@@ -24,11 +24,11 @@ class GoldenRoundtripTest extends munit.CatsEffectSuite:
   fixtures.foreach: path =>
     val name = path.getFileName.toString
     test(s"decode → encode round-trip equals golden — $name"):
-      val raw = Files.readString(path)
+      val raw     = Files.readString(path)
       val decoded = Serialize.fromJson(raw) match
         case Right(ir) => ir
         case Left(err) => fail(s"decode failed for $name: $err")
-      val reEncoded = Serialize.toJson(decoded)
+      val reEncoded   = Serialize.toJson(decoded)
       val originalDom = io.circe.parser.parse(raw) match
         case Right(j)  => j
         case Left(err) => fail(s"original JSON parse failed for $name: $err")

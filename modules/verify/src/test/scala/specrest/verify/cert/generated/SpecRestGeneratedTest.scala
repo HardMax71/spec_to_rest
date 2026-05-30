@@ -23,9 +23,9 @@ class SpecRestGeneratedTest extends FunSuite:
     )
 
   test("extracted translate handles GeOp via TLt + TEq composition"):
-    val l       = G.Ident("a", None)
-    val r       = G.Ident("b", None)
-    val emitted = G.translate(G.Cmp(G.GeOp(), l, r, None))
+    val l        = G.Ident("a", None)
+    val r        = G.Ident("b", None)
+    val emitted  = G.translate(G.Cmp(G.GeOp(), l, r, None))
     val expected = G.TOr(
       G.TLt(G.TVar("b"), G.TVar("a")),
       G.TEq(G.TVar("a"), G.TVar("b"))

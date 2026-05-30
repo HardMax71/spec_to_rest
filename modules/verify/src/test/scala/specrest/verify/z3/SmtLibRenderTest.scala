@@ -25,7 +25,7 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
 
   test("uninterp sort + func decl + simple assertion"):
     val userSort = Z3Sort.Uninterp("User")
-    val script = Z3Script(
+    val script   = Z3Script(
       sorts = List(userSort),
       funcs = List(Z3FunctionDecl("age", List(userSort), Z3Sort.Int)),
       assertions = List(
@@ -86,7 +86,7 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
   test("renderSort(SetOf) nests and renders (Set T)"):
     val intSet    = Z3Sort.SetOf(Z3Sort.Int)
     val intSetSet = Z3Sort.SetOf(intSet)
-    val script = Z3Script(
+    val script    = Z3Script(
       sorts = Nil,
       funcs = List(
         Z3FunctionDecl("s", Nil, intSet),

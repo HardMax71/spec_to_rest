@@ -71,7 +71,7 @@ class OpenApiTest extends CatsEffectSuite:
 
   test("duplicate-named temporals: first keeps bare name, second gets _0"):
     val arg = BoolLitF(true, None)
-    val ir = serviceIRWith(
+    val ir  = serviceIRWith(
       invariants = Nil,
       temporals = List(
         TemporalDeclFull("dup", TbAlways(arg), None),

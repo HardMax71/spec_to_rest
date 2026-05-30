@@ -86,11 +86,11 @@ object SpecGen:
   ):
     def render: String =
       val stateBlock = state.map("    " + _.render).mkString("\n")
-      val invBlock = invariants.zipWithIndex.map: (e, i) =>
+      val invBlock   = invariants.zipWithIndex.map: (e, i) =>
         s"  invariant inv_$i:\n    ${e.render}"
       .mkString("\n\n")
       val opBlock = operations.map(_.render).mkString("\n\n")
-      val parts = List(
+      val parts   = List(
         s"  state {\n$stateBlock\n  }",
         if operations.isEmpty then "" else opBlock,
         if invariants.isEmpty then "" else invBlock
@@ -203,7 +203,7 @@ object SpecGen:
       depth: Int,
       includePrimePre: Boolean
   ): Gen[GExpr] =
-    val refs = intRefs(state, includePrimePre)
+    val refs             = intRefs(state, includePrimePre)
     val leaf: Gen[GExpr] =
       val opts: List[Gen[GExpr]] =
         Gen.chooseNum(-5L, 5L).map(GExpr.IntLit.apply) ::
@@ -213,11 +213,12 @@ object SpecGen:
     else
       Gen.frequency(
         2 -> leaf,
-        1 -> (for
-          op <- genArithOp
-          l  <- genIntExpr(state, depth - 1, includePrimePre)
-          r  <- genIntExpr(state, depth - 1, includePrimePre)
-        yield GExpr.Arith(op, l, r)),
+        1 ->
+          (for
+            op <- genArithOp
+            l  <- genIntExpr(state, depth - 1, includePrimePre)
+            r  <- genIntExpr(state, depth - 1, includePrimePre)
+          yield GExpr.Arith(op, l, r)),
         1 -> genIntExpr(state, depth - 1, includePrimePre).map(GExpr.Neg.apply)
       )
 
@@ -226,7 +227,7 @@ object SpecGen:
       depth: Int,
       includePrimePre: Boolean
   ): Gen[GExpr] =
-    val brefs = boolRefs(state, includePrimePre)
+    val brefs            = boolRefs(state, includePrimePre)
     val leaf: Gen[GExpr] =
       val baseOpts: List[Gen[GExpr]] = List(
         Gen.const(GExpr.BoolLit(true)),
@@ -238,21 +239,24 @@ object SpecGen:
       val intDepth = math.max(0, depth - 1)
       Gen.frequency(
         2 -> leaf,
-        2 -> (for
-          op <- genCmpOp
-          l  <- genIntExpr(state, intDepth, includePrimePre)
-          r  <- genIntExpr(state, intDepth, includePrimePre)
-        yield GExpr.Cmp(op, l, r)),
-        1 -> (for
-          op <- genCmpBoolOp
-          l  <- genBoolExpr(state, intDepth, includePrimePre)
-          r  <- genBoolExpr(state, intDepth, includePrimePre)
-        yield GExpr.Cmp(op, l, r)),
-        2 -> (for
-          op <- genBoolBinOp
-          l  <- genBoolExpr(state, depth - 1, includePrimePre)
-          r  <- genBoolExpr(state, depth - 1, includePrimePre)
-        yield GExpr.BoolBin(op, l, r)),
+        2 ->
+          (for
+            op <- genCmpOp
+            l  <- genIntExpr(state, intDepth, includePrimePre)
+            r  <- genIntExpr(state, intDepth, includePrimePre)
+          yield GExpr.Cmp(op, l, r)),
+        1 ->
+          (for
+            op <- genCmpBoolOp
+            l  <- genBoolExpr(state, intDepth, includePrimePre)
+            r  <- genBoolExpr(state, intDepth, includePrimePre)
+          yield GExpr.Cmp(op, l, r)),
+        2 ->
+          (for
+            op <- genBoolBinOp
+            l  <- genBoolExpr(state, depth - 1, includePrimePre)
+            r  <- genBoolExpr(state, depth - 1, includePrimePre)
+          yield GExpr.BoolBin(op, l, r)),
         1 -> genBoolExpr(state, depth - 1, includePrimePre).map(GExpr.Not.apply)
       )
 
@@ -275,6 +279,6 @@ object SpecGen:
       invN    <- Gen.chooseNum(1, 2)
       invs    <- Gen.listOfN(invN, genBoolExpr(state, depth = 2, includePrimePre = false))
       opN     <- Gen.chooseNum(0, 2)
-      ops <-
+      ops     <-
         Gen.sequence[List[Operation], Operation]((0 until opN).toList.map(genOperation(state, _)))
     yield GeneratedSpec(svcName, state, invs, ops)

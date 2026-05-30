@@ -12,7 +12,7 @@ class TranslatorTest extends CatsEffectSuite:
       moduleE <- Translator.translateGlobal(ir, scope = 5)
       module   = moduleE.toOption.get
       _        = assertEquals(module.name, "PowersetDemo")
-      _ = assert(
+      _        = assert(
             module.sigs.exists(_.name == "User"),
             s"missing User sig; got ${module.sigs.map(_.name)}"
           )

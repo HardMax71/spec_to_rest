@@ -33,7 +33,7 @@ class CounterExampleTest extends CatsEffectSuite:
       )
       val ce = viol.flatMap(_.diagnostic).flatMap(_.counterexample)
       assert(ce.isDefined, "expected a decoded counterexample attached to the diagnostic")
-      val decoded = ce.get
+      val decoded  = ce.get
       val nonEmpty =
         decoded.entities.nonEmpty ||
           decoded.stateRelations.nonEmpty ||

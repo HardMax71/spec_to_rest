@@ -46,7 +46,7 @@ final class Synthesizer(
       entry: CacheEntry
   ): IO[Either[SynthError, SynthResult]] =
     val cost = Pricing.costOrZero(entry.usage, entry.model)
-    val rec =
+    val rec  =
       CallRecord(
         classificationOperationName(req.classification),
         entry.model,
@@ -82,7 +82,7 @@ final class Synthesizer(
     val parsed =
       for
         block <- ResponseParser.extractCodeBlock(resp.text)
-        body <-
+        body  <-
           ResponseParser.extractMethodBody(block, classificationOperationName(req.classification))
       yield (block, body)
     parsed match
@@ -116,7 +116,7 @@ final class Synthesizer(
   ): IO[Either[SynthError, SynthResult]] =
     val cost  = Pricing.costOrZero(resp.usage, resp.model)
     val entry = CacheEntry(block, body, resp.usage, resp.model, SynthPromptVersion)
-    val rec =
+    val rec   =
       CallRecord(
         classificationOperationName(req.classification),
         resp.model,
@@ -128,7 +128,7 @@ final class Synthesizer(
       case Some(c) =>
         c.store(key, entry).attempt.flatMap:
           case Right(_) => IO.unit
-          case Left(e) =>
+          case Left(e)  =>
             IO.consoleForIO.errorln(
               s"warning: cache write failed for ${classificationOperationName(req.classification)}: ${e.getMessage}"
             )

@@ -21,12 +21,12 @@ object AdminRouter:
           .map(e => s"    await session.execute(delete(${entName(e)}))")
           .mkString("\n")
 
-    val stateFieldsList = irStateFields(ir)
+    val stateFieldsList  = irStateFields(ir)
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
         val needsRows = stateFieldsList.exists(f => AdminModel.projectionFor(f, ir).isDefined)
-        val rowsLine =
+        val rowsLine  =
           if entities.size == 1 && needsRows then
             val e = entities.head
             s"    rows = (await session.execute(select(${entName(e)}))).scalars().all()\n"
@@ -44,7 +44,7 @@ object AdminRouter:
 
     val seedEntities = svcTransitions(ir).map(trnEntity).toSet
     val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
-    val seedSection =
+    val seedSection  =
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
 
@@ -97,8 +97,8 @@ object AdminRouter:
        |""".stripMargin
 
   private def seedHandler(entity: entity_decl_full, ir: ServiceIRFull): String =
-    val snake  = Naming.toSnakeCase(entName(entity))
-    val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
+    val snake    = Naming.toSnakeCase(entName(entity))
+    val pkName   = AdminModel.primaryKeyField(entity).getOrElse("id")
     val dtFields = entFields(entity)
       .filter(fld => isDateTimeType(svcTypeAliases(ir), fldType(fld)))
       .map(fldName)

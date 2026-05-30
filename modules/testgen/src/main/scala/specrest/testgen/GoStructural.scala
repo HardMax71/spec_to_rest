@@ -14,7 +14,7 @@ import specrest.profile.ProfiledService
 object GoStructural:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =
-    val ir = profiled.ir
+    val ir        = profiled.ir
     val collected = profiled.operations.map: pop =>
       if StubOps.isStub(profiled, pop) then
         Left(TestSkip(pop.operationName, "structural", StubOps.skipReason(pop)))
@@ -38,7 +38,7 @@ object GoStructural:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
+      val pairs     = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
         (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, GoRapidStrategy))
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
@@ -46,7 +46,7 @@ object GoStructural:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def goRequestCall(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
+    val ep     = pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
@@ -57,7 +57,7 @@ object GoStructural:
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else
         val names = scala.collection.mutable.ListBuffer.empty[String]
-        val tmpl = "\\{([^}]+)\\}".r.replaceAllIn(
+        val tmpl  = "\\{([^}]+)\\}".r.replaceAllIn(
           ep.path,
           m =>
             names += m.group(1)
@@ -129,9 +129,9 @@ object GoStructural:
     else renderFull(tests)
 
   private def renderFull(tests: List[GeneratedTest]): String =
-    val bodies     = tests.map(_.body).mkString("\n")
-    val stdlib     = (if bodies.contains("fmt.") then List("\t\"fmt\"") else Nil) :+ "\t\"testing\""
-    val thirdParty = if bodies.contains("rapid.") then List("\t\"pgregory.net/rapid\"") else Nil
+    val bodies      = tests.map(_.body).mkString("\n")
+    val stdlib      = (if bodies.contains("fmt.") then List("\t\"fmt\"") else Nil) :+ "\t\"testing\""
+    val thirdParty  = if bodies.contains("rapid.") then List("\t\"pgregory.net/rapid\"") else Nil
     val importBlock =
       if thirdParty.isEmpty then stdlib.mkString("\n")
       else stdlib.mkString("\n") + "\n\n" + thirdParty.mkString("\n")

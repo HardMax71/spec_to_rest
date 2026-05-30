@@ -16,10 +16,10 @@ class TemplatesTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  private def named(t: String): NamedTypeF  = NamedTypeF(t, None)
-  private def ident(n: String): IdentifierF = IdentifierF(n, None)
-  private def intL(n: Int): IntLitF         = IntLitF(BigInt(n), None)
-  private def boolL(b: Boolean): BoolLitF   = BoolLitF(b, None)
+  private def named(t: String): NamedTypeF                           = NamedTypeF(t, None)
+  private def ident(n: String): IdentifierF                          = IdentifierF(n, None)
+  private def intL(n: Int): IntLitF                                  = IntLitF(BigInt(n), None)
+  private def boolL(b: Boolean): BoolLitF                            = BoolLitF(b, None)
   private def paramD(name: String, t: type_expr_full): ParamDeclFull =
     ParamDeclFull(name, t, None)
 

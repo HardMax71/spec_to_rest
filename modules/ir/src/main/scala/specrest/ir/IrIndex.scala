@@ -24,7 +24,7 @@ object IrIndex:
   def of(ir: service_ir_full): IrIndex =
     Option(cache.get(ir)) match
       case Some(hit) => hit
-      case None =>
+      case None      =>
         val fresh = build(ir)
         cache.put(ir, fresh)
         fresh

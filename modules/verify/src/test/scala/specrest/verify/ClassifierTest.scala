@@ -18,7 +18,7 @@ class ClassifierTest extends munit.CatsEffectSuite:
 
   test("invariant with powerset routes to Alloy"):
     val inner = UnaryOpF(UPower(), id("users"), None)
-    val inv = InvariantDeclFull(
+    val inv   = InvariantDeclFull(
       Some("pow"),
       BinaryOpF(BSubset(), id("s"), inner, None),
       None

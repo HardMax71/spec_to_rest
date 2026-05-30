@@ -35,7 +35,7 @@ object AdminRouterTs:
 
     val rowToDictFns = entities
       .map: e =>
-        val cols = colsOf(e)
+        val cols  = colsOf(e)
         val pairs = cols
           .map: c =>
             val v =
@@ -58,7 +58,7 @@ object AdminRouterTs:
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n")
 
-    val stateFields = irStateFields(ir)
+    val stateFields    = irStateFields(ir)
     val neededEntities = stateFields
       .flatMap(f => AdminModel.projectionFor(f, ir).map(_.entityName))
       .distinct
@@ -90,10 +90,10 @@ object AdminRouterTs:
     val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
     val seedHandlers = seedTargets
       .map: e =>
-        val snake = Naming.toSnakeCase(entName(e))
-        val pk    = AdminModel.primaryKeyField(e).getOrElse("id")
-        val pkTs  = Naming.toCamelCase(pk)
-        val cols  = colsOf(e)
+        val snake     = Naming.toSnakeCase(entName(e))
+        val pk        = AdminModel.primaryKeyField(e).getOrElse("id")
+        val pkTs      = Naming.toCamelCase(pk)
+        val cols      = colsOf(e)
         val dataPairs = cols
           .map: c =>
             val src =

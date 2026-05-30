@@ -141,11 +141,11 @@ object ExprToPython extends ExprBackend:
 
   private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
     classifyIdent(ctx.identCtx(PythonReservedNames.toList), name) match
-      case _: IcReserved => Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
-      case _: IcBound    => Translated.Emit(name)
-      case _: IcBareBody => Translated.Emit("response_data")
-      case _: IcOutput   => Translated.Emit(s"response_data[${pyString(name)}]")
-      case _: IcInput    => Translated.Emit(name)
+      case _: IcReserved   => Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
+      case _: IcBound      => Translated.Emit(name)
+      case _: IcBareBody   => Translated.Emit("response_data")
+      case _: IcOutput     => Translated.Emit(s"response_data[${pyString(name)}]")
+      case _: IcInput      => Translated.Emit(name)
       case _: IcStateField =>
         val dict = ctx.capture match
           case CaptureMode.PostState => "post_state"
@@ -198,7 +198,7 @@ object ExprToPython extends ExprBackend:
   ): Translated =
     callee match
       case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
-      case _ =>
+      case _                    =>
         val parts = args.map(translate(_, ctx))
         lift1(translate(callee, ctx)): cp =>
           liftAll(parts, span)(ps => Translated.Emit(s"($cp)(${ps.mkString(", ")})"))
@@ -213,7 +213,7 @@ object ExprToPython extends ExprBackend:
       case Translated.Emit(text) => Translated.Emit(text)
       case Translated.Skip(_, _) =>
         userDefinedCall(fname, args, ctx, span) match
-          case Translated.Emit(text) => Translated.Emit(text)
+          case Translated.Emit(text)      => Translated.Emit(text)
           case Translated.Skip(reason, _) =>
             Translated.Skip(reason, span)
 
@@ -277,7 +277,7 @@ object ExprToPython extends ExprBackend:
       span: Option[span_t]
   ): Translated =
     val basePy = translate(base, ctx)
-    val pairs = updates.map { fa =>
+    val pairs  = updates.map { fa =>
       lift1(translate(fasValue(fa), ctx))(vx => Translated.Emit(s"${pyString(fasName(fa))}: $vx"))
     }
     lift1(basePy): bp =>

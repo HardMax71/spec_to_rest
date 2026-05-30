@@ -45,7 +45,7 @@ class IncrementalMigrationTest extends CatsEffectSuite:
           previousSnapshot = Some(profiled.schema),
           existingRevisions = List("001")
         )
-        val files = Emit.emitProject(profiled, opts).map(_.path).toSet
+        val files      = Emit.emitProject(profiled, opts).map(_.path).toSet
         val deltaPaths = files.filter: p =>
           p.contains("002_") || p.contains("003_")
         assertEquals(deltaPaths, Set.empty[String])
@@ -70,7 +70,7 @@ class IncrementalMigrationTest extends CatsEffectSuite:
           previousSnapshot = Some(profiled.schema),
           existingRevisions = List("001")
         )
-        val files = Emit.emitProject(mutated, opts).map(f => f.path -> f.content).toMap
+        val files        = Emit.emitProject(mutated, opts).map(f => f.path -> f.content).toMap
         val expectedPath = target match
           case "python-fastapi-postgres" => "alembic/versions/002_schema_update.py"
           case "go-chi-postgres"         => "migrations/002_schema_update.up.sql"
@@ -92,12 +92,12 @@ class IncrementalMigrationTest extends CatsEffectSuite:
             ColumnSpec("legacy", "TEXT", true, None)
           )
         )
-        val v2 = profiled.copy(schema = profiled.schema)
+        val v2   = profiled.copy(schema = profiled.schema)
         val opts = EmitOptions(
           previousSnapshot = Some(v1.schema),
           existingRevisions = List("001")
         )
-        val files = Emit.emitProject(v2, opts).map(f => f.path -> f.content).toMap
+        val files        = Emit.emitProject(v2, opts).map(f => f.path -> f.content).toMap
         val expectedPath = target match
           case "python-fastapi-postgres" => "alembic/versions/002_schema_update.py"
           case "go-chi-postgres"         => "migrations/002_schema_update.up.sql"
@@ -119,7 +119,7 @@ class IncrementalMigrationTest extends CatsEffectSuite:
           previousSnapshot = Some(profiled.schema),
           existingRevisions = List("001", "002")
         )
-        val files = Emit.emitProject(mutated, opts).map(_.path).toSet
+        val files       = Emit.emitProject(mutated, opts).map(_.path).toSet
         val expectedRev = target match
           case "python-fastapi-postgres" => "alembic/versions/003_schema_update.py"
           case "go-chi-postgres"         => "migrations/003_schema_update.up.sql"

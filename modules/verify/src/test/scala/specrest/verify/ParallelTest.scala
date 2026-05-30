@@ -72,7 +72,9 @@ class ParallelTest extends CatsEffectSuite:
             c.status == CheckOutcome.Unsat ||
             c.status == CheckOutcome.Unknown
         ),
-        s"dump entries should equal non-skipped checks; checks=${report.checks.map(c => s"${c.id}->${c.status}")}"
+        s"dump entries should equal non-skipped checks; checks=${report.checks.map(c =>
+            s"${c.id}->${c.status}"
+          )}"
       )
 
   test("parallel mode on a solver-heavy spec (set_ops) matches serial results"):

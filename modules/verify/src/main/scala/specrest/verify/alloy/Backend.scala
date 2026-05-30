@@ -73,7 +73,7 @@ final class AlloyBackend:
       try
         boundary:
           val reporter = A4Reporter.NOP
-          val module =
+          val module   =
             try CompUtil.parseEverything_fromString(reporter, source)
             catch
               case e: Err =>
@@ -83,8 +83,8 @@ final class AlloyBackend:
             alloyBackendFail("Alloy module has no commands; need at least one run/check")
           if commandIdx < 0 || commandIdx >= commands.size then
             alloyBackendFail(s"command index $commandIdx out of range [0, ${commands.size})")
-          val cmd  = commands.get(commandIdx)
-          val opts = new A4Options()
+          val cmd         = commands.get(commandIdx)
+          val opts        = new A4Options()
           val coreCapable =
             if captureCore then AlloyBackend.coreCapableSolver else None
           opts.solver = coreCapable.getOrElse(SATFactory.DEFAULT)
@@ -92,7 +92,7 @@ final class AlloyBackend:
           if coreCapable.isDefined then
             opts.coreMinimization = 1
             opts.coreGranularity = 1
-          val t0 = System.nanoTime()
+          val t0        = System.nanoTime()
           val solveTask = new Callable[A4Solution]:
             def call(): A4Solution =
               TranslateAlloyToKodkod.execute_command(

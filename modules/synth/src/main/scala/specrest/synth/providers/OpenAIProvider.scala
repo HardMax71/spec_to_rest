@@ -30,7 +30,7 @@ final class OpenAIProvider(client: OpenAIClient) extends LlmProvider:
         .addUserMessage(req.userMessage)
         .build()
       val response = client.chat().completions().create(params)
-      val text = response.choices().asScala.iterator
+      val text     = response.choices().asScala.iterator
         .flatMap(c => c.message().content().toScala.iterator)
         .mkString
       val (in, out) = response.usage().toScala match

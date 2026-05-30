@@ -20,7 +20,7 @@ object Fixtures:
     IO.blocking(Files.readString(Paths.get(s"fixtures/spec/$name.spec")))
       .flatMap: src =>
         Parse.parseSpec(src).flatMap:
-          case Left(e) => IO.raiseError(new AssertionError(s"parse failed: $e"))
+          case Left(e)       => IO.raiseError(new AssertionError(s"parse failed: $e"))
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(e)   => IO.raiseError(new AssertionError(s"build failed: ${e.message}"))
@@ -32,7 +32,7 @@ object Fixtures:
   ): IO[(operation_classification, DafnyMethodHeader, String)] =
     loadIR(specName).map: ir =>
       val classifications = Classify.classifyOperations(ir)
-      val c = classifications
+      val c               = classifications
         .find(c => classificationOperationName(c) == opName)
         .getOrElse(throw new AssertionError(s"operation $opName not found"))
       val out: DafnyOutput =

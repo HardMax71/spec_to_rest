@@ -20,7 +20,7 @@ class EmitTsTest extends CatsEffectSuite:
 
   test("emitProject for ts-express-postgres produces a valid TS project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>
-      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val files    = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val expected = List(
         "package.json",
         "tsconfig.json",

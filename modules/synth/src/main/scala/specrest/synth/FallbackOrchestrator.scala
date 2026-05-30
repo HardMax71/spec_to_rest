@@ -80,7 +80,7 @@ final class FallbackOrchestrator(
       spent.get.flatMap: s =>
         budgetExceeded(s) match
           case Some(reason) => finalize(req, history, reason)
-          case None =>
+          case None         =>
             runOneAndDecide(req, model, strat, rest, history, spent)
 
   private def runOneAndDecide(
@@ -92,7 +92,7 @@ final class FallbackOrchestrator(
       spent: Ref[IO, BudgetSpent]
   ): IO[FallbackOutcome] =
     val attemptReq = req.copy(model = model, strategy = strat)
-    val loop = new CegisLoop(
+    val loop       = new CegisLoop(
       provider,
       verifier,
       cache,
@@ -140,7 +140,7 @@ final class FallbackOrchestrator(
   ): IO[FallbackOutcome] =
     val lastAbort = attempts.reverse.collectFirst:
       case AttemptRecord(_, _, CegisOutcome.Aborted(r, _, _), _, _, _) => r.message
-    val abortReason = lastAbort.getOrElse(reason)
+    val abortReason                 = lastAbort.getOrElse(reason)
     val (finalStrategy, finalModel) = attempts.lastOption match
       case Some(rec) => (rec.strategy, rec.model)
       case None      => (req.strategy, req.model)
@@ -168,9 +168,9 @@ final class FallbackOrchestrator(
       fullCandidate: String
   ): IO[Unit] =
     skeletonCache match
-      case None => IO.unit
+      case None    => IO.unit
       case Some(c) =>
-        val key = Cache.keyFor(req.header, req.model, req.temperature)
+        val key   = Cache.keyFor(req.header, req.model, req.temperature)
         val entry = CacheEntry(
           candidate = fullCandidate,
           body = body,
@@ -181,7 +181,7 @@ final class FallbackOrchestrator(
         )
         c.store(key, entry).attempt.flatMap:
           case Right(_) => IO.unit
-          case Left(e) =>
+          case Left(e)  =>
             IO.consoleForIO.errorln(s"warning: skeleton cache write failed: ${e.getMessage}")
 
   private def budgetExceeded(spent: BudgetSpent): Option[String] =

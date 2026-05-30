@@ -56,7 +56,7 @@ object Generator:
       val aliasesWithWhere =
         svcTypeAliases(ir).filter(a => talConstraint(a).isDefined).map(talName).toSet
       val (externs, matchPatterns) = classifyExterns(ir)
-      val ctx = Ctx(
+      val ctx                      = Ctx(
         ir = ir,
         stateFields = stateFields,
         aliasesWithWhere = aliasesWithWhere,
@@ -166,7 +166,7 @@ object Generator:
       val fieldWhereClauses = fields.flatMap { f =>
         fldDefault(f).map { whereExpr =>
           val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value" + "x")
-          val rebound =
+          val rebound  =
             subst("value", FieldAccessF(IdentifierF("x", None), fldName(f), None), whereExpr)
           s"(${renderExpr(whereCtx, rebound)})"
         }
@@ -222,8 +222,8 @@ object Generator:
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
   private def renderMethod(ctx: Ctx, op: operation_decl_full)(using DafnyLabel): RenderedMethod =
-    val inputs  = operInputs(op)
-    val outputs = operOutputs(op)
+    val inputs     = operInputs(op)
+    val outputs    = operOutputs(op)
     val inputTypes = inputs
       .map(p => prmName(p) -> prmType(p))
       .to(ListMap)
@@ -242,14 +242,14 @@ object Generator:
     }
     val stateParam = if ctx.stateFields.nonEmpty then List("st: ServiceState") else Nil
     val sigParams  = (stateParam ++ params).mkString(", ")
-    val returns =
+    val returns    =
       if outputs.isEmpty then ""
       else
         val rs = outputs.map(p => s"${prmName(p)}: ${renderType(mctx, prmType(p))}").mkString(", ")
         s" returns ($rs)"
     val signature = s"method ${operName(op)}($sigParams)$returns"
 
-    val mutates = primedStateFields(operEnsures(op)).intersect(ctx.stateFields.keySet).nonEmpty
+    val mutates         = primedStateFields(operEnsures(op)).intersect(ctx.stateFields.keySet).nonEmpty
     val modifiesClauses =
       if mutates then List("st") else Nil
 
@@ -265,7 +265,7 @@ object Generator:
     val rawRequires     = flattenAndAll(operRequires(op)).map(renderExpr(reqCtx, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
-    val ensCtx = mctx.copy(stateMode = StateMode.Old)
+    val ensCtx   = mctx.copy(stateMode = StateMode.Old)
     val optNames =
       mctx.inputTypes.collect { case (n, _: OptionTypeF) => n }.toList :::
         mctx.outputTypes.collect {
@@ -378,11 +378,11 @@ object Generator:
     "matches_" + pattern.flatMap(c => if c.isLetterOrDigit then c.toString else "_")
 
   private def renderType(ctx: Ctx, t: type_expr_full)(using DafnyLabel): String = t match
-    case NamedTypeF(name, _)   => mapPrimitiveType(name)
-    case SetTypeF(inner, _)    => s"set<${renderType(ctx, inner)}>"
-    case SeqTypeF(inner, _)    => s"seq<${renderType(ctx, inner)}>"
-    case MapTypeF(k, v, _)     => s"map<${renderType(ctx, k)}, ${renderType(ctx, v)}>"
-    case OptionTypeF(inner, _) => s"Option<${renderType(ctx, inner)}>"
+    case NamedTypeF(name, _)              => mapPrimitiveType(name)
+    case SetTypeF(inner, _)               => s"set<${renderType(ctx, inner)}>"
+    case SeqTypeF(inner, _)               => s"seq<${renderType(ctx, inner)}>"
+    case MapTypeF(k, v, _)                => s"map<${renderType(ctx, k)}, ${renderType(ctx, v)}>"
+    case OptionTypeF(inner, _)            => s"Option<${renderType(ctx, inner)}>"
     case RelationTypeF(from, mult, to, _) =>
       val k = renderType(ctx, from)
       val v = renderType(ctx, to)
@@ -406,11 +406,11 @@ object Generator:
     case other      => other
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using DafnyLabel): String = e match
-    case IntLitF(v, _)    => v.toString
-    case BoolLitF(v, _)   => v.toString
-    case StringLitF(s, _) => "\"" + escapeString(s) + "\""
-    case NoneLitF(_)      => "None"
-    case FloatLitF(v, _)  => v
+    case IntLitF(v, _)     => v.toString
+    case BoolLitF(v, _)    => v.toString
+    case StringLitF(s, _)  => "\"" + escapeString(s) + "\""
+    case NoneLitF(_)       => "None"
+    case FloatLitF(v, _)   => v
     case IdentifierF(n, _) =>
       if ctx.boundVars.contains(n) then n
       else if ctx.stateFields.contains(n) then stateRef(n, ctx.stateMode)
@@ -438,11 +438,11 @@ object Generator:
     case BinaryOpF(BAdd(), lhs, MapLiteralF(List(MapEntryFull(k, v, _)), _), _)
         if isStateMapRef(ctx, lhs) =>
       s"${renderExpr(ctx, lhs)}[${renderExpr(ctx, k)} := ${renderExpr(ctx, v)}]"
-    case BinaryOpF(op, l, r, _) => renderBinary(ctx, op, l, r)
-    case UnaryOpF(op, x, _)     => renderUnary(ctx, op, x)
-    case FieldAccessF(b, f, _)  => s"${renderExpr(ctx, b)}.$f"
-    case EnumAccessF(_, m, _)   => m
-    case IndexF(b, i, _)        => s"${renderExpr(ctx, b)}[${renderExpr(ctx, i)}]"
+    case BinaryOpF(op, l, r, _)                      => renderBinary(ctx, op, l, r)
+    case UnaryOpF(op, x, _)                          => renderUnary(ctx, op, x)
+    case FieldAccessF(b, f, _)                       => s"${renderExpr(ctx, b)}.$f"
+    case EnumAccessF(_, m, _)                        => m
+    case IndexF(b, i, _)                             => s"${renderExpr(ctx, b)}[${renderExpr(ctx, i)}]"
     case CallF(IdentifierF("len", _), arg :: Nil, _) =>
       s"|${renderExpr(ctx, arg)}|"
     case CallF(IdentifierF("dom", _), arg :: Nil, _) =>
@@ -470,13 +470,13 @@ object Generator:
     case LetF(v, value, body, _) =>
       val inner = ctx.copy(boundVars = ctx.boundVars + v)
       s"(var $v := ${renderExpr(ctx, value)}; ${renderExpr(inner, body)})"
-    case q: QuantifierF => renderQuantifier(ctx, q)
+    case q: QuantifierF    => renderQuantifier(ctx, q)
     case MatchesF(x, p, _) =>
       s"${matchPredicateName(p)}(${renderExpr(ctx, x)})"
     case SetComprehensionF(v, dom, pred, _) =>
-      val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
-      val domStr   = renderExpr(ctx, dom)
-      val predStr  = renderExpr(innerCtx, pred)
+      val innerCtx   = ctx.copy(boundVars = ctx.boundVars + v)
+      val domStr     = renderExpr(ctx, dom)
+      val predStr    = renderExpr(innerCtx, pred)
       val projection =
         if isMapDomain(ctx, dom) then s"$domStr[$v]" else v
       s"(set $v | $v in $domStr && $predStr :: $projection)"
@@ -518,7 +518,7 @@ object Generator:
     peelRelationRefFull(dom).flatMap(ctx.stateFields.get) match
       case Some(MapTypeF(k, _, _))            => renderType(ctx, k)
       case Some(RelationTypeF(from, _, _, _)) => renderType(ctx, from)
-      case _ =>
+      case _                                  =>
         failDafny(
           s"TheBy: cannot infer key type — expected a map/relation state field, got ${dom.getClass.getSimpleName}"
         )
@@ -577,8 +577,8 @@ object Generator:
     go(e)
 
   private def collectWFGuards(e: expr_full, ctx: Ctx): List[expr_full] =
-    val acc  = scala.collection.mutable.ListBuffer.empty[expr_full]
-    val seen = scala.collection.mutable.HashSet.empty[String]
+    val acc                                                            = scala.collection.mutable.ListBuffer.empty[expr_full]
+    val seen                                                           = scala.collection.mutable.HashSet.empty[String]
     def add(key: expr_full, mref: expr_full, sp: Option[span_t]): Unit =
       val guard = BinaryOpF(BIn(), key, mref, sp)
       val sig   = structuralSig(guard)
@@ -588,13 +588,13 @@ object Generator:
     def walk(node: expr_full): Unit = node match
       case IndexF(m, k, sp) if isStateMapRef(ctx, m) =>
         walk(m); walk(k); add(k, m, sp)
-      case BinaryOpF(_, l, r, _) => walk(l); walk(r)
-      case UnaryOpF(_, x, _)     => walk(x)
-      case FieldAccessF(b, _, _) => walk(b)
-      case IndexF(b, i, _)       => walk(b); walk(i)
-      case PrimeF(x, _)          => walk(x)
-      case PreF(x, _)            => walk(x)
-      case CallF(c, args, _)     => walk(c); args.foreach(walk)
+      case BinaryOpF(_, l, r, _)  => walk(l); walk(r)
+      case UnaryOpF(_, x, _)      => walk(x)
+      case FieldAccessF(b, _, _)  => walk(b)
+      case IndexF(b, i, _)        => walk(b); walk(i)
+      case PrimeF(x, _)           => walk(x)
+      case PreF(x, _)             => walk(x)
+      case CallF(c, args, _)      => walk(c); args.foreach(walk)
       case ConstructorF(_, fs, _) =>
         fs.foreach(fa => walk(fasValue(fa)))
       case WithF(b, fs, _) =>
@@ -615,7 +615,7 @@ object Generator:
 
   // Span-agnostic structural signature for dedup of generated guards.
   private def structuralSig(e: expr_full): String = e match
-    case IdentifierF(n, _) => s"I($n)"
+    case IdentifierF(n, _)      => s"I($n)"
     case BinaryOpF(op, l, r, _) =>
       s"B(${op.getClass.getSimpleName},${structuralSig(l)},${structuralSig(r)})"
     case UnaryOpF(op, x, _)    => s"U(${op.getClass.getSimpleName},${structuralSig(x)})"
@@ -665,13 +665,13 @@ object Generator:
       case _: UNot         => s"!(${renderExpr(ctx, x)})"
       case _: UNegate      => s"-(${renderExpr(ctx, x)})"
       case _: UCardinality => s"|${renderExpr(ctx, x)}|"
-      case _: UPower =>
+      case _: UPower       =>
         failDafny("powerset operator '^' is not supported in Dafny translation")
 
   private def renderQuantifier(ctx: Ctx, q: QuantifierF)(using DafnyLabel): String =
-    val bindings = q.b
-    val varNames = bindings.map(qbdVar)
-    val innerCtx = ctx.copy(boundVars = ctx.boundVars ++ varNames)
+    val bindings   = q.b
+    val varNames   = bindings.map(qbdVar)
+    val innerCtx   = ctx.copy(boundVars = ctx.boundVars ++ varNames)
     val membership = bindings.map { b =>
       s"${qbdVar(b)} in ${renderExpr(ctx, qbdCollection(b))}"
     }

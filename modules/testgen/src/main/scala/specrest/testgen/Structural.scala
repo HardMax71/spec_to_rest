@@ -139,8 +139,8 @@ object Structural:
             case Translated.Skip(reason, _) =>
               List(Left(TestSkip(operName(opDecl), s"structural_ensures[$idx]", reason)))
             case Translated.Emit(text) =>
-              val checkName = s"_check_${opSnake}_ensures_$idx"
-              val pathLit   = ExprToPython.pyString(pop.endpoint.path)
+              val checkName  = s"_check_${opSnake}_ensures_$idx"
+              val pathLit    = ExprToPython.pyString(pop.endpoint.path)
               val methodName = pop.endpoint.method match
                 case _: GET    => "GET"
                 case _: POST   => "POST"
@@ -171,7 +171,7 @@ object Structural:
       profiled: ProfiledService,
       checks: List[StructuralCheck]
   ): String =
-    val checkDefs = checks.map(_.pyFunctionBody).mkString("\n")
+    val checkDefs  = checks.map(_.pyFunctionBody).mkString("\n")
     val checkTuple =
       if checks.isEmpty then "()"
       else "(\n" + checks.map(c => s"    ${c.pyFunctionName},").mkString("\n") + "\n)"

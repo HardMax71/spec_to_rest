@@ -57,13 +57,13 @@ final class CegisLoop(
       case None    => IO.pure(None)
 
   private def onCacheHit(req: SynthRequest, entry: CacheEntry): IO[CegisOutcome] =
-    val cost = Pricing.costOrZero(entry.usage, entry.model)
+    val cost    = Pricing.costOrZero(entry.usage, entry.model)
     val fullDfy =
       FileAssembly
         .splice(req.skeleton, classificationOperationName(req.classification), entry.body)
         .toOption
         .getOrElse(entry.candidate)
-    val rec = IterationRecord(0, entry.body, fullDfy, Nil, entry.usage, cost)
+    val rec  = IterationRecord(0, entry.body, fullDfy, Nil, entry.usage, cost)
     val call = CallRecord(
       classificationOperationName(req.classification),
       entry.model,
@@ -91,7 +91,7 @@ final class CegisLoop(
   ): IO[CegisOutcome] =
     budgetCheck(history, i) match
       case Some(reason) => IO.pure(CegisOutcome.Aborted(reason, history.lastBody, history))
-      case None =>
+      case None         =>
         val prompt = i match
           case 1 =>
             PromptBuilder.initial(req.classification, req.header, req.skeleton, req.strategy)
@@ -130,7 +130,7 @@ final class CegisLoop(
     val opName   = classificationOperationName(req.classification)
     val callRec  = CallRecord(opName, resp.model, resp.usage, cost, cached = false)
     val recorded = tracker.record(callRec)
-    val parsed =
+    val parsed   =
       for
         block <- ResponseParser.extractCodeBlock(resp.text)
         body  <- ResponseParser.extractMethodBody(block, opName)
@@ -189,12 +189,12 @@ final class CegisLoop(
       resp: LlmResponse
   ): IO[Unit] =
     cache match
-      case None => IO.unit
+      case None    => IO.unit
       case Some(c) =>
         val entry = CacheEntry(block, body, resp.usage, resp.model, SynthPromptVersion)
         c.store(key, entry).attempt.flatMap:
           case Right(_) => IO.unit
-          case Left(e) =>
+          case Left(e)  =>
             IO.consoleForIO.errorln(s"warning: cache write failed: ${e.getMessage}")
 
   private def abort(reason: AbortReason, history: CegisHistory): IO[CegisOutcome] =
@@ -220,7 +220,7 @@ final class CegisLoop(
       currentErrors: List[VerifierError]
   ): Option[AbortReason] =
     currentErrors.headOption.flatMap: head =>
-      val recent = history.records.takeRight(budget.repeatedErrorThreshold)
+      val recent        = history.records.takeRight(budget.repeatedErrorThreshold)
       val sameSignature =
         recent.flatMap(_.errors.headOption).count(e => sameError(e, head))
       if sameSignature >= budget.repeatedErrorThreshold then

@@ -62,7 +62,7 @@ object Builder:
       mergePreamble: Boolean
   ): Either[VerifyError.Build, ServiceIRFull] =
     val imports = tree.importDecl.asScala.map(imp => unquote(imp.STRING_LIT.getText)).toList
-    val raw =
+    val raw     =
       new IRBuilder().buildService(tree.serviceDecl).map(_.copy(b = imports)).map {
         ir => flattenInheritance(ir) match { case s: ServiceIRFull => s }
       }
@@ -70,7 +70,7 @@ object Builder:
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
     val userNames = svcPredicates(ir).map(prdName).toSet
-    val toAdd =
+    val toAdd     =
       Preamble.predicates.filterNot(p => userNames.contains(prdName(p)))
     if toAdd.isEmpty then ir
     else ir.copy(m = svcPredicates(ir) ++ toAdd)
@@ -120,7 +120,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     expr(arg).map(a => UnaryOpF(op, a, sp(ctx)))
 
   def buildService(ctx: ServiceDeclContext): BuildResult[ServiceIRFull] =
-    val name = ctx.UPPER_IDENT.getText
+    val name     = ctx.UPPER_IDENT.getText
     val finalAcc = ctx.serviceMember.asScala.toList
       .foldLeft[BuildResult[ServiceAcc]](Right(ServiceAcc())):
         case (accE, member) => accE.flatMap(acc => processMember(acc, member))
@@ -178,7 +178,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     val name       = idents.get(0).getText
     val extendsOpt = if ctx.EXTENDS ne null then Some(idents.get(1).getText) else None
     val members    = ctx.entityMember.asScala.toList
-    val parts =
+    val parts      =
       members.foldLeft[BuildResult[(List[FieldDeclFull], List[expr_full])]](Right((Nil, Nil))):
         case (accE, member) =>
           accE.flatMap: (fs, invs) =>
@@ -191,8 +191,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       EntityDeclFull(name, extendsOpt, fs.reverse, invs.reverse, sp(ctx))
 
   private def buildField(ctx: FieldDeclContext): BuildResult[FieldDeclFull] =
-    val name      = ctx.lowerIdent.getText
-    val typeExprV = buildTypeExpr(ctx.typeExpr)
+    val name                                        = ctx.lowerIdent.getText
+    val typeExprV                                   = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[expr_full]] =
       if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
@@ -206,8 +206,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     EnumDeclFull(name, values, sp(ctx))
 
   private def buildTypeAlias(ctx: TypeAliasContext): BuildResult[TypeAliasDeclFull] =
-    val name      = ctx.UPPER_IDENT.getText
-    val typeExprV = buildTypeExpr(ctx.typeExpr)
+    val name                                        = ctx.UPPER_IDENT.getText
+    val typeExprV                                   = buildTypeExpr(ctx.typeExpr)
     val constraintE: BuildResult[Option[expr_full]] =
       if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
@@ -269,10 +269,10 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       .map(rules => TransitionDeclFull(name, entityName, fieldName, rules, sp(ctx)))
 
   private def buildTransitionRule(ctx: TransitionRuleContext): BuildResult[TransitionRuleFull] =
-    val idents = ctx.UPPER_IDENT
-    val from   = idents.get(0).getText
-    val to     = idents.get(1).getText
-    val via    = idents.get(2).getText
+    val idents                                 = ctx.UPPER_IDENT
+    val from                                   = idents.get(0).getText
+    val to                                     = idents.get(1).getText
+    val via                                    = idents.get(2).getText
     val guardE: BuildResult[Option[expr_full]] =
       if ctx.WHEN ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     guardE.map(g => TransitionRuleFull(from, to, via, g, sp(ctx)))
@@ -290,8 +290,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     expr(ctx.expr).map(e => FactDeclFull(name, e, sp(ctx)))
 
   private def buildFunction(ctx: FunctionDeclContext): BuildResult[FunctionDeclFull] =
-    val name       = ctx.lowerIdent.getText
-    val returnType = buildTypeExpr(ctx.typeExpr)
+    val name                                      = ctx.lowerIdent.getText
+    val returnType                                = buildTypeExpr(ctx.typeExpr)
     val paramsE: BuildResult[List[ParamDeclFull]] =
       Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
     for
@@ -301,7 +301,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     yield FunctionDeclFull(name, ps, rt, b, sp(ctx))
 
   private def buildPredicate(ctx: PredicateDeclContext): BuildResult[PredicateDeclFull] =
-    val name = ctx.lowerIdent.getText
+    val name                                      = ctx.lowerIdent.getText
     val paramsE: BuildResult[List[ParamDeclFull]] =
       Option(ctx.paramList).map(_.param.asScala.toList.traverseB(buildParam)).getOrElse(Right(Nil))
     for
@@ -318,8 +318,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     val target          = ctx.UPPER_IDENT.getText
     val idents          = ctx.lowerIdent.asScala.toList
     val stringQualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
-    val resolved = idents match
-      case List(p) => Right((stringQualifier, p.getText))
+    val resolved        = idents match
+      case List(p)    => Right((stringQualifier, p.getText))
       case List(q, p) =>
         if stringQualifier.isDefined then
           Left(buildErr(
@@ -333,11 +333,11 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       (qual, p) = qp
       v        <- expr(ctx.expr)
     yield
-    // Parse-don't-validate: dispatch on property name → typed
-    // convention_value at IR construction time. Unrecognised property
-    // names / shape-or-range failures flow through CvUnknown / CvBad
-    // variants for the validator pass to surface as diagnostics.
-    ConventionRuleFull(target, p, qual, parseConventionValue(p, v), sp(ctx))
+      // Parse-don't-validate: dispatch on property name → typed
+      // convention_value at IR construction time. Unrecognised property
+      // names / shape-or-range failures flow through CvUnknown / CvBad
+      // variants for the validator pass to surface as diagnostics.
+      ConventionRuleFull(target, p, qual, parseConventionValue(p, v), sp(ctx))
 
   private def buildTypeExpr(ctx: TypeExprContext): BuildResult[type_expr_full] =
     val baseTypes = ctx.baseType
@@ -345,8 +345,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       for
         fromType <- buildBaseType(baseTypes.get(0))
         toType   <- buildBaseType(baseTypes.get(1))
-        mult <- Option(ctx.multiplicity) match
-                  case None => Right(MultOne())
+        mult     <- Option(ctx.multiplicity) match
+                  case None    => Right(MultOne())
                   case Some(m) =>
                     m.getText match
                       case "one"  => Right(MultOne())
@@ -460,9 +460,9 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     buildQuantifier(ctx.quantifierExpr)
   override def visitSomeWrapE(ctx: SomeWrapEContext): BuildResult[expr_full] =
     buildSomeWrap(ctx.someWrapExpr)
-  override def visitTheE(ctx: TheEContext): BuildResult[expr_full] = buildThe(ctx.theExpr)
-  override def visitIfE(ctx: IfEContext): BuildResult[expr_full]   = buildIf(ctx.ifExpr)
-  override def visitLetE(ctx: LetEContext): BuildResult[expr_full] = buildLet(ctx.letExpr)
+  override def visitTheE(ctx: TheEContext): BuildResult[expr_full]       = buildThe(ctx.theExpr)
+  override def visitIfE(ctx: IfEContext): BuildResult[expr_full]         = buildIf(ctx.ifExpr)
+  override def visitLetE(ctx: LetEContext): BuildResult[expr_full]       = buildLet(ctx.letExpr)
   override def visitLambdaE(ctx: LambdaEContext): BuildResult[expr_full] =
     buildLambda(ctx.lambdaExpr)
   override def visitConstructorE(ctx: ConstructorEContext): BuildResult[expr_full] =
@@ -497,7 +497,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     Right(IdentifierF(ctx.lowerIdent.getText, sp(ctx)))
 
   private def buildQuantifier(ctx: QuantifierExprContext): BuildResult[expr_full] =
-    val qCtx = ctx.quantifier
+    val qCtx                        = ctx.quantifier
     val quantifier: quant_kind_full =
       if qCtx.ALL ne null then QAll()
       else if qCtx.SOME ne null then QSome()
@@ -558,8 +558,9 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       if exprs.size % 2 != 0 then
         Left(buildErr("map literal requires key/value pairs", ctx))
       else
-        val pairs: List[(ExprContext, ExprContext)] =
-          (0 until exprs.size by 2).map(i => (exprs.get(i), exprs.get(i + 1))).toList
+        val pairs: List[(ExprContext, ExprContext)] = (0 until exprs.size by 2).map(i =>
+          (exprs.get(i), exprs.get(i + 1))
+        ).toList
         pairs
           .traverseB: (kc, vc) =>
             for

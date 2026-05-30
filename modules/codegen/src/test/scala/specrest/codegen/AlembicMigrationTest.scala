@@ -118,7 +118,7 @@ class AlembicMigrationTest extends CatsEffectSuite:
 
   test("ecommerce: aggregate-invariant trigger emitted with subtotal recompute"):
     SpecFixtures.loadProfiled("ecommerce").map: profiled =>
-      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val migrationPath = files.keys
         .find(_.startsWith("alembic/versions/"))
         .getOrElse(fail(s"missing alembic migration; paths=${files.keys.toList.sorted}"))
@@ -146,7 +146,7 @@ class AlembicMigrationTest extends CatsEffectSuite:
 
   test("ecommerce: Product.partial_index 'active' emits postgresql_where"):
     SpecFixtures.loadProfiled("ecommerce").map: profiled =>
-      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val files         = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val migrationPath = files.keys
         .find(_.startsWith("alembic/versions/"))
         .getOrElse(fail(s"missing alembic migration; paths=${files.keys.toList.sorted}"))

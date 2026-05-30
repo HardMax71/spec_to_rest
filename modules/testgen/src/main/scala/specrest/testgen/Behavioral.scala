@@ -28,7 +28,7 @@ object Behavioral:
     val ir               = profiled.ir
     val transition       = transitionEmission(profiled, ir)
     val coveredByTransit = transition.coveredOps
-    val perOp = profiled.operations.flatMap: pop =>
+    val perOp            = profiled.operations.flatMap: pop =>
       if StubOps.isStub(profiled, pop) then
         List(Left(TestSkip(pop.operationName, "operation", StubOps.skipReason(pop))))
       else
@@ -349,7 +349,7 @@ object Behavioral:
         List(Left(TestSkip(trnName(td), "transition", s"unknown entity '${trnEntity(td)}'"))),
         Set.empty
       )
-    val entity = entityOpt.get
+    val entity   = entityOpt.get
     val fieldOpt =
       findFieldDeclFull(entFields(entity), trnField(td))
     if fieldOpt.isEmpty then
@@ -397,9 +397,9 @@ object Behavioral:
     val pk           = pkOpt.get
     val byVia        = trnRules(td).groupBy(trlVia)
     byVia.toList.sortBy(_._1).foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, kv) =>
-      val (viaName, rules) = kv
-      val opDeclOpt        = svcOperations(ir).find(o => operName(o) == viaName)
-      val popOpt           = profiled.operations.find(_.operationName == viaName)
+      val (viaName, rules)              = kv
+      val opDeclOpt                     = svcOperations(ir).find(o => operName(o) == viaName)
+      val popOpt                        = profiled.operations.find(_.operationName == viaName)
       val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
         case (Some(_), Some(pop)) if StubOps.isStub(profiled, pop) =>
           TransitionEmissionResult(
@@ -437,7 +437,7 @@ object Behavioral:
             case Right(nonPath) =>
               val legalFroms   = rules.map(trlFrom).toSet
               val illegalFroms = statusValues.filterNot(legalFroms.contains)
-              val stateField = stateFieldForEntity(trnEntity(td), ir)
+              val stateField   = stateFieldForEntity(trnEntity(td), ir)
                 .getOrElse(Naming.toSnakeCase(trnEntity(td)) + "s")
               val positives = rules.toList.map: rule =>
                 buildTransitionPositiveOrSkip(
@@ -520,7 +520,7 @@ object Behavioral:
       ir: ServiceIRFull
   ): Either[(String, String), List[NonPathInput]] =
     val overrides = TestStrategyOverrides.from(ir)
-    val tagged =
+    val tagged    =
       pop.endpoint.bodyParams.map(p => (p, NonPathKind.Body)) ++
         pop.endpoint.queryParams.map(p => (p, NonPathKind.Query))
     val resolved = tagged.map: (p, k) =>
@@ -529,7 +529,7 @@ object Behavioral:
       (p.name, k, expr)
     resolved.collectFirst { case (n, _, StrategyExpr.Skip(r)) => (n, r) } match
       case Some(skip) => Left(skip)
-      case None =>
+      case None       =>
         val withArgs = resolved
           .collect { case (n, k, StrategyExpr.Code(t)) => (n, k, t) }
           .foldLeft((List.empty[NonPathInput], Set.empty[String])):
@@ -683,7 +683,7 @@ object Behavioral:
   private def transitionRequestCall(pop: ProfiledOperation, nonPath: List[NonPathInput]): String =
     val ep        = pop.endpoint
     val pathParam = ep.pathParams.headOption.map(_.name)
-    val pathExpr =
+    val pathExpr  =
       pathParam match
         case Some(p) =>
           val rendered = ep.path.replace(s"{$p}", "{seeded_id}")
@@ -809,14 +809,14 @@ object Behavioral:
     if params.isEmpty then Right(InputSig(Nil, "", ""))
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
+      val pairs     = params.map: p =>
         val ctx  = StrategyCtx.OperationInput(pop.operationName, p.name)
         val expr = Strategies.expressionFor(p.typeExpr, ir, ctx, overrides)
         (p.name, expr)
       val firstSkip = pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" }
       firstSkip match
         case Some(reason) => Left(reason)
-        case None =>
+        case None         =>
           val codes = pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) }
           val sig   = codes.map(_._1).mkString(", ")
           val args  = codes.map((n, t) => s"$n=$t").mkString(", ")
@@ -824,7 +824,7 @@ object Behavioral:
           Right(InputSig(names = codes.map(_._1), signature = sig, givenLine = gen))
 
   private def requestCallExpr(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
+    val ep     = pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
@@ -834,7 +834,7 @@ object Behavioral:
     val bodyParamNames  = ep.bodyParams.map(_.name)
     val queryParamNames = ep.queryParams.map(_.name)
     val pathExpr        = pythonPathLiteral(ep)
-    val bodyExpr =
+    val bodyExpr        =
       if bodyParamNames.isEmpty then ""
       else
         val pairs =
@@ -938,14 +938,14 @@ object Behavioral:
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
     val entitySnake = Naming.toSnakeCase(r.entityName)
-    val testName =
+    val testName    =
       s"test_${opSnake}_negative_${r.stateName}_${r.fieldName}_not_${r.requiredValue.toLowerCase}"
     val rowStrategy = Strategies.strategyFunctionName(r.entityName)
     val pkKey       = ExprToPython.pyString(r.pkField)
     val fieldKey    = ExprToPython.pyString(r.fieldName)
     val wrongValues = r.enumValues.filterNot(_ == r.requiredValue)
     val sampledFrom = wrongValues.map(ExprToPython.pyString).mkString("[", ", ", "]")
-    val extraGiven =
+    val extraGiven  =
       List("row" -> s"$rowStrategy()", "wrong_status" -> s"st.sampled_from($sampledFrom)") ++
         nonPath.map(i => i.argName -> i.strategyExpr)
     val givenArgs = extraGiven.map((n, e) => s"$n=$e").mkString(", ")
@@ -1001,7 +1001,7 @@ object Behavioral:
     ) extends Fix:
       def writeKey: String            = leftKey
       override def reads: Set[String] = Set(rightKey)
-      def lines: List[String] =
+      def lines: List[String]         =
         val lk      = ExprToPython.pyString(leftKey)
         val rk      = ExprToPython.pyString(rightKey)
         val anchor  = "datetime.datetime(2024, 1, 1)"
@@ -1029,7 +1029,7 @@ object Behavioral:
         constPy: String,
         deltaSeconds: Int
     ) extends Fix:
-      def writeKey: String = field
+      def writeKey: String    = field
       def lines: List[String] =
         val k = ExprToPython.pyString(field)
         kind match
@@ -1047,18 +1047,18 @@ object Behavioral:
             List(s"row[$k] = ($parsed + $delta).isoformat()")
 
     private case class Assign(field: String, pyValue: String) extends Fix:
-      def writeKey: String = field
+      def writeKey: String    = field
       def lines: List[String] =
         List(s"row[${ExprToPython.pyString(field)}] = $pyValue")
 
     private case class NotNoneAnchor(field: String, anchor: String) extends Fix:
-      def writeKey: String = field
+      def writeKey: String    = field
       def lines: List[String] =
         val k = ExprToPython.pyString(field)
         List(s"if row[$k] is None: row[$k] = $anchor")
 
     private case class ListOfSize(field: String, items: List[String]) extends Fix:
-      def writeKey: String = field
+      def writeKey: String    = field
       def lines: List[String] =
         val k = ExprToPython.pyString(field)
         List(s"row[$k] = [${items.mkString(", ")}]")
@@ -1066,7 +1066,7 @@ object Behavioral:
     private case class ListAppend(field: String, pyElem: String, optional: Boolean) extends Fix:
       def writeKey: String            = field
       override def reads: Set[String] = Set(field)
-      def lines: List[String] =
+      def lines: List[String]         =
         val k      = ExprToPython.pyString(field)
         val anchor = if optional then List(s"if row[$k] is None: row[$k] = []") else Nil
         anchor ++ List(s"row[$k] = list(row[$k]) + [$pyElem]")
@@ -1086,7 +1086,7 @@ object Behavioral:
         val realFixes = fixes.filter:
           case _: NoOp => false
           case _       => true
-        val byKey = realFixes.groupBy(_.writeKey)
+        val byKey    = realFixes.groupBy(_.writeKey)
         val conflict = byKey.exists: (_, group) =>
           group.map(_.lines).distinct.size > 1
         if conflict then None
@@ -1099,7 +1099,7 @@ object Behavioral:
       if remaining.isEmpty then Some(placed.reverse)
       else
         val pendingWrites = remaining.map(_.writeKey).toSet
-        val idx = remaining.indexWhere: f =>
+        val idx           = remaining.indexWhere: f =>
           f.reads.filterNot(_ == f.writeKey).forall(r => !pendingWrites.contains(r))
         if idx < 0 then None
         else
@@ -1137,8 +1137,8 @@ object Behavioral:
         if a == transitionField || b == transitionField then None
         else
           for
-            fa <- findFieldDeclFull(entFields(entity), a)
-            fb <- findFieldDeclFull(entFields(entity), b)
+            fa   <- findFieldDeclFull(entFields(entity), a)
+            fb   <- findFieldDeclFull(entFields(entity), b)
             kind <-
               if isDateTimeType(svcTypeAliases(ir), fldType(fa)) &&
                 isDateTimeType(svcTypeAliases(ir), fldType(fb))
@@ -1256,7 +1256,7 @@ object Behavioral:
         case FloatLitF(v, _)           => Some(v.toString)
         case BoolLitF(v, _)            => Some(if v then "True" else "False")
         case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
-        case IdentifierF(name, _) =>
+        case IdentifierF(name, _)      =>
           val enumNames = svcEnums(ir).flatMap(enmVariants).toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
@@ -1265,7 +1265,7 @@ object Behavioral:
     private def literalValueFor(rhs: expr_full, ir: ServiceIRFull): Option[String] =
       rhs match
         case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
-        case IdentifierF(name, _) =>
+        case IdentifierF(name, _)      =>
           val enumNames = svcEnums(ir).flatMap(enmVariants).toSet
           if enumNames.contains(name) then Some(ExprToPython.pyString(name))
           else None
@@ -1286,7 +1286,7 @@ object Behavioral:
         inner match
           case NamedTypeF("String", _) => Some(ExprToPython.pyString("x"))
           case NamedTypeF("Bool", _)   => Some("True")
-          case NamedTypeF(name, _) =>
+          case NamedTypeF(name, _)     =>
             svcEnums(ir)
               .find(e => enmName(e) == name)
               .flatMap(e => enmVariants(e).headOption)

@@ -7,8 +7,8 @@ import specrest.ir.generated.SpecRestGenerated.*
 // (foreach over case-tables at class-init time) don't capture `this` and
 // trip Scala's safe-initialization checker.
 object DisambiguateKeysTest:
-  private def n(i: Int): nat                = Nata(BigInt(i))
-  private def ident(s: String): IdentifierF = IdentifierF(s, None)
+  private def n(i: Int): nat                            = Nata(BigInt(i))
+  private def ident(s: String): IdentifierF             = IdentifierF(s, None)
   private def call(name: String, arg: expr_full): CallF =
     CallF(ident(name), List(arg), None)
   private val dummyArg: expr_full = BoolLitF(true, None)

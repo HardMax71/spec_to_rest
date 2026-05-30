@@ -17,14 +17,14 @@ class GeneratorGoldenTest extends CatsEffectSuite:
   fixtures.foreach: name =>
     test(s"Dafny skeleton matches golden — $name"):
       for
-        ir    <- SpecFixtures.loadIR(name)
-        result = Generator.generate(ir)
+        ir     <- SpecFixtures.loadIR(name)
+        result  = Generator.generate(ir)
         emitted = result.fold(
                     err => fail(s"Generator failed for $name: ${err.message}"),
                     _.text.stripSuffix("\n")
                   )
         golden <- IO.blocking(Files.readString(goldenDir.resolve(s"$name.dfy")).stripSuffix("\n"))
-        _ <-
+        _      <-
           if emitted == golden then IO.unit
           else
             IO.blocking {

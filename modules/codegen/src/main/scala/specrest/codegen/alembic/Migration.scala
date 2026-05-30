@@ -95,8 +95,8 @@ object Migration:
     )
 
   private def buildAlembicTable(t: table_spec, dialect: Dialect): AlembicTable =
-    val tname   = tableName(t)
-    val columns = tableColumns(t).map(buildColumn(_, t, dialect))
+    val tname       = tableName(t)
+    val columns     = tableColumns(t).map(buildColumn(_, t, dialect))
     val foreignKeys = tableForeignKeys(t).map: fk =>
       AlembicForeignKey(
         name = s"fk_${tname}_${fkColumn(fk)}",

@@ -31,7 +31,7 @@ object ExitCodes:
     case _: CacheFailure         => Backend
 
   def forCegisOutcome(o: CegisOutcome): ExitCode = o match
-    case _: CegisOutcome.Verified => Ok
+    case _: CegisOutcome.Verified           => Ok
     case CegisOutcome.Aborted(reason, _, _) =>
       reason match
         case _: AbortReason.BudgetExhausted        => Violations

@@ -90,7 +90,7 @@ object SpecRestGeneratedTestProbes:
     "BinaryOp.Or"         -> BinaryOpF(BOr(), BoolLitF(true, None), BoolLitF(false, None), None),
     "BinaryOp.Implies"    -> BinaryOpF(BImplies(), BoolLitF(true, None), BoolLitF(false, None), None),
     "BinaryOp.Iff"        -> BinaryOpF(BIff(), BoolLitF(true, None), BoolLitF(false, None), None),
-    "BinaryOp.Eq" -> BinaryOpF(
+    "BinaryOp.Eq"         -> BinaryOpF(
       BEq(),
       IntLitF(BigInt(1), None),
       IntLitF(BigInt(2), None),
@@ -121,7 +121,7 @@ object SpecRestGeneratedTestProbes:
     "Pre"         -> PreF(IdentifierF("count", None), None),
     "FieldAccess" -> FieldAccessF(IdentifierF("u", None), "name", None),
     "Index"       -> IndexF(IdentifierF("arr", None), IntLitF(BigInt(0), None), None),
-    "Index.Pre" -> IndexF(
+    "Index.Pre"   -> IndexF(
       PreF(IdentifierF("arr", None), None),
       IntLitF(BigInt(0), None),
       None

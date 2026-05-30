@@ -7,14 +7,14 @@ object UndefinedRef extends LintPass:
   val code = "L02"
 
   def run(ir: service_ir_full): List[LintDiagnostic] =
-    val out         = List.newBuilder[LintDiagnostic]
-    val stateFields = irStateFieldNames(ir).toSet
-    val entityNames = svcEntities(ir).map(entName).toSet
-    val enumNames   = svcEnums(ir).map(enmName).toSet
-    val enumMembers = svcEnums(ir).flatMap(enmVariants).toSet
-    val typeAliases = svcTypeAliases(ir).map(talName).toSet
-    val predicates  = svcPredicates(ir).map(prdName).toSet
-    val functions   = svcFunctions(ir).map(fncName).toSet
+    val out          = List.newBuilder[LintDiagnostic]
+    val stateFields  = irStateFieldNames(ir).toSet
+    val entityNames  = svcEntities(ir).map(entName).toSet
+    val enumNames    = svcEnums(ir).map(enmName).toSet
+    val enumMembers  = svcEnums(ir).flatMap(enmVariants).toSet
+    val typeAliases  = svcTypeAliases(ir).map(talName).toSet
+    val predicates   = svcPredicates(ir).map(prdName).toSet
+    val functions    = svcFunctions(ir).map(fncName).toSet
     val factImplicit = svcFacts(ir).flatMap { f =>
       // Fact bodies sometimes call helper predicates by name with no
       // explicit declaration; treat any Call(Identifier, _) callee as

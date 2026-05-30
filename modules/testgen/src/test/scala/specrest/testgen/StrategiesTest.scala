@@ -391,7 +391,7 @@ class StrategiesTest extends CatsEffectSuite:
       )
     )
     val overrides = TestStrategyOverrides.from(ir)
-    val expr = Strategies.expressionFor(
+    val expr      = Strategies.expressionFor(
       named("String"),
       ir,
       StrategyCtx.OperationInput("Login", "password"),
@@ -427,7 +427,7 @@ class StrategiesTest extends CatsEffectSuite:
         )
       )
     )
-    val overrides = TestStrategyOverrides.from(ir)
+    val overrides    = TestStrategyOverrides.from(ir)
     val exprRegister = Strategies.expressionFor(
       named("String"),
       ir,

@@ -135,7 +135,7 @@ object EmitGo:
     val templates = GoTemplates.goChiPostgres
     val ctx       = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val module    = goModuleName(ctx.service.kebabName)
-    val service = GoServiceNames(
+    val service   = GoServiceNames(
       name = ctx.service.name,
       snakeName = ctx.service.snakeName,
       kebabName = ctx.service.kebabName
@@ -301,7 +301,7 @@ object EmitGo:
 
   private def goDbView(database: String, snake: String): GoDbView = database match
     case "postgres" =>
-      val dv = specrest.codegen.migration.Postgres.deployment(snake)
+      val dv     = specrest.codegen.migration.Postgres.deployment(snake)
       val recipe = specrest.codegen.Dsn.Recipe(
         spec = specrest.codegen.Dsn.Spec(
           shape = specrest.codegen.Dsn.Shape.Url("postgres"),
@@ -361,7 +361,7 @@ object EmitGo:
         dsnRecipe = None
       )
     case "mysql" =>
-      val dv = specrest.codegen.migration.Mysql.deployment(snake)
+      val dv     = specrest.codegen.migration.Mysql.deployment(snake)
       val recipe = specrest.codegen.Dsn.Recipe(
         spec = specrest.codegen.Dsn.Spec(
           shape = specrest.codegen.Dsn.Shape.MysqlGo,
@@ -418,7 +418,7 @@ object EmitGo:
       val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
       val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
-      val view = SqlMigrationView(
+      val view       = SqlMigrationView(
         upgradeStatements = SqlRenderer.upgrade(ops, dialect),
         downgradeStatements = SqlRenderer.downgrade(ops, dialect)
       )
@@ -439,11 +439,11 @@ object EmitGo:
     opts.previousSnapshot match
       case None                                      => emitInitial()
       case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
-      case Some(prev) =>
+      case Some(prev)                                =>
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
-          val view = SqlMigrationView(
+          val view    = SqlMigrationView(
             upgradeStatements = SqlRenderer.upgrade(ops, dialect),
             downgradeStatements = SqlRenderer.downgrade(ops, dialect)
           )
@@ -594,14 +594,14 @@ object EmitGo:
       entity: ProfiledEntity,
       typeLookup: Map[String, String]
   ): GoOperation =
-    val endpoint = op.endpoint
+    val endpoint   = op.endpoint
     val pathParams = endpoint.pathParams.map: p =>
       val goType = goTypeForParam(p.typeExpr, typeLookup)
       GoPathParam(p.name, toCamelCase(p.name), goType, isInt = goType == "int64")
 
     val nonIdFields   = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
     val createAssigns = nonIdFields.map(f => s"${f.goField}: body.${f.goField}")
-    val lookupCol = pathParams.headOption match
+    val lookupCol     = pathParams.headOption match
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
 
@@ -627,7 +627,7 @@ object EmitGo:
             (entity.createSchemaName, List.empty[GoFieldView])
           case Some(name) =>
             val pathParamNames = endpoint.pathParams.map(_.name).toSet
-            val fields = op.requestBodyFields
+            val fields         = op.requestBodyFields
               .filterNot(f => pathParamNames.contains(f.fieldName))
               .map(toGoField)
             (name, fields)

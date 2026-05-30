@@ -19,13 +19,13 @@ class AlloyGoldenTest extends CatsEffectSuite:
       for
         ir      <- SpecFixtures.loadIR(name)
         moduleE <- Translator.translateGlobal(ir, scope = 5)
-        module =
+        module   =
           moduleE.toOption.getOrElse(
             fail(s"translateGlobal failed for $name: ${moduleE.left.toOption.map(_.message)}")
           )
         emitted = Render.render(module).stripSuffix("\n")
         golden <- IO.blocking(Files.readString(goldenDir.resolve(s"$name.als")).stripSuffix("\n"))
-        _ <-
+        _      <-
           if emitted == golden then IO.unit
           else
             IO.blocking {

@@ -75,8 +75,8 @@ object Consistency:
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): IO[ConsistencyReport] =
-    val plans = planChecks(ir)
-    val enums = Trust.enumNames(ir)
+    val plans                          = planChecks(ir)
+    val enums                          = Trust.enumNames(ir)
     val results: IO[List[CheckResult]] =
       if config.maxParallel <= 1 then
         backendsResource.use: (wasm, alloy) =>
@@ -93,13 +93,13 @@ object Consistency:
       config: VerificationConfig
   ): CheckResult =
     check.diagnostic match
-      case None => check
+      case None       => check
       case Some(diag) =>
         val op = check.operationName.flatMap(n =>
           svcOperations(ir).find(o => operName(o) == n)
         )
         val isInvariantBound = check.kind == CheckKind.Preservation
-        val invDecl =
+        val invDecl          =
           if !isInvariantBound then None
           else
             check.invariantName.flatMap: n =>
@@ -108,7 +108,7 @@ object Consistency:
                 .orElse(n.stripPrefix("inv_").toIntOption.flatMap(idx =>
                   svcInvariants(ir).lift(idx)
                 ))
-        val invDisplayName = if isInvariantBound then check.invariantName else None
+        val invDisplayName                = if isInvariantBound then check.invariantName else None
         val newSuggestion: Option[String] =
           if !config.suggestions then None
           else
@@ -194,7 +194,7 @@ object Consistency:
       TrustLevel.fromLifted(trustRequires(enums, op))
     case CheckPlan.Op(ir, op, CheckKind.Enabled) =>
       TrustLevel.fromLifted(trustEnabled(enums, op, ir))
-    case CheckPlan.Op(_, _, _) => TrustLevel.BestEffort
+    case CheckPlan.Op(_, _, _)              => TrustLevel.BestEffort
     case CheckPlan.Preservation(_, op, inv) =>
       TrustLevel.fromLifted(trustPreservation(enums, op, inv.decl))
     case CheckPlan.Temporal(_, _) => TrustLevel.BestEffort
@@ -427,7 +427,7 @@ object Consistency:
       case _                  => "?"
     val id          = s"${operName(op)}.$kindStr"
     val sourceSpans = operationCheckSpans(op, kind, ir)
-    val tool = kind match
+    val tool        = kind match
       case CheckKind.Requires => Classifier.classifyRequires(op)
       case CheckKind.Enabled  => Classifier.classifyEnabled(op, ir)
       case _                  => VerifierTool.Z3
@@ -439,7 +439,7 @@ object Consistency:
       val scriptIO: IO[Either[VerifyError.Translator, Z3Script]] = kind match
         case CheckKind.Requires => Translator.translateOperationRequires(ir, op)
         case CheckKind.Enabled  => Translator.translateOperationEnabled(ir, op)
-        case _ =>
+        case _                  =>
           IO.pure(Left(VerifyError.Translator(s"runOperationCheck: unexpected kind $kind")))
       scriptIO.flatMap:
         case Left(err) =>
@@ -700,7 +700,7 @@ object Consistency:
             ))
           case Right(result) =>
             val outcome = translation.kind match
-              case AlloyTranslator.TemporalKind.Always => invertStatus(result.status)
+              case AlloyTranslator.TemporalKind.Always     => invertStatus(result.status)
               case AlloyTranslator.TemporalKind.Eventually =>
                 CheckOutcome.fromStatus(result.status)
             IO.blocking(
@@ -854,7 +854,7 @@ object Consistency:
           Some(DiagnosticCategory.ContradictoryInvariants)
         case (CheckKind.Requires, CheckStatus.Unsat) =>
           Some(DiagnosticCategory.UnsatisfiablePrecondition)
-        case (CheckKind.Enabled, CheckStatus.Unsat) => Some(DiagnosticCategory.UnreachableOperation)
+        case (CheckKind.Enabled, CheckStatus.Unsat)    => Some(DiagnosticCategory.UnreachableOperation)
         case (CheckKind.Preservation, CheckStatus.Sat) =>
           Some(DiagnosticCategory.InvariantViolationByOperation)
         case _ => None
@@ -931,7 +931,7 @@ object Consistency:
       invariantName: Option[String],
       sourceSpans: List[span_t]
   ): CheckResult =
-    val message = "outside lower's coverage"
+    val message    = "outside lower's coverage"
     val diagnostic = VerificationDiagnostic(
       level = DiagnosticLevel.Warning,
       category = DiagnosticCategory.SoundnessLimitation,
@@ -966,7 +966,7 @@ object Consistency:
       message: String,
       trust: TrustLevel
   ): CheckResult =
-    val isTranslator = category == DiagnosticCategory.TranslatorLimitation
+    val isTranslator         = category == DiagnosticCategory.TranslatorLimitation
     val status: CheckOutcome =
       if isTranslator then CheckOutcome.Skipped else CheckOutcome.Unknown
     val detail =
@@ -1005,7 +1005,7 @@ object Consistency:
   ): Option[String] = kind match
     case CheckKind.Preservation =>
       outcome match
-        case CheckOutcome.Sat => None
+        case CheckOutcome.Sat   => None
         case CheckOutcome.Unsat =>
           Some(
             s"operation '${op.getOrElse("?")}' does not preserve invariant '${inv.getOrElse("?")}' — counterexample found"
@@ -1017,7 +1017,7 @@ object Consistency:
         case CheckOutcome.Skipped => None
     case CheckKind.Global =>
       outcome match
-        case CheckOutcome.Sat => None
+        case CheckOutcome.Sat   => None
         case CheckOutcome.Unsat =>
           Some("invariants are jointly contradictory — no valid state exists")
         case CheckOutcome.Unknown =>
@@ -1025,7 +1025,7 @@ object Consistency:
         case CheckOutcome.Skipped => None
     case CheckKind.Requires =>
       outcome match
-        case CheckOutcome.Sat => None
+        case CheckOutcome.Sat   => None
         case CheckOutcome.Unsat =>
           Some(
             s"'requires' of operation '${op.getOrElse("?")}' is unsatisfiable under the spec's base constraints — the operation can never fire"
@@ -1037,7 +1037,7 @@ object Consistency:
         case CheckOutcome.Skipped => None
     case CheckKind.Enabled =>
       outcome match
-        case CheckOutcome.Sat => None
+        case CheckOutcome.Sat   => None
         case CheckOutcome.Unsat =>
           Some(
             s"operation '${op.getOrElse("?")}' is dead — no valid pre-state satisfies both the invariants and its 'requires'"
@@ -1047,7 +1047,7 @@ object Consistency:
         case CheckOutcome.Skipped => None
     case CheckKind.Temporal =>
       outcome match
-        case CheckOutcome.Sat => None
+        case CheckOutcome.Sat   => None
         case CheckOutcome.Unsat =>
           Some(
             s"temporal property '${inv.getOrElse("?")}' does not hold under the invariants at the current Alloy scope"

@@ -85,7 +85,7 @@ object Synth:
       err: PrintStream = System.err
   ): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)    => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -201,7 +201,7 @@ object Synth:
       err: PrintStream = System.err
   ): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)    => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -264,7 +264,7 @@ object Synth:
       case Left(msg) =>
         IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
       case Right(binary) =>
-        val req = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
+        val req    = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
         val budget = CegisBudget.Default.copy(
           maxIterations = opts.maxIter,
           maxCostUsd = opts.maxCostUsd
@@ -312,9 +312,10 @@ object Synth:
                   opts.hintsEnabled
                 )
               loop.run(req).flatMap: outcome =>
-                emitOutcome(outcome, classificationOperationName(c), out, err) *> tracker.summary
-                  .flatMap: s =>
-                    emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
+                emitOutcome(outcome, classificationOperationName(c), out, err) *>
+                  tracker.summary
+                    .flatMap: s =>
+                      emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
 
   private def verifiedCacheResource(opts: SynthVerifyOptions): IO[Option[Cache]] =
     if opts.noCache then IO.pure(None)
@@ -396,7 +397,7 @@ object Synth:
       err: PrintStream = System.err
   ): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)    => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -427,7 +428,7 @@ object Synth:
       ).as(ExitCodes.Ok)
     else
       DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
-        case Left(msg) => IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
+        case Left(msg)     => IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
         case Right(binary) =>
           DafnyGenerator.generate(ir) match
             case Left(dErr) =>

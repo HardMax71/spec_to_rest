@@ -91,9 +91,9 @@ final class WasmBackend:
               solver.assertAndTrack(Backend.renderBool(rctx, a), tracker)
               val _ = trackerNames += name
           else for a <- script.assertions do solver.add(Backend.renderBool(rctx, a))
-          val t0       = System.nanoTime()
-          val status   = solver.check()
-          val duration = (System.nanoTime() - t0) / 1_000_000.0
+          val t0          = System.nanoTime()
+          val status      = solver.check()
+          val duration    = (System.nanoTime() - t0) / 1_000_000.0
           val checkStatus = status match
             case Status.SATISFIABLE   => CheckStatus.Sat
             case Status.UNSATISFIABLE => CheckStatus.Unsat
@@ -144,8 +144,8 @@ private def registerSort(ctx: Context, map: mutable.Map[String, Sort], s: Z3Sort
 
 private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3Sort): Sort =
   s match
-    case Z3Sort.Int  => ctx.getIntSort
-    case Z3Sort.Bool => ctx.getBoolSort
+    case Z3Sort.Int            => ctx.getIntSort
+    case Z3Sort.Bool           => ctx.getBoolSort
     case Z3Sort.Uninterp(name) =>
       sortMap.getOrElseUpdate(Z3Sort.key(s), ctx.mkUninterpretedSort(name))
     case Z3Sort.SetOf(elem) =>
@@ -192,22 +192,22 @@ private object Backend:
       lookupVar(rctx, name).getOrElse(backendFail(rctx, s"unbound Z3 variable '$name'"))
     case Z3Expr.App(func, args, _) =>
       rctx.funcMap.get(func) match
-        case None => backendFail(rctx, s"undeclared Z3 function '$func'")
+        case None       => backendFail(rctx, s"undeclared Z3 function '$func'")
         case Some(decl) =>
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
             .apply(rendered.asInstanceOf[Array[Z3AstExpr[Sort]]]*)
-    case Z3Expr.IntLit(v, _)  => rctx.ctx.mkInt(v.toString)
-    case Z3Expr.BoolLit(v, _) => rctx.ctx.mkBool(v)
-    case Z3Expr.And(args, _)  => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Or(args, _)   => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Not(arg, _)   => rctx.ctx.mkNot(renderBool(rctx, arg))
+    case Z3Expr.IntLit(v, _)     => rctx.ctx.mkInt(v.toString)
+    case Z3Expr.BoolLit(v, _)    => rctx.ctx.mkBool(v)
+    case Z3Expr.And(args, _)     => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Or(args, _)      => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Not(arg, _)      => rctx.ctx.mkNot(renderBool(rctx, arg))
     case Z3Expr.Implies(l, r, _) =>
       rctx.ctx.mkImplies(renderBool(rctx, l), renderBool(rctx, r))
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
     case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
-    case Z3Expr.EmptySet(elemSort, _) =>
+    case Z3Expr.EmptySet(elemSort, _)      =>
       val sort = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
       rctx.ctx.mkEmptySet(sort)
     case Z3Expr.SetLit(elemSort, members, _) =>

@@ -40,7 +40,7 @@ class NarrationTest extends CatsEffectSuite:
       ir     <- SpecFixtures.loadIR("unsat_invariants")
       report <- Consistency.runConsistencyChecks(ir, cfg)
     yield
-      val global = report.checks.find(_.id == "global").getOrElse(fail("no global check"))
+      val global    = report.checks.find(_.id == "global").getOrElse(fail("no global check"))
       val narrative = global.diagnostic.flatMap(_.narrative)
         .getOrElse(fail("expected narration on global check"))
       assert(narrative.contains("Why these invariants conflict"), narrative)

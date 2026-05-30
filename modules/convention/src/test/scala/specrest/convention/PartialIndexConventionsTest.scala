@@ -11,8 +11,8 @@ object PartialIndexConventionsTest:
       v: expr_full
   ): ConventionRuleFull =
     ConventionRuleFull(target, prop, col, parseConventionValue(prop, v), None)
-  private def stringL(s: String): StringLitF = StringLitF(s, None)
-  private def intL(n: Int): IntLitF          = IntLitF(BigInt(n), None)
+  private def stringL(s: String): StringLitF                              = StringLitF(s, None)
+  private def intL(n: Int): IntLitF                                       = IntLitF(BigInt(n), None)
   private def conv(rs: List[convention_rule_full]): conventions_decl_full =
     ConventionsDeclFull(rs, None)
 
@@ -77,8 +77,8 @@ class PartialIndexConventionsTest extends CatsEffectSuite:
     assertEquals(appendPartialIndexes(t, Nil), t)
 
   test("one (col, filter) appends one IndexSpec with canonical name"):
-    val t      = table("orders")
-    val result = appendPartialIndexes(t, List(("status", "status = 'open'")))
+    val t        = table("orders")
+    val result   = appendPartialIndexes(t, List(("status", "status = 'open'")))
     val expected =
       IndexSpec("idx_orders_status_partial", List("status"), false, Some("status = 'open'"))
     assertEquals(tableIndexes(result), List(expected))

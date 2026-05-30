@@ -34,7 +34,7 @@ object TsStateful:
             Some(StepOp(pop.operationName, pop, args))
           case _ => None
 
-    val invCtx = Stateful.invariantCtx(ir)
+    val invCtx     = Stateful.invariantCtx(ir)
     val invariants =
       svcInvariants(ir).zipWithIndex.flatMap: (inv, idx) =>
         val name = invName(inv).getOrElse(s"anon_$idx")
@@ -68,7 +68,7 @@ object TsStateful:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
+      val pairs     = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
         (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, TsFastCheckStrategy))
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
@@ -76,15 +76,15 @@ object TsStateful:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def dispatchCall(s: StepOp): String =
-    val ep = s.pop.endpoint
+    val ep     = s.pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
       case _: PUT    => "put"
       case _: PATCH  => "patch"
       case _: DELETE => "delete"
-    val hasPath = ep.pathParams.nonEmpty
-    val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{step.$1\\}")
+    val hasPath  = ep.pathParams.nonEmpty
+    val rawPath  = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{step.$1\\}")
     val pathExpr =
       if hasPath then s"`$rawPath`" else TsLit.str(ep.path)
     val bodyExpr =
@@ -101,10 +101,11 @@ object TsStateful:
   ): String =
     val stepArbs = stepOps
       .map: s =>
-        val fields = (("op", s"fc.constant(${TsLit.str(s.name)})")
-          :: s.args.map((n, a) => (n, a)))
-          .map((k, v) => s"$k: $v")
-          .mkString(", ")
+        val fields =
+          (("op", s"fc.constant(${TsLit.str(s.name)})")
+            :: s.args.map((n, a) => (n, a)))
+            .map((k, v) => s"$k: $v")
+            .mkString(", ")
         s"    fc.record({ $fields })"
       .mkString(",\n")
 
@@ -121,7 +122,7 @@ object TsStateful:
 
     val bodyForScan = stepArbs + dispatchCases + invChecks
     val usedRt      = RuntimeHelpers.filter(h => bodyForScan.contains(s"$h("))
-    val predNames =
+    val predNames   =
       (svcFunctions(ir).map(fncName) ++
         svcPredicates(ir).map(prdName)).distinct.sorted
         .filter(n => bodyForScan.contains(s"$n("))

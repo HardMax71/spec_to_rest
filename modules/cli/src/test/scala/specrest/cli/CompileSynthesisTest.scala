@@ -57,7 +57,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
     withTempDir: dir =>
       val opts = baseOpts(dir.toString, Some(dir.resolve("synth-cache").toString))
       for
-        code <- Compile.run("fixtures/lint/passing.spec", opts, log)
+        code  <- Compile.run("fixtures/lint/passing.spec", opts, log)
         files <- IO.blocking:
                    val stream = Files.walk(dir)
                    try stream.iterator.asScala.map(dir.relativize).map(_.toString).toSet
@@ -79,9 +79,9 @@ class CompileSynthesisTest extends CatsEffectSuite:
 
   test("loadVerifiedBodies reports the missing operation by name"):
     withTempDir: dir =>
-      val cacheDir     = dir.resolve("synth-cache")
-      val verifiedRoot = cacheDir.resolve("verified")
-      val opts         = baseOpts(dir.toString, Some(cacheDir.toString))
+      val cacheDir       = dir.resolve("synth-cache")
+      val verifiedRoot   = cacheDir.resolve("verified")
+      val opts           = baseOpts(dir.toString, Some(cacheDir.toString))
       val seed: IO[Unit] =
         for
           _       <- IO.blocking(Files.createDirectories(verifiedRoot))
@@ -94,7 +94,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
           header   = dafny.methods.find(_.name == "Shorten").getOrElse(fail("Shorten missing"))
           cache   <- Cache.make(verifiedRoot)
           key      = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
-          entry = CacheEntry(
+          entry    = CacheEntry(
                     candidate = "stub",
                     body = "assume false;",
                     usage = TokenUsage(0, 0),
@@ -104,9 +104,10 @@ class CompileSynthesisTest extends CatsEffectSuite:
           _ <- cache.store(key, entry)
         yield ()
 
-      seed *> Compile
-        .run("fixtures/spec/url_shortener.spec", opts, log)
-        .map(code => assertEquals(code, ExitCodes.Violations))
+      seed *>
+        Compile
+          .run("fixtures/spec/url_shortener.spec", opts, log)
+          .map(code => assertEquals(code, ExitCodes.Violations))
 
   test("--allow-skeletons + skeletons cache populated → compile succeeds with warning"):
     DafnyCli.resolveBinary(None).flatMap:
@@ -117,7 +118,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
     withTempDir: dir =>
       val cacheDir      = dir.resolve("synth-cache")
       val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
-      val opts =
+      val opts          =
         baseOpts(dir.toString, Some(cacheDir.toString)).copy(allowSkeletons = true)
       val seedAll: IO[Unit] =
         for
@@ -149,7 +150,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
                          finalModel = "claude-sonnet-4-6",
                          reason = "test"
                        )
-                       val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
+                       val key   = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
                        val entry = CacheEntry(
                          candidate = body,
                          body = body,
@@ -164,15 +165,16 @@ class CompileSynthesisTest extends CatsEffectSuite:
                    case None         => IO.unit
         yield ()
 
-      seedAll *> Compile
-        .run("fixtures/spec/url_shortener.spec", opts, log)
-        .map: code =>
-          assertEquals(code, ExitCodes.Ok)
-          val kernelDir = Paths.get(opts.outDir).resolve("app/dafny_kernel")
-          assert(
-            Files.isDirectory(kernelDir),
-            s"kernel emitted under $kernelDir even when only skeletons cached"
-          )
+      seedAll *>
+        Compile
+          .run("fixtures/spec/url_shortener.spec", opts, log)
+          .map: code =>
+            assertEquals(code, ExitCodes.Ok)
+            val kernelDir = Paths.get(opts.outDir).resolve("app/dafny_kernel")
+            assert(
+              Files.isDirectory(kernelDir),
+              s"kernel emitted under $kernelDir even when only skeletons cached"
+            )
 
   test("--allow-skeletons but no skeletons either → still fails with helpful error"):
     withTempDir: dir =>

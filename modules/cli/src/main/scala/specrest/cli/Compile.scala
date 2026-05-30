@@ -65,8 +65,8 @@ object Compile:
     case _               => false
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
-    val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
-    val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
+    val downgrade       = opts.withTests && !SupportedTargets.supports(opts.target)
+    val resolvedOpts    = if downgrade then opts.copy(withTests = false) else opts
     val downgradeNotice =
       if downgrade then
         IO.delay(
@@ -88,7 +88,7 @@ object Compile:
 
   private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)    => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -134,13 +134,13 @@ object Compile:
       opts: CompileOptions,
       log: Logger
   ): IO[ExitCode] =
-    val profiledBase = Annotate.buildProfiledService(ir, opts.target)
+    val profiledBase                                           = Annotate.buildProfiledService(ir, opts.target)
     val kernelStep: IO[Either[ExitCode, Option[KernelBundle]]] =
       if !opts.withSynthesis then IO.pure(Right(None))
       else buildKernel(specFile, ir, opts, log)
 
     kernelStep.flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)         => IO.pure(code)
       case Right(maybeKernel) =>
         val profiled =
           maybeKernel match
@@ -150,7 +150,7 @@ object Compile:
           val outRoot          = Paths.get(opts.outDir)
           val previousSnapshot = SnapshotIO.readSnapshot(outRoot, log)
           val existingRevs     = Revision.discover(outRoot, opts.target)
-          val emitOpts = EmitOptions(
+          val emitOpts         = EmitOptions(
             dafnyKernel = maybeKernel.map(_.kernel),
             previousSnapshot = previousSnapshot,
             existingRevisions = existingRevs
@@ -309,7 +309,7 @@ object Compile:
       for
         verifiedCache <- verifiedCacheIO
         skeletonCache <- skeletonCacheIO
-        result <- foldVerifiedAndSkeleton(
+        result        <- foldVerifiedAndSkeleton(
                     specFile,
                     synthOps,
                     methods,

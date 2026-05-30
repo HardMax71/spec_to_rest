@@ -36,7 +36,7 @@ class ParallelVerifyBench:
   @Setup(Level.Trial)
   def setup(): Unit =
     runtime = IORuntime.global
-    val source = Files.readString(repoRoot.resolve("fixtures/spec/url_shortener.spec"))
+    val source                      = Files.readString(repoRoot.resolve("fixtures/spec/url_shortener.spec"))
     val loaded: IO[service_ir_full] =
       Parse.parseSpec(source).flatMap:
         case Left(err) =>

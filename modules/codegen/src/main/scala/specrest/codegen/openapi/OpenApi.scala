@@ -166,7 +166,7 @@ object Schema:
 
   def makeNullable(schema: SchemaObject): SchemaObject =
     decideNullable(schema.ref, schema.`type`) match
-      case _: NdNoop => schema
+      case _: NdNoop          => schema
       case _: NdWrapAnyOfNull =>
         SchemaObject(anyOf = Some(List(schema, SchemaObject(`type` = Some(List("null"))))))
       case _: NdAppendNull =>
@@ -181,7 +181,7 @@ object Components:
     schemas("ErrorResponse") = errorResponseSchema
     for entity <- profiled.entities do
       ctx.entityDecls.get(entity.entityName).foreach: decl =>
-        val decorated = decorateFields(entity, decl, ctx)
+        val decorated                   = decorateFields(entity, decl, ctx)
         val (createL, (readL, updateL)) =
           specrest.ir.generated.SpecRestGenerated.buildEntitySchemas(entity.entityName, decorated)
         schemas(entity.createSchemaName) = SchemaObjectAdapter.fromLifted(createL)
@@ -196,7 +196,7 @@ object Components:
   ): List[(String, (schema_object, Boolean))] =
     val irFields = entFields(decl)
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
-      val irField = irFields(idx)
+      val irField            = irFields(idx)
       val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
         fldType(irField),
         fldDefault(irField),
@@ -385,7 +385,7 @@ object Paths:
     val responses = collection.mutable.LinkedHashMap.empty[String, ResponseObject]
     responses(status) = success
 
-    val hasPathParam = op.endpoint.pathParams.nonEmpty
+    val hasPathParam   = op.endpoint.pathParams.nonEmpty
     val isKindNeeds404 = op.kind match
       case _: Read | _: Deletea | _: Replace | _: PartialUpdate | _: Transition | _: CreateChild =>
         true
@@ -506,7 +506,7 @@ object OpenApi:
   private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
     val pairs = svcTemporals(profiled.ir).flatMap: t =>
       tmpBody(t) match
-        case TbAlways(arg) => Some(tmpName(t) -> TemporalAnnotation("always", prettyOneLine(arg)))
+        case TbAlways(arg)     => Some(tmpName(t) -> TemporalAnnotation("always", prettyOneLine(arg)))
         case TbEventually(arg) =>
           Some(tmpName(t) -> TemporalAnnotation("eventually", prettyOneLine(arg)))
         case TbFairness(arg) =>
@@ -553,7 +553,7 @@ object OpenApi:
     case d: Double            => Some(java.lang.Double.valueOf(d))
     case n: java.lang.Number  => Some(n)
     case b: java.lang.Boolean => Some(b)
-    case m: Map[?, ?] =>
+    case m: Map[?, ?]         =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       m.foreach: (k, v) =>
         toJava(v).foreach(ja => out.put(k.toString, ja))
@@ -561,7 +561,7 @@ object OpenApi:
     case xs: Iterable[?] => Some(xs.flatMap(toJava).toList.asJava)
     case SOBSchema(s)    => toJava(s)
     case SOBBool(b)      => Some(java.lang.Boolean.valueOf(b))
-    case p: Product =>
+    case p: Product      =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       p.productElementNames.toList.zip(p.productIterator.toList).foreach: (k, value) =>
         if !shouldSkip(k) then toJava(value).foreach(ja => out.put(mapKeyName(k), ja))

@@ -38,14 +38,14 @@ object AdminRouterGo:
           )
           .mkString("\n")
 
-    val stateFields = irStateFields(ir)
+    val stateFields  = irStateFields(ir)
     val stateAssigns = stateFields
       .map: f =>
         AdminModel.projectionFor(f, ir) match
           case Some(p) =>
-            val keyCol = Naming.toColumnName(p.keyFieldName)
+            val keyCol  = Naming.toColumnName(p.keyFieldName)
             val valExpr = p.valueShape match
-              case AdminModel.ProjectionValue.EntityRow => "row"
+              case AdminModel.ProjectionValue.EntityRow            => "row"
               case AdminModel.ProjectionValue.PrimitiveField(name) =>
                 s"row[${GoLit.str(Naming.toColumnName(name))}]"
             val srcTbl = entities
@@ -184,11 +184,11 @@ object AdminRouterGo:
         |""".stripMargin
 
   private def seedHandler(e: entity_decl_full, isPg: Boolean): String =
-    val snake  = Naming.toSnakeCase(entName(e))
-    val pk     = AdminModel.primaryKeyField(e).getOrElse("id")
-    val pkCol  = Naming.toColumnName(pk)
-    val fields = entFields(e)
-    val cols   = fields.map(f => (fldName(f), Naming.toColumnName(fldName(f))))
+    val snake     = Naming.toSnakeCase(entName(e))
+    val pk        = AdminModel.primaryKeyField(e).getOrElse("id")
+    val pkCol     = Naming.toColumnName(pk)
+    val fields    = entFields(e)
+    val cols      = fields.map(f => (fldName(f), Naming.toColumnName(fldName(f))))
     val colChecks = cols
       .map: (_, col) =>
         s"""\t\tif v, ok := body[${GoLit.str(col)}]; ok {

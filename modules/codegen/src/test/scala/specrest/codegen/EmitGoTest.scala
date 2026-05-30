@@ -20,7 +20,7 @@ class EmitGoTest extends CatsEffectSuite:
 
   test("emitProject for go-chi-postgres produces a valid Go project layout for url_shortener"):
     SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>
-      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val files    = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val expected = List(
         "go.mod",
         "cmd/server/main.go",

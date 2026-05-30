@@ -10,7 +10,7 @@ object PrettyPrint:
     case IntLitF(v, _) =>
       v match
         case b => b.toString
-    case FloatLitF(v, _) => v
+    case FloatLitF(v, _)  => v
     case StringLitF(v, _) =>
       val escaped = v.flatMap:
         case '\\' => "\\\\"
@@ -20,20 +20,20 @@ object PrettyPrint:
         case '\t' => "\\t"
         case c    => c.toString
       "\"" + escaped + "\""
-    case BoolLitF(v, _)         => v.toString
-    case NoneLitF(_)            => "none"
-    case IdentifierF(n, _)      => n
-    case BinaryOpF(op, l, r, _) => s"(${render(l)} ${binOpToken(op)} ${render(r)})"
-    case UnaryOpF(op, x, _)     => s"(${unOpToken(op)} ${render(x)})"
-    case FieldAccessF(b, f, _)  => s"${render(b)}.$f"
-    case EnumAccessF(b, m, _)   => s"${render(b)}.$m"
-    case IndexF(b, i, _)        => s"${render(b)}[${render(i)}]"
-    case CallF(c, args, _)      => s"${render(c)}(${args.map(render).mkString(", ")})"
-    case PrimeF(x, _)           => s"${render(x)}'"
-    case PreF(x, _)             => s"pre(${render(x)})"
-    case SomeWrapF(x, _)        => s"some(${render(x)})"
+    case BoolLitF(v, _)              => v.toString
+    case NoneLitF(_)                 => "none"
+    case IdentifierF(n, _)           => n
+    case BinaryOpF(op, l, r, _)      => s"(${render(l)} ${binOpToken(op)} ${render(r)})"
+    case UnaryOpF(op, x, _)          => s"(${unOpToken(op)} ${render(x)})"
+    case FieldAccessF(b, f, _)       => s"${render(b)}.$f"
+    case EnumAccessF(b, m, _)        => s"${render(b)}.$m"
+    case IndexF(b, i, _)             => s"${render(b)}[${render(i)}]"
+    case CallF(c, args, _)           => s"${render(c)}(${args.map(render).mkString(", ")})"
+    case PrimeF(x, _)                => s"${render(x)}'"
+    case PreF(x, _)                  => s"pre(${render(x)})"
+    case SomeWrapF(x, _)             => s"some(${render(x)})"
     case QuantifierF(q, bs, body, _) =>
-      val qs = quantToken(q)
+      val qs       = quantToken(q)
       val bindings = bs.map:
         case QuantifierBindingFull(v, dom, kind, _) =>
           val sep = kind match
@@ -52,7 +52,7 @@ object PrettyPrint:
       s"(if ${render(c)} then ${render(t)} else ${render(e)})"
     case LetF(v, value, body, _) =>
       s"(let $v = ${render(value)} in ${render(body)})"
-    case LambdaF(p, b, _) => s"(\\$p -> ${render(b)})"
+    case LambdaF(p, b, _)          => s"(\\$p -> ${render(b)})"
     case ConstructorF(name, fs, _) =>
       val parts = fs.map:
         case FieldAssignFull(n, v, _) => s"$n = ${render(v)}"

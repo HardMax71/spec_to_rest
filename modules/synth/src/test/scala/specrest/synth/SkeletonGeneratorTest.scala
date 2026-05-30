@@ -110,7 +110,7 @@ class SkeletonGeneratorTest extends CatsEffectSuite:
 
   test("reason gets newline/quote-sanitized and truncated"):
     val verbose = "line1\n\"quoted\"\n" + ("x" * 500)
-    val body = SkeletonGenerator.fallbackBody(
+    val body    = SkeletonGenerator.fallbackBody(
       header("method Foo(st: ServiceState)"),
       attempts = 1,
       finalStrategy = "ZeroShot",

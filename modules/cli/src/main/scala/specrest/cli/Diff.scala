@@ -28,8 +28,8 @@ final case class DiffOptions(
 object Diff:
 
   def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
-    val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
-    val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
+    val downgrade       = opts.withTests && !SupportedTargets.supports(opts.target)
+    val resolvedOpts    = if downgrade then opts.copy(withTests = false) else opts
     val downgradeNotice =
       if downgrade then
         IO.delay(
@@ -43,7 +43,7 @@ object Diff:
 
   private def runImpl(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
+      case Left(code)    => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -72,7 +72,7 @@ object Diff:
                       val baseFiles = Emit.emitProject(profiled, emitOpts)
                       val testFiles = if opts.withTests then TestEmit.emit(profiled) else Nil
                       val files     = baseFiles ++ testFiles
-                      val plans = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
+                      val plans     = if Files.isDirectory(outRoot) then Plan.classify(files, outRoot)
                       else files.map(f => FilePlan(FileAction.Create, f.path))
                       val changes = plans.filter: p =>
                         p.action == FileAction.Create || p.action == FileAction.Update

@@ -27,7 +27,7 @@ class LintIntegrationTest extends CatsEffectSuite:
   fixtures.foreach: name =>
     test(s"Lint.run is silent on fixtures/spec/$name.spec"):
       SpecFixtures.loadIR(name).map: ir =>
-        val diags = Lint.run(ir)
+        val diags  = Lint.run(ir)
         val detail = diags
           .map: d =>
             val line = d.span.collect { case SpanT(l, _, _, _) => l.toString }.getOrElse("?")

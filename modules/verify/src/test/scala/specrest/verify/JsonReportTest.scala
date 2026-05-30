@@ -24,7 +24,7 @@ class JsonReportTest extends CatsEffectSuite:
         report   <- Consistency.runConsistencyChecks(ir, cfg)
         json      = JsonReport.toJson(s"fixtures/spec/$fixture.spec", report, 0.0)
         canonical = stripTimings(json)
-        _ = assertEquals(
+        _         = assertEquals(
               canonical.hcursor.downField("schemaVersion").as[Int].toOption,
               Some(JsonReport.SchemaVersion)
             )
@@ -32,7 +32,7 @@ class JsonReportTest extends CatsEffectSuite:
         goldenPath = Paths.get(s"fixtures/golden/verify_report/$fixture.json")
         rendered   = JsonReport.render(canonical)
         exists    <- IO.blocking(Files.exists(goldenPath))
-        _ <-
+        _         <-
           if !exists then
             IO.blocking {
               Files.createDirectories(goldenPath.getParent)
@@ -176,7 +176,7 @@ class JsonReportTest extends CatsEffectSuite:
           val patched = obj.toMap.map: (k, v) =>
             val isTopTotal   = path.isEmpty && k == "totalMs"
             val isCheckTotal = path == List("checks", "[]") && k == "durationMs"
-            val mapped =
+            val mapped       =
               if isTopTotal || isCheckTotal then Json.fromDoubleOrNull(0.0)
               else loop(v, path :+ k)
             k -> mapped

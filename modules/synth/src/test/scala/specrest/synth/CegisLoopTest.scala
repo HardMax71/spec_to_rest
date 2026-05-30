@@ -127,7 +127,7 @@ class CegisLoopTest extends CatsEffectSuite:
               )
             )
           tracker <- Tracker.empty
-          loop = new CegisLoop(
+          loop     = new CegisLoop(
                    provider,
                    verifier,
                    None,
@@ -150,7 +150,7 @@ class CegisLoopTest extends CatsEffectSuite:
               List.fill(8)(Right(failingRun(classificationOperationName(c), List(postcondError))))
             )
           tracker <- Tracker.empty
-          loop = new CegisLoop(
+          loop     = new CegisLoop(
                    provider,
                    verifier,
                    None,
@@ -271,7 +271,7 @@ class CegisLoopTest extends CatsEffectSuite:
                         )
                       )
           tracker <- Tracker.empty
-          loop = new CegisLoop(
+          loop     = new CegisLoop(
                    provider,
                    verifier,
                    None,
@@ -324,7 +324,7 @@ class CegisLoopTest extends CatsEffectSuite:
               List.fill(5)(Right(failingRun(classificationOperationName(c), List(postcondError))))
             )
           tracker <- Tracker.empty
-          loop = new CegisLoop(
+          loop     = new CegisLoop(
                    provider,
                    verifier,
                    None,

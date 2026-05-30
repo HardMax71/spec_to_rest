@@ -264,7 +264,7 @@ class CliSmokeTest extends CatsEffectSuite:
       val snapPath      = outDir.resolve(".spec-snapshot.json")
       val migrationsDir = outDir.resolve("alembic/versions")
       val initialPath   = migrationsDir.resolve("001_initial_schema.py")
-      val opts = CompileOptions(
+      val opts          = CompileOptions(
         "python-fastapi-postgres",
         outDir.toString,
         ignoreVerify = true,
@@ -272,7 +272,7 @@ class CliSmokeTest extends CatsEffectSuite:
       )
       for
         first <- Compile.run("fixtures/spec/url_shortener.spec", opts, log)
-        _ <- IO.blocking {
+        _     <- IO.blocking {
                // Downgrade the freshly-written v2 snapshot to v1 by hand: set schemaVersion=1
                // and drop the `triggers` field from `schema`. This simulates a snapshot left
                // on disk by spec-to-rest <= the M7.6 release (before triggers existed).
@@ -322,7 +322,7 @@ class CliSmokeTest extends CatsEffectSuite:
              )
         initialBytes   <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
         snapshotBytesA <- IO.blocking(java.nio.file.Files.readAllBytes(snapshotPath))
-        b <- Compile.run(
+        b              <- Compile.run(
                "fixtures/spec/url_shortener.spec",
                CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
                log
@@ -453,7 +453,7 @@ class CliSmokeTest extends CatsEffectSuite:
       for
         firstExit <- Compile.run("fixtures/spec/strict_strategies_positive.spec", opts, log)
         userPath   = outDir.resolve("tests/strategies_user.py")
-        _ <- IO.blocking {
+        _         <- IO.blocking {
                val edited = java.nio.file.Files.readString(userPath) + "\n# USER EDIT\n"
                java.nio.file.Files.writeString(userPath, edited)
              }
@@ -523,7 +523,7 @@ class CliSmokeTest extends CatsEffectSuite:
                ),
                log
              )
-        _ <- IO.blocking(java.nio.file.Files.delete(outDir.resolve("app/main.py")))
+        _        <- IO.blocking(java.nio.file.Files.delete(outDir.resolve("app/main.py")))
         diffExit <- Diff.run(
                       "fixtures/spec/url_shortener.spec",
                       DiffOptions(
@@ -538,7 +538,7 @@ class CliSmokeTest extends CatsEffectSuite:
   test("test command errors out when run_conformance.py is missing"):
     tempOutPath.use: outDir =>
       for
-        _ <- IO.blocking(java.nio.file.Files.createDirectories(outDir))
+        _    <- IO.blocking(java.nio.file.Files.createDirectories(outDir))
         exit <- TestCmd.run(
                   TestOptions(outDir = outDir.toString),
                   log
@@ -632,7 +632,7 @@ class CliSmokeTest extends CatsEffectSuite:
         )
 
   test("--with-tests is no longer recognised (use the default; --no-tests to opt out)"):
-    val cmd = com.monovore.decline.Command("spec-to-rest", "")(Main.main)
+    val cmd    = com.monovore.decline.Command("spec-to-rest", "")(Main.main)
     val parsed = cmd.parse(
       Seq(
         "compile",

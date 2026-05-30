@@ -11,7 +11,7 @@ object DiffChecker:
   def check(header: DafnyMethodHeader, candidate: String): Either[DiffViolation, Unit] =
     forbiddenExtern(candidate) match
       case Some(violation) => Left(violation)
-      case None =>
+      case None            =>
         val name     = methodNameOf(header.signature)
         val expected = canonical(header)
         parseCandidate(candidate, name) match
@@ -60,7 +60,7 @@ object DiffChecker:
   private def specLines(after: List[String]): List[String] =
     @tailrec def take(remaining: List[String], acc: List[String]): List[String] =
       remaining match
-        case Nil => acc.reverse
+        case Nil          => acc.reverse
         case head :: rest =>
           unbalancedOpenBraceCol(head) match
             case None      => take(rest, head :: acc)

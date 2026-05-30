@@ -71,7 +71,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("ensures body has expected admin-reset / state-capture / request structure"):
     loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out  = Behavioral.emitFor(profiled)
       val test = out.tests
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
@@ -92,7 +92,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("url_shortener: Resolve and Delete get key-existence negative tests"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out        = Behavioral.emitFor(profiled)
       val resolveNeg = out.tests
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail(s"missing resolve negative; tests=${out.tests.map(_.name)}"))
@@ -115,7 +115,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("HTTP method + path are correctly translated"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out        = Behavioral.emitFor(profiled)
       val resolveNeg = out.tests
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail("missing"))
@@ -123,7 +123,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("Operation with no inputs has no @given decorator"):
     loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out  = Behavioral.emitFor(profiled)
       val test = out.tests
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
@@ -134,7 +134,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("invariant test captures post_state via a separate /state call after the op"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out           = Behavioral.emitFor(profiled)
       val invariantTest = out.tests
         .find(_.name.startsWith("test_shorten_invariant_"))
         .getOrElse(fail("no invariant test for shorten"))
@@ -153,7 +153,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("state-dep precondition records invariant skips per-invariant (not dropped silently)"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out             = Behavioral.emitFor(profiled)
       val resolveInvSkips =
         out.skips.filter(s => s.operation == "Resolve" && s.kind.startsWith("invariant["))
       assert(
@@ -163,7 +163,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("negative-test 4xx assertion covers full 400..499 range, not the narrow set"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out  = Behavioral.emitFor(profiled)
       val test = out.tests
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail("missing"))
@@ -313,7 +313,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("M5.9: positive transition test seeds entity, asserts post-state field"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out  = Behavioral.emitFor(profiled)
       val test = out.tests
         .find(_.name == "test_start_work_transition_todo_to_in_progress")
         .getOrElse(fail("missing positive transition test"))
@@ -334,7 +334,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("M5.9: negative transition test asserts 4xx on illegal from"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out  = Behavioral.emitFor(profiled)
       val test = out.tests
         .find(_.name == "test_start_work_transition_illegal_from_done")
         .getOrElse(fail("missing negative transition test"))
@@ -353,7 +353,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("M5.9: state-dep skip on a transition op now reads 'covered by transition tests'"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out            = Behavioral.emitFor(profiled)
       val startWorkSkips = out.skips.filter: s =>
         s.operation == "StartWork" && s.kind == "ensures"
       assert(
@@ -382,7 +382,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("#155: ecommerce RecordPayment illegal-from negatives now emit with @given(amount=…)"):
     loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out      = Behavioral.emitFor(profiled)
       val negNames = out.tests
         .map(_.name)
         .filter(_.startsWith("test_record_payment_transition_illegal_from_"))
@@ -513,7 +513,7 @@ class BehavioralTest extends CatsEffectSuite:
 
   test("M5.9 fix H: emitted transition op DOES claim 'covered by transition tests'"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out           = Behavioral.emitFor(profiled)
       val swEnsuresSkip = out.skips.find: s =>
         s.operation == "StartWork" && s.kind == "ensures"
       assert(swEnsuresSkip.nonEmpty, s"expected StartWork ensures skip; got=${out.skips}")
@@ -1315,7 +1315,7 @@ class BehavioralTest extends CatsEffectSuite:
   test("audit C1: ecommerce AddLineItem gets a status-restriction negative for status=DRAFT"):
     loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
       val out = Behavioral.emitFor(profiled)
-      val t = out.tests
+      val t   = out.tests
         .find(_.name == "test_add_line_item_negative_orders_status_not_draft")
         .getOrElse(
           fail(s"missing status-restriction negative; tests=${out.tests.map(_.name)}")
@@ -1342,7 +1342,7 @@ class BehavioralTest extends CatsEffectSuite:
   test("audit C1: ecommerce RecordPayment gets status-restriction negative with amount strategy"):
     loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
       val out = Behavioral.emitFor(profiled)
-      val t = out.tests
+      val t   = out.tests
         .find(_.name == "test_record_payment_negative_orders_status_not_placed")
         .getOrElse(fail("missing"))
       assert(
@@ -1421,7 +1421,7 @@ class BehavioralTest extends CatsEffectSuite:
          |}
          |""".stripMargin
     loadProfiledFromSpec(spec).map: profiled =>
-      val out = Behavioral.emitFor(profiled)
+      val out           = Behavioral.emitFor(profiled)
       val invInputSkips =
         out.skips.filter(s => s.operation == "Foo" && s.kind == "invariant_inputs")
       assertEquals(

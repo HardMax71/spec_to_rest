@@ -65,7 +65,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
           verifier <-
             MockDafnyVerifier.of(List(Right(correctRun(classificationOperationName(c)))))
           tracker <- Tracker.empty
-          orch = new FallbackOrchestrator(
+          orch     = new FallbackOrchestrator(
                    provider,
                    verifier,
                    None,
@@ -105,7 +105,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                         )
                       )
           tracker <- Tracker.empty
-          orch = new FallbackOrchestrator(
+          orch     = new FallbackOrchestrator(
                    provider,
                    verifier,
                    None,
@@ -149,7 +149,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                         )
                       )
           tracker <- Tracker.empty
-          orch = new FallbackOrchestrator(
+          orch     = new FallbackOrchestrator(
                    provider,
                    verifier,
                    None,
@@ -191,7 +191,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                         )
             tracker   <- Tracker.empty
             skelCache <- Cache.make(Cache.skeletonsRoot(dir))
-            orch = new FallbackOrchestrator(
+            orch       = new FallbackOrchestrator(
                      provider,
                      verifier,
                      None,
@@ -258,7 +258,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
                         )
                       )
           tracker <- Tracker.empty
-          orch = new FallbackOrchestrator(
+          orch     = new FallbackOrchestrator(
                    provider,
                    verifier,
                    None,
@@ -295,7 +295,7 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
           verifier <-
             MockDafnyVerifier.of(List(Right(correctRun(classificationOperationName(c)))))
           tracker <- Tracker.empty
-          orch = new FallbackOrchestrator(
+          orch     = new FallbackOrchestrator(
                    provider,
                    verifier,
                    None,

@@ -111,7 +111,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
       .map: (exit, out) =>
         assertEquals(exit, ExitCodes.Violations)
-        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val parsed      = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val suggestions = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
           .flatMap(_.hcursor.downField("diagnostic").focus)
           .filterNot(_.isNull)
@@ -128,7 +128,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
       .map: (_, out) =>
-        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val parsed   = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val nonEmpty = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
           .flatMap(_.hcursor.downField("diagnostic").focus)
           .filterNot(_.isNull)
@@ -141,8 +141,8 @@ class VerifyJsonTest extends CatsEffectSuite:
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/auth_service.spec", opts, log, ps))
       .map: (_, out) =>
-        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
-        val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+        val parsed           = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val checks           = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
         val soundnessSkipped = checks.filter: c =>
           val status   = c.hcursor.downField("status").as[String].toOption
           val category = c.hcursor.downField("diagnostic").downField("category").as[String].toOption
@@ -162,8 +162,8 @@ class VerifyJsonTest extends CatsEffectSuite:
     captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
       .map: (exit, out) =>
         assertEquals(exit, ExitCodes.Ok)
-        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
-        val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+        val parsed     = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+        val checks     = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
         val nonSkipped = checks.filter: c =>
           c.hcursor.downField("status").as[String].toOption.exists(_ != "skipped")
         nonSkipped.foreach: c =>
@@ -185,7 +185,7 @@ class VerifyJsonTest extends CatsEffectSuite:
       .map: (exit, out) =>
         assertEquals(exit, ExitCodes.Violations)
         val parsed = parser.parse(out).toOption.getOrElse(fail("invalid JSON"))
-        val cores = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+        val cores  = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
           .flatMap(_.hcursor.downField("diagnostic").downField("coreSpans").values)
           .flatten
         assert(cores.nonEmpty, "expected at least one coreSpan entry when --explain is set")

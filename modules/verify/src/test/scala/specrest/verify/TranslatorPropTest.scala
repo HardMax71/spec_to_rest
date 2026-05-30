@@ -50,9 +50,9 @@ object TranslatorPropTest:
   private def walkInv(inv: invariant_decl_full): Set[String] = walk(invBody(inv))
 
   private def walk(e: expr_full): Set[String] = e match
-    case IdentifierF(n, _)     => Set(n)
-    case BinaryOpF(_, l, r, _) => walk(l) ++ walk(r)
-    case UnaryOpF(_, x, _)     => walk(x)
+    case IdentifierF(n, _)           => Set(n)
+    case BinaryOpF(_, l, r, _)       => walk(l) ++ walk(r)
+    case UnaryOpF(_, x, _)           => walk(x)
     case QuantifierF(_, bs, body, _) =>
       val bound  = bs.map(qbdVar).toSet
       val domain = bs.flatMap(b => walk(qbdCollection(b)).toList).toSet
@@ -66,12 +66,12 @@ object TranslatorPropTest:
     case CallF(c, args, _)     => walk(c) ++ args.flatMap(walk).toSet
     case PrimeF(x, _)          => walk(x)
     case PreF(x, _)            => walk(x)
-    case WithF(b, fs, _) =>
+    case WithF(b, fs, _)       =>
       walk(b) ++ fs.flatMap(f => walk(fasValue(f))).toSet
     case IfF(c, t, el, _)        => walk(c) ++ walk(t) ++ walk(el)
     case LetF(v, value, body, _) => walk(value) ++ (walk(body) - v)
     case LambdaF(p, body, _)     => walk(body) - p
-    case ConstructorF(_, fs, _) =>
+    case ConstructorF(_, fs, _)  =>
       fs.flatMap(f => walk(fasValue(f))).toSet
     case SetLiteralF(xs, _) => xs.flatMap(walk).toSet
     case MapLiteralF(es, _) =>
@@ -140,7 +140,7 @@ class TranslatorPropTest extends CatsEffectSuite, ScalaCheckEffectSuite:
             val entityFields = artifact.entities.flatMap(_.fields.map(_.name)).toSet
             val enumNames    = artifact.enums.map(_.name).toSet
             val enumMembers  = artifact.enums.flatMap(_.members.map(_.name)).toSet
-            val stateNames = artifact.state.map:
+            val stateNames   = artifact.state.map:
               case ArtifactStateEntry.Const(n, _, _, _)             => n
               case ArtifactStateEntry.Relation(n, _, _, _, _, _, _) => n
             .toSet

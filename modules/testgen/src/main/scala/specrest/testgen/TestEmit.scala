@@ -25,7 +25,7 @@ object TestEmit:
     val behavioralOut = GoBehavioral.emitFor(profiled)
     val statefulOut   = GoStateful.emitFor(profiled)
     val structuralOut = GoStructural.emitFor(profiled)
-    val skipsJson = renderSkipsJson(
+    val skipsJson     = renderSkipsJson(
       svcName(ir),
       stratSpecs,
       behavioralOut.skips ++ statefulOut.skips,
@@ -73,7 +73,7 @@ object TestEmit:
     val behavioralOut = TsBehavioral.emitFor(profiled)
     val statefulOut   = TsStateful.emitFor(profiled)
     val structuralOut = TsStructural.emitFor(profiled)
-    val skipsJson = renderSkipsJson(
+    val skipsJson     = renderSkipsJson(
       svcName(ir),
       stratSpecs,
       behavioralOut.skips ++ statefulOut.skips,
@@ -96,7 +96,7 @@ object TestEmit:
       )
 
   private def renderTsStrategiesFile(specs: List[StrategySpec]): String =
-    val bodies = specs.map(_.body).mkString
+    val bodies     = specs.map(_.body).mkString
     val usesRedact =
       bodies.contains("redact(") || specs.exists(_.body.contains("\"***REDACTED***\""))
     val rtHelpers =
@@ -145,7 +145,7 @@ object TestEmit:
       else (FilePaths.AdminRouterFile, AdminRouter.emit(profiled))
     val strategiesPy = renderStrategiesFile(strategySpecs)
     val behavioralPy = renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs)
-    val skipsJson =
+    val skipsJson    =
       renderSkipsJson(
         svcName(ir),
         strategySpecs,
@@ -171,7 +171,7 @@ object TestEmit:
          |from tests.predicates import is_valid_email, is_valid_uri
          |""".stripMargin.replace("\\\"", "\"")
 
-    val userImports = specs.flatMap(_.imports).distinct
+    val userImports      = specs.flatMap(_.imports).distinct
     val userImportsBlock =
       userImports
         .groupBy(_.module)

@@ -57,7 +57,7 @@ object Translator:
         val ctx = buildCtx(ir)
         Right(tmpBody(decl) match
           case TbAlways(arg) =>
-            val body = renderExpr(ctx, arg)
+            val body   = renderExpr(ctx, arg)
             val module = AlloyModule(
               name = sanitizeName(svcName(ir)),
               sigs = buildSigs(ctx),
@@ -84,8 +84,7 @@ object Translator:
             failAlloy(
               s"temporal '${tmpName(decl)}': only 'always(P)' and 'eventually(P)' are supported in v1; got " +
                 s"${raw.getClass.getSimpleName}"
-            )
-        )
+            ))
     }
 
   def translateOperationRequires(
@@ -113,7 +112,7 @@ object Translator:
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
       boundary:
-        val ctx = buildCtxWithInputs(ir, op)
+        val ctx      = buildCtxWithInputs(ir, op)
         val reqFacts = operRequires(op).zipWithIndex.map: (r, i) =>
           AlloyFact(Some(s"${operName(op)}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
         Right(AlloyModule(
@@ -164,7 +163,7 @@ object Translator:
           AlloyFact(Some(s"${operName(op)}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
 
         val mentionedInEnsures = primedStateFields(operEnsures(op))
-        val frameFacts = irStateFields(ir)
+        val frameFacts         = irStateFields(ir)
           .collect {
             case sf if !mentionedInEnsures.contains(stfName(sf)) =>
               AlloyFact(
@@ -204,7 +203,7 @@ object Translator:
       includeStatePost
     ) match
       case Some(sigs) => sigs.map(AlloyAdapter.fromLiftedSig)
-      case None =>
+      case None       =>
         failAlloy(
           "unsupported Alloy field type (supported: NamedType, Set[T], Option[T])"
         )
@@ -232,7 +231,7 @@ object Translator:
 
   private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
     case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
-    case UnaryOpF(op, x, _) =>
+    case UnaryOpF(op, x, _)     =>
       alloyUnopShape(op) match
         case _: AusNot         => s"not (${renderExpr(ctx, x)})"
         case _: AusCardinality => s"#(${renderExpr(ctx, x)})"
@@ -244,7 +243,7 @@ object Translator:
     case q @ QuantifierF(_, _, _, _) => renderQuantifier(ctx, q)
     case FieldAccessF(b, f, _)       => s"(${renderExpr(ctx, b)}).$f"
     case EnumAccessF(_, m, _)        => m
-    case IdentifierF(name, _) =>
+    case IdentifierF(name, _)        =>
       classifyAlloyIdentifier(
         name,
         ctx.boundVars.toList,
@@ -259,7 +258,7 @@ object Translator:
       renderExpr(ctx.copy(currentStateSig = ctx.postStateSig), inner)
     case PreF(inner, _) =>
       renderExpr(ctx.copy(currentStateSig = "State"), inner)
-    case IntLitF(v, _) => v.toString
+    case IntLitF(v, _)  => v.toString
     case BoolLitF(v, _) =>
       if v then "(True = True)" else "(True = False)"
     case StringLitF(s, _) =>
@@ -268,7 +267,7 @@ object Translator:
     case SetLiteralF(elems, _)  => elems.map(renderExpr(ctx, _)).mkString(" + ")
     case IndexF(b, i, _)        => s"(${renderExpr(ctx, b)})[${renderExpr(ctx, i)}]"
     case CallF(callee, args, _) => renderCall(ctx, callee, args)
-    case other =>
+    case other                  =>
       failAlloy(s"Alloy translator does not support expression: ${other.getClass.getSimpleName}")
 
   private def renderBinaryOp(ctx: Ctx, op: bin_op_full, l: expr_full, r: expr_full)(using
@@ -282,7 +281,7 @@ object Translator:
       case AbsPrefixCall(tok) => s"$tok[$lr, $rr]"
 
   private def renderQuantifier(ctx: Ctx, q: QuantifierF)(using AlloyLabel): String =
-    val bindings0 = q.b
+    val bindings0         = q.b
     val hasPowersetBinder = bindings0.exists { qb =>
       qbdCollection(qb) match
         case UnaryOpF(UPower(), _, _) => true
@@ -308,7 +307,7 @@ object Translator:
     val innerCtx                        = ctx.copy(boundVars = ctx.boundVars ++ bindings0.map(qbdVar))
     val bodyInner                       = renderExpr(innerCtx, q.c)
     val extras                          = extraConstraints.flatten
-    val body =
+    val body                            =
       if extras.isEmpty then bodyInner
       else
         val joiner = if isAll then " implies " else " and "
@@ -332,8 +331,8 @@ object Translator:
           ctx.stateFields.toList,
           ctx.inputFields.toList
         ) match
-          case AbirEntity(sn) => (s"${qbdVar(b)}: $sn", None)
-          case AbirEnum(en)   => (s"${qbdVar(b)}: $en", None)
+          case AbirEntity(sn)      => (s"${qbdVar(b)}: $sn", None)
+          case AbirEnum(en)        => (s"${qbdVar(b)}: $en", None)
           case _: AbirStateOrInput =>
             val elem = domainSigName(ctx, qbdCollection(b))
             (s"${qbdVar(b)}: $elem", Some(s"${qbdVar(b)} in ${renderExpr(ctx, qbdCollection(b))}"))
@@ -350,7 +349,7 @@ object Translator:
       svcEnums(ctx.ir)
     ) match
       case Some(n) => n
-      case None =>
+      case None    =>
         failAlloy(
           "powerset binder domain must be an identifier referring to an entity or set-typed state"
         )

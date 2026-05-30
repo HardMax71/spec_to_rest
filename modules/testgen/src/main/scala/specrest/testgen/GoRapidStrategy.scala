@@ -23,7 +23,7 @@ object GoRapidStrategy extends StrategyBackend:
   def set(inner: String): String           = s"genSet($inner)"
   def jsonSetUnique(inner: String): String = s"genSetUnique($inner)"
   def seq(inner: String): String           = s"genSeq($inner)"
-  def redactedPlaceholder: String =
+  def redactedPlaceholder: String          =
     s"genJust(${GoLit.str(Strategies.RedactedPlaceholder)})"
   def redactWrap(inner: String): String = s"genRedact($inner)"
 
@@ -38,14 +38,14 @@ object GoRapidStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(_.toInt)
-      val maxSize = maxOpt.map(_.toInt)
+      val minSize                      = minOpt.map(_.toInt)
+      val maxSize                      = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
       val base = primaryRegex match
         case Some(p) => s"genStringMatching(${GoLit.str(s"^(?:$p)$$")})"
-        case None =>
+        case None    =>
           val lo = minSize.getOrElse(-1)
           val hi = maxSize.getOrElse(-1)
           if lo < 0 && hi < 0 then "genString()" else s"genStringBounded($lo, $hi)"
