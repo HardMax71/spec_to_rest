@@ -49,7 +49,7 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
     fks = List(fk("order_id", "orders"))
   )
 
-  private val parentFields = parent.c.collect { case f: FieldDeclFull => f }
+  private val parentFields = entFields(parent)
 
   test("happy path: parent has target + child has unique back-FK + source field exists → Some"):
     val result = validateTrigger(

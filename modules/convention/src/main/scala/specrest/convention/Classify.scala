@@ -6,57 +6,55 @@ import specrest.ir.idx
 object Classify:
 
   def classifyOperations(ir: ServiceIRFull): List[operation_classification] =
-    ir.g.collect { case op: OperationDeclFull => classifyOperation(op, ir) }
+    svcOperations(ir).map(op => classifyOperation(op, ir))
 
-  def classifyOperation(op: OperationDeclFull, ir: ServiceIRFull): operation_classification =
-    val stateFieldNames = ir.f match
-      case Some(StateDeclFull(fs, _)) => fs.collect { case StateFieldDeclFull(n, _, _) => n }.toSet
-      case None                       => Set.empty[String]
+  def classifyOperation(op: operation_decl_full, ir: ServiceIRFull): operation_classification =
+    val stateFieldNames = svcState(ir) match
+      case Some(sd) => stdFields(sd).map(stfName).toSet
+      case None     => Set.empty[String]
     val signals      = analyze(op, ir, stateFieldNames)
     val entityMap    = ir.idx.entityByName
     val targetEntity = resolveTargetEntity(op, ir, entityMap)
-    val outputNames  = op.c.collect { case ParamDeclFull(n, _, _) => n }
-    val strategy     = classifyStrategy(op.e, stateFieldNames.toList, outputNames)
+    val outputNames  = operOutputs(op).map(prmName)
+    val strategy     = classifyStrategy(operEnsures(op), stateFieldNames.toList, outputNames)
     val entityFieldCount: Option[nat] =
-      targetEntity.flatMap(entityMap.get).map { case EntityDeclFull(_, _, fs, _, _) =>
-        Nata(BigInt(fs.length))
-      }
+      targetEntity.flatMap(entityMap.get).map(e => Nata(BigInt(entFields(e).length)))
     buildOperationClassification(
-      op.a,
+      operName(op),
       targetEntity,
       strategy,
       decideKindAndMethod(signals, entityFieldCount)
     )
 
   private def analyze(
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull,
       stateFieldNames: Set[String]
   ): analysis_signals =
     val stateFieldList = stateFieldNames.toList
-    val primedIds      = collectPrimedIdentifiers(op.e).toSet
-    val preserved      = collectPreservedRelations(op.e, stateFieldList).toSet
+    val primedIds      = collectPrimedIdentifiers(operEnsures(op)).toSet
+    val preserved      = collectPreservedRelations(operEnsures(op), stateFieldList).toSet
 
     val primedStateFields = primedIds.toList.filter(stateFieldNames.contains)
     val mutated           = primedStateFields.filterNot(preserved.contains)
 
-    val createInfo   = detectCreatePattern(op.e, stateFieldList)
-    val deleteInfo   = detectDeletePattern(op.e, stateFieldList)
-    val existingKeys = detectKeyExistsInRequires(op.d, stateFieldList).toSet
+    val createInfo   = detectCreatePattern(operEnsures(op), stateFieldList)
+    val deleteInfo   = detectDeletePattern(operEnsures(op), stateFieldList)
+    val existingKeys = detectKeyExistsInRequires(operRequires(op), stateFieldList).toSet
     val createsNewKey =
       createInfo.exists(name => !existingKeys.contains(name))
 
-    val withInfo = collectWithFields(op.e)
+    val withInfo = collectWithFields(operEnsures(op))
 
-    val isTransition = ir.h.exists {
-      case TransitionDeclFull(_, _, _, rules, _) =>
-        rules.exists { case TransitionRuleFull(_, _, via, _, _) => via == op.a }
+    val isTransition = svcTransitions(ir).exists { td =>
+      trnRules(td).exists(tr => trlVia(tr) == operName(op))
     }
 
-    val params = op.b.collect { case p: ParamDeclFull => p }
-    val filterCount = params.count {
-      case ParamDeclFull(_, _: OptionTypeF, _) => true
-      case _                                   => false
+    val params = operInputs(op)
+    val filterCount = params.count { p =>
+      prmType(p) match
+        case _: OptionTypeF => true
+        case _              => false
     }
     AnalysisSignals(
       mutated,
@@ -67,24 +65,25 @@ object Classify:
       withInfo.map(wi => Nata(BigInt(withInfoFieldNames(wi).length))),
       Nata(BigInt(filterCount)),
       isTransition,
-      params.exists { case ParamDeclFull(_, t, _) => isInputCollectionType(t) }
+      params.exists(p => isInputCollectionType(prmType(p)))
     )
 
   private def resolveTargetEntity(
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull,
-      entityMap: Map[String, EntityDeclFull]
+      entityMap: Map[String, entity_decl_full]
   ): Option[String] =
-    ir.f match
+    svcState(ir) match
       case None => None
-      case Some(StateDeclFull(fs, _)) =>
-        val primedIds = collectPrimedIdentifiers(op.e).toSet
-        val fromState = fs.iterator
-          .collect { case StateFieldDeclFull(n, t, _) if primedIds.contains(n) => t }
+      case Some(sd) =>
+        val primedIds = collectPrimedIdentifiers(operEnsures(op)).toSet
+        val fromState = stdFields(sd).iterator
+          .filter(sf => primedIds.contains(stfName(sf)))
+          .map(stfType)
           .flatMap(entityNameFromType)
           .find(entityMap.contains)
         fromState.orElse:
-          op.c.iterator
-            .collect { case ParamDeclFull(_, t, _) => t }
+          operOutputs(op).iterator
+            .map(prmType)
             .flatMap(entityNameFromType)
             .find(entityMap.contains)

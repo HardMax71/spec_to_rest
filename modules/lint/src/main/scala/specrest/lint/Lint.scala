@@ -12,5 +12,5 @@ object Lint:
     CircularPredicate
   )
 
-  def run(ir: ServiceIRFull): List[LintDiagnostic] =
+  def run(ir: service_ir_full): List[LintDiagnostic] =
     passes.flatMap(_.run(ir))

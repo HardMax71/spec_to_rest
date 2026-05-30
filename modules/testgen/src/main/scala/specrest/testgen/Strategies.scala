@@ -39,10 +39,10 @@ object TestStrategyOverrides:
   val Empty: TestStrategyOverrides = TestStrategyOverrides(Map.empty, Map.empty)
 
   def from(ir: ServiceIRFull): TestStrategyOverrides =
-    val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }.collect:
+    val rules = svcConventions(ir).toList.flatMap(cvdRules).collect:
       case ConventionRuleFull(target, "test_strategy", Some(field), CvOk(PvBool(live)), _) =>
         (target, field, if live then "live" else "redacted")
-    val opNames     = ir.g.collect { case o: OperationDeclFull => o.a }.toSet
+    val opNames     = svcOperations(ir).map(operName).toSet
     val entityNames = ir.idx.entityNames
     val perOp = rules.collect:
       case (t, f, v) if opNames.contains(t) => (t, f) -> v
@@ -65,14 +65,14 @@ object Strategies:
     val enumSpecs     = ix.enums.map(e => specForEnum(e, overrides, b))
     val transEntities = transitionEntityNames(ir)
     val entitySpecs =
-      ix.entities.filter(e => transEntities.contains(e.a)).map(e => specForEntity(e, ir, b))
+      ix.entities.filter(e => transEntities.contains(entName(e))).map(e => specForEntity(e, ir, b))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
   def transitionEntityNames(ir: ServiceIRFull): Set[String] =
-    ir.h.collect { case t: TransitionDeclFull => t.b }.toSet
+    svcTransitions(ir).map(trnEntity).toSet
 
   private def strategyOverrides(ir: ServiceIRFull): Map[String, StrategyImport] =
-    ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }.flatMap:
+    svcConventions(ir).toList.flatMap(cvdRules).flatMap:
       case ConventionRuleFull(target, "strategy", _, CvOk(PvStrPair(m, s)), _) =>
         Some(target -> StrategyImport(m, s))
       case _ => None
@@ -132,9 +132,8 @@ object Strategies:
     case NamedTypeF("Duration", _) => StrategyExpr.Code(b.duration)
     case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
     case NamedTypeF(name, _) =>
-      if ir.e.exists { case _a: TypeAliasDeclFull => _a.a == name } || ir.d.exists {
-          case _e: EnumDeclFull => _e.a == name
-        }
+      if svcTypeAliases(ir).exists(a => talName(a) == name) ||
+        svcEnums(ir).exists(e => enmName(e) == name)
       then
         StrategyExpr.Code(b.call(strategyFunctionName(name, b)))
       else StrategyExpr.Skip(s"unknown named type '$name'")
@@ -160,16 +159,16 @@ object Strategies:
     b.functionName(typeName)
 
   private def specForAlias(
-      alias: TypeAliasDeclFull,
+      alias: type_alias_decl_full,
       ir: ServiceIRFull,
       overrides: Map[String, StrategyImport],
       b: StrategyBackend
   ): StrategySpec =
-    overrides.get(alias.a) match
+    overrides.get(talName(alias)) match
       case Some(imp) =>
         StrategySpec(
-          typeName = alias.a,
-          functionName = strategyFunctionName(alias.a, b),
+          typeName = talName(alias),
+          functionName = strategyFunctionName(talName(alias), b),
           body = s"${imp.symbol}()",
           skipped = Nil,
           imports = List(imp)
@@ -177,42 +176,42 @@ object Strategies:
       case None =>
         val (body, skipped) = renderAlias(alias, ir, b)
         StrategySpec(
-          typeName = alias.a,
-          functionName = strategyFunctionName(alias.a, b),
+          typeName = talName(alias),
+          functionName = strategyFunctionName(talName(alias), b),
           body = body,
           skipped = skipped
         )
 
   private def specForEntity(
-      entity: EntityDeclFull,
+      entity: entity_decl_full,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
-    val pairs = entity.c.collect { case f: FieldDeclFull =>
-      val ctx     = StrategyCtx.EntityField(entity.a, f.a)
+    val pairs = entFields(entity).map { f =>
+      val ctx     = StrategyCtx.EntityField(entName(entity), fldName(f))
       val rawExpr = jsonStrategyForField(f, ir, b)
       val expr    = applyRedaction(rawExpr, ctx, overrides, b)
-      (f.a, expr)
+      (fldName(f), expr)
     }
     val skipped = pairs.collect:
-      case (n, StrategyExpr.Skip(r)) => s"entity '${entity.a}' field '$n': $r"
+      case (n, StrategyExpr.Skip(r)) => s"entity '${entName(entity)}' field '$n': $r"
     val codeEntries = pairs.collect:
       case (n, StrategyExpr.Code(t)) => (n, t)
     val body = b.fixedDict(codeEntries)
     StrategySpec(
-      typeName = entity.a,
-      functionName = strategyFunctionName(entity.a, b),
+      typeName = entName(entity),
+      functionName = strategyFunctionName(entName(entity), b),
       body = body,
       skipped = skipped
     )
 
   private def jsonStrategyForField(
-      f: FieldDeclFull,
+      f: field_decl_full,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategyExpr =
-    jsonStrategyForType(f.b, f.c, ir, b)
+    jsonStrategyForType(fldType(f), fldDefault(f), ir, b)
 
   private def jsonStrategyForType(
       t: type_expr_full,
@@ -232,17 +231,17 @@ object Strategies:
     case NamedTypeF("Duration", _) => StrategyExpr.Code(b.jsonDuration)
     case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
     case NamedTypeF(name, _) =>
-      if ir.d.exists { case _e: EnumDeclFull => _e.a == name } then
+      if svcEnums(ir).exists(e => enmName(e) == name) then
         StrategyExpr.Code(b.call(strategyFunctionName(name, b)))
       else
-        ir.e.collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a } match
+        svcTypeAliases(ir).find(a => talName(a) == name) match
           case Some(alias) =>
-            val combined = (constraint, alias.c) match
+            val combined = (constraint, talConstraint(alias)) match
               case (Some(c), Some(a)) => Some(BinaryOpF(BAnd(), c, a, None))
               case (c, a)             => c.orElse(a)
-            jsonStrategyForType(alias.b, combined, ir, b)
+            jsonStrategyForType(talType(alias), combined, ir, b)
           case None =>
-            if ir.c.exists { case _e: EntityDeclFull => _e.a == name } then
+            if svcEntities(ir).exists(e => entName(e) == name) then
               StrategyExpr.Skip(s"nested entity reference '$name' not seedable")
             else StrategyExpr.Skip(s"unknown named type '$name'")
     case OptionTypeF(inner, _) =>
@@ -261,38 +260,38 @@ object Strategies:
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
-      decl: EnumDeclFull,
+      decl: enum_decl_full,
       overrides: Map[String, StrategyImport],
       b: StrategyBackend
   ): StrategySpec =
-    overrides.get(decl.a) match
+    overrides.get(enmName(decl)) match
       case Some(imp) =>
         StrategySpec(
-          typeName = decl.a,
-          functionName = strategyFunctionName(decl.a, b),
+          typeName = enmName(decl),
+          functionName = strategyFunctionName(enmName(decl), b),
           body = s"${imp.symbol}()",
           skipped = Nil,
           imports = List(imp)
         )
       case None =>
         StrategySpec(
-          typeName = decl.a,
-          functionName = strategyFunctionName(decl.a, b),
-          body = b.enumSampled(decl.b),
+          typeName = enmName(decl),
+          functionName = strategyFunctionName(enmName(decl), b),
+          body = b.enumSampled(enmVariants(decl)),
           skipped = Nil
         )
 
   private def renderAlias(
-      alias: TypeAliasDeclFull,
+      alias: type_alias_decl_full,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): (String, List[String]) =
-    alias.b match
+    talType(alias) match
       case NamedTypeF("String", _) =>
-        val (cs, skipped) = collectStringConstraint(alias.c, ir)
+        val (cs, skipped) = collectStringConstraint(talConstraint(alias), ir)
         (b.constrainedString(cs), skipped)
       case NamedTypeF("Int", _) =>
-        val (cs, skipped) = collectIntConstraint(alias.c)
+        val (cs, skipped) = collectIntConstraint(talConstraint(alias))
         (b.constrainedInt(cs), skipped)
       case other =>
         expressionFor(other, ir, StrategyCtx.Anonymous, TestStrategyOverrides.from(ir), b) match
@@ -323,7 +322,7 @@ object Strategies:
       skips: List[String],
       ir: ServiceIRFull
   ): (string_constraint, List[String]) =
-    val predicateNames          = ir.m.collect { case p: PredicateDeclFull => p.a }.toSet
+    val predicateNames          = svcPredicates(ir).map(prdName).toSet
     val (predSkips, otherSkips) = skips.partition(predicateNames.contains)
     predSkips.foldLeft((raw, otherSkips)):
       case ((accConstraint, accSkips), name) =>
@@ -338,14 +337,14 @@ object Strategies:
       case Some(pattern) =>
         (StringConstraint(None, None, List(pattern), Nil, Nil), Nil)
       case None =>
-        ir.m.collectFirst { case p: PredicateDeclFull if p.a == name => p } match
+        svcPredicates(ir).find(p => prdName(p) == name) match
           case None =>
             (emptyStringConstraint, List(s"unknown predicate '$name' in string constraint"))
-          case Some(pr) if pr.b.size != 1 =>
+          case Some(pr) if prdParams(pr).size != 1 =>
             (
               emptyStringConstraint,
               List(
-                s"predicate '$name' has arity ${pr.b.size}; string-constraint filters require arity 1"
+                s"predicate '$name' has arity ${prdParams(pr).size}; string-constraint filters require arity 1"
               )
             )
           case Some(_) =>
@@ -360,9 +359,9 @@ object Strategies:
             else (StringConstraint(None, None, Nil, List(snake), Nil), Nil)
 
   private def inlineMatchesPredicate(name: String, ir: ServiceIRFull): Option[String] =
-    ir.m
-      .collectFirst { case _p: PredicateDeclFull if _p.a == name => _p }
-      .filter(_.b.size == 1)
+    svcPredicates(ir)
+      .find(p => prdName(p) == name)
+      .filter(pr => prdParams(pr).size == 1)
       .flatMap: pr =>
-        val paramName = pr.b.head match { case ParamDeclFull(n, _, _) => n }
-        matchesIdentityShape(pr.c, paramName)
+        val paramName = prmName(prdParams(pr).head)
+        matchesIdentityShape(prdBody(pr), paramName)

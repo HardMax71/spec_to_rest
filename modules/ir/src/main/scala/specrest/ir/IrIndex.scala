@@ -3,25 +3,25 @@ package specrest.ir
 import specrest.ir.generated.SpecRestGenerated.*
 
 final case class IrIndex(
-    entities: List[EntityDeclFull],
-    enums: List[EnumDeclFull],
-    aliases: List[TypeAliasDeclFull],
-    entityByName: Map[String, EntityDeclFull],
-    enumByName: Map[String, EnumDeclFull],
-    aliasByName: Map[String, TypeAliasDeclFull],
+    entities: List[entity_decl_full],
+    enums: List[enum_decl_full],
+    aliases: List[type_alias_decl_full],
+    entityByName: Map[String, entity_decl_full],
+    enumByName: Map[String, enum_decl_full],
+    aliasByName: Map[String, type_alias_decl_full],
     entityNames: Set[String],
     enumNames: Set[String],
     aliasNames: Set[String]
 ):
-  def aliasAList: List[(String, TypeAliasDeclFull)] = aliasByName.toList
-  def enumAList: List[(String, EnumDeclFull)]       = enumByName.toList
-  def entityNamesList: List[String]                 = entities.map(_.a)
+  def aliasAList: List[(String, type_alias_decl_full)] = aliasByName.toList
+  def enumAList: List[(String, enum_decl_full)]        = enumByName.toList
+  def entityNamesList: List[String]                    = entities.map(entName)
 
 object IrIndex:
-  private val cache: java.util.Map[ServiceIRFull, IrIndex] =
-    java.util.Collections.synchronizedMap(new java.util.WeakHashMap[ServiceIRFull, IrIndex]())
+  private val cache: java.util.Map[service_ir_full, IrIndex] =
+    java.util.Collections.synchronizedMap(new java.util.WeakHashMap[service_ir_full, IrIndex]())
 
-  def of(ir: ServiceIRFull): IrIndex =
+  def of(ir: service_ir_full): IrIndex =
     Option(cache.get(ir)) match
       case Some(hit) => hit
       case None =>
@@ -29,20 +29,20 @@ object IrIndex:
         cache.put(ir, fresh)
         fresh
 
-  private def build(ir: ServiceIRFull): IrIndex =
-    val entities = ir.c.collect { case e: EntityDeclFull => e }
-    val enums    = ir.d.collect { case e: EnumDeclFull => e }
-    val aliases  = ir.e.collect { case a: TypeAliasDeclFull => a }
+  private def build(ir: service_ir_full): IrIndex =
+    val entities = svcEntities(ir)
+    val enums    = svcEnums(ir)
+    val aliases  = svcTypeAliases(ir)
     IrIndex(
       entities = entities,
       enums = enums,
       aliases = aliases,
-      entityByName = entities.map(e => e.a -> e).toMap,
-      enumByName = enums.map(e => e.a -> e).toMap,
-      aliasByName = aliases.map(a => a.a -> a).toMap,
-      entityNames = entities.map(_.a).toSet,
-      enumNames = enums.map(_.a).toSet,
-      aliasNames = aliases.map(_.a).toSet
+      entityByName = entities.map(e => entName(e) -> e).toMap,
+      enumByName = enums.map(e => enmName(e) -> e).toMap,
+      aliasByName = aliases.map(a => talName(a) -> a).toMap,
+      entityNames = entities.map(entName).toSet,
+      enumNames = enums.map(enmName).toSet,
+      aliasNames = aliases.map(talName).toSet
     )
 
-extension (ir: ServiceIRFull) def idx: IrIndex = IrIndex.of(ir)
+extension (ir: service_ir_full) def idx: IrIndex = IrIndex.of(ir)

@@ -17,4 +17,4 @@ final case class LintDiagnostic(
 
 trait LintPass:
   def code: String
-  def run(ir: ServiceIRFull): List[LintDiagnostic]
+  def run(ir: service_ir_full): List[LintDiagnostic]

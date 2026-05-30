@@ -6,7 +6,7 @@ import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
 import specrest.convention.Validate
 import specrest.ir.VerifyError
-import specrest.ir.generated.SpecRestGenerated.SpanT
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.lint.Lint
 import specrest.lint.LintDiagnostic
 import specrest.lint.LintLevel
@@ -42,7 +42,7 @@ object Check:
                     val buildMs = (System.nanoTime() - t1) / 1_000_000.0
                     log.verbose(f"Built IR in ${buildMs}%.0fms")
 
-                    val convDiags = Validate.validateConventions(ir.n, ir)
+                    val convDiags = Validate.validateConventions(svcConventions(ir), ir)
                     val lintDiags = Lint.run(ir)
 
                     val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)
@@ -58,7 +58,7 @@ object Check:
                     if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
                     else
                       log.success(
-                        s"$specFile: valid (${ir.g.length} operations, ${ir.c.length} entities, ${ir.i.length} invariants)"
+                        s"$specFile: valid (${svcOperations(ir).length} operations, ${svcEntities(ir).length} entities, ${svcInvariants(ir).length} invariants)"
                       )
                       ExitCodes.Ok
                   }

@@ -41,7 +41,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "strategy", "tests.strategies_user:valid_url"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics, Nil)
 
   test("strategy on enum is accepted"):
@@ -49,7 +49,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       enums = List(EnumDeclFull("Color", List("RED", "BLUE"), None)),
       rules = List(stringRule("Color", "strategy", "tests.strategies_user:valid_color"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics, Nil)
 
   test("strategy on operation is rejected"):
@@ -57,7 +57,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       operations = List(OperationDeclFull("Shorten", Nil, Nil, Nil, Nil, None)),
       rules = List(stringRule("Shorten", "strategy", "tests.strategies_user:foo"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d =>
         d.message.contains("type aliases and enums") && d.target == "Shorten"
@@ -70,7 +70,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       entities = List(EntityDeclFull("Url", None, Nil, Nil, None)),
       rules = List(stringRule("Url", "strategy", "tests.strategies_user:foo"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("type aliases and enums") && d.target == "Url"),
       s"diagnostics=$diagnostics"
@@ -81,7 +81,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "http_method", "GET"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("only 'strategy' applies")),
       s"diagnostics=$diagnostics"
@@ -92,7 +92,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("LongURL", "strategy", "no_colon_here"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("module:symbol")),
       s"diagnostics=$diagnostics"
@@ -109,7 +109,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
         stringRule("B", "strategy", "module_only:")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics.count(_.property == "strategy"), 2, s"diagnostics=$diagnostics")
 
   test("strategy with non-string value is rejected"):
@@ -117,7 +117,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
       typeAliases = List(TypeAliasDeclFull("LongURL", NamedTypeF("String", None), None, None)),
       rules = List(rule("LongURL", "strategy", IntLitF(BigInt(42), None)))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected a string") && d.target == "LongURL"),
       s"diagnostics=$diagnostics"
@@ -127,7 +127,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
     val ir = baseIR(
       rules = List(stringRule("MysteryThing", "strategy", "m:s"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("type alias, or enum")),
       s"diagnostics=$diagnostics"

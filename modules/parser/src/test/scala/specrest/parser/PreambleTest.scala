@@ -1,12 +1,12 @@
 package specrest.parser
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated.PredicateDeclFull
+import specrest.ir.generated.SpecRestGenerated.prdName
 
 class PreambleTest extends CatsEffectSuite:
 
   test("preamble loads cleanly and exposes the two built-in predicates"):
-    val names = Preamble.predicates.collect { case p: PredicateDeclFull => p.a }.toSet
+    val names = Preamble.predicates.map(prdName).toSet
     assertEquals(names, Set("isValidURI", "isValidEmail"))
 
   test("Preamble.load returns Right when the resource is well-formed"):

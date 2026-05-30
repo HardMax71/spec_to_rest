@@ -25,7 +25,7 @@ object Preamble:
               .buildIRCore(parsed.tree, mergePreamble = false)
               .left
               .map(err => PreambleLoadException(s"specrest preamble.spec build failure: $err"))
-    yield ir.m
+    yield svcPredicates(ir)
 
   @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
   private def loadResource(path: String): Either[PreambleLoadException, String] =

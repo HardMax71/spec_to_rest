@@ -17,20 +17,20 @@ object VerifierTool:
 
 object Classifier:
 
-  def classifyGlobal(ir: ServiceIRFull): VerifierTool =
+  def classifyGlobal(ir: service_ir_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyGlobalVerifier(ir))
 
-  def classifyInvariant(inv: InvariantDeclFull): VerifierTool =
+  def classifyInvariant(inv: invariant_decl_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyInvariantVerifier(inv))
 
-  def classifyRequires(op: OperationDeclFull): VerifierTool =
+  def classifyRequires(op: operation_decl_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyRequiresVerifier(op))
 
-  def classifyEnabled(op: OperationDeclFull, ir: ServiceIRFull): VerifierTool =
+  def classifyEnabled(op: operation_decl_full, ir: service_ir_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyEnabledVerifier(op, ir))
 
-  def classifyPreservation(op: OperationDeclFull, inv: InvariantDeclFull): VerifierTool =
+  def classifyPreservation(op: operation_decl_full, inv: invariant_decl_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyPreservationVerifier(op, inv))
 
-  def classifyTemporal(@annotation.unused t: TemporalDeclFull): VerifierTool =
+  def classifyTemporal(@annotation.unused t: temporal_decl_full): VerifierTool =
     VerifierTool.fromLifted(SpecRestGenerated.classifyTemporalVerifier)

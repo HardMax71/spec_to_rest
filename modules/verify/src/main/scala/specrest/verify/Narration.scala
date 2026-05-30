@@ -10,9 +10,9 @@ object Narration:
   private val Truncated: String = "(narration truncated; see counterexample above for full state)"
 
   final case class Context(
-      ir: ServiceIRFull,
-      op: Option[OperationDeclFull],
-      invariantDecl: Option[InvariantDeclFull],
+      ir: service_ir_full,
+      op: Option[operation_decl_full],
+      invariantDecl: Option[invariant_decl_full],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -36,14 +36,14 @@ object Narration:
       invDecl <- ctx.invariantDecl
       invName <- ctx.invariantName.orElse(Some("invariant"))
       ce      <- ctx.counterexample
-      field   <- contributingField(invDecl.b, ctx.ir)
+      field   <- contributingField(invBody(invDecl), ctx.ir)
     yield
-      val rhs    = ensuresRhsForField(op.e, field)
-      val opName = ctx.operationName.getOrElse(op.a)
+      val rhs    = ensuresRhsForField(operEnsures(op), field)
+      val opName = ctx.operationName.getOrElse(operName(op))
       val lines  = List.newBuilder[String]
       lines += "Why this violates the invariant:"
       lines += s"  1. Invariant '$invName' requires:"
-      lines += s"       ${PrettyPrint.expr(invDecl.b)}"
+      lines += s"       ${PrettyPrint.expr(invBody(invDecl))}"
       rhs match
         case Some(r) =>
           lines += s"  2. Operation '$opName' computes '$field' from:"
@@ -63,12 +63,12 @@ object Narration:
       lines.result().mkString("\n")
 
   private def narrateContradictoryInvariants(ctx: Context): Option[String] =
-    val invs = ctx.ir.i.collect { case i: InvariantDeclFull => i }
+    val invs = svcInvariants(ctx.ir)
     if invs.isEmpty then None
     else
       val lines = List.newBuilder[String]
-      val invNames = invs.zipWithIndex.map { case (InvariantDeclFull(n, _, _), i) =>
-        n.getOrElse(s"inv_$i")
+      val invNames = invs.zipWithIndex.map { case (inv, i) =>
+        invName(inv).getOrElse(s"inv_$i")
       }
       lines += "Why these invariants conflict:"
       lines += "  1. The verifier could not satisfy all invariants jointly."
@@ -86,10 +86,10 @@ object Narration:
 
   private def narrateUnreachable(ctx: Context): Option[String] =
     ctx.op.map: op =>
-      val opName = ctx.operationName.getOrElse(op.a)
+      val opName = ctx.operationName.getOrElse(operName(op))
       val lines  = List.newBuilder[String]
       lines += "Why this operation is unreachable:"
-      val req = combineAnd(op.d)
+      val req = combineAnd(operRequires(op))
       lines += s"  1. Operation '$opName' has 'requires':"
       lines += s"       ${PrettyPrint.expr(req)}"
       lines += "  2. No pre-state satisfies both 'requires' and the invariants."
@@ -101,21 +101,20 @@ object Narration:
         lines += "     (Run with --explain to see the contributing clauses.)"
       lines.result().mkString("\n")
 
-  private def contributingField(e: expr_full, ir: ServiceIRFull): Option[String] =
+  private def contributingField(e: expr_full, ir: service_ir_full): Option[String] =
     collectFieldAccessNames(e).headOption.orElse:
-      val stateFieldNames = ir.f.toList.flatMap {
-        case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
-      }.toSet
+      val stateFieldNames = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
       collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def describePreInputs(
       ce: DecodedCounterExample,
-      op: OperationDeclFull,
+      op: operation_decl_full,
       field: String
   ): Option[String] =
     val parts         = List.newBuilder[String]
     val inputDisplays = scala.collection.mutable.LinkedHashSet.empty[String]
-    op.b.foreach { case ParamDeclFull(pn, _, _) =>
+    operInputs(op).foreach { p =>
+      val pn = prmName(p)
       ce.inputs.find(_.name == pn).foreach: inp =>
         parts += s"$pn = ${inp.value.display}"
         inputDisplays += inp.value.display
@@ -136,11 +135,11 @@ object Narration:
 
   private def describePost(
       ce: DecodedCounterExample,
-      op: OperationDeclFull,
+      op: operation_decl_full,
       field: String
   ): Option[String] =
     val inputDisplays =
-      op.b.collect { case ParamDeclFull(n, _, _) => n }
+      operInputs(op).map(prmName)
         .flatMap(n => ce.inputs.find(_.name == n).map(_.value.display))
         .toSet
     val fromRelations = ce.stateRelations.filter(_.side == "post").iterator.flatMap: rel =>
@@ -162,13 +161,13 @@ object Narration:
       .find(e => inputDisplays.contains(e.key.display))
       .orElse(rel.entries.sortBy(_.key.display).headOption)
 
-  private def rangePairConflict(invs: List[InvariantDeclFull]): Option[String] =
-    val ranges = invs.flatMap { case d @ InvariantDeclFull(_, e, _) => rangeOf(e).map(r => (d, r)) }
+  private def rangePairConflict(invs: List[invariant_decl_full]): Option[String] =
+    val ranges = invs.flatMap(d => rangeOf(invBody(d)).map(r => (d, r)))
     ranges.combinations(2).collectFirst:
       case List((aDecl, (aIdent, (aOp, aBound))), (bDecl, (bIdent, (bOp, bBound))))
           if aIdent == bIdent && conflicts(aOp, aBound, bOp, bBound) =>
-        val aName = aDecl.a.getOrElse("invariant")
-        val bName = bDecl.a.getOrElse("invariant")
+        val aName = invName(aDecl).getOrElse("invariant")
+        val bName = invName(bDecl).getOrElse("invariant")
         s"For example, '$aName' and '$bName' bound '$aIdent' to disjoint ranges."
 
   private def cap(s: String): String =

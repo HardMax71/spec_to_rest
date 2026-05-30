@@ -1,11 +1,19 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.generated.SpecRestGenerated.EntityDeclFull
-import specrest.ir.generated.SpecRestGenerated.FieldDeclFull
-import specrest.ir.generated.SpecRestGenerated.StateDeclFull
-import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
-import specrest.ir.generated.SpecRestGenerated.TransitionDeclFull
+import specrest.ir.generated.SpecRestGenerated.entFields
+import specrest.ir.generated.SpecRestGenerated.entName
+import specrest.ir.generated.SpecRestGenerated.entity_decl_full
+import specrest.ir.generated.SpecRestGenerated.fldName
+import specrest.ir.generated.SpecRestGenerated.fldType
+import specrest.ir.generated.SpecRestGenerated.isDateTimeType
+import specrest.ir.generated.SpecRestGenerated.stdFields
+import specrest.ir.generated.SpecRestGenerated.stfName
+import specrest.ir.generated.SpecRestGenerated.svcEntities
+import specrest.ir.generated.SpecRestGenerated.svcState
+import specrest.ir.generated.SpecRestGenerated.svcTransitions
+import specrest.ir.generated.SpecRestGenerated.svcTypeAliases
+import specrest.ir.generated.SpecRestGenerated.trnEntity
 import specrest.profile.ProfiledService
 
 object AdminRouterTs:
@@ -14,18 +22,17 @@ object AdminRouterTs:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val entities = ir.c.collect { case e: EntityDeclFull => e }
+    val entities = svcEntities(ir)
 
-    def colsOf(e: EntityDeclFull): List[Col] =
-      val fields = e.c.collect { case f: FieldDeclFull => f }
-      fields.map: f =>
+    def colsOf(e: entity_decl_full): List[Col] =
+      entFields(e).map: f =>
         Col(
-          tsField = Naming.toCamelCase(f.a),
-          columnName = Naming.toColumnName(f.a),
-          isDate = specrest.ir.generated.SpecRestGenerated.isDateTimeType(ir.e, f.b)
+          tsField = Naming.toCamelCase(fldName(f)),
+          columnName = Naming.toColumnName(fldName(f)),
+          isDate = isDateTimeType(svcTypeAliases(ir), fldType(f))
         )
 
-    def accessor(e: EntityDeclFull): String = Naming.toCamelCase(e.a)
+    def accessor(e: entity_decl_full): String = Naming.toCamelCase(entName(e))
 
     val rowToDictFns = entities
       .map: e =>
@@ -38,7 +45,7 @@ object AdminRouterTs:
               else s"r.${c.tsField}"
             s"""    ${tsKey(c.columnName)}: $v,"""
           .mkString("\n")
-        s"""function rowToDict_${e.a}(r: Record<string, unknown>): Record<string, unknown> {
+        s"""function rowToDict_${entName(e)}(r: Record<string, unknown>): Record<string, unknown> {
            |  return {
            |$pairs
            |  };
@@ -52,16 +59,14 @@ object AdminRouterTs:
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n")
 
-    val stateFields = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.collect { case sf: StateFieldDeclFull => sf }
-    }
+    val stateFields = svcState(ir).toList.flatMap(stdFields)
     val neededEntities = stateFields
       .flatMap(f => AdminModel.projectionFor(f, ir).map(_.entityName))
       .distinct
     val rowsDecls = neededEntities
-      .flatMap(en => entities.find(_.a == en))
+      .flatMap(en => entities.find(e => entName(e) == en))
       .map: e =>
-        s"      const rows_${e.a} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany();"
+        s"      const rows_${entName(e)} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany();"
       .mkString("\n")
     val stateProps = stateFields
       .map: f =>
@@ -73,20 +78,20 @@ object AdminRouterTs:
                 s"rowToDict_${p.entityName}(r)"
               case AdminModel.ProjectionValue.PrimitiveField(name) =>
                 s"r.${Naming.toCamelCase(name)}"
-            s"""        ${tsKey(f.a)}: Object.fromEntries(
+            s"""        ${tsKey(stfName(f))}: Object.fromEntries(
                |          rows_${p.entityName}.map((r: Record<string, unknown>) => [
                |            String(r.$keyTs), $value,
                |          ]),
                |        ),""".stripMargin
           case None =>
-            s"        ${tsKey(f.a)}: null,"
+            s"        ${tsKey(stfName(f))}: null,"
       .mkString("\n")
 
-    val seedEntities = ir.h.collect { case TransitionDeclFull(_, en, _, _, _) => en }.toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(e.a))
+    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
+    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
     val seedHandlers = seedTargets
       .map: e =>
-        val snake = Naming.toSnakeCase(e.a)
+        val snake = Naming.toSnakeCase(entName(e))
         val pk    = AdminModel.primaryKeyField(e).getOrElse("id")
         val pkTs  = Naming.toCamelCase(pk)
         val cols  = colsOf(e)

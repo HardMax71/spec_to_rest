@@ -136,11 +136,11 @@ final case class OpenApiDocument(
 )
 
 final case class BuildContext(
-    aliasMap: Map[String, TypeAliasDeclFull],
-    enumMap: Map[String, EnumDeclFull],
-    entityDecls: Map[String, EntityDeclFull],
-    aliasAList: List[(String, TypeAliasDeclFull)],
-    enumAList: List[(String, EnumDeclFull)],
+    aliasMap: Map[String, type_alias_decl_full],
+    enumMap: Map[String, enum_decl_full],
+    entityDecls: Map[String, entity_decl_full],
+    aliasAList: List[(String, type_alias_decl_full)],
+    enumAList: List[(String, enum_decl_full)],
     entityNamesList: List[String]
 )
 
@@ -191,21 +191,20 @@ object Components:
 
   private def decorateFields(
       entity: ProfiledEntity,
-      decl: EntityDeclFull,
+      decl: entity_decl_full,
       ctx: BuildContext
   ): List[(String, (schema_object, Boolean))] =
-    val irFields = decl.c.collect { case f: FieldDeclFull => f }
+    val irFields = entFields(decl)
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
-      irFields(idx) match
-        case FieldDeclFull(_, irType, irConstraint, _) =>
-          val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
-            irType,
-            irConstraint,
-            ctx.aliasAList,
-            ctx.enumAList,
-            ctx.entityNamesList
-          )
-          (profiledField.columnName, (lifted, nullable))
+      val irField = irFields(idx)
+      val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
+        fldType(irField),
+        fldDefault(irField),
+        ctx.aliasAList,
+        ctx.enumAList,
+        ctx.entityNamesList
+      )
+      (profiledField.columnName, (lifted, nullable))
 
   private def errorResponseSchema: SchemaObject =
     SchemaObject(
@@ -483,9 +482,9 @@ object OpenApi:
     OpenApiDocument(
       openapi = "3.1.0",
       info = InfoObject(
-        title = profiled.ir.a,
+        title = svcName(profiled.ir),
         version = "0.1.0",
-        description = Some(s"API for ${profiled.ir.a}. Generated from formal specification.")
+        description = Some(s"API for ${svcName(profiled.ir)}. Generated from formal specification.")
       ),
       servers = List(
         ServerObject(s"http://localhost:${profiled.profile.httpPort}", Some("Local development"))
@@ -498,19 +497,21 @@ object OpenApi:
     )
 
   private def buildXInvariant(profiled: ProfiledService): Option[Map[String, String]] =
-    val pairs = profiled.ir.i.collect { case inv: InvariantDeclFull => inv }.zipWithIndex.map:
+    val pairs = svcInvariants(profiled.ir).zipWithIndex.map:
       case (inv, idx) =>
-        val name = inv.a.getOrElse(anonInvariantName(Nata(BigInt(idx))))
-        name -> prettyOneLine(inv.b)
+        val name = invName(inv).getOrElse(anonInvariantName(Nata(BigInt(idx))))
+        name -> prettyOneLine(invBody(inv))
     toStableListMap(disambiguateKeys(pairs))
 
   private def buildXTemporal(profiled: ProfiledService): Option[Map[String, TemporalAnnotation]] =
-    val pairs = profiled.ir.j.collect { case t: TemporalDeclFull => t }.flatMap: t =>
-      t.b match
-        case TbAlways(arg)     => Some(t.a -> TemporalAnnotation("always", prettyOneLine(arg)))
-        case TbEventually(arg) => Some(t.a -> TemporalAnnotation("eventually", prettyOneLine(arg)))
-        case TbFairness(arg)   => Some(t.a -> TemporalAnnotation("fairness", prettyOneLine(arg)))
-        case TbInvalid(_)      => None
+    val pairs = svcTemporals(profiled.ir).flatMap: t =>
+      tmpBody(t) match
+        case TbAlways(arg) => Some(tmpName(t) -> TemporalAnnotation("always", prettyOneLine(arg)))
+        case TbEventually(arg) =>
+          Some(tmpName(t) -> TemporalAnnotation("eventually", prettyOneLine(arg)))
+        case TbFairness(arg) =>
+          Some(tmpName(t) -> TemporalAnnotation("fairness", prettyOneLine(arg)))
+        case TbInvalid(_) => None
     toStableListMap(disambiguateKeys(pairs))
 
   // ListMap preserves insertion order; the lifted disambiguateKeys already

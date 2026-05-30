@@ -8,22 +8,20 @@ object AdminRouter:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val entities = ir.c.collect { case e: EntityDeclFull => e }
+    val entities = svcEntities(ir)
 
     val entityImports = entities
-      .map(e => s"from app.models.${Naming.toSnakeCase(e.a)} import ${e.a}")
+      .map(e => s"from app.models.${Naming.toSnakeCase(entName(e))} import ${entName(e)}")
       .mkString("\n")
 
     val deleteStatements =
       if entities.isEmpty then "    pass"
       else
         entities
-          .map(e => s"    await session.execute(delete(${e.a}))")
+          .map(e => s"    await session.execute(delete(${entName(e)}))")
           .mkString("\n")
 
-    val stateFieldsList = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.collect { case sf: StateFieldDeclFull => sf }
-    }
+    val stateFieldsList = svcState(ir).toList.flatMap(stdFields)
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
@@ -31,12 +29,12 @@ object AdminRouter:
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
-            s"    rows = (await session.execute(select(${e.a}))).scalars().all()\n"
+            s"    rows = (await session.execute(select(${entName(e)}))).scalars().all()\n"
           else if entities.size > 1 && needsRows then
             entities
               .map: e =>
-                val v = s"rows_${Naming.toSnakeCase(e.a)}"
-                s"    $v = (await session.execute(select(${e.a}))).scalars().all()"
+                val v = s"rows_${Naming.toSnakeCase(entName(e))}"
+                s"    $v = (await session.execute(select(${entName(e)}))).scalars().all()"
               .mkString("\n") + "\n"
           else ""
 
@@ -44,8 +42,8 @@ object AdminRouter:
         val body  = pairs.mkString(",\n")
         s"$rowsLine    return {\n$body,\n    }"
 
-    val seedEntities = ir.h.collect { case TransitionDeclFull(_, en, _, _, _) => en }.toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(e.a))
+    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
+    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
     val seedSection =
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
@@ -98,11 +96,12 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private def seedHandler(entity: EntityDeclFull, ir: ServiceIRFull): String =
-    val snake  = Naming.toSnakeCase(entity.a)
+  private def seedHandler(entity: entity_decl_full, ir: ServiceIRFull): String =
+    val snake  = Naming.toSnakeCase(entName(entity))
     val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
-    val dtFields = entity.c.collect:
-      case FieldDeclFull(n, t, _, _) if isDateTimeType(ir.e, t) => n
+    val dtFields = entFields(entity)
+      .filter(fld => isDateTimeType(svcTypeAliases(ir), fldType(fld)))
+      .map(fldName)
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -117,7 +116,7 @@ object AdminRouter:
         |) -> dict:
         |    _check_enabled()
         |    payload = dict(payload)
-        |$coercion    obj = ${entity.a}(**payload)
+        |$coercion    obj = ${entName(entity)}(**payload)
         |    session.add(obj)
         |    await session.commit()
         |    await session.refresh(obj)
@@ -125,9 +124,9 @@ object AdminRouter:
         |""".stripMargin
 
   private def projectionLine(
-      f: StateFieldDeclFull,
+      f: state_field_decl_full,
       ir: ServiceIRFull,
-      entities: List[EntityDeclFull]
+      entities: List[entity_decl_full]
   ): String =
     AdminModel.projectionFor(f, ir) match
       case Some(p) =>
@@ -137,11 +136,11 @@ object AdminRouter:
         val valueExpr = p.valueShape match
           case AdminModel.ProjectionValue.PrimitiveField(name) => s"row.$name"
           case AdminModel.ProjectionValue.EntityRow            => "_row_to_dict(row)"
-        val key = pyStringLit(f.a)
+        val key = pyStringLit(stfName(f))
         s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
       case None =>
-        val key = pyStringLit(f.a)
-        s"        # M5.1: state field '${f.a}' not backed by entity table\n        $key: None"
+        val key = pyStringLit(stfName(f))
+        s"        # M5.1: state field '${stfName(f)}' not backed by entity table\n        $key: None"
 
   private def pyStringLit(s: String): String =
     "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""

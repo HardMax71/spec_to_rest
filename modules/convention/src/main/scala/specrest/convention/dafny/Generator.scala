@@ -49,13 +49,12 @@ object Generator:
 
   def generate(ir: ServiceIRFull): Either[DafnyError, DafnyOutput] =
     boundary[Either[DafnyError, DafnyOutput]]:
-      val stateFields = ir.f match
-        case Some(StateDeclFull(fs, _)) =>
-          fs.collect { case StateFieldDeclFull(n, t, _) => n -> t }.to(ListMap)
+      val stateFields = svcState(ir) match
+        case Some(sd) =>
+          stdFields(sd).map(sf => stfName(sf) -> stfType(sf)).to(ListMap)
         case None => ListMap.empty[String, type_expr_full]
-      val aliasesWithWhere = ir.e.collect {
-        case TypeAliasDeclFull(name, _, Some(_), _) => name
-      }.toSet
+      val aliasesWithWhere =
+        svcTypeAliases(ir).filter(a => talConstraint(a).isDefined).map(talName).toSet
       val (externs, matchPatterns) = classifyExterns(ir)
       val ctx = Ctx(
         ir = ir,
@@ -67,19 +66,17 @@ object Generator:
 
       val sb = new StringBuilder
 
-      sb ++= header(ir.a)
+      sb ++= header(svcName(ir))
       sb ++= optionDatatype()
       sb ++= theByFunction()
 
-      val enumDecls    = renderEnums(ir.d)
-      val typeAliases  = renderTypeAliases(ctx, ir.e)
-      val entityDecls  = renderEntities(ctx, ir.c)
+      val enumDecls    = renderEnums(svcEnums(ir))
+      val typeAliases  = renderTypeAliases(ctx, svcTypeAliases(ir))
+      val entityDecls  = renderEntities(ctx, svcEntities(ir))
       val stateClass   = renderStateClass(ctx)
-      val invPredicate = renderInvariantPredicate(ctx, ir.i)
+      val invPredicate = renderInvariantPredicate(ctx, svcInvariants(ir))
 
-      val methods = ir.g.collect { case op: OperationDeclFull =>
-        renderMethod(ctx, op)
-      }
+      val methods = svcOperations(ir).map(op => renderMethod(ctx, op))
 
       if enumDecls.nonEmpty then
         sb ++= "\n"
@@ -132,9 +129,9 @@ object Generator:
       "}\n"
 
   private def renderEnums(decls: List[enum_decl_full])(using DafnyLabel): String =
-    val parts = decls.collect { case EnumDeclFull(name, vs, _) =>
-      val ctors = vs.mkString(" | ")
-      s"datatype $name = $ctors\n"
+    val parts = decls.map { d =>
+      val ctors = enmVariants(d).mkString(" | ")
+      s"datatype ${enmName(d)} = $ctors\n"
     }
     parts.mkString
 
@@ -142,47 +139,50 @@ object Generator:
       DafnyLabel
   ): String =
     val sb = new StringBuilder
-    decls.foreach:
-      case TypeAliasDeclFull(name, base, where, _) =>
-        val baseStr = renderType(ctx, base)
-        sb ++= s"type $name = $baseStr\n"
-        where.foreach: predExpr =>
-          val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value")
-          val rendered = renderExpr(whereCtx, predExpr)
-          sb ++= s"predicate ${name}Where(value: $baseStr)\n"
-          sb ++= "{\n"
-          sb ++= s"  $rendered\n"
-          sb ++= "}\n"
+    decls.foreach: d =>
+      val name    = talName(d)
+      val baseStr = renderType(ctx, talType(d))
+      sb ++= s"type $name = $baseStr\n"
+      talConstraint(d).foreach: predExpr =>
+        val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value")
+        val rendered = renderExpr(whereCtx, predExpr)
+        sb ++= s"predicate ${name}Where(value: $baseStr)\n"
+        sb ++= "{\n"
+        sb ++= s"  $rendered\n"
+        sb ++= "}\n"
     sb.toString
 
   private def renderEntities(ctx: Ctx, decls: List[entity_decl_full])(using DafnyLabel): String =
     val sb = new StringBuilder
-    decls.foreach:
-      case EntityDeclFull(name, _, fields, invariants, _) =>
-        val ctorFields = fields.collect { case FieldDeclFull(fn, ft, _, _) =>
-          s"$fn: ${renderType(ctx, ft)}"
+    decls.foreach: d =>
+      val name       = entName(d)
+      val fields     = entFields(d)
+      val invariants = entInvariants(d)
+      val ctorFields = fields.map { f =>
+        s"${fldName(f)}: ${renderType(ctx, fldType(f))}"
+      }
+      sb ++= s"datatype $name = $name(${ctorFields.mkString(", ")})\n"
+
+      val fieldWhereClauses = fields.flatMap { f =>
+        fldDefault(f).map { whereExpr =>
+          val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value" + "x")
+          val rebound =
+            subst("value", FieldAccessF(IdentifierF("x", None), fldName(f), None), whereExpr)
+          s"(${renderExpr(whereCtx, rebound)})"
         }
-        sb ++= s"datatype $name = $name(${ctorFields.mkString(", ")})\n"
+      }
 
-        val fieldWhereClauses = fields.collect {
-          case FieldDeclFull(fn, _, Some(whereExpr), _) =>
-            val whereCtx = ctx.copy(boundVars = ctx.boundVars + "value" + "x")
-            val rebound =
-              subst("value", FieldAccessF(IdentifierF("x", None), fn, None), whereExpr)
-            s"(${renderExpr(whereCtx, rebound)})"
-        }
+      val invClauses =
+        if invariants.nonEmpty then
+          val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
+          invariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
+        else Nil
 
-        val invClauses =
-          if invariants.nonEmpty then
-            val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
-            invariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
-          else Nil
-
-        val allClauses = fieldWhereClauses ++ invClauses
-        if allClauses.nonEmpty then
-          sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
-          sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
-          sb ++= "}\n"
+      val allClauses = fieldWhereClauses ++ invClauses
+      if allClauses.nonEmpty then
+        sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
+        sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
+        sb ++= "}\n"
     sb.toString
 
   private def renderEntityInvariant(ctx: Ctx, expr: expr_full, entityName: String)(using
@@ -190,7 +190,7 @@ object Generator:
   ): String =
     val rewritten =
       specrest.ir.generated.SpecRestGenerated
-        .rewriteEntityFieldRefs(entityFieldNames(ctx.ir.c, entityName), expr)
+        .rewriteEntityFieldRefs(entityFieldNames(svcEntities(ctx.ir), entityName), expr)
     renderExpr(ctx, rewritten)
 
   private def renderStateClass(ctx: Ctx)(using DafnyLabel): Option[String] =
@@ -209,10 +209,8 @@ object Generator:
     if invs.isEmpty || ctx.stateFields.isEmpty then None
     else
       val invCtx = ctx.copy(stateMode = StateMode.Direct)
-      val parts = invs.collect { case InvariantDeclFull(_, e, _) =>
-        s"(${renderExpr(invCtx, e)})"
-      }
-      val body = parts.mkString("\n  && ")
+      val parts  = invs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})")
+      val body   = parts.mkString("\n  && ")
       Some(
         "predicate ServiceStateInv(st: ServiceState)\n" +
           "  reads st\n" +
@@ -223,14 +221,14 @@ object Generator:
 
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
-  private def renderMethod(ctx: Ctx, op: OperationDeclFull)(using DafnyLabel): RenderedMethod =
-    val inputs  = op.b.collect { case p: ParamDeclFull => p }
-    val outputs = op.c.collect { case p: ParamDeclFull => p }
+  private def renderMethod(ctx: Ctx, op: operation_decl_full)(using DafnyLabel): RenderedMethod =
+    val inputs  = operInputs(op)
+    val outputs = operOutputs(op)
     val inputTypes = inputs
-      .collect { case ParamDeclFull(n, t, _) => n -> t }
+      .map(p => prmName(p) -> prmType(p))
       .to(ListMap)
     val outputTypes = outputs
-      .collect { case ParamDeclFull(n, t, _) => n -> t }
+      .map(p => prmName(p) -> prmType(p))
       .to(ListMap)
 
     val mctx = ctx.copy(
@@ -240,31 +238,31 @@ object Generator:
     )
 
     val params = inputs.map { p =>
-      s"${p.a}: ${renderType(mctx, p.b)}"
+      s"${prmName(p)}: ${renderType(mctx, prmType(p))}"
     }
     val stateParam = if ctx.stateFields.nonEmpty then List("st: ServiceState") else Nil
     val sigParams  = (stateParam ++ params).mkString(", ")
     val returns =
       if outputs.isEmpty then ""
       else
-        val rs = outputs.map(p => s"${p.a}: ${renderType(mctx, p.b)}").mkString(", ")
+        val rs = outputs.map(p => s"${prmName(p)}: ${renderType(mctx, prmType(p))}").mkString(", ")
         s" returns ($rs)"
-    val signature = s"method ${op.a}($sigParams)$returns"
+    val signature = s"method ${operName(op)}($sigParams)$returns"
 
-    val mutates = primedStateFields(op.e).intersect(ctx.stateFields.keySet).nonEmpty
+    val mutates = primedStateFields(operEnsures(op)).intersect(ctx.stateFields.keySet).nonEmpty
     val modifiesClauses =
       if mutates then List("st") else Nil
 
     val invariantClauses =
-      if ctx.stateFields.nonEmpty && ctx.ir.i.nonEmpty then List("ServiceStateInv(st)")
+      if ctx.stateFields.nonEmpty && svcInvariants(ctx.ir).nonEmpty then List("ServiceStateInv(st)")
       else Nil
 
     val aliasInputClauses = inputs.flatMap { p =>
-      aliasWhereCall(ctx, p.a, p.b)
+      aliasWhereCall(ctx, prmName(p), prmType(p))
     }
 
     val reqCtx          = mctx.copy(stateMode = StateMode.Direct)
-    val rawRequires     = flattenAndAll(op.d).map(renderExpr(reqCtx, _)).filter(_ != "true")
+    val rawRequires     = flattenAndAll(operRequires(op)).map(renderExpr(reqCtx, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
@@ -274,7 +272,9 @@ object Generator:
           case (n, _: OptionTypeF) if !mctx.inputTypes.contains(n) => n
         }.toList
     val rawEnsures = flattenAndAll(
-      op.e.map(e => specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, e))
+      operEnsures(op).map(e =>
+        specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, e)
+      )
     )
       .map(injectWFGuards(_, ensCtx))
       .map(renderExpr(ensCtx, _))
@@ -297,7 +297,7 @@ object Generator:
     RenderedMethod(
       sb.toString,
       DafnyMethodHeader(
-        name = op.a,
+        name = operName(op),
         signature = signature,
         requiresClauses = requiresClauses,
         ensuresClauses = ensuresClauses,
@@ -315,16 +315,16 @@ object Generator:
     def items(e: expr_full): List[extern_item] =
       specrest.ir.generated.SpecRestGenerated.collectExternItems(EkPredicate(), e)
     val all: List[extern_item] =
-      ir.i.collect { case InvariantDeclFull(_, e, _) => e }.flatMap(items) :::
-        ir.j.collect { case TemporalDeclFull(_, b, _) => temporalArg(b) }.flatMap(items) :::
-        ir.k.collect { case FactDeclFull(_, e, _) => e }.flatMap(items) :::
-        ir.c.collect { case e: EntityDeclFull => e }.flatMap { e =>
-          e.d.flatMap(items) :::
-            e.c.collect { case FieldDeclFull(_, _, Some(w), _) => w }.flatMap(items)
+      svcInvariants(ir).map(invBody).flatMap(items) :::
+        svcTemporals(ir).map(td => temporalArg(tmpBody(td))).flatMap(items) :::
+        svcFacts(ir).map(fctBody).flatMap(items) :::
+        svcEntities(ir).flatMap { e =>
+          entInvariants(e).flatMap(items) :::
+            entFields(e).flatMap(f => fldDefault(f)).flatMap(items)
         } :::
-        ir.e.collect { case TypeAliasDeclFull(_, _, Some(w), _) => w }.flatMap(items) :::
-        ir.g.collect { case op: OperationDeclFull => op }.flatMap { op =>
-          op.d.flatMap(items) ::: op.e.flatMap(items)
+        svcTypeAliases(ir).flatMap(a => talConstraint(a)).flatMap(items) :::
+        svcOperations(ir).flatMap { op =>
+          operRequires(op).flatMap(items) ::: operEnsures(op).flatMap(items)
         }
     val (externsAlist, patterns) =
       specrest.ir.generated.SpecRestGenerated.classifyExternItems(all)
@@ -457,8 +457,8 @@ object Generator:
     case SomeWrapF(x, _) =>
       s"Some(${renderExpr(ctx, x)})"
     case MapLiteralF(entries, _) =>
-      val parts = entries.map { case MapEntryFull(k, v, _) =>
-        s"${renderExpr(ctx, k)} := ${renderExpr(ctx, v)}"
+      val parts = entries.map { e =>
+        s"${renderExpr(ctx, mpeKey(e))} := ${renderExpr(ctx, mpeValue(e))}"
       }
       s"map[${parts.mkString(", ")}]"
     case SetLiteralF(elems, _) =>
@@ -497,8 +497,8 @@ object Generator:
       val keyType  = theByKeyType(ctx, dom)
       s"TheBy($domStr, ($v: $keyType) => $v in $domStr && $bodyStr)"
     case WithF(base, fields, _) =>
-      val parts = fields.map { case FieldAssignFull(n, v, _) =>
-        s"$n := ${renderExpr(ctx, v)}"
+      val parts = fields.map { fa =>
+        s"${fasName(fa)} := ${renderExpr(ctx, fasValue(fa))}"
       }
       s"${renderExpr(ctx, base)}.(${parts.mkString(", ")})"
     case ConstructorF(name, fields, sp) =>
@@ -535,11 +535,11 @@ object Generator:
       assigns: List[field_assign_full],
       sp: Option[span_t]
   )(using DafnyLabel): List[expr_full] =
-    val entity = entityByName(ctx.ir.c, entityName)
+    val entity = entityByName(svcEntities(ctx.ir), entityName)
     entity match
-      case Some(EntityDeclFull(_, _, fs, _, _)) =>
-        val byName = assigns.collect { case FieldAssignFull(n, v, _) => n -> v }.toMap
-        fs.collect { case FieldDeclFull(fn, _, _, _) => fn }.map { fn =>
+      case Some(e) =>
+        val byName = assigns.map(fa => fasName(fa) -> fasValue(fa)).toMap
+        entFields(e).map(fldName).map { fn =>
           byName.getOrElse(
             fn,
             failDafny(s"constructor for $entityName missing field $fn", sp)
@@ -596,12 +596,14 @@ object Generator:
       case PreF(x, _)            => walk(x)
       case CallF(c, args, _)     => walk(c); args.foreach(walk)
       case ConstructorF(_, fs, _) =>
-        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+        fs.foreach(fa => walk(fasValue(fa)))
       case WithF(b, fs, _) =>
         walk(b)
-        fs.foreach { case FieldAssignFull(_, v, _) => walk(v) }
+        fs.foreach(fa => walk(fasValue(fa)))
       case MapLiteralF(es, _) =>
-        es.foreach { case MapEntryFull(k, v, _) => walk(k); walk(v) }
+        es.foreach { e =>
+          walk(mpeKey(e)); walk(mpeValue(e))
+        }
       case SetLiteralF(es, _)   => es.foreach(walk)
       case SeqLiteralF(es, _)   => es.foreach(walk)
       case IfF(c, t, e, _)      => walk(c); walk(t); walk(e)
@@ -667,11 +669,11 @@ object Generator:
         failDafny("powerset operator '^' is not supported in Dafny translation")
 
   private def renderQuantifier(ctx: Ctx, q: QuantifierF)(using DafnyLabel): String =
-    val bindings = q.b.collect { case b: QuantifierBindingFull => b }
-    val varNames = bindings.map(_.a)
+    val bindings = q.b
+    val varNames = bindings.map(qbdVar)
     val innerCtx = ctx.copy(boundVars = ctx.boundVars ++ varNames)
     val membership = bindings.map { b =>
-      s"${b.a} in ${renderExpr(ctx, b.b)}"
+      s"${qbdVar(b)} in ${renderExpr(ctx, qbdCollection(b))}"
     }
     val membershipExpr = membership.mkString(" && ")
     val body           = renderExpr(innerCtx, q.c)

@@ -21,9 +21,8 @@ class TestCtxTest extends CatsEffectSuite:
       .getLines
       .mkString("\n")
     loadIR(src).map: ir =>
-      val incOp = ir.g
-        .collect { case o: OperationDeclFull => o }
-        .find(_.a == "Increment")
+      val incOp = svcOperations(ir)
+        .find(o => operName(o) == "Increment")
         .getOrElse(fail("no Increment"))
       val ctx = TestCtx.fromOperation(incOp, ir, CaptureMode.PreState)
       assert(ctx.stateFields.contains("count"), s"state fields=${ctx.stateFields}")
@@ -37,11 +36,13 @@ class TestCtxTest extends CatsEffectSuite:
       .getLines
       .mkString("\n")
     loadIR(src).map: ir =>
-      val results = ir.g.collect { case o: OperationDeclFull => o }.flatMap: op =>
+      val results = svcOperations(ir).flatMap: op =>
         val reqCtx = TestCtx.fromOperation(op, ir, CaptureMode.PreState)
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
-        op.d.map(e => s"${op.a}.requires" -> ExprToPython.translate(e, reqCtx)) ++
-          op.e.map(e => s"${op.a}.ensures" -> ExprToPython.translate(e, ensCtx))
+        operRequires(op).map(e =>
+          s"${operName(op)}.requires" -> ExprToPython.translate(e, reqCtx)
+        ) ++
+          operEnsures(op).map(e => s"${operName(op)}.ensures" -> ExprToPython.translate(e, ensCtx))
       val skips = results.collect { case (n, Translated.Skip(r, _)) => n -> r }
       // `count` is the only state and it is unbacked; every clause that references it
       // must honest-skip rather than emit a `None`-comparison that crashes at runtime.

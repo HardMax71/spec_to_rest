@@ -74,7 +74,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       operations = List(registerOp),
       rules = List(stringRule("Register", "test_strategy", Some("password"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics, Nil)
 
   test("test_strategy on entity field with live is accepted"):
@@ -82,7 +82,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("password_hash"), "live"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics, Nil)
 
   test("test_strategy without qualifier is rejected"):
@@ -90,7 +90,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", None, "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("requires a field qualifier")),
       s"diagnostics=$diagnostics"
@@ -101,7 +101,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("ghost_field"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("no field named 'ghost_field'")),
       s"diagnostics=$diagnostics"
@@ -112,7 +112,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       operations = List(registerOp),
       rules = List(stringRule("Register", "test_strategy", Some("ghost_input"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("no field named 'ghost_input'")),
       s"diagnostics=$diagnostics"
@@ -123,7 +123,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       entities = List(userEntity),
       rules = List(stringRule("User", "test_strategy", Some("password_hash"), "bogus"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected \"live\" or \"redacted\"")),
       s"diagnostics=$diagnostics"
@@ -139,7 +139,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         IntLitF(BigInt(42), None)
       ))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("expected a string")),
       s"diagnostics=$diagnostics"
@@ -150,7 +150,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       typeAliases = List(TypeAliasDeclFull("PasswordHash", NamedTypeF("String", None), None, None)),
       rules = List(stringRule("PasswordHash", "test_strategy", Some("value"), "redacted"))
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("applies to operations and entities")),
       s"diagnostics=$diagnostics"
@@ -164,7 +164,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("email"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics.filter(_.message.contains("duplicate")), Nil)
 
   test("two test_strategy rules for the same field are duplicates"):
@@ -175,7 +175,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"diagnostics=$diagnostics"
@@ -196,7 +196,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("Admin", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("conflicting test_strategy")),
       s"diagnostics=$diagnostics"
@@ -217,7 +217,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("Admin", "test_strategy", Some("password_hash"), "redacted")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assertEquals(diagnostics, Nil)
 
   test(
@@ -230,7 +230,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         stringRule("User", "test_strategy", Some("password_hash"), "live")
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"expected duplicate diagnostic; got=$diagnostics"
@@ -248,7 +248,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
         rule("Login", "http_method", Some("y"), StringLitF("GET", None))
       )
     )
-    val diagnostics = Validate.validateConventions(ir.n, ir)
+    val diagnostics = Validate.validateConventions(svcConventions(ir), ir)
     assert(
       diagnostics.exists(d => d.message.contains("duplicate")),
       s"diagnostics=$diagnostics"

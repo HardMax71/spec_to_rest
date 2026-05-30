@@ -21,25 +21,27 @@ class SkipRateProbeTest extends CatsEffectSuite:
       var total       = 0
       var skipped     = 0
       val skipReasons = scala.collection.mutable.ListBuffer.empty[String]
-      ir.g.collect { case op: OperationDeclFull => op }.foreach: op =>
+      svcOperations(ir).foreach: op =>
         val reqCtx = TestCtx.fromOperation(op, ir, CaptureMode.PreState)
         val ensCtx = TestCtx.fromOperation(op, ir, CaptureMode.PostState)
-        op.d.foreach: e =>
+        operRequires(op).foreach: e =>
           total += 1
           ExprToPython.translate(e, reqCtx) match
-            case Translated.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.requires: $r"
-            case _                     => ()
-        op.e.foreach: e =>
+            case Translated.Skip(r, _) =>
+              skipped += 1; skipReasons += s"${operName(op)}.requires: $r"
+            case _ => ()
+        operEnsures(op).foreach: e =>
           total += 1
           ExprToPython.translate(e, ensCtx) match
-            case Translated.Skip(r, _) => skipped += 1; skipReasons += s"${op.a}.ensures: $r"
-            case _                     => ()
-      ir.i.collect { case inv: InvariantDeclFull => inv }.foreach: inv =>
+            case Translated.Skip(r, _) =>
+              skipped += 1; skipReasons += s"${operName(op)}.ensures: $r"
+            case _ => ()
+      svcInvariants(ir).foreach: inv =>
         total += 1
-        ExprToPython.translate(inv.b, baseCtx(ir)) match
+        ExprToPython.translate(invBody(inv), baseCtx(ir)) match
           case Translated.Skip(r, _) =>
             skipped += 1
-            skipReasons += s"invariant ${inv.a.getOrElse("<anon>")}: $r"
+            skipReasons += s"invariant ${invName(inv).getOrElse("<anon>")}: $r"
           case _ => ()
       val rate = if total == 0 then 0.0 else skipped.toDouble / total.toDouble
       println(f"[$path] total=$total skipped=$skipped rate=${rate * 100}%.1f%%")
@@ -47,12 +49,11 @@ class SkipRateProbeTest extends CatsEffectSuite:
       (total, skipped, rate)
 
   private def baseCtx(ir: ServiceIRFull) =
-    val stateFields = ir.f.toList.flatMap:
-      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
-    val stateNames = stateFields.map(_.a).toSet
-    val enumVals   = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap
+    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateNames  = stateFields.map(stfName).toSet
+    val enumVals    = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap
     val mapNames = stateFields.collect {
-      case StateFieldDeclFull(n, _: MapTypeF, _) => n
+      case f if stfType(f) match { case _: MapTypeF => true; case _ => false } => stfName(f)
     }.toSet
     TestCtx(
       inputs = Set.empty,
@@ -60,8 +61,8 @@ class SkipRateProbeTest extends CatsEffectSuite:
       stateFields = stateNames,
       mapStateFields = mapNames,
       enumValues = enumVals,
-      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
-      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

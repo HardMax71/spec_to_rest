@@ -25,16 +25,14 @@ object Structural:
   def emitFor(profiled: ProfiledService): StructuralOutput =
     val ir = profiled.ir
 
-    val invChecks = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap:
-      (inv, idx) =>
-        checkForGlobalInvariant(inv, idx, ir).toList
-    val invSkips = ir.i.collect { case _iv: InvariantDeclFull => _iv }.zipWithIndex.flatMap:
-      (inv, idx) =>
-        checkForGlobalInvariantSkip(inv, idx, ir).toList
+    val invChecks = svcInvariants(ir).zipWithIndex.flatMap: (inv, idx) =>
+      checkForGlobalInvariant(inv, idx, ir).toList
+    val invSkips = svcInvariants(ir).zipWithIndex.flatMap: (inv, idx) =>
+      checkForGlobalInvariantSkip(inv, idx, ir).toList
 
     val ensuresPairs =
       profiled.operations.flatMap: pop =>
-        ir.g.collectFirst { case _o: OperationDeclFull if _o.a == pop.operationName => _o } match
+        svcOperations(ir).find(o => operName(o) == pop.operationName) match
           case Some(opDecl) => checksForOperation(pop, opDecl, ir)
           case None         => Nil
     val ensuresChecks = ensuresPairs.collect { case Right(c) => c }
@@ -54,20 +52,20 @@ object Structural:
   // -- Global invariants -----------------------------------------------------
 
   private def checkForGlobalInvariant(
-      inv: InvariantDeclFull,
+      inv: invariant_decl_full,
       idx: Int,
       ir: ServiceIRFull
   ): Option[StructuralCheck] =
     val ctx = invariantCtx(ir)
-    ExprToPython.translate(inv.b, ctx) match
+    ExprToPython.translate(invBody(inv), ctx) match
       case Translated.Skip(_, _) => None
       case Translated.Emit(text) =>
-        val name       = inv.a.getOrElse(s"anon_$idx")
+        val name       = invName(inv).getOrElse(s"anon_$idx")
         val methodName = Naming.toSnakeCase(name)
         val sb         = new StringBuilder
         sb.append(s"def _check_invariant_$methodName(ctx, response, case):\n")
         sb.append(
-          s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(inv.b))}$TQ\n"
+          s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(invBody(inv)))}$TQ\n"
         )
         sb.append("    if response.status_code >= 500:\n")
         sb.append("        return\n")
@@ -78,13 +76,13 @@ object Structural:
         Some(StructuralCheck(s"_check_invariant_$methodName", sb.toString))
 
   private def checkForGlobalInvariantSkip(
-      inv: InvariantDeclFull,
+      inv: invariant_decl_full,
       idx: Int,
       ir: ServiceIRFull
   ): Option[TestSkip] =
     val ctx  = invariantCtx(ir)
-    val name = inv.a.getOrElse(s"anon_$idx")
-    ExprToPython.translate(inv.b, ctx) match
+    val name = invName(inv).getOrElse(s"anon_$idx")
+    ExprToPython.translate(invBody(inv), ctx) match
       case Translated.Skip(reason, _) =>
         Some(TestSkip("<invariants>", s"structural_invariant[$name]", reason))
       case _ => None
@@ -93,15 +91,15 @@ object Structural:
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
-      stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
-        _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
-      }.toSet,
-      mapStateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) => _fs }.collect {
-        case StateFieldDeclFull(n, t, _) if t.isInstanceOf[MapTypeF] => n
-      }.toSet,
-      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
-      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
-      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
+      stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet,
+      mapStateFields = svcState(ir).toList
+        .flatMap(stdFields)
+        .filter(f => stfType(f).isInstanceOf[MapTypeF])
+        .map(stfName)
+        .toSet,
+      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState,
       unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
@@ -111,7 +109,7 @@ object Structural:
 
   private def checksForOperation(
       pop: ProfiledOperation,
-      opDecl: OperationDeclFull,
+      opDecl: operation_decl_full,
       ir: ServiceIRFull
   ): List[Either[TestSkip, StructuralCheck]] =
     val isCreateLike = pop.kind match
@@ -119,14 +117,12 @@ object Structural:
       case _                          => false
     if !isCreateLike then Nil
     else
-      val opSnake = Naming.toSnakeCase(opDecl.a)
-      val stateFields = ir.f.toList.flatMap { case StateDeclFull(_fs, _) =>
-        _fs.collect { case StateFieldDeclFull(_n, _, _) => _n }
-      }.toSet
-      val outputNames     = opDecl.c.collect { case ParamDeclFull(_n, _, _) => _n }.toSet
+      val opSnake         = Naming.toSnakeCase(operName(opDecl))
+      val stateFields     = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+      val outputNames     = operOutputs(opDecl).map(prmName).toSet
       val outputNamesList = outputNames.toList
       val stateFieldsList = stateFields.toList
-      opDecl.e.zipWithIndex.flatMap: (clause, idx) =>
+      operEnsures(opDecl).zipWithIndex.flatMap: (clause, idx) =>
         val inelig = structuralIneligibility(clause, outputNamesList, stateFieldsList)
         if inelig.isDefined then
           val reason = inelig match
@@ -137,12 +133,12 @@ object Structural:
             case Some(SceReferencesNoOutput()) =>
               "ensures references no output field; not a structural-checkable shape"
             case None => "ensures not eligible for structural check"
-          List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
+          List(Left(TestSkip(operName(opDecl), s"structural_ensures[$idx]", reason)))
         else
           val ctx = TestCtx.fromOperation(opDecl, ir, CaptureMode.PostState)
           ExprToPython.translate(clause, ctx) match
             case Translated.Skip(reason, _) =>
-              List(Left(TestSkip(opDecl.a, s"structural_ensures[$idx]", reason)))
+              List(Left(TestSkip(operName(opDecl), s"structural_ensures[$idx]", reason)))
             case Translated.Emit(text) =>
               val checkName = s"_check_${opSnake}_ensures_$idx"
               val pathLit   = ExprToPython.pyString(pop.endpoint.path)
@@ -165,7 +161,7 @@ object Structural:
               sb.append("        return\n")
               sb.append("    response_data = response.json() if response.content else {}\n")
               sb.append(
-                s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${opDecl.a}#$idx)")}\n"
+                s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${operName(opDecl)}#$idx)")}\n"
               )
               List(Right(StructuralCheck(checkName, sb.toString)))
 
@@ -203,8 +199,8 @@ object Structural:
     // 4.x. Stateful coverage is the dedicated Hypothesis `test_stateful_*` suite.
 
     val sensitiveFieldNames: List[String] =
-      ir.g
-        .collect { case op: OperationDeclFull => op.b.collect { case ParamDeclFull(n, _, _) => n } }
+      svcOperations(ir)
+        .map(op => operInputs(op).map(prmName))
         .flatten
         .filter(SensitiveFields.isSensitive)
         .distinct
@@ -229,7 +225,7 @@ object Structural:
             |                body[_k] = _RedactedStr(_v)
             |""".stripMargin
 
-    s"""|${TQ}Auto-generated structural tests for ${ir.a}.
+    s"""|${TQ}Auto-generated structural tests for ${svcName(ir)}.
         |
         |Loads openapi.yaml and uses Schemathesis to fuzz every (method, path);
         |custom checks below are derived from spec invariants and pure-output

@@ -6,24 +6,22 @@ import specrest.ir.generated.SpecRestGenerated.*
 object UndefinedRef extends LintPass:
   val code = "L02"
 
-  def run(ir: ServiceIRFull): List[LintDiagnostic] =
-    val out = List.newBuilder[LintDiagnostic]
-    val stateFields = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.map { case StateFieldDeclFull(n, _, _) => n }
-    }.toSet
-    val entityNames = ir.c.map { case EntityDeclFull(n, _, _, _, _) => n }.toSet
-    val enumNames   = ir.d.map { case EnumDeclFull(n, _, _) => n }.toSet
-    val enumMembers = ir.d.flatMap { case EnumDeclFull(_, vs, _) => vs }.toSet
-    val typeAliases = ir.e.map { case TypeAliasDeclFull(n, _, _, _) => n }.toSet
-    val predicates  = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
-    val functions   = ir.l.map { case FunctionDeclFull(n, _, _, _, _) => n }.toSet
-    val factImplicit = ir.k.flatMap { case FactDeclFull(_, e, _) =>
+  def run(ir: service_ir_full): List[LintDiagnostic] =
+    val out         = List.newBuilder[LintDiagnostic]
+    val stateFields = svcState(ir).toList.flatMap(sd => stdFields(sd).map(stfName)).toSet
+    val entityNames = svcEntities(ir).map(entName).toSet
+    val enumNames   = svcEnums(ir).map(enmName).toSet
+    val enumMembers = svcEnums(ir).flatMap(enmVariants).toSet
+    val typeAliases = svcTypeAliases(ir).map(talName).toSet
+    val predicates  = svcPredicates(ir).map(prdName).toSet
+    val functions   = svcFunctions(ir).map(fncName).toSet
+    val factImplicit = svcFacts(ir).flatMap { f =>
       // Fact bodies sometimes call helper predicates by name with no
       // explicit declaration; treat any Call(Identifier, _) callee as
       // defined to avoid false positives. (Crucially, we whitelist
       // CALLEE names only — not arbitrary identifiers from the fact
       // body, which would silently mask real undefined-ref errors.)
-      collectAllCallNames(e)
+      collectAllCallNames(fctBody(f))
     }.toSet
     val global =
       stateFields ++ entityNames ++ enumNames ++ enumMembers ++ typeAliases ++
@@ -42,37 +40,36 @@ object UndefinedRef extends LintPass:
     def check(expr: expr_full, scope: Set[String]): Unit =
       emit(walkUndefinedExpr(expr, scope.toList))
 
-    for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
-      val opScope = global ++ inputs.map { case ParamDeclFull(n, _, _) => n } ++
-        outputs.map { case ParamDeclFull(n, _, _) => n } + "self"
-      requires.foreach(check(_, opScope))
-      ensures.foreach(check(_, opScope))
+    for op <- svcOperations(ir) do
+      val opScope = global ++ operInputs(op).map(prmName) ++
+        operOutputs(op).map(prmName) + "self"
+      operRequires(op).foreach(check(_, opScope))
+      operEnsures(op).foreach(check(_, opScope))
 
-    ir.i.foreach { case InvariantDeclFull(_, e, _) => check(e, global + "self") }
-    ir.j.foreach { case TemporalDeclFull(_, b, _) => check(temporalArg(b), global + "self") }
-    ir.k.foreach { case FactDeclFull(_, e, _) => check(e, global + "self") }
+    svcInvariants(ir).foreach(inv => check(invBody(inv), global + "self"))
+    svcTemporals(ir).foreach(t => check(temporalArg(tmpBody(t)), global + "self"))
+    svcFacts(ir).foreach(f => check(fctBody(f), global + "self"))
 
-    for case EntityDeclFull(_, _, fields, invs, _) <- ir.c do
-      val entScope = global + "self" + "value" ++ fields.map { case FieldDeclFull(n, _, _, _) => n }
-      fields.foreach { case FieldDeclFull(_, _, c, _) => c.foreach(check(_, entScope)) }
-      invs.foreach(check(_, entScope))
+    for e <- svcEntities(ir) do
+      val entScope = global + "self" + "value" ++ entFields(e).map(fldName)
+      entFields(e).foreach(f => fldDefault(f).foreach(check(_, entScope)))
+      entInvariants(e).foreach(check(_, entScope))
 
-    for case TypeAliasDeclFull(_, _, c, _) <- ir.e do c.foreach(check(_, global + "value"))
+    for a <- svcTypeAliases(ir) do talConstraint(a).foreach(check(_, global + "value"))
 
-    for case FunctionDeclFull(_, params, _, body, _) <- ir.l do
-      check(body, global ++ params.map { case ParamDeclFull(n, _, _) => n })
+    for fn <- svcFunctions(ir) do
+      check(fncBody(fn), global ++ fncParams(fn).map(prmName))
 
-    for case PredicateDeclFull(_, params, body, _) <- ir.m do
-      check(body, global ++ params.map { case ParamDeclFull(n, _, _) => n })
+    for p <- svcPredicates(ir) do
+      check(prdBody(p), global ++ prdParams(p).map(prmName))
 
-    for case TransitionDeclFull(_, entityName, _, rules, _) <- ir.h do
-      val entFields = ir.c.collect {
-        case EntityDeclFull(n, _, fs, _, _) if n == entityName =>
-          fs.map { case FieldDeclFull(fn, _, _, _) => fn }.toSet
-      }.headOption.getOrElse(Set.empty)
-      val trScope = global ++ entFields + "self"
-      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) =>
-        guard.foreach(check(_, trScope))
-      }
+    for tr <- svcTransitions(ir) do
+      val entFieldNames = svcEntities(ir)
+        .filter(e => entName(e) == trnEntity(tr))
+        .map(e => entFields(e).map(fldName).toSet)
+        .headOption
+        .getOrElse(Set.empty)
+      val trScope = global ++ entFieldNames + "self"
+      trnRules(tr).foreach(r => trlGuard(r).foreach(check(_, trScope)))
 
     out.result()

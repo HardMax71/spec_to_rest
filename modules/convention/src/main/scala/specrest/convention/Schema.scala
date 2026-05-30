@@ -22,8 +22,8 @@ object Schema:
   )
 
   final private case class ClassifierCtx(
-      aliasAList: List[(String, TypeAliasDeclFull)],
-      enumAList: List[(String, EnumDeclFull)],
+      aliasAList: List[(String, type_alias_decl_full)],
+      enumAList: List[(String, enum_decl_full)],
       entityNamesList: List[String]
   )
 
@@ -42,17 +42,17 @@ object Schema:
     for entity <- entities do
       tables += deriveTable(entity, ir, entityNames, cctx, entityRefs)
 
-    ir.f match
-      case Some(StateDeclFull(fs, _)) =>
-        for case sf @ StateFieldDeclFull(_, ty, _) <- fs do
-          ty match
+    svcState(ir) match
+      case Some(sd) =>
+        for sf <- stdFields(sd) do
+          stfType(sf) match
             case RelationTypeF(_, _: (MultSome | MultSet), _, _) =>
               deriveJunctionTable(sf, entityNames).foreach(tables += _)
             case _ => ()
       case None => ()
 
     val builtTables        = tables.result()
-    val withPartialIndexes = applyPartialIndexConventions(builtTables, entities, ir.n)
+    val withPartialIndexes = applyPartialIndexConventions(builtTables, entities, svcConventions(ir))
     val triggers           = detectAggregateTriggers(entities, withPartialIndexes)
     DatabaseSchema(withPartialIndexes, triggers)
 
@@ -61,35 +61,35 @@ object Schema:
       cctx: ClassifierCtx
   ): Map[String, EntityRef] =
     ir.idx.entities.map { entity =>
-      val fields = entity.c.collect { case f: FieldDeclFull => f }
+      val fields = entFields(entity)
       val tableName = Path
-        .getConvention(ir.n, entity.a, "db_table")
-        .getOrElse(Naming.toTableName(entity.a))
-      val idField = fields.find(_.a == "id")
+        .getConvention(svcConventions(ir), entName(entity), "db_table")
+        .getOrElse(Naming.toTableName(entName(entity)))
+      val idField = fields.find(f => fldName(f) == "id")
       val idFkSqlType = idField match
         case None => "BIGINT"
         case Some(f) =>
-          val mapped = mapTypeToColumn("id", f.b, cctx)
+          val mapped = mapTypeToColumn("id", fldType(f), cctx)
           // A FK referencing the PK must match its widened type.
           columnSqlType(mapped.column) match
             case "BIGSERIAL" => "BIGINT"
             case other       => widenExplicitIdPkSqlType("id", other)
-      entity.a -> EntityRef(tableName, idFkSqlType)
+      entName(entity) -> EntityRef(tableName, idFkSqlType)
     }.toMap
 
   private def deriveTable(
-      entity: EntityDeclFull,
+      entity: entity_decl_full,
       ir: ServiceIRFull,
       entityNames: Set[String],
       cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): table_spec =
-    val fields = entity.c.collect { case f: FieldDeclFull => f }
+    val fields = entFields(entity)
     val tableName = Path
-      .getConvention(ir.n, entity.a, "db_table")
-      .getOrElse(Naming.toTableName(entity.a))
+      .getConvention(svcConventions(ir), entName(entity), "db_table")
+      .getOrElse(Naming.toTableName(entName(entity)))
 
-    val entityFieldNames = fields.map(_.a).toSet
+    val entityFieldNames = fields.map(fldName).toSet
     val columns          = scala.collection.mutable.ListBuffer.empty[column_spec]
     if !entityFieldNames.contains("id") then
       columns += ColumnSpec("id", "BIGSERIAL", false, None)
@@ -99,9 +99,9 @@ object Schema:
     val indexes     = scala.collection.mutable.ListBuffer.empty[index_spec]
 
     for field <- fields do
-      val colName    = Naming.toColumnName(field.a)
+      val colName    = Naming.toColumnName(fldName(field))
       val mapped     = mapFieldToColumn(field, cctx, entityRefs)
-      val widenedSql = widenExplicitIdPkSqlType(field.a, columnSqlType(mapped.column))
+      val widenedSql = widenExplicitIdPkSqlType(fldName(field), columnSqlType(mapped.column))
       val column = ColumnSpec(
         columnName(mapped.column),
         widenedSql,
@@ -114,20 +114,20 @@ object Schema:
         val fkCol = fkColumn(fk)
         indexes += IndexSpec(s"idx_${tableName}_$fkCol", List(fkCol), false, None)
       mapped.check.foreach(checks += _)
-      field.c.foreach: c =>
+      fldDefault(field).foreach: c =>
         checks ++= extractChecks(colName, c)
-      for refinement <- aliasRefinements(field.b, cctx.aliasAList) do
+      for refinement <- aliasRefinements(fldType(field), cctx.aliasAList) do
         checks ++= extractChecks(colName, refinement)
 
-    for inv <- entity.d do
+    for inv <- entInvariants(entity) do
       checks ++= extractInvariantChecks(inv, fields)
 
-    ir.f match
-      case Some(StateDeclFull(fs, _)) =>
-        for case StateFieldDeclFull(_, ty, _) <- fs do
-          ty match
+    svcState(ir) match
+      case Some(sd) =>
+        for sf <- stdFields(sd) do
+          stfType(sf) match
             case RelationTypeF(from, mult, to, _)
-                if typeName(to).contains(entity.a) && (mult match
+                if typeName(to).contains(entName(entity)) && (mult match
                   case _: (MultSome | MultSet) => false; case _ => true
                 ) =>
               typeName(from).filter(entityNames.contains) match
@@ -153,7 +153,7 @@ object Schema:
             case _ => ()
       case None => ()
 
-    val tsOverride    = Path.getConvention(ir.n, entity.a, "db_timestamps")
+    val tsOverride    = Path.getConvention(svcConventions(ir), entName(entity), "db_timestamps")
     val addTimestamps = !tsOverride.contains("false")
     if addTimestamps && !columns.exists(c => columnName(c) == "created_at") then
       columns += ColumnSpec("created_at", "TIMESTAMPTZ", false, Some("NOW()"))
@@ -162,7 +162,7 @@ object Schema:
 
     TableSpec(
       tableName,
-      entity.a,
+      entName(entity),
       columns.toList,
       "id",
       foreignKeys.toList,
@@ -171,10 +171,10 @@ object Schema:
     )
 
   private def deriveJunctionTable(
-      stateField: StateFieldDeclFull,
+      stateField: state_field_decl_full,
       entityNames: Set[String]
   ): Option[table_spec] =
-    stateField.b match
+    stfType(stateField) match
       case RelationTypeF(from, _, to, _) =>
         for
           fromName <- typeName(from) if entityNames.contains(fromName)
@@ -218,12 +218,12 @@ object Schema:
       case _ => None
 
   private def mapFieldToColumn(
-      field: FieldDeclFull,
+      field: field_decl_full,
       cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): MappedField =
-    val colName = Naming.toColumnName(field.a)
-    val mapped  = mapTypeToColumn(colName, field.b, cctx)
+    val colName = Naming.toColumnName(fldName(field))
+    val mapped  = mapTypeToColumn(colName, fldType(field), cctx)
     if mapped.foreignKey.isEmpty && colName.endsWith("_id") then
       val prefix       = colName.dropRight("_id".length)
       val targetEntity = cctx.entityNamesList.find(n => Naming.toSnakeCase(n) == prefix)
@@ -304,7 +304,7 @@ object Schema:
 
   private def extractInvariantChecks(
       inv: expr_full,
-      @annotation.unused fields: List[FieldDeclFull]
+      @annotation.unused fields: List[field_decl_full]
   ): List[String] =
     flattenAnd(inv).flatMap: atom =>
       classifyInvariantAtom(atom) match
@@ -330,19 +330,21 @@ object Schema:
 
   private def applyPartialIndexConventions(
       tables: List[table_spec],
-      entities: List[EntityDeclFull],
+      entities: List[entity_decl_full],
       conv: Option[conventions_decl_full]
   ): List[table_spec] =
     val rules = extractPartialIndexRules(conv)
     if rules.isEmpty then tables
     else
-      val entityByName = entities.map(e => e.a -> e).toMap
+      val entityByName = entities.map(e => entName(e) -> e).toMap
       // Resolve target entity name → table name (regex + convention lookup, stays in Scala).
       val rulesByTable: Map[String, List[(String, String)]] = rules
         .flatMap { case (target, (col, filt)) =>
           entityByName.get(target).map: e =>
             val tableNm =
-              Path.getConvention(conv, e.a, "db_table").getOrElse(Naming.toTableName(e.a))
+              Path.getConvention(conv, entName(e), "db_table").getOrElse(
+                Naming.toTableName(entName(e))
+              )
             (tableNm, Naming.toColumnName(col), filt)
         }
         .groupBy(_._1)
@@ -355,24 +357,24 @@ object Schema:
           case Some(colFilters) => appendPartialIndexes(t, colFilters)
 
   private def detectAggregateTriggers(
-      entities: List[EntityDeclFull],
+      entities: List[entity_decl_full],
       tables: List[table_spec]
   ): List[trigger_spec] =
     val tablesByEntity = tables.map(t => tableEntityName(t) -> t).toMap
-    val entitiesByName = entities.map(e => e.a -> e).toMap
+    val entitiesByName = entities.map(e => entName(e) -> e).toMap
     val out            = List.newBuilder[trigger_spec]
     for
       parent    <- entities
-      parentTbl <- tablesByEntity.get(parent.a)
-      inv       <- parent.d
+      parentTbl <- tablesByEntity.get(entName(parent))
+      inv       <- entInvariants(parent)
     do
       detectAggregateInvariant(inv) match
         case Some(DetectedAggregate(targetField, collFieldName, agg, sourceField)) =>
-          val parentFields = parent.c.collect { case f: FieldDeclFull => f }
+          val parentFields = entFields(parent)
           val triggerOpt: Option[trigger_candidate] =
             for
-              collField   <- parentFields.find(_.a == collFieldName)
-              childName   <- collectionElementEntityName(collField.b)
+              collField   <- parentFields.find(f => fldName(f) == collFieldName)
+              childName   <- collectionElementEntityName(fldType(collField))
               childEntity <- entitiesByName.get(childName)
               childTable  <- tablesByEntity.get(childName)
               validated <- validateTrigger(
@@ -387,7 +389,7 @@ object Schema:
             yield validated
           triggerOpt match
             case Some(TriggerCandidate(parentTable, _, childTable, fkCol, _, srcField)) =>
-              val parentSnake = Naming.toSnakeCase(parent.a)
+              val parentSnake = Naming.toSnakeCase(entName(parent))
               val funcName    = s"recalc_${parentSnake}_$targetField"
               out += TriggerSpec(
                 s"trg_$funcName",

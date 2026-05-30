@@ -65,8 +65,8 @@ final case class TestCtx(
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
-    userFunctions: Map[String, FunctionDeclFull],
-    userPredicates: Map[String, PredicateDeclFull],
+    userFunctions: Map[String, function_decl_full],
+    userPredicates: Map[String, predicate_decl_full],
     boundVars: Set[String],
     capture: CaptureMode,
     // The single output an endpoint returns as the bare response body (e.g. a `list`
@@ -95,34 +95,31 @@ final case class TestCtx(
     )
 
   def fnArities: List[(String, BigInt)] =
-    userFunctions.view.mapValues(f => BigInt(f.b.size)).toList
+    userFunctions.view.mapValues(f => BigInt(fncParams(f).size)).toList
 
   def predArities: List[(String, BigInt)] =
-    userPredicates.view.mapValues(p => BigInt(p.b.size)).toList
+    userPredicates.view.mapValues(p => BigInt(prdParams(p).size)).toList
 
 object TestCtx:
   def fromOperation(
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull,
       capture: CaptureMode,
       bareBodyOutput: Option[String] = None
   ): TestCtx =
-    val stateNames = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.collect { case StateFieldDeclFull(n, _, _) => n }
+    val stateNames = svcState(ir).toList.flatMap(s => stdFields(s).map(stfName)).toSet
+    val mapStateNames = svcState(ir).toList.flatMap { s =>
+      stdFields(s).filter(f => isMapType(stfType(f))).map(stfName)
     }.toSet
-    val mapStateNames = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) =>
-        fs.collect { case StateFieldDeclFull(n, t, _) if isMapType(t) => n }
-    }.toSet
-    val enumVals = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap
+    val enumVals = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap
     TestCtx(
-      inputs = op.b.collect { case ParamDeclFull(n, _, _) => n }.toSet,
-      outputs = op.c.collect { case ParamDeclFull(n, _, _) => n }.toSet,
+      inputs = operInputs(op).map(prmName).toSet,
+      outputs = operOutputs(op).map(prmName).toSet,
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
-      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
-      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
       boundVars = Set.empty,
       capture = capture,
       bareBodyOutput = bareBodyOutput,

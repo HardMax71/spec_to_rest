@@ -251,8 +251,10 @@ object ExprToPython extends ExprBackend:
   ): Translated =
     if entries.isEmpty then Translated.Emit("{}")
     else
-      val pairs = entries.collect { case MapEntryFull(k, v, _) =>
-        lift2(translate(k, ctx), translate(v, ctx))((kx, vx) => Translated.Emit(s"$kx: $vx"))
+      val pairs = entries.map { e =>
+        lift2(translate(mpeKey(e), ctx), translate(mpeValue(e), ctx))((kx, vx) =>
+          Translated.Emit(s"$kx: $vx")
+        )
       }
       liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
 
@@ -263,8 +265,8 @@ object ExprToPython extends ExprBackend:
   ): Translated =
     if fields.isEmpty then Translated.Emit("{}")
     else
-      val pairs = fields.collect { case FieldAssignFull(n, v, _) =>
-        lift1(translate(v, ctx))(vx => Translated.Emit(s"${pyString(n)}: $vx"))
+      val pairs = fields.map { fa =>
+        lift1(translate(fasValue(fa), ctx))(vx => Translated.Emit(s"${pyString(fasName(fa))}: $vx"))
       }
       liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
 
@@ -275,8 +277,8 @@ object ExprToPython extends ExprBackend:
       span: Option[span_t]
   ): Translated =
     val basePy = translate(base, ctx)
-    val pairs = updates.collect { case FieldAssignFull(n, v, _) =>
-      lift1(translate(v, ctx))(vx => Translated.Emit(s"${pyString(n)}: $vx"))
+    val pairs = updates.map { fa =>
+      lift1(translate(fasValue(fa), ctx))(vx => Translated.Emit(s"${pyString(fasName(fa))}: $vx"))
     }
     lift1(basePy): bp =>
       liftAll(pairs, span)(ps => Translated.Emit(s"{**($bp), ${ps.mkString(", ")}}"))
@@ -308,8 +310,8 @@ object ExprToPython extends ExprBackend:
   ): Translated =
     if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
     else
-      val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
-      val domains    = bindings.collect { case QuantifierBindingFull(_, d, _, _) => translate(d, ctx) }
+      val boundNames = bindings.map(qbdVar)
+      val domains    = bindings.map(b => translate(qbdCollection(b), ctx))
       val innerCtx   = ctx.withBound(boundNames)
       val bodyPy     = translate(body, innerCtx)
       liftAll(domains :+ bodyPy, span): texts =>

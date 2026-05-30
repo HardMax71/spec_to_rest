@@ -14,26 +14,28 @@ object Path:
   ): List[EndpointSpec] =
     classifications.map: c =>
       val opName = classificationOperationName(c)
-      val op = ir.g.collectFirst {
-        case o @ OperationDeclFull(n, _, _, _, _, _) if n == opName => o
-      }.getOrElse(
-        throw new RuntimeException(s"operation not found: $opName")
-      )
+      val op = svcOperations(ir)
+        .find(o => operName(o) == opName)
+        .getOrElse(
+          throw new RuntimeException(s"operation not found: $opName")
+        )
       deriveEndpoint(c, op, ir)
 
   private def deriveEndpoint(
       classification: operation_classification,
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull
   ): EndpointSpec =
-    val method        = resolveMethod(classification, ir.n)
+    val method        = resolveMethod(classification, svcConventions(ir))
     val path          = resolvePath(classification, op, ir)
-    val successStatus = resolveStatus(classification, ir.n, method)
+    val successStatus = resolveStatus(classification, svcConventions(ir), method)
 
     val pathParamNames = extractPathParamNames(path)
     val pathParams     = List.newBuilder[ParamSpec]
     val other          = List.newBuilder[ParamSpec]
-    for case ParamDeclFull(name, ty, _) <- op.b do
+    for p <- operInputs(op) do
+      val name = prmName(p)
+      val ty   = prmType(p)
       if pathParamNames.contains(name) then
         pathParams += ParamSpec(name, ty, required = true)
       else
@@ -64,26 +66,26 @@ object Path:
 
   private def resolvePath(
       c: operation_classification,
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull
   ): String =
-    getConvention(ir.n, op.a, "http_path")
+    getConvention(svcConventions(ir), operName(op), "http_path")
       .getOrElse(autoDerivePath(c, op, ir))
 
   private def autoDerivePath(
       c: operation_classification,
-      op: OperationDeclFull,
+      op: operation_decl_full,
       ir: ServiceIRFull
   ): String =
     val entity  = classificationTargetEntity(c)
-    val opKebab = Naming.toKebabCase(op.a)
+    val opKebab = Naming.toKebabCase(operName(op))
     val segment = entity.map(Naming.toPathSegment).getOrElse(opKebab)
-    val action  = extractActionVerb(op.a, entity)
+    val action  = extractActionVerb(operName(op), entity)
     val idOpt   = findIdParam(op, ir)
     derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
-  private def findIdParam(op: OperationDeclFull, ir: ServiceIRFull): Option[String] =
-    SpecRestGenerated.findIdParam(op.b, ir.f)
+  private def findIdParam(op: operation_decl_full, ir: ServiceIRFull): Option[String] =
+    SpecRestGenerated.findIdParam(operInputs(op), svcState(ir))
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
     Naming.toKebabCase(extractVerbBeforeKebab(opName, entityName))
@@ -106,8 +108,8 @@ object Path:
       target: String,
       property: String
   ): Option[String] =
-    conv.flatMap { case ConventionsDeclFull(rules, _) =>
-      rules.collectFirst {
+    conv.flatMap { c =>
+      cvdRules(c).collectFirst {
         case ConventionRuleFull(t, p, _, CvOk(pv), _) if t == target && p == property =>
           parsedValueToString(pv)
       }.flatten

@@ -15,16 +15,19 @@ object AdminModel:
     case EntityRow
 
   def unbackedStateFieldNames(ir: ServiceIRFull): Set[String] =
-    ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.collect { case f: StateFieldDeclFull => f }
-    }.filter(f => projectionFor(f, ir).isEmpty).map(_.a).toSet
+    svcState(ir).toList
+      .flatMap(stdFields)
+      .filter(f => projectionFor(f, ir).isEmpty)
+      .map(stfName)
+      .toSet
 
-  def projectionFor(f: StateFieldDeclFull, ir: ServiceIRFull): Option[Projection] =
-    f.b match
+  def projectionFor(f: state_field_decl_full, ir: ServiceIRFull): Option[Projection] =
+    stfType(f) match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
       case NamedTypeF(name, _) =>
-        ir.c.collect { case e: EntityDeclFull if e.a == name => e }.headOption
+        svcEntities(ir)
+          .find(e => entName(e) == name)
           .flatMap(e =>
             primaryKeyField(e).map(pk => Projection(name, pk, ProjectionValue.EntityRow))
           )
@@ -37,30 +40,34 @@ object AdminModel:
   ): Option[Projection] =
     val kName      = typeName(k)
     val vName      = typeName(v)
-    val entityList = ir.c.collect { case e: EntityDeclFull => e }
+    val entityList = svcEntities(ir)
     (kName, vName) match
-      case (Some(kn), Some(vn)) if entityList.exists(_.a == vn) =>
+      case (Some(kn), Some(vn)) if entityList.exists(e => entName(e) == vn) =>
         for
-          entity <- entityList.find(_.a == vn)
+          entity <- entityList.find(e => entName(e) == vn)
           keyField <-
-            entity.c.collect { case f: FieldDeclFull => f }.find(f => typeName(f.b).contains(kn))
-        yield Projection(vn, keyField.a, ProjectionValue.EntityRow)
+            entFields(entity).find(f => typeName(fldType(f)).contains(kn))
+        yield Projection(vn, fldName(keyField), ProjectionValue.EntityRow)
       case (Some(kn), Some(vn)) =>
         entityList
           .find: e =>
-            val ef = e.c.collect { case f: FieldDeclFull => f }
-            ef.exists(f => typeName(f.b).contains(kn)) &&
-            ef.exists(f => typeName(f.b).contains(vn))
+            val ef = entFields(e)
+            ef.exists(f => typeName(fldType(f)).contains(kn)) &&
+            ef.exists(f => typeName(fldType(f)).contains(vn))
           .flatMap: e =>
-            val ef = e.c.collect { case f: FieldDeclFull => f }
+            val ef = entFields(e)
             for
-              keyField <- ef.find(f => typeName(f.b).contains(kn))
+              keyField <- ef.find(f => typeName(fldType(f)).contains(kn))
               valField <- ef.find(f =>
-                            typeName(f.b).contains(vn) && f.a != keyField.a
+                            typeName(fldType(f)).contains(vn) && fldName(f) != fldName(keyField)
                           )
-            yield Projection(e.a, keyField.a, ProjectionValue.PrimitiveField(valField.a))
+            yield Projection(
+              entName(e),
+              fldName(keyField),
+              ProjectionValue.PrimitiveField(fldName(valField))
+            )
       case _ => None
 
-  def primaryKeyField(e: EntityDeclFull): Option[String] =
-    val fs = e.c.collect { case f: FieldDeclFull => f }
-    fs.find(_.a == "id").map(_.a).orElse(fs.headOption.map(_.a))
+  def primaryKeyField(e: entity_decl_full): Option[String] =
+    val fs = entFields(e)
+    fs.find(f => fldName(f) == "id").map(fldName).orElse(fs.headOption.map(fldName))
