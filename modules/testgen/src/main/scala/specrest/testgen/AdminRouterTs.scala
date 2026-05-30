@@ -22,7 +22,7 @@ object AdminRouterTs:
         Col(
           tsField = Naming.toCamelCase(f.a),
           columnName = Naming.toColumnName(f.a),
-          isDate = AdminModel.isDateTimeType(f.b, ir, Set.empty)
+          isDate = specrest.ir.generated.SpecRestGenerated.isDateTimeType(ir.e, f.b)
         )
 
     def accessor(e: EntityDeclFull): String = Naming.toCamelCase(e.a)

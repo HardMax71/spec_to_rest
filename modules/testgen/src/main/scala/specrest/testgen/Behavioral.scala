@@ -1144,11 +1144,11 @@ object Behavioral:
             fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
             fb <- findFieldDeclFull(entity.c, b).collect { case f: FieldDeclFull => f }
             kind <-
-              if AdminModel.isDateTimeType(fa.b, ir, Set.empty) &&
-                AdminModel.isDateTimeType(fb.b, ir, Set.empty)
+              if isDateTimeType(ir.e, fa.b) &&
+                isDateTimeType(ir.e, fb.b)
               then Some(DateTimeField)
-              else if AdminRouter.isNumericType(fa.b, ir, Set.empty) &&
-                AdminRouter.isNumericType(fb.b, ir, Set.empty)
+              else if isNumericType(ir.e, fa.b) &&
+                isNumericType(ir.e, fb.b)
               then Some(NumericField)
               else None
           yield List(
@@ -1156,7 +1156,7 @@ object Behavioral:
               leftKey = a,
               rightKey = b,
               kind = kind,
-              rightOptional = AdminRouter.isOptionalType(fb.b, ir, Set.empty),
+              rightOptional = isOptionalType(ir.e, fb.b),
               deltaSeconds = orderedDelta(op)
             )
           )
@@ -1166,7 +1166,7 @@ object Behavioral:
             && a != transitionField =>
         for
           fa <- findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }
-          if AdminRouter.isNumericType(fa.b, ir, Set.empty)
+          if isNumericType(ir.e, fa.b)
           constPy <- numericLiteralPy(rhs)
         yield List(
           OrderedShiftConst(
@@ -1180,7 +1180,7 @@ object Behavioral:
       case BinaryOpF(BEq(), IdentifierF(a, _), NoneLitF(_), _)
           if a != transitionField =>
         findFieldDeclFull(entity.c, a).collect { case f: FieldDeclFull => f }.flatMap: f =>
-          if AdminRouter.isOptionalType(f.b, ir, Set.empty) then
+          if isOptionalType(ir.e, f.b) then
             Some(List(Assign(a, "None")))
           else None
 
@@ -1198,9 +1198,9 @@ object Behavioral:
           if field != transitionField =>
         for
           f     <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
-          inner <- collectionElementType(f.b, ir)
+          inner <- collectionElementType(ir.e, f.b)
           py    <- literalForElementType(lit, inner, ir)
-        yield List(ListAppend(field, py, AdminRouter.isOptionalType(f.b, ir, Set.empty)))
+        yield List(ListAppend(field, py, isOptionalType(ir.e, f.b)))
 
       case BinaryOpF(op, lenOrCard, IntLitF(n, _), _)
           if op match { case _: (BGt | BGe | BLt | BLe | BEq) => true; case _ => false } =>
@@ -1208,31 +1208,11 @@ object Behavioral:
           field <- isLenOrCardOf(lenOrCard)
           if field != transitionField
           f       <- findFieldDeclFull(entity.c, field).collect { case f: FieldDeclFull => f }
-          inner   <- collectionElementType(f.b, ir)
+          inner   <- collectionElementType(ir.e, f.b)
           size    <- desiredSize(op, n)
           fillers <- buildFillers(size.toInt, inner, ir)
         yield List(ListOfSize(field, fillers))
 
-      case _ => None
-
-    private def collectionElementType(
-        t: type_expr_full,
-        ir: ServiceIRFull
-    ): Option[type_expr_full] =
-      collectionElementTypeIn(t, ir, Set.empty)
-
-    private def collectionElementTypeIn(
-        t: type_expr_full,
-        ir: ServiceIRFull,
-        seen: Set[String]
-    ): Option[type_expr_full] = t match
-      case SetTypeF(inner, _)    => Some(inner)
-      case SeqTypeF(inner, _)    => Some(inner)
-      case OptionTypeF(inner, _) => collectionElementTypeIn(inner, ir, seen)
-      case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e
-          .collectFirst { case _a: TypeAliasDeclFull if _a.a == name => _a }
-          .flatMap(alias => collectionElementTypeIn(alias.b, ir, seen + name))
       case _ => None
 
     private def buildFillers(
@@ -1241,7 +1221,7 @@ object Behavioral:
         ir: ServiceIRFull
     ): Option[List[String]] =
       if size == 0 then Some(Nil)
-      else if AdminRouter.isNumericType(inner, ir, Set.empty) then
+      else if isNumericType(ir.e, inner) then
         Some((0 until size).map(_.toString).toList)
       else
         inner match
@@ -1303,9 +1283,9 @@ object Behavioral:
       val inner = f.b match
         case OptionTypeF(t, _) => t
         case t                 => t
-      if AdminModel.isDateTimeType(inner, ir, Set.empty) then
+      if isDateTimeType(ir.e, inner) then
         Some("datetime.datetime(2024, 1, 1).isoformat()")
-      else if AdminRouter.isNumericType(inner, ir, Set.empty) then Some("0")
+      else if isNumericType(ir.e, inner) then Some("0")
       else
         inner match
           case NamedTypeF("String", _) => Some(ExprToPython.pyString("x"))

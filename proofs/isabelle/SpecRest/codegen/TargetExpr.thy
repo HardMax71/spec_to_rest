@@ -112,4 +112,97 @@ fun isMapLiteralExpr :: "expr_full \<Rightarrow> bool" where
 
 lemmas isMapLiteralExpr_code [code] = isMapLiteralExpr.simps
 
+text \<open>Type-expression walkers shared by the testgen admin / behavioral backends
+  (\<open>AdminRouter.isNumericType\<close>/\<open>isOptionalType\<close>, \<open>AdminModel.isDateTimeType\<close>,
+  \<open>Behavioral.collectionElementType\<close>). Each resolves a \<open>NamedTypeF\<close> through the spec's
+  type-alias table. The Scala uses a \<open>seen\<close>-set to stop alias cycles; here a fuel bound
+  (\<open>length aliases + 100\<close>, the \<open>typeExprToSchemaAux\<close> convention) plays the same role —
+  identical on every realistic spec, and both reject cyclic aliases.\<close>
+
+fun lookupAliasTarget ::
+  "type_alias_decl_full list \<Rightarrow> String.literal \<Rightarrow> type_expr_full option"
+where
+  "lookupAliasTarget [] _ = None"
+| "lookupAliasTarget (TypeAliasDeclFull nm tgt _ _ # rest) n =
+     (if nm = n then Some tgt else lookupAliasTarget rest n)"
+
+definition typeWalkFuel :: "type_alias_decl_full list \<Rightarrow> nat" where
+  "typeWalkFuel aliases = length aliases + 100"
+
+fun isNumericTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isNumericTypeAux 0 _ _ = False"
+| "isNumericTypeAux (Suc fuel) aliases t =
+     (case t of
+        NamedTypeF n _ \<Rightarrow>
+          (if n = STR ''Int'' \<or> n = STR ''Long'' \<or> n = STR ''Float'' \<or> n = STR ''Double''
+             then True
+           else (case lookupAliasTarget aliases n of
+                   Some tgt \<Rightarrow> isNumericTypeAux fuel aliases tgt
+                 | None \<Rightarrow> False))
+      | OptionTypeF inner _ \<Rightarrow> isNumericTypeAux fuel aliases inner
+      | _ \<Rightarrow> False)"
+
+fun isOptionalTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isOptionalTypeAux 0 _ _ = False"
+| "isOptionalTypeAux (Suc fuel) aliases t =
+     (case t of
+        OptionTypeF _ _ \<Rightarrow> True
+      | NamedTypeF n _ \<Rightarrow>
+          (case lookupAliasTarget aliases n of
+             Some tgt \<Rightarrow> isOptionalTypeAux fuel aliases tgt
+           | None \<Rightarrow> False)
+      | _ \<Rightarrow> False)"
+
+fun isDateTimeTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isDateTimeTypeAux 0 _ _ = False"
+| "isDateTimeTypeAux (Suc fuel) aliases t =
+     (case t of
+        NamedTypeF n _ \<Rightarrow>
+          (if n = STR ''DateTime'' then True
+           else (case lookupAliasTarget aliases n of
+                   Some tgt \<Rightarrow> isDateTimeTypeAux fuel aliases tgt
+                 | None \<Rightarrow> False))
+      | OptionTypeF inner _ \<Rightarrow> isDateTimeTypeAux fuel aliases inner
+      | _ \<Rightarrow> False)"
+
+fun collectionElementTypeAux ::
+  "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> type_expr_full option"
+where
+  "collectionElementTypeAux 0 _ _ = None"
+| "collectionElementTypeAux (Suc fuel) aliases t =
+     (case t of
+        SetTypeF inner _ \<Rightarrow> Some inner
+      | SeqTypeF inner _ \<Rightarrow> Some inner
+      | OptionTypeF inner _ \<Rightarrow> collectionElementTypeAux fuel aliases inner
+      | NamedTypeF n _ \<Rightarrow>
+          (case lookupAliasTarget aliases n of
+             Some tgt \<Rightarrow> collectionElementTypeAux fuel aliases tgt
+           | None \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+
+definition isNumericType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isNumericType aliases t = isNumericTypeAux (typeWalkFuel aliases) aliases t"
+
+definition isOptionalType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isOptionalType aliases t = isOptionalTypeAux (typeWalkFuel aliases) aliases t"
+
+definition isDateTimeType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+  "isDateTimeType aliases t = isDateTimeTypeAux (typeWalkFuel aliases) aliases t"
+
+definition collectionElementType ::
+  "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> type_expr_full option"
+where
+  "collectionElementType aliases t = collectionElementTypeAux (typeWalkFuel aliases) aliases t"
+
+lemmas lookupAliasTarget_code [code]        = lookupAliasTarget.simps
+lemmas typeWalkFuel_code [code]             = typeWalkFuel_def
+lemmas isNumericTypeAux_code [code]         = isNumericTypeAux.simps
+lemmas isOptionalTypeAux_code [code]        = isOptionalTypeAux.simps
+lemmas isDateTimeTypeAux_code [code]        = isDateTimeTypeAux.simps
+lemmas collectionElementTypeAux_code [code] = collectionElementTypeAux.simps
+lemmas isNumericType_code [code]            = isNumericType_def
+lemmas isOptionalType_code [code]           = isOptionalType_def
+lemmas isDateTimeType_code [code]           = isDateTimeType_def
+lemmas collectionElementType_code [code]    = collectionElementType_def
+
 end

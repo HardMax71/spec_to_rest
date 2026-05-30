@@ -6307,6 +6307,9 @@ object SpecRestGenerated {
       case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
     }
 
+  def typeWalkFuel(aliases: List[type_alias_decl_full]): nat =
+    plus_nat(size_list[type_alias_decl_full](aliases), nat_of_integer(BigInt(100)))
+
   def optConcat(a: Option[List[alloy_sig]], b: Option[List[alloy_sig]]): Option[List[alloy_sig]] =
     a match {
       case None => None
@@ -6652,6 +6655,42 @@ object SpecRestGenerated {
           }
       }
   }
+
+  def lookupAliasTarget(x0: List[type_alias_decl_full], uu: String): Option[type_expr_full] =
+    (x0, uu) match {
+      case (Nil, uu) => None
+      case (TypeAliasDeclFull(nm, tgt, uv, uw) :: rest, n) =>
+        nm == n match {
+          case true  => Some[type_expr_full](tgt)
+          case false => lookupAliasTarget(rest, n)
+        }
+    }
+
+  def isNumericTypeAux(fuel: nat, uu: List[type_alias_decl_full], uv: type_expr_full): Boolean =
+    equal_nat(fuel, zero_nat) match {
+      case true => false
+      case false => uv match {
+          case NamedTypeF(n, _) =>
+            n == "Int" ||
+              (n == "Long" ||
+                (n == "Float" || n == "Double")) match {
+              case true => true
+              case false => lookupAliasTarget(uu, n) match {
+                  case None    => false
+                  case Some(a) => isNumericTypeAux(minus_nat(fuel, one_nat), uu, a)
+                }
+            }
+          case SetTypeF(_, _)    => false
+          case MapTypeF(_, _, _) => false
+          case SeqTypeF(_, _)    => false
+          case OptionTypeF(inner, _) =>
+            isNumericTypeAux(minus_nat(fuel, one_nat), uu, inner)
+          case RelationTypeF(_, _, _, _) => false
+        }
+    }
+
+  def isNumericType(aliases: List[type_alias_decl_full], t: type_expr_full): Boolean =
+    isNumericTypeAux(typeWalkFuel(aliases), aliases, t)
 
   def alloyUnopShape(x0: un_op_full): alloy_unop_shape = x0 match {
     case UNot()         => AusNot()
@@ -8443,6 +8482,51 @@ object SpecRestGenerated {
   def serviceEntities(x0: service_ir_full): List[entity_decl_full] = x0 match {
     case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
   }
+
+  def isDateTimeTypeAux(fuel: nat, uu: List[type_alias_decl_full], uv: type_expr_full): Boolean =
+    equal_nat(fuel, zero_nat) match {
+      case true => false
+      case false => uv match {
+          case NamedTypeF(n, _) =>
+            n == "DateTime" match {
+              case true => true
+              case false => lookupAliasTarget(uu, n) match {
+                  case None    => false
+                  case Some(a) => isDateTimeTypeAux(minus_nat(fuel, one_nat), uu, a)
+                }
+            }
+          case SetTypeF(_, _)    => false
+          case MapTypeF(_, _, _) => false
+          case SeqTypeF(_, _)    => false
+          case OptionTypeF(inner, _) =>
+            isDateTimeTypeAux(minus_nat(fuel, one_nat), uu, inner)
+          case RelationTypeF(_, _, _, _) => false
+        }
+    }
+
+  def isDateTimeType(aliases: List[type_alias_decl_full], t: type_expr_full): Boolean =
+    isDateTimeTypeAux(typeWalkFuel(aliases), aliases, t)
+
+  def isOptionalTypeAux(fuel: nat, uu: List[type_alias_decl_full], uv: type_expr_full): Boolean =
+    equal_nat(fuel, zero_nat) match {
+      case true => false
+      case false => uv match {
+          case NamedTypeF(n, _) =>
+            lookupAliasTarget(uu, n) match {
+              case None => false
+              case Some(a) =>
+                isOptionalTypeAux(minus_nat(fuel, one_nat), uu, a)
+            }
+          case SetTypeF(_, _)            => false
+          case MapTypeF(_, _, _)         => false
+          case SeqTypeF(_, _)            => false
+          case OptionTypeF(_, _)         => true
+          case RelationTypeF(_, _, _, _) => false
+        }
+    }
+
+  def isOptionalType(aliases: List[type_alias_decl_full], t: type_expr_full): Boolean =
+    isOptionalTypeAux(typeWalkFuel(aliases), aliases, t)
 
   def alloyBinopShape(x0: bin_op_full): alloy_binop_shape = x0 match {
     case BAnd()       => AbsLogical("and")
@@ -12921,6 +13005,35 @@ object SpecRestGenerated {
       case NoneLitF(_)                   => None
       case IdentifierF(_, _)             => None
     }
+
+  def collectionElementTypeAux(
+      fuel: nat,
+      uu: List[type_alias_decl_full],
+      uv: type_expr_full
+  ): Option[type_expr_full] =
+    equal_nat(fuel, zero_nat) match {
+      case true => None
+      case false => uv match {
+          case NamedTypeF(n, _) =>
+            lookupAliasTarget(uu, n) match {
+              case None => None
+              case Some(a) =>
+                collectionElementTypeAux(minus_nat(fuel, one_nat), uu, a)
+            }
+          case SetTypeF(inner, _) => Some[type_expr_full](inner)
+          case MapTypeF(_, _, _)  => None
+          case SeqTypeF(inner, _) => Some[type_expr_full](inner)
+          case OptionTypeF(inner, _) =>
+            collectionElementTypeAux(minus_nat(fuel, one_nat), uu, inner)
+          case RelationTypeF(_, _, _, _) => None
+        }
+    }
+
+  def collectionElementType(
+      aliases: List[type_alias_decl_full],
+      t: type_expr_full
+  ): Option[type_expr_full] =
+    collectionElementTypeAux(typeWalkFuel(aliases), aliases, t)
 
   def splitOnColonAux(uu: List[BigInt], x1: List[BigInt]): Option[(List[BigInt], List[BigInt])] =
     (uu, x1) match {

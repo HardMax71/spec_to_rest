@@ -424,6 +424,10 @@ export_code
     quantifierAllIn
     isMapLiteralExpr
     rewriteEntityFieldRefs
+    isNumericType
+    isOptionalType
+    isDateTimeType
+    collectionElementType
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"
