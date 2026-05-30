@@ -34,7 +34,7 @@ object SmtLib:
     s"(declare-fun ${f.name} ($args) ${renderSort(f.resultSort)})"
 
   def renderExpr(e: Z3Expr): String = e match
-    case Z3Expr.Var(name, _, _)    => name
+    case Z3Expr.Var(name, _, _) => name
     case Z3Expr.App(func, args, _) =>
       if args.isEmpty then func
       else s"($func ${args.map(renderExpr).mkString(" ")})"
@@ -63,7 +63,7 @@ object SmtLib:
       val qTok    = if q == QKind.ForAll then "forall" else "exists"
       val binders = bindings.map(b => s"(${b.name} ${renderSort(b.sort)})").mkString(" ")
       s"($qTok ($binders) ${renderExpr(body)})"
-    case Z3Expr.EmptySet(elemSort, _)        => emptySetLit(elemSort)
+    case Z3Expr.EmptySet(elemSort, _) => emptySetLit(elemSort)
     case Z3Expr.SetLit(elemSort, members, _) =>
       members.foldLeft(emptySetLit(elemSort))((acc, m) => s"(store $acc ${renderExpr(m)} true)")
     case Z3Expr.SetMember(elem, set, _) =>

@@ -99,8 +99,8 @@ object Reporter:
   private val Bold   = "\u001b[1m"
 
   def render(report: SynthesisReport, useColor: Boolean): String =
-    val rows   = report.ops.map(row(_, useColor))
-    val total  = report.totals
+    val rows  = report.ops.map(row(_, useColor))
+    val total = report.totals
     val header =
       if useColor then s"${Bold}Synthesis Report${Reset}"
       else "Synthesis Report"

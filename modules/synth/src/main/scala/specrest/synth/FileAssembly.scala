@@ -44,8 +44,8 @@ object FileAssembly:
             if placeholderAt < 0 || placeholderAt >= nextMethodAt then
               Left(SpliceFailure(s"placeholder not found within method '$methodName'"))
             else
-              val before   = src.substring(0, placeholderAt)
-              val after    = src.substring(placeholderAt + Placeholder.length)
+              val before = src.substring(0, placeholderAt)
+              val after  = src.substring(placeholderAt + Placeholder.length)
               val indented = body.linesIterator
                 .map(line => if line.isEmpty then line else s"  $line")
                 .mkString("\n")

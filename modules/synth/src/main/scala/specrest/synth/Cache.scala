@@ -49,7 +49,7 @@ object CacheEntry:
       usage         <- c.downField("usage").as[TokenUsage]
       model         <- c.downField("model").as[String]
       promptVersion <- c.downField("promptVersion").as[String]
-      outcome       <-
+      outcome <-
         c.downField("outcome").as[Option[CacheOutcome]].map(_.getOrElse(CacheOutcome.Verified))
     yield CacheEntry(candidate, body, usage, model, promptVersion, outcome)
 

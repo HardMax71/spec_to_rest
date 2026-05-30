@@ -93,7 +93,7 @@ class SchemaCodecTest extends CatsEffectSuite:
     assert(SchemaCodec.decode(future).isLeft)
 
   test("triggers + filterClause round-trip"):
-    val firstTable   = schemaTables(sample).head
+    val firstTable = schemaTables(sample).head
     val updatedFirst = TableSpec(
       tableName(firstTable),
       tableEntityName(firstTable),

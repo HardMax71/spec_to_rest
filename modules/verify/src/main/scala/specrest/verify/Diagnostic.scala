@@ -57,9 +57,9 @@ object Diagnostic:
 
   def suggestionFor(category: DiagnosticCategory, ctx: SuggestionContext): Option[String] =
     val raw = category match
-      case DiagnosticCategory.ContradictoryInvariants       => contradictoryInvariantsSuggestion(ctx)
-      case DiagnosticCategory.UnsatisfiablePrecondition     => unsatisfiablePreconditionSuggestion(ctx)
-      case DiagnosticCategory.UnreachableOperation          => unreachableOperationSuggestion(ctx)
+      case DiagnosticCategory.ContradictoryInvariants   => contradictoryInvariantsSuggestion(ctx)
+      case DiagnosticCategory.UnsatisfiablePrecondition => unsatisfiablePreconditionSuggestion(ctx)
+      case DiagnosticCategory.UnreachableOperation      => unreachableOperationSuggestion(ctx)
       case DiagnosticCategory.InvariantViolationByOperation =>
         invariantViolationSuggestion(ctx)
       case DiagnosticCategory.SolverTimeout        => solverTimeoutSuggestion(ctx)
@@ -105,7 +105,7 @@ object Diagnostic:
   private def contradictoryInvariantsSuggestion(ctx: SuggestionContext): Option[String] =
     val names = invariantDisplayNames(ctx.ir)
     names match
-      case Nil        => suggestionFor(DiagnosticCategory.ContradictoryInvariants)
+      case Nil => suggestionFor(DiagnosticCategory.ContradictoryInvariants)
       case one :: Nil =>
         Some(
           s"Invariant '$one' is unsatisfiable on its own — its range constraints cannot be met by any state. Narrow the predicate or drop it."
@@ -118,7 +118,7 @@ object Diagnostic:
 
   private def unsatisfiablePreconditionSuggestion(ctx: SuggestionContext): Option[String] =
     ctx.operationName match
-      case None     => suggestionFor(DiagnosticCategory.UnsatisfiablePrecondition)
+      case None => suggestionFor(DiagnosticCategory.UnsatisfiablePrecondition)
       case Some(op) =>
         Some(
           s"'$op.d' is unsatisfiable on its own — its conjuncts contradict each other. Inspect the listed spans for a pair like 'y > 10' ∧ 'y < 5', or relax the input-type refinement."
@@ -126,9 +126,9 @@ object Diagnostic:
 
   private def unreachableOperationSuggestion(ctx: SuggestionContext): Option[String] =
     ctx.operationName match
-      case None     => suggestionFor(DiagnosticCategory.UnreachableOperation)
+      case None => suggestionFor(DiagnosticCategory.UnreachableOperation)
       case Some(op) =>
-        val invs      = invariantDisplayNames(ctx.ir)
+        val invs = invariantDisplayNames(ctx.ir)
         val invClause =
           if invs.isEmpty then "the invariants"
           else s"the invariants (e.g., ${formatNameList(invs, max = 3)})"
@@ -152,7 +152,7 @@ object Diagnostic:
       case _ => suggestionFor(DiagnosticCategory.InvariantViolationByOperation)
 
   private def solverTimeoutSuggestion(ctx: SuggestionContext): Option[String] =
-    val features      = ctx.invariantDecl.map(invBody).toList.flatMap(featureSummary).distinct
+    val features = ctx.invariantDecl.map(invBody).toList.flatMap(featureSummary).distinct
     val featureClause =
       if features.isEmpty then ""
       else s" (uses ${features.mkString(", ")})"
@@ -177,7 +177,7 @@ object Diagnostic:
     else s.take(MaxSuggestionLength - 1) + "…"
 
   private def featureSummary(e: expr_full): List[String] =
-    val out                                       = List.newBuilder[String]
+    val out = List.newBuilder[String]
     def walk(x: expr_full, depthQuant: Int): Unit = x match
       case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"

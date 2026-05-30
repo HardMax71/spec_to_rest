@@ -21,7 +21,7 @@ object Parse:
     val tokens = new CommonTokenStream(lexer)
     val parser = new SpecParser(tokens)
 
-    val errors                      = scala.collection.mutable.ListBuffer.empty[ParseError]
+    val errors = scala.collection.mutable.ListBuffer.empty[ParseError]
     val listener: BaseErrorListener = new BaseErrorListener:
       override def syntaxError(
           recognizer: Recognizer[?, ?],

@@ -36,7 +36,7 @@ class EnumValuesForFieldTest extends CatsEffectSuite:
 
   test("enumValuesForField returns None when chain bottoms out at a non-enum"):
     val emailAlias = alias("Email", named("String"))
-    val res        =
+    val res =
       enumValuesForField(field("f", named("Email")), Nil, List(emailAlias))
     assertEquals(res, None)
 

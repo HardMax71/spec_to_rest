@@ -22,8 +22,8 @@ object SeedVerifiedCacheMain extends IOApp:
         "usage: SeedVerifiedCacheMain <spec> <cache-root> <op1> <body1> [<op2> <body2> ...]"
       ).as(ExitCode.Error)
     else
-      val spec  = args.head
-      val root  = Paths.get(args(1)).resolve("verified")
+      val spec = args.head
+      val root = Paths.get(args(1)).resolve("verified")
       val pairs = args
         .drop(2)
         .grouped(2)
@@ -38,20 +38,20 @@ object SeedVerifiedCacheMain extends IOApp:
           tree   <- IO.fromEither(parsed.left.map(e => new RuntimeException(s"parse: $e")))
           irE    <- Builder.buildIR(tree.tree)
           ir     <- IO.fromEither(irE.left.map(e => new RuntimeException(s"build: ${e.message}")))
-          dafny  <- IO.fromEither(
+          dafny <- IO.fromEither(
                      DafnyGenerator
                        .generate(ir)
                        .left
                        .map(e => new RuntimeException(s"dafny gen: ${e.message}"))
                    )
           cache <- Cache.make(root)
-          _     <- pairs.foldLeft(IO.unit): (acc, kv) =>
+          _ <- pairs.foldLeft(IO.unit): (acc, kv) =>
                  val (op, body) = kv
                  dafny.methods.find(_.name == op) match
                    case None =>
                      acc *> IO.raiseError(new RuntimeException(s"no Dafny method '$op'"))
                    case Some(header) =>
-                     val key   = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
+                     val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
                      val entry = CacheEntry(
                        candidate = "stub",
                        body = body,

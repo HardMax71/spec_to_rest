@@ -35,7 +35,7 @@ final class TemplateEngine:
     case f: Float             => Some(java.lang.Float.valueOf(f))
     case n: java.lang.Number  => Some(n)
     case b: java.lang.Boolean => Some(b)
-    case m: Map[?, ?]         =>
+    case m: Map[?, ?] =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       m.foreach: (k, v) =>
         toJava(v).foreach(ja => out.put(k.toString, ja))
@@ -43,7 +43,7 @@ final class TemplateEngine:
     case xs: Iterable[?]                   => Some(xs.flatMap(toJava).toList.asJava)
     case arr: Array[?]                     => Some(arr.toList.flatMap(toJava).asJava)
     case p: Product if p.productArity == 0 => Some(p.toString)
-    case p: Product                        =>
+    case p: Product =>
       val out = new java.util.LinkedHashMap[String, AnyRef]()
       p.productElementNames.toList.zip(p.productIterator.toList).foreach: (k, v) =>
         toJava(v).foreach(ja => out.put(k, ja))
@@ -123,7 +123,7 @@ final class TemplateEngine:
             case s: String => s
             case _         => ","
           Option(ctx) match
-            case _: None.type                      => ""
+            case _: None.type => ""
             case Some(xs: java.util.Collection[?]) =>
               val sb = new java.util.StringJoiner(sep)
               xs.forEach { x =>

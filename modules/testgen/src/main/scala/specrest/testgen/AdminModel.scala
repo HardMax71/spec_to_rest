@@ -43,7 +43,7 @@ object AdminModel:
     (kName, vName) match
       case (Some(kn), Some(vn)) if entityList.exists(e => entName(e) == vn) =>
         for
-          entity   <- entityList.find(e => entName(e) == vn)
+          entity <- entityList.find(e => entName(e) == vn)
           keyField <-
             entFields(entity).find(f => typeName(fldType(f)).contains(kn))
         yield Projection(vn, fldName(keyField), ProjectionValue.EntityRow)

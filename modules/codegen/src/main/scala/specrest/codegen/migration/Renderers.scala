@@ -136,7 +136,7 @@ object Renderers:
     val tname       = tableName(t)
     val columnLines = cols.map(c => "    " + sqlColumnDef(c, dialect))
     val pkIsSerial  = cols.find(c => columnName(c) == pk).exists(c => isSerial(columnSqlType(c)))
-    val pkLines     =
+    val pkLines =
       if pkIsSerial && !dialect.serialUsesSeparatePk then Nil
       else List(s"    CONSTRAINT pk_$tname PRIMARY KEY ($pk)")
     val fkLines = tableForeignKeys(t).map: fk =>
@@ -175,7 +175,7 @@ object Renderers:
     val filter         = indexFilterClause(ix)
     val partialDropped = filter.isDefined && !dialect.caps.supportsPartialIndex
     val unique         = if indexUnique(ix) && !partialDropped then "UNIQUE " else ""
-    val where          =
+    val where =
       if partialDropped then "" else filter.fold("")(f => s" WHERE $f")
     s"CREATE ${unique}INDEX ${indexName(ix)} ON $tableName (${indexColumns(ix).mkString(", ")})$where;"
 
@@ -185,17 +185,17 @@ object Renderers:
     case other       => other
 
   private def alembicCreateTable(t: table_spec, dialect: Dialect): List[String] =
-    val tname      = tableName(t)
-    val pk         = tablePrimaryKey(t)
+    val tname = tableName(t)
+    val pk    = tablePrimaryKey(t)
     val columnArgs = tableColumns(t).map: c =>
       val isPk     = columnName(c) == pk
       val sqlT     = columnSqlType(c)
       val isSerial = sqlT == "BIGSERIAL" || sqlT == "SERIAL"
       alembicColumn(c, primaryKey = isPk, autoincrement = isSerial, dialect = dialect)
-    val fkArgs    = tableForeignKeys(t).map(fk => alembicForeignKeyConstraint(tname, fk))
+    val fkArgs = tableForeignKeys(t).map(fk => alembicForeignKeyConstraint(tname, fk))
     val checkArgs = namedChecks(t, dialect, SchemaDiff.autoIncrementPk(t)).map: (name, sql) =>
       s"""sa.CheckConstraint(${pythonStringLiteral(sql)}, name="$name")"""
-    val allArgs    = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
+    val allArgs = (columnArgs ++ fkArgs ++ checkArgs).map(a => s"    $a,").mkString("\n")
     val createStmt =
       s"""op.create_table(
          |    "$tname",

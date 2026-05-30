@@ -8,7 +8,7 @@ object ColorMode:
     case "auto"          => Right(Auto)
     case "always" | "on" => Right(On)
     case "never" | "off" => Right(Off)
-    case other           =>
+    case other =>
       Left(
         s"unknown color mode '$other'; choices: auto, always (alias: on), never (alias: off)"
       )

@@ -29,13 +29,13 @@ class SmtLibGoldenTest extends CatsEffectSuite:
       for
         ir      <- SpecFixtures.loadIR(name)
         scriptE <- Translator.translate(ir)
-        script   = scriptE.fold(
+        script = scriptE.fold(
                    err => fail(s"Translator.translate failed for $name: ${err.message}"),
                    identity
                  )
         emitted = SmtLib.renderSmtLib(script, timeoutMs = Some(30_000L)).stripSuffix("\n")
         golden <- IO.blocking(Files.readString(goldenDir.resolve(s"$name.smt2")).stripSuffix("\n"))
-        _      <-
+        _ <-
           if emitted == golden then IO.unit
           else
             IO.blocking {

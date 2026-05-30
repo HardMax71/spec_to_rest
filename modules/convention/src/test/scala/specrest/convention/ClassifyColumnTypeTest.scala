@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ClassifyColumnTypeTest extends CatsEffectSuite:
 
-  private def named(t: String): NamedTypeF                                   = NamedTypeF(t, None)
+  private def named(t: String): NamedTypeF = NamedTypeF(t, None)
   private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
   private def enumD(name: String, values: List[String]): EnumDeclFull =
@@ -75,7 +75,7 @@ class ClassifyColumnTypeTest extends CatsEffectSuite:
   test("alias chain to enum resolves to CkEnum"):
     val statusEnum  = enumD("Status", List("ON", "OFF"))
     val statusAlias = alias("StatusAlias", named("Status"))
-    val (k, _)      = classify(
+    val (k, _) = classify(
       named("StatusAlias"),
       aliases = List("StatusAlias" -> statusAlias),
       enums = List("Status" -> statusEnum)
@@ -83,7 +83,7 @@ class ClassifyColumnTypeTest extends CatsEffectSuite:
     assertEquals(k, CkEnum(List("ON", "OFF")))
 
   test("Option of alias preserves nullable across the chain"):
-    val email         = alias("Email", named("String"))
+    val email = alias("Email", named("String"))
     val (k, nullable) = classify(
       OptionTypeF(named("Email"), None),
       aliases = List("Email" -> email)

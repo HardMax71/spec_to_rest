@@ -24,7 +24,7 @@ object IrValueDecoder:
       case Z3Sort.Int =>
         NegNumRe.findFirstMatchIn(raw) match
           case Some(m) => Some(VInt(BigInt(s"-${m.group(1)}")))
-          case None    =>
+          case None =>
             if PlainIntRe.matches(raw) then
               scala.util.Try(BigInt(raw)).toOption.map(b => VInt(b))
             else None

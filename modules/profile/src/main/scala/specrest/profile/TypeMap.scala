@@ -90,7 +90,7 @@ object TypeMap:
 
   def mapType(typeExpr: type_expr_full, profile: DeploymentProfile, ctx: TypeContext): MappedType =
     typeExpr match
-      case NamedTypeF(name, _)   => mapNamedType(name, profile, ctx)
+      case NamedTypeF(name, _) => mapNamedType(name, profile, ctx)
       case OptionTypeF(inner, _) =>
         val m = mapType(inner, profile, ctx)
         wrapOption(m, profile)
@@ -109,7 +109,7 @@ object TypeMap:
 
   private def mapNamedType(name: String, profile: DeploymentProfile, ctx: TypeContext): MappedType =
     profile.typeMap.get(name) match
-      case Some(m)                                => MappedType(m.domain, m.validation, ormFieldFor(profile, m.domain))
+      case Some(m) => MappedType(m.domain, m.validation, ormFieldFor(profile, m.domain))
       case None if ctx.entityNames.contains(name) =>
         relationFor(profile)
       case None if ctx.enumNames.contains(name) =>

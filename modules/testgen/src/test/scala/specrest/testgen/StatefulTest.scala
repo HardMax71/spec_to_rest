@@ -583,7 +583,7 @@ class StatefulTest extends CatsEffectSuite:
 
   test("rule whose only requires is `<input> in <state>` uses strict assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out          = Stateful.emitFor(profiled)
+      val out = Stateful.emitFor(profiled)
       val resolveBlock = out.file
         .linesIterator
         .dropWhile(!_.contains("def resolve(self, code):"))
@@ -608,7 +608,7 @@ class StatefulTest extends CatsEffectSuite:
 
   test("non-Create rules do NOT call response.json() before status assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out          = Stateful.emitFor(profiled)
+      val out = Stateful.emitFor(profiled)
       val resolveBlock = out.file
         .linesIterator
         .dropWhile(!_.contains("def resolve(self, code):"))
@@ -630,7 +630,7 @@ class StatefulTest extends CatsEffectSuite:
 
   test("Create rule parses response.json() AFTER strict status assertion"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out          = Stateful.emitFor(profiled)
+      val out = Stateful.emitFor(profiled)
       val shortenBlock = out.file
         .linesIterator
         .dropWhile(!_.contains("def shorten(self, url):"))
@@ -796,7 +796,7 @@ class StatefulTest extends CatsEffectSuite:
 
   test("temporal fairness(op) is recorded as a skip, not emitted"):
     val arg = IdentifierF("Step", None)
-    val ir  = serviceWithTemporals(
+    val ir = serviceWithTemporals(
       List(TemporalDeclFull("fairStep", TbFairness(arg), None))
     )
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
@@ -813,7 +813,7 @@ class StatefulTest extends CatsEffectSuite:
     )
 
   test("no temporals → no teardown method"):
-    val ir      = serviceWithTemporals(Nil)
+    val ir = serviceWithTemporals(Nil)
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
       ir,
       "python-fastapi-postgres"

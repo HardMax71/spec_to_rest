@@ -15,7 +15,7 @@ import specrest.profile.ProfiledService
 object TsBehavioral:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =
-    val ir        = profiled.ir
+    val ir = profiled.ir
     val collected = profiled.operations.flatMap: pop =>
       if StubOps.isStub(profiled, pop) then
         List(Left(TestSkip(pop.operationName, "operation", StubOps.skipReason(pop))))
@@ -43,8 +43,8 @@ object TsBehavioral:
       opDecl: operation_decl_full,
       ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
-    val opSnake             = Naming.toSnakeCase(operName(opDecl))
-    val stateFields         = irStateFieldNames(ir).toSet
+    val opSnake     = Naming.toSnakeCase(operName(opDecl))
+    val stateFields = irStateFieldNames(ir).toSet
     val requiresHasStateRef =
       operRequires(opDecl).exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
     val nonTrivialRequires = operRequires(opDecl).exists(!isTrueLit(_))
@@ -62,7 +62,7 @@ object TsBehavioral:
     else
       tsInputArbs(pop, ir) match
         case Left(reason) => List(Left(TestSkip(operName(opDecl), "ensures", reason)))
-        case Right(arbs)  =>
+        case Right(arbs) =>
           val ctx = TestCtx.fromOperation(
             opDecl,
             ir,
@@ -101,7 +101,7 @@ object TsBehavioral:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs     = params.map: p =>
+      val pairs = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
         (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, TsFastCheckStrategy))
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
@@ -109,15 +109,15 @@ object TsBehavioral:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def tsRequestCall(pop: ProfiledOperation): String =
-    val ep     = pop.endpoint
+    val ep = pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
       case _: PUT    => "put"
       case _: PATCH  => "patch"
       case _: DELETE => "delete"
-    val hasPath  = ep.pathParams.nonEmpty
-    val rawPath  = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
+    val hasPath = ep.pathParams.nonEmpty
+    val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
     val pathExpr =
       if hasPath then s"`$rawPath`" else TsLit.str(ep.path)
     val bodyExpr =
@@ -210,8 +210,8 @@ object TsBehavioral:
     else renderFull(ir, tests)
 
   private def renderFull(ir: ServiceIRFull, tests: List[GeneratedTest]): String =
-    val bodies    = tests.map(_.body).mkString("\n")
-    val usedRt    = RuntimeHelpers.filter(h => bodies.contains(s"$h("))
+    val bodies = tests.map(_.body).mkString("\n")
+    val usedRt = RuntimeHelpers.filter(h => bodies.contains(s"$h("))
     val predNames =
       (svcFunctions(ir).map(fncName) ++
         svcPredicates(ir).map(prdName)).distinct.sorted

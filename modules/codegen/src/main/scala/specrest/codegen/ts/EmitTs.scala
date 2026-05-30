@@ -128,7 +128,7 @@ object EmitTs:
     val templates   = TsTemplates.tsExpressPostgres
     val ctx         = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val packageName = npmPackageName(ctx.service.kebabName)
-    val service     = TsServiceNames(
+    val service = TsServiceNames(
       name = ctx.service.name,
       snakeName = ctx.service.snakeName,
       kebabName = ctx.service.kebabName
@@ -158,7 +158,7 @@ object EmitTs:
         .mapValues(_.map(triggerTargetColumn).toSet)
         .toMap
 
-    val db                  = tsDbView(profiled.profile.database, service.snakeName)
+    val db = tsDbView(profiled.profile.database, service.snakeName)
     val prismaAutoIncrement =
       specrest.codegen.migration.Dialect.forDatabase(profiled.profile.database).prismaAutoIncrement
 
@@ -298,7 +298,7 @@ object EmitTs:
       val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
       val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
-      val upScope    = Map[String, Any](
+      val upScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
       )
       val downScope = Map[String, Any](
@@ -316,7 +316,7 @@ object EmitTs:
     opts.previousSnapshot match
       case None                                      => emitInitial()
       case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
-      case Some(prev)                                =>
+      case Some(prev) =>
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
@@ -358,7 +358,7 @@ object EmitTs:
 
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>
-      val dv     = specrest.codegen.migration.Postgres.deployment(snake)
+      val dv = specrest.codegen.migration.Postgres.deployment(snake)
       val recipe = specrest.codegen.Dsn.Recipe(
         spec = specrest.codegen.Dsn.Spec(
           shape = specrest.codegen.Dsn.Shape.Url("postgresql"),
@@ -396,7 +396,7 @@ object EmitTs:
         dsnRecipe = None
       )
     case "mysql" =>
-      val dv     = specrest.codegen.migration.Mysql.deployment(snake)
+      val dv = specrest.codegen.migration.Mysql.deployment(snake)
       val recipe = specrest.codegen.Dsn.Recipe(
         spec = specrest.codegen.Dsn.Spec(
           shape = specrest.codegen.Dsn.Shape.Url("mysql"),
@@ -491,7 +491,7 @@ object EmitTs:
           // (the spec's `Int` wire contract); a bigint id is bridged by the result cast and
           // the app-level BigInt JSON serializer.
           val nativeAttr = if nativeAttrs then nativePrismaAttr("BIGSERIAL") else ""
-          val pk         = TsFieldView(
+          val pk = TsFieldView(
             tsField = "id",
             jsonName = "id",
             columnName = "id",
@@ -600,12 +600,12 @@ object EmitTs:
   private def baseZod(domainType: String): String =
     val stripped = domainType.replaceAll("\\s*\\|\\s*null$", "").trim
     stripped match
-      case "string"                      => "z.string()"
-      case "number"                      => "z.number()"
-      case "boolean"                     => "z.boolean()"
-      case "Date"                        => "z.coerce.date()"
-      case "Buffer"                      => "z.instanceof(Buffer)"
-      case "Prisma.Decimal"              => "z.union([z.string(), z.number()])"
+      case "string"         => "z.string()"
+      case "number"         => "z.number()"
+      case "boolean"        => "z.boolean()"
+      case "Date"           => "z.coerce.date()"
+      case "Buffer"         => "z.instanceof(Buffer)"
+      case "Prisma.Decimal" => "z.union([z.string(), z.number()])"
       case other if other.endsWith("[]") =>
         s"z.array(${baseZod(other.dropRight(2))})"
       case _ => "z.string()"
@@ -628,7 +628,7 @@ object EmitTs:
     // non-id entity column (e.g. `{code}`) is a normal lookup and keeps its spec type.
     val pkSqlType =
       entity.fields.find(_.fieldName == "id").map(_.ormColumnType).getOrElse("BIGSERIAL")
-    val pkIsBigInt                    = prismaTypeFor(pkSqlType) == "BigInt"
+    val pkIsBigInt = prismaTypeFor(pkSqlType) == "BigInt"
     val bigIntPkParam: Option[String] =
       if !pkIsBigInt then None
       else
@@ -638,7 +638,7 @@ object EmitTs:
       val isBigIntPk = bigIntPkParam.contains(p.name)
       val tsType     = if isBigIntPk then "bigint" else tsTypeForParam(p.typeExpr, typeLookup)
       val nm         = toCamelCase(p.name)
-      val stmt       =
+      val stmt =
         if isBigIntPk then
           s"""      let $nm: bigint;
              |      try {
@@ -655,7 +655,7 @@ object EmitTs:
       TsPathParam(p.name, nm, tsType, stmt)
 
     val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
-    val method      = endpoint.method match
+    val method = endpoint.method match
       case _: GET    => "get"
       case _: POST   => "post"
       case _: PUT    => "put"
@@ -677,7 +677,7 @@ object EmitTs:
             (entity.createSchemaName, List.empty[TsFieldView])
           case Some(name) =>
             val pathParamNames = endpoint.pathParams.map(_.name).toSet
-            val fields         = op.requestBodyFields
+            val fields = op.requestBodyFields
               .filterNot(f => pathParamNames.contains(f.fieldName))
               .map(toTsField(_, nativeAttrs))
             (name, fields)

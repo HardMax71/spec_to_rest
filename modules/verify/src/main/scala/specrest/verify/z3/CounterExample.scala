@@ -40,7 +40,7 @@ object Z3CounterExample:
     val entities = artifact.entities.flatMap: entity =>
       val sortOpt = sortMap.get(Z3Sort.key(entity.sort))
       sortOpt match
-        case None       => Nil
+        case None => Nil
         case Some(sort) =>
           safeSortUniverse(model, sort).zipWithIndex.map: (elem, idx) =>
             val raw   = elem.toString
@@ -93,7 +93,7 @@ object Z3CounterExample:
 
     val stateConstants = artifact.state.flatMap:
       case c: ArtifactStateEntry.Const =>
-        val pre  = buildConstantSide(model, funcMap, c, "pre", rawToLabel, ctx, typingFails)
+        val pre = buildConstantSide(model, funcMap, c, "pre", rawToLabel, ctx, typingFails)
         val post = if artifact.hasPostState then
           List(buildConstantSide(model, funcMap, c, "post", rawToLabel, ctx, typingFails))
         else Nil
@@ -122,8 +122,8 @@ object Z3CounterExample:
     )
 
   private def sortToTy(sort: Z3Sort, ctx: tyctx_ext[Unit]): Option[ty] = sort match
-    case Z3Sort.Bool           => Some(TBool())
-    case Z3Sort.Int            => Some(TInt())
+    case Z3Sort.Bool => Some(TBool())
+    case Z3Sort.Int  => Some(TInt())
     case Z3Sort.Uninterp(name) =>
       if tc_enums(ctx).contains(name) then Some(TEnum(name))
       else if tc_entities(ctx)
@@ -174,7 +174,7 @@ object Z3CounterExample:
   ): DecodedRelation =
     val domFuncName = if side == "pre" then relation.domFunc else relation.domFuncPost
     val mapFuncName = if side == "pre" then relation.mapFunc else relation.mapFuncPost
-    val entries     = (funcMap.get(domFuncName), funcMap.get(mapFuncName)) match
+    val entries = (funcMap.get(domFuncName), funcMap.get(mapFuncName)) match
       case (Some(domDecl), Some(mapDecl)) =>
         keyUniverse.flatMap: k =>
           val inDom = evalExpr(model, applyDecl(domDecl, List(k)))
@@ -216,7 +216,7 @@ object Z3CounterExample:
       sink: mutable.ListBuffer[String]
   ): DecodedConstant =
     val funcName = if side == "pre" then entry.funcName else entry.funcNamePost
-    val value    = funcMap.get(funcName) match
+    val value = funcMap.get(funcName) match
       case Some(decl) =>
         val evaluated = evalExpr(model, applyDecl(decl, Nil))
         validateType(
@@ -238,7 +238,7 @@ object Z3CounterExample:
     val text = normalizeZ3Text(expr.toString)
     rawToLabel.get(text) match
       case Some(label) => DecodedValue(label, Some(label))
-      case None        =>
+      case None =>
         if text == "true" || text == "false" then DecodedValue(text, None)
         else if text.matches("-?\\d+") then DecodedValue(text, None)
         else

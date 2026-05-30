@@ -407,13 +407,12 @@ class DialectProfileEmitTest extends CatsEffectSuite:
   // op.drop_index first breaks MySQL when the index backs a foreign key (error 1553).
   test("alembic downgrade drops tables only, no explicit op.drop_index"):
     for
-      pg    <- fileMapOf("ecommerce", "python-fastapi-postgres")
-      mysql <- fileMapOf("ecommerce", "python-fastapi-mysql")
-    yield
-      for files <- List(pg, mysql) do
-        val mig = files("alembic/versions/001_initial_schema.py")
-        assert(!mig.contains("op.drop_index("), mig)
-        assert(mig.contains("op.drop_table("), mig)
+      pg            <- fileMapOf("ecommerce", "python-fastapi-postgres")
+      mysql         <- fileMapOf("ecommerce", "python-fastapi-mysql")
+    yield for files <- List(pg, mysql) do
+      val mig = files("alembic/versions/001_initial_schema.py")
+      assert(!mig.contains("op.drop_index("), mig)
+      assert(mig.contains("op.drop_table("), mig)
 
   // N: a refined type alias (Email/Token/PasswordHash) must carry its `where` predicate as a
   // column CHECK — previously dropped entirely (no DB enforcement). Length checks are portable;

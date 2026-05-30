@@ -73,7 +73,7 @@ final class DafnyTranslateCli private (binary: String, workDir: Path) extends Da
     )
     IO.blocking {
       val started = System.nanoTime()
-      val pb      = new ProcessBuilder(command.toArray*)
+      val pb = new ProcessBuilder(command.toArray*)
         .redirectOutput(outFile.toFile)
         .redirectError(errFile.toFile)
       val proc = pb.start()

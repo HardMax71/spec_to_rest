@@ -53,22 +53,20 @@ object Narration:
       val preLine  = describePreInputs(ce, op, field)
       val postLine = describePost(ce, op, field)
       preLine.foreach { line =>
-        lines +=
-          s"  3. The solver picked $line${postLine.fold("")(p => s", producing post-state $p")}."
+        lines += s"  3. The solver picked $line${postLine.fold("")(p => s", producing post-state $p")}."
       }
       if preLine.isEmpty then
         postLine.foreach { p =>
           lines += s"  3. The solver produced post-state $p."
         }
-      lines +=
-        s"  4. The post-state value violates the bound on '$field' from invariant '$invName'."
+      lines += s"  4. The post-state value violates the bound on '$field' from invariant '$invName'."
       lines.result().mkString("\n")
 
   private def narrateContradictoryInvariants(ctx: Context): Option[String] =
     val invs = svcInvariants(ctx.ir)
     if invs.isEmpty then None
     else
-      val lines    = List.newBuilder[String]
+      val lines = List.newBuilder[String]
       val invNames = invs.zipWithIndex.map { case (inv, i) =>
         invName(inv).getOrElse(s"inv_$i")
       }
@@ -127,8 +125,7 @@ object Narration:
         val target = entry.value.entityLabel.getOrElse(entry.value.display)
         ce.entities.find(_.label == target).foreach: ent =>
           ent.fields.find(_.name == field).foreach: fieldVal =>
-            parts +=
-              s"pre(${rel.stateName})[${entry.key.display}].$field = ${fieldVal.value.display}"
+            parts += s"pre(${rel.stateName})[${entry.key.display}].$field = ${fieldVal.value.display}"
     ce.stateConstants
       .filter(c => c.side == "pre" && c.stateName == field)
       .foreach: c =>
@@ -174,7 +171,7 @@ object Narration:
         s"For example, '$aName' and '$bName' bound '$aIdent' to disjoint ranges."
 
   private def cap(s: String): String =
-    val lines  = s.split("\n", -1).toList
+    val lines = s.split("\n", -1).toList
     val capped =
       if lines.size <= MaxLines then s
       else lines.take(MaxLines).mkString("\n") + s"\n  $Truncated"

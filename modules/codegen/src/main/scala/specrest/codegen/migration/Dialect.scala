@@ -18,17 +18,17 @@ final case class SaType(expr: String, importModule: Option[String]) derives CanE
 
 private[migration] object DialectAdapter:
   def toLifted(t: CanonicalType): canonical_type = t match
-    case CanonicalType.Text             => CtText()
-    case CanonicalType.Varchar(n)       => CtVarchar(BigInt(n))
-    case CanonicalType.Int4             => CtInt4()
-    case CanonicalType.Serial4          => CtSerial4()
-    case CanonicalType.Int8             => CtInt8()
-    case CanonicalType.Serial8          => CtSerial8()
-    case CanonicalType.Float8           => CtFloat8()
-    case CanonicalType.Bool             => CtBool()
-    case CanonicalType.Timestamptz      => CtTimestamptz()
-    case CanonicalType.DateOnly         => CtDateOnly()
-    case CanonicalType.Uuid             => CtUuid()
+    case CanonicalType.Text        => CtText()
+    case CanonicalType.Varchar(n)  => CtVarchar(BigInt(n))
+    case CanonicalType.Int4        => CtInt4()
+    case CanonicalType.Serial4     => CtSerial4()
+    case CanonicalType.Int8        => CtInt8()
+    case CanonicalType.Serial8     => CtSerial8()
+    case CanonicalType.Float8      => CtFloat8()
+    case CanonicalType.Bool        => CtBool()
+    case CanonicalType.Timestamptz => CtTimestamptz()
+    case CanonicalType.DateOnly    => CtDateOnly()
+    case CanonicalType.Uuid        => CtUuid()
     case CanonicalType.Numeric(p, sOpt) =>
       CtNumeric(BigInt(p), sOpt.map(s => BigInt(s)))
     case CanonicalType.Bytes => CtBytes()
@@ -129,7 +129,7 @@ object Dialect:
     case "postgres" => Postgres
     case "sqlite"   => Sqlite
     case "mysql"    => Mysql
-    case other      =>
+    case other =>
       throw new RuntimeException(
         s"No SQL dialect registered for database '$other' (known: postgres, sqlite, mysql)"
       )
@@ -228,10 +228,10 @@ object Dialect:
     def needsDialectImport(sqlType: String): Boolean =
       CanonicalType.parse(sqlType).exists(dialect.saType(_).importModule.isDefined)
     ops.exists:
-      case CreateTable(t)              => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
-      case DropTable(t)                => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
-      case AddColumn(_, c)             => needsDialectImport(columnSqlType(c))
-      case DropColumn(_, c)            => needsDialectImport(columnSqlType(c))
+      case CreateTable(t)   => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
+      case DropTable(t)     => tableColumns(t).exists(c => needsDialectImport(columnSqlType(c)))
+      case AddColumn(_, c)  => needsDialectImport(columnSqlType(c))
+      case DropColumn(_, c) => needsDialectImport(columnSqlType(c))
       case AlterColumnType(_, _, o, n) =>
         needsDialectImport(o) || needsDialectImport(n)
       case _ => false
@@ -296,9 +296,9 @@ object Postgres extends Dialect:
       dsnRecipe = Some(recipe)
     )
 
-  def sqlColumnType(sqlType: String): String                 = sqlType
-  def sqlServerDefault(expr: String): String                 = expr
-  def alembicServerDefault(expr: String): String             = expr
+  def sqlColumnType(sqlType: String): String     = sqlType
+  def sqlServerDefault(expr: String): String     = expr
+  def alembicServerDefault(expr: String): String = expr
   def serialColumnDef(name: String, sqlType: String): String =
     postgresSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = true
@@ -344,7 +344,7 @@ object Sqlite extends Dialect:
   def sqlColumnType(sqlType: String): String = Dialect.sqliteType(sqlType)
   def sqlServerDefault(expr: String): String =
     Dialect.normalizeNow(Dialect.stripPgCast(expr))
-  def alembicServerDefault(expr: String): String             = Dialect.stripPgCast(expr)
+  def alembicServerDefault(expr: String): String = Dialect.stripPgCast(expr)
   def serialColumnDef(name: String, sqlType: String): String =
     sqliteSerialColumnDef(name, DialectAdapter.parseOrDefault(sqlType))
   def serialUsesSeparatePk: Boolean = false

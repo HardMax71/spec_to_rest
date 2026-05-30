@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ClassifyOpenApiNamedTypeTest extends CatsEffectSuite:
 
-  private def named(t: String): NamedTypeF                                   = NamedTypeF(t, None)
+  private def named(t: String): NamedTypeF = NamedTypeF(t, None)
   private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
   private def enumD(name: String, values: List[String]): EnumDeclFull =
@@ -64,7 +64,7 @@ class ClassifyOpenApiNamedTypeTest extends CatsEffectSuite:
   test("alias chain to enum resolves to OntEnum"):
     val statusEnum  = enumD("Status", List("ON", "OFF"))
     val statusAlias = alias("StatusAlias", named("Status"))
-    val result      = classify(
+    val result = classify(
       "StatusAlias",
       aliases = List("StatusAlias" -> statusAlias),
       enums = List("Status" -> statusEnum)
@@ -73,7 +73,7 @@ class ClassifyOpenApiNamedTypeTest extends CatsEffectSuite:
 
   test("alias chain to entity resolves to OntEntityRef"):
     val userAlias = alias("UserAlias", named("User"))
-    val result    = classify(
+    val result = classify(
       "UserAlias",
       aliases = List("UserAlias" -> userAlias),
       entityNames = List("User")

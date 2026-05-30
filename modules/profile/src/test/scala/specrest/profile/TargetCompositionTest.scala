@@ -61,7 +61,7 @@ class TargetCompositionTest extends CatsEffectSuite:
     test(s"Registry.resolveSlug('$slug') yields the expected profile"):
       Registry.resolveSlug(slug) match
         case Left(err) => fail(s"expected a profile for '$slug', got: $err")
-        case Right(p)  =>
+        case Right(p) =>
           assertEquals(p.name, slug)
           assertEquals(p.dbDriver, wantDriver)
 

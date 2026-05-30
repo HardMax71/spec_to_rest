@@ -20,7 +20,7 @@ object Emit:
       case "python" => specrest.codegen.python.EmitPython.emit(profiled, opts)
       case "go"     => specrest.codegen.go.EmitGo.emit(profiled, opts)
       case "ts"     => specrest.codegen.ts.EmitTs.emit(profiled, opts)
-      case other    =>
+      case other =>
         throw new RuntimeException(
           s"unsupported profile language '$other' (known: python, go, ts)"
         )

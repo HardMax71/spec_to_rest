@@ -106,7 +106,7 @@ class SchemaDiffTest extends CatsEffectSuite:
   test("nullability change produces AlterColumnNullable"):
     val cols0 = List(ColumnSpec("email", "TEXT", false, None))
     val cols1 = List(ColumnSpec("email", "TEXT", true, None))
-    val ops   = SchemaDiff.compute(
+    val ops = SchemaDiff.compute(
       DatabaseSchema(List(table("users", cols = cols0)), Nil),
       DatabaseSchema(List(table("users", cols = cols1)), Nil)
     )
@@ -115,7 +115,7 @@ class SchemaDiffTest extends CatsEffectSuite:
   test("default change produces AlterColumnDefault"):
     val cols0 = List(ColumnSpec("count", "INTEGER", false, None))
     val cols1 = List(ColumnSpec("count", "INTEGER", false, Some("0")))
-    val ops   = SchemaDiff.compute(
+    val ops = SchemaDiff.compute(
       DatabaseSchema(List(table("counters", cols = cols0)), Nil),
       DatabaseSchema(List(table("counters", cols = cols1)), Nil)
     )
@@ -129,7 +129,7 @@ class SchemaDiffTest extends CatsEffectSuite:
     assertEquals(ops, List(AddCheck("users", "ck_users_0", "length(name) > 0")))
 
   test("added foreign key produces AddForeignKey"):
-    val fk  = ForeignKeySpec("user_id", "users", "id", "CASCADE")
+    val fk = ForeignKeySpec("user_id", "users", "id", "CASCADE")
     val ops = SchemaDiff.compute(
       DatabaseSchema(
         List(
@@ -151,7 +151,7 @@ class SchemaDiffTest extends CatsEffectSuite:
   test("added index produces AddIndex"):
     val ix   = IndexSpec("ix_users_email", List("email"), true, None)
     val cols = List(ColumnSpec("email", "TEXT", false, None))
-    val ops  = SchemaDiff.compute(
+    val ops = SchemaDiff.compute(
       DatabaseSchema(List(table("users", cols = cols)), Nil),
       DatabaseSchema(List(table("users", cols = cols, indexes = List(ix))), Nil)
     )
@@ -221,7 +221,7 @@ class SchemaDiffTest extends CatsEffectSuite:
     val cols  = List(ColumnSpec("email", "TEXT", false, None))
     val oldIx = IndexSpec("ix_users_email", List("email"), false, None)
     val newIx = IndexSpec("ix_users_email", List("email"), true, None)
-    val ops   = SchemaDiff.compute(
+    val ops = SchemaDiff.compute(
       DatabaseSchema(List(table("users", cols = cols, indexes = List(oldIx))), Nil),
       DatabaseSchema(List(table("users", cols = cols, indexes = List(newIx))), Nil)
     )

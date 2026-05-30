@@ -81,12 +81,12 @@ class EmitTest extends CatsEffectSuite:
     SpecFixtures.loadIR("todo_list").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("CreateTodo" -> "CreateTodo"))
-      val kernel       = DafnyKernel(
+      val kernel = DafnyKernel(
         packagePath = DafnyKernel.PythonDefaultPackagePath,
         files = Map("module_.py" -> "# kernel\n"),
         bindings = List(OperationBinding("CreateTodo", "CreateTodo"))
       )
-      val files       = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
       val todoService = files
         .find(_.path == "app/services/todo.py")
         .map(_.content)
@@ -103,7 +103,7 @@ class EmitTest extends CatsEffectSuite:
   test("kernel-routed router call args match kernel handler signature (#27 review)"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-      val profiled     =
+      val profiled =
         Annotate.attachDafnyMethods(
           profiledBase,
           Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
@@ -114,7 +114,7 @@ class EmitTest extends CatsEffectSuite:
         bindings =
           List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
       )
-      val files  = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
       val router = files
         .find(_.path == "app/routers/url_mappings.py")
         .map(_.content)
@@ -134,7 +134,7 @@ class EmitTest extends CatsEffectSuite:
   test("kernel-routed handler signature matches dafnyCallArgs for path+body ops (#27 review)"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-      val profiled     =
+      val profiled =
         Annotate.attachDafnyMethods(
           profiledBase,
           Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
@@ -145,7 +145,7 @@ class EmitTest extends CatsEffectSuite:
         bindings =
           List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
       )
-      val files   = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
       val service = files
         .find(_.path == "app/services/url_mapping.py")
         .map(_.content)
@@ -178,7 +178,7 @@ class EmitTest extends CatsEffectSuite:
 
   test("url_shortener emits a known file set"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
-      val files    = Emit.emitProject(profiled).map(_.path).toSet
+      val files = Emit.emitProject(profiled).map(_.path).toSet
       val expected = Set(
         "app/__init__.py",
         "app/main.py",
@@ -262,8 +262,8 @@ class EmitTest extends CatsEffectSuite:
 
   test("read schema continues to exclude sensitive fields"):
     SpecFixtures.loadProfiled("auth_service").map: profiled =>
-      val files     = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val schema    = files("app/schemas/user.py")
+      val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val schema = files("app/schemas/user.py")
       val readBlock =
         schema.linesIterator
           .dropWhile(!_.contains("class UserRead"))

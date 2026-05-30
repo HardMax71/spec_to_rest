@@ -156,10 +156,10 @@ object TsExprBackend extends ExprBackend:
     classifyIdent(ctx.identCtx(TsReservedNames.toList), name) match
       case _: IcReserved =>
         Translated.Skip(s"identifier '$name' is a TypeScript-reserved name", span)
-      case _: IcBound      => Translated.Emit(name)
-      case _: IcBareBody   => Translated.Emit("responseData")
-      case _: IcOutput     => Translated.Emit(s"responseData[${TsLit.str(name)}]")
-      case _: IcInput      => Translated.Emit(name)
+      case _: IcBound    => Translated.Emit(name)
+      case _: IcBareBody => Translated.Emit("responseData")
+      case _: IcOutput   => Translated.Emit(s"responseData[${TsLit.str(name)}]")
+      case _: IcInput    => Translated.Emit(name)
       case _: IcStateField =>
         val obj = ctx.capture match
           case CaptureMode.PostState => "postState"
@@ -212,7 +212,7 @@ object TsExprBackend extends ExprBackend:
   ): Translated =
     callee match
       case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
-      case _                    =>
+      case _ =>
         val parts = args.map(translate(_, ctx))
         ExprLift.lift1(translate(callee, ctx)): cp =>
           ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"($cp)(${ps.mkString(", ")})"))
@@ -295,7 +295,7 @@ object TsExprBackend extends ExprBackend:
       span: Option[span_t]
   ): Translated =
     val basePy = translate(base, ctx)
-    val pairs  = updates.map { fa =>
+    val pairs = updates.map { fa =>
       ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
         Translated.Emit(s"${TsLit.str(fasName(fa))}: $vx")
       )
@@ -335,8 +335,8 @@ object TsExprBackend extends ExprBackend:
       val innerCtx   = ctx.withBound(boundNames)
       val bodyPy     = translate(body, innerCtx)
       ExprLift.liftAll(domains :+ bodyPy, span): texts =>
-        val ds     = texts.init
-        val bp     = texts.last
+        val ds = texts.init
+        val bp = texts.last
         val method = kind match
           case QAll() => "every"
           case _      => "some"

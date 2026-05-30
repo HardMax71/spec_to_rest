@@ -29,7 +29,7 @@ final case class TestStrategyOverrides(
     perEntityField: Map[String, String]
 ):
   def resolve(ctx: StrategyCtx): Option[String] = ctx match
-    case StrategyCtx.Anonymous             => None
+    case StrategyCtx.Anonymous => None
     case StrategyCtx.OperationInput(op, f) =>
       perOperation.get((op, f)).orElse(perEntityField.get(f))
     case StrategyCtx.EntityField(_, f) =>
@@ -44,7 +44,7 @@ object TestStrategyOverrides:
         (target, field, if live then "live" else "redacted")
     val opNames     = svcOperations(ir).map(operName).toSet
     val entityNames = ir.idx.entityNames
-    val perOp       = rules.collect:
+    val perOp = rules.collect:
       case (t, f, v) if opNames.contains(t) => (t, f) -> v
     val perField = rules.collect:
       case (t, f, v) if entityNames.contains(t) => f -> v
@@ -64,7 +64,7 @@ object Strategies:
     val aliasSpecs    = ix.aliases.map(a => specForAlias(a, ir, overrides, b))
     val enumSpecs     = ix.enums.map(e => specForEnum(e, overrides, b))
     val transEntities = transitionEntityNames(ir)
-    val entitySpecs   =
+    val entitySpecs =
       ix.entities.filter(e => transEntities.contains(entName(e))).map(e => specForEntity(e, ir, b))
     aliasSpecs ++ enumSpecs ++ entitySpecs
 
@@ -105,7 +105,7 @@ object Strategies:
   ): StrategyExpr =
     raw match
       case skip: StrategyExpr.Skip => skip
-      case StrategyExpr.Code(t)    =>
+      case StrategyExpr.Code(t) =>
         val fieldName = ctx match
           case StrategyCtx.Anonymous            => None
           case StrategyCtx.OperationInput(_, f) => Some(f)
@@ -131,7 +131,7 @@ object Strategies:
     case NamedTypeF("DateTime", _) => StrategyExpr.Code(b.datetime)
     case NamedTypeF("Duration", _) => StrategyExpr.Code(b.duration)
     case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
-    case NamedTypeF(name, _)       =>
+    case NamedTypeF(name, _) =>
       if svcTypeAliases(ir).exists(a => talName(a) == name) ||
         svcEnums(ir).exists(e => enmName(e) == name)
       then
@@ -188,7 +188,7 @@ object Strategies:
       b: StrategyBackend
   ): StrategySpec =
     val overrides = TestStrategyOverrides.from(ir)
-    val pairs     = entFields(entity).map { f =>
+    val pairs = entFields(entity).map { f =>
       val ctx     = StrategyCtx.EntityField(entName(entity), fldName(f))
       val rawExpr = jsonStrategyForField(f, ir, b)
       val expr    = applyRedaction(rawExpr, ctx, overrides, b)
@@ -230,7 +230,7 @@ object Strategies:
     case NamedTypeF("DateTime", _) => StrategyExpr.Code(b.jsonDatetime)
     case NamedTypeF("Duration", _) => StrategyExpr.Code(b.jsonDuration)
     case NamedTypeF("Id", _)       => StrategyExpr.Code(b.id)
-    case NamedTypeF(name, _)       =>
+    case NamedTypeF(name, _) =>
       if svcEnums(ir).exists(e => enmName(e) == name) then
         StrategyExpr.Code(b.call(strategyFunctionName(name, b)))
       else
@@ -312,7 +312,7 @@ object Strategies:
       ir: ServiceIRFull
   ): (string_constraint, List[String]) =
     c match
-      case None    => (emptyStringConstraint, Nil)
+      case None => (emptyStringConstraint, Nil)
       case Some(e) =>
         val (raw, skips) = walkStringConstraint(e)
         resolvePredicateSkips(raw, skips, ir)

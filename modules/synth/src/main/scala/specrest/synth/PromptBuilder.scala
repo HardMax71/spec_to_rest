@@ -49,7 +49,7 @@ object PromptBuilder:
       error: VerifierError,
       withHints: Boolean = false
   ): Prompt =
-    val hints    = if withHints then HintLibrary.forCategory(error.category) else Nil
+    val hints = if withHints then HintLibrary.forCategory(error.category) else Nil
     val sections = List(
       previousAttemptSection(previousBody),
       verifierErrorSection(error),
@@ -112,7 +112,7 @@ object PromptBuilder:
 
   private def taskSection(name: String, strategy: PromptStrategy): String =
     val extra = strategy match
-      case PromptStrategy.ZeroShot       => ""
+      case PromptStrategy.ZeroShot => ""
       case PromptStrategy.ChainOfThought =>
         "\nThink step-by-step before emitting the code block; only the first " +
           "fenced ```dafny block is extracted."
@@ -178,7 +178,7 @@ object PromptBuilder:
       "Inspect the failing clause and adjust the body so verification succeeds."
 
   private def loadResource(name: String): String =
-    val path   = s"$systemRoot/$name"
+    val path = s"$systemRoot/$name"
     val stream = Option(getClass.getResourceAsStream(path))
       .getOrElse(sys.error(s"Prompt resource not found: $path"))
     Using.resource(stream): in =>

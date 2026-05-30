@@ -34,7 +34,7 @@ object GoStateful:
             Some(StepOp(pop.operationName, pop, args))
           case _ => None
 
-    val invCtx     = Stateful.invariantCtx(ir)
+    val invCtx = Stateful.invariantCtx(ir)
     val invariants =
       svcInvariants(ir).zipWithIndex.flatMap: (inv, idx) =>
         val name = invName(inv).getOrElse(s"anon_$idx")
@@ -68,7 +68,7 @@ object GoStateful:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs     = params.map: p =>
+      val pairs = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
         (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, GoRapidStrategy))
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
@@ -76,7 +76,7 @@ object GoStateful:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def dispatchCall(s: StepOp): String =
-    val ep     = s.pop.endpoint
+    val ep = s.pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
@@ -87,7 +87,7 @@ object GoStateful:
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else
         val names = scala.collection.mutable.ListBuffer.empty[String]
-        val tmpl  = "\\{([^}]+)\\}".r.replaceAllIn(
+        val tmpl = "\\{([^}]+)\\}".r.replaceAllIn(
           ep.path,
           m =>
             names += m.group(1)

@@ -55,7 +55,7 @@ class TimeoutTest extends CatsEffectSuite:
       for
         ir <- SpecFixtures.loadIR("set_ops")
         t0 <- IO.monotonic
-        _  <- Consistency
+        _ <- Consistency
                .runConsistencyChecks(ir, cfg)
                .timeoutTo(outerMs.millis, fired.set(true))
         t1      <- IO.monotonic

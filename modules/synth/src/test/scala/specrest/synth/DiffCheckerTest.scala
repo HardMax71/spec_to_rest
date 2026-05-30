@@ -35,7 +35,7 @@ class DiffCheckerTest extends CatsEffectSuite:
         |  st.count := st.count + 1;
         |}""".stripMargin
     DiffChecker.check(header, candidate) match
-      case Right(_)        => fail("expected diff violation")
+      case Right(_) => fail("expected diff violation")
       case Left(violation) =>
         assert(violation.diff.contains("ServiceStateInv(st)"))
 

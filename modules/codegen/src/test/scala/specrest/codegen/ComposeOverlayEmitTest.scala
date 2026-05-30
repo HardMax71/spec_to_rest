@@ -55,7 +55,7 @@ class ComposeOverlayEmitTest extends CatsEffectSuite:
 
   for
     (target, secrets) <- targetsWithDb
-    (overlay, env)    <-
+    (overlay, env) <-
       List("docker-compose.prod.yml" -> "production", "docker-compose.staging.yml" -> "staging")
   do
     test(s"$target $env overlay overrides app DATABASE_URL with $env-labelled secrets"):

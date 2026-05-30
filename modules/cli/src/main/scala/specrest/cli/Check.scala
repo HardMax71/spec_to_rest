@@ -21,48 +21,48 @@ object Check:
 
   def run(specFile: String, log: Logger): IO[ExitCode] =
     readSource(specFile, log).flatMap:
-      case Left(code)    => IO.pure(code)
+      case Left(code) => IO.pure(code)
       case Right(source) =>
         val t0 = System.nanoTime()
         Parse.parseSpec(source).flatMap { parsedE =>
           val parseMs = (System.nanoTime() - t0) / 1_000_000.0
-          IO.delay(log.verbose(f"Parsed in ${parseMs}%.0fms")) >>
-            (parsedE match
-              case Left(VerifyError.Parse(errors)) =>
-                IO.delay {
-                  errors.foreach: e =>
-                    log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-                }.as(ExitCodes.Violations)
-              case Right(parsed) =>
-                val t1 = System.nanoTime()
-                Builder.buildIR(parsed.tree).flatMap:
-                  case Left(err) =>
-                    IO.delay(log.error(renderBuildError(specFile, err))).as(ExitCodes.Violations)
-                  case Right(ir) =>
-                    IO.delay {
-                      val buildMs = (System.nanoTime() - t1) / 1_000_000.0
-                      log.verbose(f"Built IR in ${buildMs}%.0fms")
+          IO.delay(log.verbose(f"Parsed in ${parseMs}%.0fms")) >> (parsedE match
+            case Left(VerifyError.Parse(errors)) =>
+              IO.delay {
+                errors.foreach: e =>
+                  log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+              }.as(ExitCodes.Violations)
+            case Right(parsed) =>
+              val t1 = System.nanoTime()
+              Builder.buildIR(parsed.tree).flatMap:
+                case Left(err) =>
+                  IO.delay(log.error(renderBuildError(specFile, err))).as(ExitCodes.Violations)
+                case Right(ir) =>
+                  IO.delay {
+                    val buildMs = (System.nanoTime() - t1) / 1_000_000.0
+                    log.verbose(f"Built IR in ${buildMs}%.0fms")
 
-                      val convDiags = Validate.validateConventions(svcConventions(ir), ir)
-                      val lintDiags = Lint.run(ir)
+                    val convDiags = Validate.validateConventions(svcConventions(ir), ir)
+                    val lintDiags = Lint.run(ir)
 
-                      val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)
-                      val convWarnings = convDiags.filter(_.level == ConvDiagLevel.Warning)
-                      val lintErrors   = lintDiags.filter(_.level == LintLevel.Error)
-                      val lintWarnings = lintDiags.filter(_.level == LintLevel.Warning)
+                    val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)
+                    val convWarnings = convDiags.filter(_.level == ConvDiagLevel.Warning)
+                    val lintErrors   = lintDiags.filter(_.level == LintLevel.Error)
+                    val lintWarnings = lintDiags.filter(_.level == LintLevel.Warning)
 
-                      convWarnings.foreach(d => log.warn(renderConv(specFile, d)))
-                      lintWarnings.foreach(d => log.warn(renderLint(specFile, d)))
-                      convErrors.foreach(d => log.error(renderConv(specFile, d)))
-                      lintErrors.foreach(d => log.error(renderLint(specFile, d)))
+                    convWarnings.foreach(d => log.warn(renderConv(specFile, d)))
+                    lintWarnings.foreach(d => log.warn(renderLint(specFile, d)))
+                    convErrors.foreach(d => log.error(renderConv(specFile, d)))
+                    lintErrors.foreach(d => log.error(renderLint(specFile, d)))
 
-                      if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
-                      else
-                        log.success(
-                          s"$specFile: valid (${svcOperations(ir).length} operations, ${svcEntities(ir).length} entities, ${svcInvariants(ir).length} invariants)"
-                        )
-                        ExitCodes.Ok
-                    })
+                    if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
+                    else
+                      log.success(
+                        s"$specFile: valid (${svcOperations(ir).length} operations, ${svcEntities(ir).length} entities, ${svcInvariants(ir).length} invariants)"
+                      )
+                      ExitCodes.Ok
+                  }
+          )
         }
 
   private def renderConv(specFile: String, d: ConventionDiagnostic): String =

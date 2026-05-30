@@ -83,7 +83,7 @@ object HintLibrary:
   def categories: Set[String] = all.map(_.category).toSet
 
   def loadSnippet(name: String): String =
-    val path   = s"$resourceRoot/$name.dfy"
+    val path = s"$resourceRoot/$name.dfy"
     val stream = Option(getClass.getResourceAsStream(path))
       .getOrElse(sys.error(s"Hint resource not found: $path"))
     Using.resource(Source.fromInputStream(stream, "UTF-8"))(_.mkString)

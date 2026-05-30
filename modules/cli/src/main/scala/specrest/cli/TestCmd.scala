@@ -60,7 +60,7 @@ object TestCmd:
                 "(project was likely compiled with --no-tests; re-compile without it)"
             )
           case List(one) => Right(one)
-          case many      =>
+          case many =>
             Left(
               s"multiple conformance runners found under $testsDir: " +
                 many.map(_.getFileName.toString).mkString(", ")

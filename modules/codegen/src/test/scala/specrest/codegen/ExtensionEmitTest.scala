@@ -15,7 +15,7 @@ class ExtensionEmitTest extends CatsEffectSuite:
     test(s"$target emits the extension scaffold with preserve=true"):
       SpecFixtures.loadProfiled("url_shortener", target).map: profiled =>
         val files = Emit.emitProject(profiled)
-        val ext   = files.find(_.path == extPath).getOrElse(
+        val ext = files.find(_.path == extPath).getOrElse(
           fail(s"$target did not emit $extPath; got: ${files.map(_.path).mkString(", ")}")
         )
         assert(ext.preserve, s"$extPath must be marked preserve=true")

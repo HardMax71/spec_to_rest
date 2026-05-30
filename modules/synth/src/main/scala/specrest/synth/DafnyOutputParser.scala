@@ -13,7 +13,7 @@ object DafnyOutputParser:
       .flatMap: doc =>
         val sourceLines = source.linesIterator.toList
         doc.hcursor.downField("verificationResults").values match
-          case None         => Left("dafny --log-format json output missing 'verificationResults' field")
+          case None => Left("dafny --log-format json output missing 'verificationResults' field")
           case Some(values) =>
             Right(values.toList.map(j => decodeMethod(j.hcursor, sourceLines)))
 
@@ -23,7 +23,7 @@ object DafnyOutputParser:
   ): MethodResult =
     val name    = c.get[String]("name").getOrElse("<unknown>")
     val outcome = c.get[String]("outcome").getOrElse("Unknown")
-    val errors  =
+    val errors =
       if outcome == "Correct" || outcome == "Valid" then Nil
       else extractErrors(c, outcome, sourceLines)
     MethodResult(name, outcome, errors)
@@ -33,7 +33,7 @@ object DafnyOutputParser:
       methodOutcome: String,
       sourceLines: List[String]
   ): List[VerifierError] =
-    val vcs   = c.downField("vcResults").values.getOrElse(Iterable.empty).toList
+    val vcs = c.downField("vcResults").values.getOrElse(Iterable.empty).toList
     val perVc = vcs.flatMap: vc =>
       val vcCur     = vc.hcursor
       val vcOutcome = vcCur.get[String]("outcome").getOrElse(methodOutcome)
@@ -74,7 +74,7 @@ object DafnyOutputParser:
     val description = a.get[String]("description").getOrElse(vcOutcome)
     val line        = a.get[Int]("line").toOption
     val col         = a.get[Int]("col").toOption
-    val category    = if vcOutcome == "Valid" || vcOutcome == "Correct" then "unknown"
+    val category = if vcOutcome == "Valid" || vcOutcome == "Correct" then "unknown"
     else outcomeCategory(vcOutcome).getOrElse(classify(description))
     VerifierError(
       category = category,

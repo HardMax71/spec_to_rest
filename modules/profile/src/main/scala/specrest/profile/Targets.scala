@@ -40,7 +40,7 @@ object TargetKey:
       val fw = parts.slice(1, parts.length - 1).mkString("-")
       (LanguageId.parse(parts.head), DatabaseId.parse(parts.last)) match
         case (Some(l), Some(d)) => Right(TargetKey(l, fw, d))
-        case _                  =>
+        case _ =>
           Left(s"unrecognised language or database in target '$slug'")
 
 trait Framework:
@@ -53,7 +53,7 @@ trait Framework:
 object Fastapi extends Framework:
   val id                                  = "fastapi"
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Python)
-  val supportedDialects: Set[DatabaseId]  =
+  val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
 
   override def supportsTestgen(database: DatabaseId): Boolean = true
@@ -113,7 +113,7 @@ object Fastapi extends Framework:
 object Chi extends Framework:
   val id                                  = "chi"
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Go)
-  val supportedDialects: Set[DatabaseId]  =
+  val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
   override def supportsTestgen(database: DatabaseId): Boolean = true
 
@@ -175,7 +175,7 @@ object Chi extends Framework:
 object Express extends Framework:
   val id                                  = "express"
   val supportedLanguages: Set[LanguageId] = Set(LanguageId.Ts)
-  val supportedDialects: Set[DatabaseId]  =
+  val supportedDialects: Set[DatabaseId] =
     Set(DatabaseId.Postgres, DatabaseId.Sqlite, DatabaseId.Mysql)
 
   override def supportsTestgen(database: DatabaseId): Boolean = true

@@ -69,7 +69,7 @@ object Validate:
       ir: ServiceIRFull
   ): List[ConventionDiagnostic] =
     conventions match
-      case None     => Nil
+      case None => Nil
       case Some(cd) =>
         val rules       = cvdRules(cd)
         val ix          = ir.idx

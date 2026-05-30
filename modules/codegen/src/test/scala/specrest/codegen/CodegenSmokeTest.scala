@@ -45,7 +45,7 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
     import specrest.ir.generated.SpecRestGenerated.*
     import specrest.profile.{ProfiledEntity, ProfiledOperation}
     given CanEqual[route_kind, route_kind] = CanEqual.derived
-    val endpoint                           = EndpointSpec(
+    val endpoint = EndpointSpec(
       operationName = "Shorten",
       method = POST(),
       path = "/shorten",

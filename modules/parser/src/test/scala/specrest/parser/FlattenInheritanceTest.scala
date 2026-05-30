@@ -17,7 +17,7 @@ class FlattenInheritanceTest extends CatsEffectSuite:
 
   private val base  = EntityDeclFull("P", None, Nil, List(IdentifierF("p_inv", None)), None)
   private val child = EntityDeclFull("C", Some("P"), Nil, List(IdentifierF("c_inv", None)), None)
-  private val ir    =
+  private val ir =
     ServiceIRFull(
       "S",
       Nil,

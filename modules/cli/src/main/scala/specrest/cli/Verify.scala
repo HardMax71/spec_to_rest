@@ -56,7 +56,7 @@ object Verify:
       }.as(ExitCodes.Violations)
     else
       Check.readSource(specFile, log).flatMap:
-        case Left(code)    => IO.pure(code)
+        case Left(code) => IO.pure(code)
         case Right(source) =>
           val tParse0 = System.nanoTime()
           Parse.parseSpec(source).flatMap { parsedE =>
@@ -174,7 +174,7 @@ object Verify:
     IO.delay(log.verbose(s"Timeout: ${opts.timeoutMs}ms")) >>
       IO.delay(log.verbose(s"Alloy scope: ${opts.alloyScope}")) >>
       openDumpSink(specFile, opts, log).use:
-        case Left(code)  => IO.pure(code)
+        case Left(code) => IO.pure(code)
         case Right(sink) =>
           val maxParallel = opts.parallel.getOrElse(VerificationConfig.defaultParallelism)
           IO.delay(log.verbose(s"Max parallel: $maxParallel")) >> {
@@ -191,7 +191,7 @@ object Verify:
               ),
               sink
             ).flatMap { report =>
-              val totalMs    = (System.nanoTime() - tRun0) / 1_000_000.0
+              val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
               val writeIndex = sink match
                 case Some(s) =>
                   IO.blocking(s.writeIndex(specFile, totalMs, report.ok)) >>
@@ -218,7 +218,7 @@ object Verify:
       stdout: PrintStream
   ): IO[ExitCode] =
     val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
-    val write    = opts.jsonOut match
+    val write = opts.jsonOut match
       case Some(path) =>
         IO.blocking(Files.writeString(Paths.get(path), rendered)).void >>
           IO.delay(log.success(s"Wrote JSON report to $path"))
@@ -256,7 +256,7 @@ object Verify:
       val soundnessSkipped = checks.count: c =>
         c.status == CheckOutcome.Skipped &&
           c.diagnostic.exists(_.category == DiagnosticCategory.SoundnessLimitation)
-      val otherSkipped          = skipped - translatorSkipped - soundnessSkipped
+      val otherSkipped = skipped - translatorSkipped - soundnessSkipped
       def skipBreakdown: String =
         val parts =
           (if translatorSkipped > 0 then List(s"$translatorSkipped translator coverage")

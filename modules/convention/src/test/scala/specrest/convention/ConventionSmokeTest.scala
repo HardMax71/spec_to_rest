@@ -103,7 +103,7 @@ class ConventionSmokeTest extends CatsEffectSuite:
   test("ecommerce: aggregate-invariant detector emits a Sum trigger on line_items"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
       val schema = Schema.deriveSchema(ir)
-      val trig   = schemaTriggers(schema)
+      val trig = schemaTriggers(schema)
         .find(t => triggerName(t) == "trg_recalc_order_subtotal")
         .getOrElse(fail(s"trigger missing; got names=${schemaTriggers(schema).map(triggerName)}"))
       assertEquals(triggerFunctionName(trig), "recalc_order_subtotal")
@@ -116,7 +116,7 @@ class ConventionSmokeTest extends CatsEffectSuite:
 
   test("ecommerce: Product.partial_index convention produces filterClause on index"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
-      val schema   = Schema.deriveSchema(ir)
+      val schema = Schema.deriveSchema(ir)
       val products = schemaTables(schema)
         .find(t => tableName(t) == "products")
         .getOrElse(fail(s"products table missing; got=${schemaTables(schema).map(tableName)}"))

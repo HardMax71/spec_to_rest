@@ -31,7 +31,7 @@ object Schema:
     val ix          = ir.idx
     val entities    = ix.entities
     val entityNames = ix.entityNames
-    val cctx        = ClassifierCtx(
+    val cctx = ClassifierCtx(
       aliasAList = ix.aliasAList,
       enumAList = ix.enumAList,
       entityNamesList = ix.entityNamesList
@@ -61,13 +61,13 @@ object Schema:
       cctx: ClassifierCtx
   ): Map[String, EntityRef] =
     ir.idx.entities.map { entity =>
-      val fields    = entFields(entity)
+      val fields = entFields(entity)
       val tableName = Path
         .getConvention(svcConventions(ir), entName(entity), "db_table")
         .getOrElse(Naming.toTableName(entName(entity)))
-      val idField     = fields.find(f => fldName(f) == "id")
+      val idField = fields.find(f => fldName(f) == "id")
       val idFkSqlType = idField match
-        case None    => "BIGINT"
+        case None => "BIGINT"
         case Some(f) =>
           val mapped = mapTypeToColumn("id", fldType(f), cctx)
           // A FK referencing the PK must match its widened type.
@@ -84,7 +84,7 @@ object Schema:
       cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): table_spec =
-    val fields    = entFields(entity)
+    val fields = entFields(entity)
     val tableName = Path
       .getConvention(svcConventions(ir), entName(entity), "db_table")
       .getOrElse(Naming.toTableName(entName(entity)))
@@ -102,7 +102,7 @@ object Schema:
       val colName    = Naming.toColumnName(fldName(field))
       val mapped     = mapFieldToColumn(field, cctx, entityRefs)
       val widenedSql = widenExplicitIdPkSqlType(fldName(field), columnSqlType(mapped.column))
-      val column     = ColumnSpec(
+      val column = ColumnSpec(
         columnName(mapped.column),
         widenedSql,
         columnNullable(mapped.column),
@@ -127,10 +127,9 @@ object Schema:
         for sf <- stdFields(sd) do
           stfType(sf) match
             case RelationTypeF(from, mult, to, _)
-                if typeName(to).contains(entName(entity)) &&
-                  (mult match
-                    case _: (MultSome | MultSet) => false;
-                    case _ => true) =>
+                if typeName(to).contains(entName(entity)) && (mult match
+                  case _: (MultSome | MultSet) => false; case _ => true
+                ) =>
               typeName(from).filter(entityNames.contains) match
                 case Some(fromName) =>
                   val fkCol =
@@ -138,7 +137,7 @@ object Schema:
                       fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
                     ) + "_id"
                   val fkRefTable = Naming.toTableName(fromName)
-                  val nullable   = mult match
+                  val nullable = mult match
                     case _: MultLone => true
                     case _           => false
                   if !columns.exists(c => columnName(c) == fkCol) then
@@ -184,7 +183,7 @@ object Schema:
           val fromTable = Naming.toTableName(fromName)
           val toTable   = Naming.toTableName(toName)
           val tableName = s"${fromTable}_$toTable"
-          val fromCol   = Naming.toColumnName(
+          val fromCol = Naming.toColumnName(
             fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
           ) + "_id"
           val toCol = Naming.toColumnName(
@@ -285,7 +284,7 @@ object Schema:
   private def extractChecks(colName: String, constraint: expr_full): List[String] =
     flattenAnd(constraint).flatMap: atom =>
       classifyColumnCheckAtom(atom) match
-        case _: CcSkip         => Nil
+        case _: CcSkip => Nil
         case CcRegexMatch(pat) =>
           List(s"$colName ~ '${escapeSqlString(pat)}'")
         case CcLenCompare(op, n) =>
@@ -309,10 +308,10 @@ object Schema:
   ): List[String] =
     flattenAnd(inv).flatMap: atom =>
       classifyInvariantAtom(atom) match
-        case _: IcSkip                       => Nil
+        case _: IcSkip => Nil
         case IcInClause(fieldName, elements) =>
           val colName = Naming.toColumnName(fieldName)
-          val values  = elements.collect {
+          val values = elements.collect {
             case StringLitF(v, _) => s"'${escapeSqlString(v)}'"
             case IntLitF(v, _)    => v.toString
           }
@@ -371,14 +370,14 @@ object Schema:
     do
       detectAggregateInvariant(inv) match
         case Some(DetectedAggregate(targetField, collFieldName, agg, sourceField)) =>
-          val parentFields                          = entFields(parent)
+          val parentFields = entFields(parent)
           val triggerOpt: Option[trigger_candidate] =
             for
               collField   <- parentFields.find(f => fldName(f) == collFieldName)
               childName   <- collectionElementEntityName(fldType(collField))
               childEntity <- entitiesByName.get(childName)
               childTable  <- tablesByEntity.get(childName)
-              validated   <- validateTrigger(
+              validated <- validateTrigger(
                              parentTbl,
                              parentFields,
                              childTable,

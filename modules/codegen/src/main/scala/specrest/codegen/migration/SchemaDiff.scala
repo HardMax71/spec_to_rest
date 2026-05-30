@@ -12,7 +12,7 @@ object SchemaDiff:
     val nextChecks = checkAssign(schemaTables(next))
     computeDiff(prev, next, prevChecks, nextChecks) match
       case Some(ops) => ops
-      case None      =>
+      case None =>
         val names = (schemaTables(prev) ++ schemaTables(next))
           .map(tableName).distinct.mkString(", ")
         throw new RuntimeException(s"Foreign-key cycle detected among tables: $names")
@@ -72,7 +72,7 @@ object SchemaDiff:
   def topoSort(tables: List[table_spec]): List[table_spec] =
     sortTablesByFk(tables) match
       case Some(sorted) => sorted
-      case None         =>
+      case None =>
         val names = tables.map(tableName).mkString(", ")
         throw new RuntimeException(s"Foreign-key cycle detected among tables: $names")
 
@@ -95,8 +95,7 @@ object SchemaDiff:
           pCols.get(columnName(nc)).foreach: pc =>
             val pSql = columnSqlType(pc)
             val nSql = columnSqlType(nc)
-            if pSql != nSql &&
-              (CanonicalType.isAutoIncrementType(pSql) ||
+            if pSql != nSql && (CanonicalType.isAutoIncrementType(pSql) ||
                 CanonicalType.isAutoIncrementType(nSql))
             then
               throw new RuntimeException(

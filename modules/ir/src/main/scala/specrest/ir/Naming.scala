@@ -108,7 +108,7 @@ object Naming:
     )
 
   def toCamelCase(name: String, strategy: CamelStrategy = CamelStrategy.Plain): String =
-    val parts  = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
+    val parts = name.split('_').toList.flatMap(p => splitCamelCase(p)).filter(_.nonEmpty)
     val joined = parts.zipWithIndex.map { (w, i) =>
       if i == 0 then w.toLowerCase
       else w.head.toUpper +: w.tail.toLowerCase

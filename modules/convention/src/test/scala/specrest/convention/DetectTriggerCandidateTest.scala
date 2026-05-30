@@ -83,7 +83,7 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
 
   test("returns None if target field doesn't exist on parent"):
     val noTarget = List(fieldD("items", SetTypeF(named("Item"), None)))
-    val result   = validateTrigger(
+    val result = validateTrigger(
       orderTable,
       noTarget,
       itemTable,
@@ -114,7 +114,7 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
 
   test("returns None if child has no FK to parent"):
     val noFkChild = table("items", "Item", List(col("id", "BIGSERIAL")), fks = Nil)
-    val result    = validateTrigger(
+    val result = validateTrigger(
       orderTable,
       parentFields,
       noFkChild,
@@ -127,7 +127,7 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
 
   test("returns None if source-projection field missing from child"):
     val childMissingSrc = entityD("Item", fields = List(fieldD("order_id", named("Int"))))
-    val result          = validateTrigger(
+    val result = validateTrigger(
       orderTable,
       parentFields,
       itemTable,

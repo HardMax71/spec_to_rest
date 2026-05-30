@@ -22,7 +22,7 @@ object FewShot:
   def text(s: Snippet): String =
     val name     = fileName(s)
     val resource = s"$resourceRoot/$name"
-    val stream   = Option(getClass.getResourceAsStream(resource))
+    val stream = Option(getClass.getResourceAsStream(resource))
       .getOrElse(sys.error(s"Few-shot resource not found: $resource"))
     Using.resource(stream): in =>
       Source.fromInputStream(in, "UTF-8").mkString

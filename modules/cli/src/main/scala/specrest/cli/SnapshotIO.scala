@@ -19,7 +19,7 @@ object SnapshotIO:
         .map(t => s"read failed: ${Option(t.getMessage).getOrElse(t.toString)}")
         .flatMap(SchemaCodec.decode) match
         case Right(snap) => Some(snap.schema)
-        case Left(err)   =>
+        case Left(err) =>
           log.warn(
             s"ignoring schema snapshot at $path: $err " +
               "(treating as missing — full re-emit will follow)"

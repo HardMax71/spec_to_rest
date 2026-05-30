@@ -15,7 +15,7 @@ import specrest.profile.ProfiledService
 object TsStructural:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =
-    val ir        = profiled.ir
+    val ir = profiled.ir
     val collected = profiled.operations.map: pop =>
       if StubOps.isStub(profiled, pop) then
         Left(TestSkip(pop.operationName, "structural", StubOps.skipReason(pop)))
@@ -39,7 +39,7 @@ object TsStructural:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
-      val pairs     = params.map: p =>
+      val pairs = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
         (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, TsFastCheckStrategy))
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
@@ -47,15 +47,15 @@ object TsStructural:
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
 
   private def tsRequestCall(pop: ProfiledOperation): String =
-    val ep     = pop.endpoint
+    val ep = pop.endpoint
     val method = ep.method match
       case _: GET    => "get"
       case _: POST   => "post"
       case _: PUT    => "put"
       case _: PATCH  => "patch"
       case _: DELETE => "delete"
-    val hasPath  = ep.pathParams.nonEmpty
-    val rawPath  = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
+    val hasPath = ep.pathParams.nonEmpty
+    val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
     val pathExpr =
       if hasPath then s"`$rawPath`" else TsLit.str(ep.path)
     val bodyExpr =
@@ -112,7 +112,7 @@ object TsStructural:
     else renderFull(ir, tests)
 
   private def renderFull(ir: ServiceIRFull, tests: List[GeneratedTest]): String =
-    val bodies     = tests.map(_.body).mkString("\n")
+    val bodies = tests.map(_.body).mkString("\n")
     val stratNames =
       Strategies.forIR(ir, TsFastCheckStrategy).map(_.functionName).distinct.sorted
         .filter(n => bodies.contains(s"$n("))

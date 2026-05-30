@@ -29,7 +29,7 @@ final class AnthropicProvider(client: AnthropicClient) extends LlmProvider:
         .addUserMessage(req.userMessage)
         .build()
       val message = client.messages().create(params)
-      val text    = message.content().asScala.iterator
+      val text = message.content().asScala.iterator
         .flatMap(b => b.text().toScala.iterator)
         .map(_.text())
         .mkString

@@ -5,7 +5,7 @@ object AlembicSyntax:
   def mapSqlTypeToSa(sqlType: String, dialect: Dialect = Postgres): String =
     CanonicalType.parse(sqlType) match
       case Some(t) => dialect.saType(t).expr
-      case None    =>
+      case None =>
         throw new RuntimeException(s"Unsupported SQL type in Alembic migration: $sqlType")
 
   def mapServerDefault(value: Option[String]): Option[String] = value match

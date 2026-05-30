@@ -32,15 +32,15 @@ object OperationContext:
   def from(op: ProfiledOperation, entity: ProfiledEntity): OperationContext =
     val entityNonIdColumnNames =
       entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
-    val bodyParamNames           = op.endpoint.bodyParams.map(_.name)
-    val initialRouteKind         = OperationContext.initialRouteKind(op)
+    val bodyParamNames   = op.endpoint.bodyParams.map(_.name)
+    val initialRouteKind = OperationContext.initialRouteKind(op)
     val matchesEntityCreateShape =
       matchesCreateShape(initialRouteKind, bodyParamNames, entityNonIdColumnNames.toList)
     val routeKind = effectiveRouteKind(initialRouteKind, matchesEntityCreateShape)
-    val isCreate  = initialRouteKind match
+    val isCreate = initialRouteKind match
       case _: RkCreate => true
       case _           => false
-    val hasRequestBody          = isCreate || op.endpoint.bodyParams.nonEmpty
+    val hasRequestBody = isCreate || op.endpoint.bodyParams.nonEmpty
     val customRequestSchemaName =
       if !hasRequestBody then None
       else if isCreate && matchesEntityCreateShape then None

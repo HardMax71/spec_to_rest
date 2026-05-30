@@ -19,8 +19,8 @@ object Main
   private val verbose = Opts.flag("verbose", "show detailed progress", short = "v").orFalse
   private val quiet   = Opts.flag("quiet", "suppress non-error output", short = "q").orFalse
 
-  private val colorFlag                  = Opts.flag("color", "force colored output").orFalse
-  private val noColorFlag                = Opts.flag("no-color", "disable colored output").orFalse
+  private val colorFlag   = Opts.flag("color", "force colored output").orFalse
+  private val noColorFlag = Opts.flag("no-color", "disable colored output").orFalse
   private val colorMode: Opts[ColorMode] =
     (colorFlag, noColorFlag).tupled.mapValidated:
       case (true, true) =>
@@ -71,7 +71,7 @@ object Main
                     case None =>
                       fw.supportedLanguages.toList match
                         case single :: Nil => Right(single)
-                        case many          =>
+                        case many =>
                           Left(
                             s"framework '$framework' supports multiple languages " +
                               s"(${many.map(_.slug).sorted.mkString(", ")}); specify --lang"
@@ -115,10 +115,10 @@ object Main
     val timeout = Opts
       .option[Long]("timeout", "per-check timeout ms (0 = no timeout)")
       .withDefault(30_000L)
-    val dumpSmt    = Opts.flag("dump-smt", "emit Z3 SMT-LIB to stdout and exit").orFalse
+    val dumpSmt = Opts.flag("dump-smt", "emit Z3 SMT-LIB to stdout and exit").orFalse
     val dumpSmtOut =
       Opts.option[String]("dump-smt-out", "write Z3 SMT-LIB to file and exit").orNone
-    val dumpAlloy    = Opts.flag("dump-alloy", "emit Alloy source to stdout and exit").orFalse
+    val dumpAlloy = Opts.flag("dump-alloy", "emit Alloy source to stdout and exit").orFalse
     val dumpAlloyOut =
       Opts.option[String]("dump-alloy-out", "write Alloy source to file and exit").orNone
     val alloyScope = Opts
@@ -197,7 +197,7 @@ object Main
         )
 
   private val compileCmd: Opts[IO[ExitCode]] =
-    val outDir       = Opts.option[String]("out", "output directory", short = "o")
+    val outDir = Opts.option[String]("out", "output directory", short = "o")
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
       .orFalse
@@ -305,7 +305,7 @@ object Main
 
   private val synthCmd: Opts[IO[ExitCode]] =
     val operation = Opts.option[String]("operation", "operation to synthesize", short = "o")
-    val model     = Opts
+    val model = Opts
       .option[String]("model", "LLM model (gpt-* routes to OpenAI; otherwise Anthropic)")
       .withDefault("claude-sonnet-4-6")
     val temperature = Opts
@@ -381,7 +381,7 @@ object Main
         "inject DafnyPro-style proof patterns into the repair prompt (default ON for --fallback / verify-all, OFF for strict CEGIS)"
       )
       .orFalse
-    val noHintsFlag                          = Opts.flag("no-hints", "disable hint-augmentation injection").orFalse
+    val noHintsFlag = Opts.flag("no-hints", "disable hint-augmentation injection").orFalse
     val hintsTriState: Opts[Option[Boolean]] = (withHintsFlag, noHintsFlag).tupled.mapValidated:
       case (true, true) =>
         cats.data.Validated.invalidNel("--with-hints and --no-hints are mutually exclusive")
@@ -474,7 +474,7 @@ object Main
           )
 
   private val testCmd: Opts[IO[ExitCode]] =
-    val outDir  = Opts.option[String]("out", "generated project directory", short = "o")
+    val outDir = Opts.option[String]("out", "generated project directory", short = "o")
     val profile = Opts
       .option[String]("profile", "conformance profile (smoke, thorough, exhaustive)")
       .withDefault("thorough")

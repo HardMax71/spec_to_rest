@@ -27,7 +27,7 @@ object InspectFormat:
     case "ir"           => Right(Ir)
     case "dafny"        => Right(Dafny)
     case "dafny-prompt" => Right(DafnyPrompt)
-    case other          =>
+    case other =>
       Left(s"unknown format '$other'; choices: summary, json, ir, dafny, dafny-prompt")
 
 object Inspect:
@@ -42,7 +42,7 @@ object Inspect:
       operation: Option[String] = None
   ): IO[ExitCode] =
     Check.readSource(specFile, log).flatMap:
-      case Left(code)    => IO.pure(code)
+      case Left(code) => IO.pure(code)
       case Right(source) =>
         Parse.parseSpec(source).flatMap:
           case Left(VerifyError.Parse(errors)) =>
@@ -57,7 +57,7 @@ object Inspect:
               case Right(ir) =>
                 renderIR(ir, format, operation) match
                   case Right(text) => IO.blocking(out.println(text)).as(ExitCodes.Ok)
-                  case Left(msg)   =>
+                  case Left(msg) =>
                     IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Translator)
 
   private def renderIR(
@@ -68,8 +68,8 @@ object Inspect:
     val classifications = Classify.classifyOperations(ir)
     format match
       case InspectFormat.Json =>
-        val printer  = Printer.spaces2.copy(dropNullValues = false)
-        val irJson   = (ir: service_ir_full).asJson
+        val printer = Printer.spaces2.copy(dropNullValues = false)
+        val irJson  = (ir: service_ir_full).asJson
         val strategy = Json.obj(
           classifications.map(c =>
             classificationOperationName(c) ->
@@ -80,7 +80,7 @@ object Inspect:
         Right(printer.print(combined))
       case InspectFormat.Summary =>
         val (direct, llm) = strategyTally(classifications)
-        val opsLine       =
+        val opsLine =
           s"  ${svcEntities(ir).length} entities, ${svcEnums(ir).length} enums, ${svcOperations(ir).length} operations " +
             s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${svcInvariants(ir).length} invariants"
         val perOp = classifications.map: c =>
@@ -129,7 +129,7 @@ object Inspect:
       s"Dafny generation failed$loc: ${err.message}"
     }.flatMap { dafny =>
       val byName: Map[String, DafnyMethodHeader] = dafny.methods.map(h => h.name -> h).toMap
-      val targets                                = operation match
+      val targets = operation match
         case Some(name) =>
           classifications
             .filter(c => classificationOperationName(c) == name)

@@ -66,13 +66,13 @@ class DafnyTranslatorTest extends CatsEffectSuite:
   test("DafnyTranslateCli emits module_.py when dafny is on PATH"):
     dafnyOnPath.flatMap:
       case false => IO.pure(())
-      case true  =>
+      case true =>
         DafnyCli.resolveBinary(None).flatMap:
-          case Left(msg)  => IO(fail(s"unexpected: $msg"))
+          case Left(msg) => IO(fail(s"unexpected: $msg"))
           case Right(bin) =>
             DafnyTranslateCli.make(bin).use: tx =>
               tx.translate(sampleSource, TargetLanguage.Python, 60).map:
-                case Left(err)  => fail(s"translate failed: $err")
+                case Left(err) => fail(s"translate failed: $err")
                 case Right(out) =>
                   assert(
                     out.files.contains("module_.py"),

@@ -16,7 +16,7 @@ object Annotate:
     val endpoints       = Path.deriveEndpoints(classifications, ir)
     val schema          = Schema.deriveSchema(ir)
 
-    val ix  = ir.idx
+    val ix = ir.idx
     val ctx = TypeContext(
       entityNames = ix.entityNames,
       enumNames = ix.enumNames,
@@ -100,10 +100,10 @@ object Annotate:
       profile: DeploymentProfile,
       ctx: TypeContext
   ): ProfiledField =
-    val mapped     = TypeMap.mapType(typeExpr, profile, ctx)
-    val colName    = Naming.toColumnName(fieldName)
-    val resolved   = TypeMap.resolveTypeExpr(typeExpr, ctx.aliasMap)
-    val nullable   = resolved.isInstanceOf[OptionTypeF]
+    val mapped   = TypeMap.mapType(typeExpr, profile, ctx)
+    val colName  = Naming.toColumnName(fieldName)
+    val resolved = TypeMap.resolveTypeExpr(typeExpr, ctx.aliasMap)
+    val nullable = resolved.isInstanceOf[OptionTypeF]
     val columnType =
       widenExplicitIdPkSqlType(fieldName, resolveColumnType(typeExpr, profile, ctx))
     ProfiledField(
@@ -129,7 +129,7 @@ object Annotate:
           case Some(m)                                => m.ormColumn
           case None if ctx.entityNames.contains(name) => defaults.relation
           case None if ctx.enumNames.contains(name)   => defaults.enum_
-          case None                                   =>
+          case None =>
             ctx.aliasMap.get(name) match
               case Some(alias) => resolveColumnType(alias, profile, ctx)
               case None        => defaults.fallback

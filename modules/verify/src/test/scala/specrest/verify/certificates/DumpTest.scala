@@ -35,7 +35,7 @@ class DumpTest extends CatsEffectSuite:
           ir     <- SpecFixtures.loadIR(fixture)
           report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
           _      <- IO.blocking(sink.writeIndex(s"fixtures/spec/$fixture.spec", 0.0, report.ok))
-          names  <- IO.blocking {
+          names <- IO.blocking {
                      Using.resource(Files.list(tmpDir)): stream =>
                        val it  = stream.iterator
                        val buf = scala.collection.mutable.ListBuffer.empty[String]
@@ -47,9 +47,9 @@ class DumpTest extends CatsEffectSuite:
                 s"verdicts.json missing in $tmpDir; saw: $names"
               )
           _ = if expectsSmt2 then
-            assert(names.exists(_.endsWith(".smt2")), s"no .smt2 files; saw: $names")
+                assert(names.exists(_.endsWith(".smt2")), s"no .smt2 files; saw: $names")
           _ = if expectsAls then
-            assert(names.exists(_.endsWith(".als")), s"no .als files; saw: $names")
+                assert(names.exists(_.endsWith(".als")), s"no .als files; saw: $names")
           verdictsRaw <- IO.blocking(Files.readString(tmpDir.resolve("verdicts.json")))
           verdicts     = parser.parse(verdictsRaw).toOption.getOrElse(fail("invalid verdicts.json"))
         yield
@@ -63,7 +63,7 @@ class DumpTest extends CatsEffectSuite:
             s"verdicts.json entries mismatch sink for $fixture"
           )
           entries.foreach: e =>
-            val ec   = e.hcursor
+            val ec = e.hcursor
             val file = ec.downField("file").as[String].toOption
               .getOrElse(fail(s"entry missing 'file': $e"))
             assert(Files.exists(tmpDir.resolve(file)), s"missing $file in dump dir")
@@ -79,8 +79,8 @@ class DumpTest extends CatsEffectSuite:
     tempDir("dump-shape-").use: tmpDir =>
       val sink = DumpSink.open(tmpDir).toOption.get
       for
-        ir  <- SpecFixtures.loadIR("safe_counter")
-        _   <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
+        ir <- SpecFixtures.loadIR("safe_counter")
+        _  <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default, Some(sink))
         src <- IO.blocking {
                  val picked = Using.resource(Files.list(tmpDir)): stream =>
                    val it                  = stream.iterator

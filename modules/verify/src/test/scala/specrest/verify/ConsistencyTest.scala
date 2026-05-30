@@ -76,8 +76,7 @@ class ConsistencyTest extends CatsEffectSuite:
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield assert(
       report.ok,
-      s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status !=
-          CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
+      s"safe_counter should be fully consistent; failing: ${report.checks.filter(_.status != CheckOutcome.Sat).map(c => s"${c.id}->${c.status}")}"
     )
 
   test("set_ops — every check is sat or soundness-skipped (no unsoundness)"):

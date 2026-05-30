@@ -16,7 +16,7 @@ object Preamble:
 
   private[parser] def load(): Either[PreambleLoadException, List[predicate_decl_full]] =
     for
-      text   <- loadResource(ResourcePath)
+      text <- loadResource(ResourcePath)
       parsed <- Parse
                   .parseSpecCore(text)
                   .left

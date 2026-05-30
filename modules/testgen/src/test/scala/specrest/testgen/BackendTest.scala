@@ -112,7 +112,7 @@ class BackendTest extends CatsEffectSuite:
       unbackedStateFields = unbacked
     )
 
-  private def i1(n: Int): expr_full                    = IntLitF(BigInt(n), None)
+  private def i1(n: Int): expr_full = IntLitF(BigInt(n), None)
   private def pyText(e: expr_full, c: TestCtx): String = ExprToPython.translate(e, c) match
     case Translated.Emit(t)    => t
     case Translated.Skip(r, _) => s"<skip:$r>"
@@ -216,7 +216,7 @@ class BackendTest extends CatsEffectSuite:
     assertEquals(tsText(days1, c), "((1) * 86400)")
 
   test("now() - minutes(15) is numeric arithmetic (no str/float mismatch — cubic P1)"):
-    val c   = ctx()
+    val c = ctx()
     val sub = BinaryOpF(
       BSub(),
       CallF(IdentifierF("now", None), Nil, None),
@@ -291,7 +291,7 @@ class BackendTest extends CatsEffectSuite:
 
   test("TsBehavioral emits vitest+fast-check for the positive-ensures path"):
     loadIR("fixtures/spec/edge_cases.spec").map: ir =>
-      val out     = TsBehavioral.emitFor(SynthFixture.profiled(ir))
+      val out = TsBehavioral.emitFor(SynthFixture.profiled(ir))
       val noInput = out.tests
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
@@ -486,7 +486,7 @@ class BackendTest extends CatsEffectSuite:
 
   test("GoBehavioral emits go test + rapid for the positive-ensures path"):
     loadIR("fixtures/spec/edge_cases.spec").map: ir =>
-      val out     = GoBehavioral.emitFor(SynthFixture.profiled(ir))
+      val out = GoBehavioral.emitFor(SynthFixture.profiled(ir))
       val noInput = out.tests
         .find(_.name == "Test_no_input_ensures_0")
         .getOrElse(fail(s"missing Test_no_input_ensures_0; got ${out.tests.map(_.name)}"))

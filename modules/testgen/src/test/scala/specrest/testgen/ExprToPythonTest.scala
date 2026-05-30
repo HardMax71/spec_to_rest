@@ -10,8 +10,8 @@ class ExprToPythonTest extends CatsEffectSuite:
   private def b(v: Boolean): expr_full    = BoolLitF(v, None)
   private def id(name: String): expr_full = IdentifierF(name, None)
 
-  private val uriParam   = ParamDeclFull("s", NamedTypeF("String", None), None)
-  private val uriBody    = MatchesF(id("s"), "^https?:..[^\\s]+", None)
+  private val uriParam = ParamDeclFull("s", NamedTypeF("String", None), None)
+  private val uriBody  = MatchesF(id("s"), "^https?:..[^\\s]+", None)
   private val emailParam =
     ParamDeclFull("s", NamedTypeF("String", None), None)
   private val emailBody = MatchesF(id("s"), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", None)
@@ -305,7 +305,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     )
 
   test("Quantifier exists / no map to any / not any"):
-    val body   = BinaryOpF(BGt(), id("c"), i(0), None)
+    val body = BinaryOpF(BGt(), id("c"), i(0), None)
     val exists = QuantifierF(
       QExists(),
       List(QuantifierBindingFull("c", id("store"), BkIn(), None)),
@@ -426,7 +426,7 @@ class ExprToPythonTest extends CatsEffectSuite:
 
   test("SetComprehension over a non-map iterates directly"):
     val ctxWithSet = ctx.copy(stateFields = ctx.stateFields + "items", mapStateFields = Set.empty)
-    val e          = SetComprehensionF(
+    val e = SetComprehensionF(
       "x",
       id("items"),
       BinaryOpF(BGt(), id("x"), i(0), None),

@@ -39,7 +39,7 @@ class SynthesizerTest extends CatsEffectSuite:
           calls   <- provider.calls
         yield result match
           case Left(err) => fail(s"expected Right, got $err")
-          case Right(r)  =>
+          case Right(r) =>
             assert(r.body.contains("st.count := st.count + 1"))
             assertEquals(r.usage, TokenUsage(100, 200))
             assert(r.costUsd > 0.0)
@@ -86,7 +86,7 @@ class SynthesizerTest extends CatsEffectSuite:
           synth     = new Synthesizer(provider, None, tracker)
           result   <- synth.synthesize(SynthRequest(c, header, skel, "claude-sonnet-4-6"))
         yield result match
-          case Right(_)                   => fail("expected provider failure")
+          case Right(_) => fail("expected provider failure")
           case Left(err: ProviderFailure) =>
             assert(err.message.contains("network down"))
           case Left(other) => fail(s"expected ProviderFailure, got $other")

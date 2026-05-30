@@ -113,14 +113,14 @@ object PythonHypothesisStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize                      = minOpt.map(_.toInt)
-      val maxSize                      = maxOpt.map(_.toInt)
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
       val base = primaryRegex match
         case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
-        case None    =>
+        case None =>
           val args = List(
             minSize.map(n => s"min_size=$n"),
             maxSize.map(n => s"max_size=$n")
@@ -175,7 +175,7 @@ object ExprLift:
   ): Translated =
     parts.collectFirst { case s @ Translated.Skip(_, _) => s } match
       case Some(s) => s
-      case None    =>
+      case None =>
         val texts = parts.collect { case Translated.Emit(t) => t }
         if texts.size == parts.size then f(texts)
         else Translated.Skip("internal: lift mismatch", span)
@@ -229,7 +229,7 @@ object TsFastCheckStrategy extends StrategyBackend:
   def set(inner: String): String           = s"fc.uniqueArray($inner, { maxLength: 5 })"
   def jsonSetUnique(inner: String): String = s"fc.uniqueArray($inner, { maxLength: 5 })"
   def seq(inner: String): String           = s"fc.array($inner, { maxLength: 5 })"
-  def redactedPlaceholder: String          =
+  def redactedPlaceholder: String =
     s"fc.constant(${TsLit.str(Strategies.RedactedPlaceholder)})"
   def redactWrap(inner: String): String = s"redact($inner)"
 
@@ -244,14 +244,14 @@ object TsFastCheckStrategy extends StrategyBackend:
 
   def constrainedString(c: string_constraint): String = c match
     case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize                      = minOpt.map(_.toInt)
-      val maxSize                      = maxOpt.map(_.toInt)
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
       val (primaryRegex, extraRegexes) = regexes match
         case head :: tail => (Some(head), tail)
         case Nil          => (None, Nil)
       val base = primaryRegex match
         case Some(p) => s"fc.stringMatching(new RegExp(${TsLit.str(s"^(?:$p)$$")}))"
-        case None    =>
+        case None =>
           val args = List(
             minSize.map(n => s"minLength: $n"),
             maxSize.map(n => s"maxLength: $n")

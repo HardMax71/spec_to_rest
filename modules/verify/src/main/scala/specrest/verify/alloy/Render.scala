@@ -12,9 +12,9 @@ object Render:
   def render(m: AlloyModule): String = renderWithLineMap(m).source
 
   def renderWithLineMap(m: AlloyModule): RenderedAlloy =
-    val sb                                                        = new StringBuilder
-    val spans                                                     = mutable.Map.empty[Int, span_t]
-    var line                                                      = 1
+    val sb    = new StringBuilder
+    val spans = mutable.Map.empty[Int, span_t]
+    var line  = 1
     def emit(text: String, factSpan: Option[span_t] = None): Unit =
       val startLine = line
       sb.append(text)
@@ -47,7 +47,7 @@ object Render:
     val prefixStr = modifiers.result().mkString(" ")
     val prefix    = if prefixStr.isEmpty then "" else s"$prefixStr "
     val extend    = s.extends_.map(e => s" extends $e").getOrElse("")
-    val body      =
+    val body =
       if s.fields.isEmpty then " {}"
       else
         val fieldStrs = s.fields.map: f =>

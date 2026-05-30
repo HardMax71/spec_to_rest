@@ -12,7 +12,7 @@ object ResponseParser:
       .flatMap(tag => indexAfterTag(response, tag).iterator)
       .nextOption()
     opened match
-      case None               => Left(ParseError("no fenced code block found in LLM response"))
+      case None => Left(ParseError("no fenced code block found in LLM response"))
       case Some((tag, start)) =>
         val end = response.indexOf("```", start)
         if end < 0 then Left(ParseError(s"unterminated fenced block (opened with $tag)"))
@@ -84,7 +84,7 @@ object ResponseParser:
           else matchingClose(s, i + 1, depth, ScanMode.StringLit)
         case ScanMode.Code =>
           c match
-            case '"'                                               => matchingClose(s, i + 1, depth, ScanMode.StringLit)
+            case '"' => matchingClose(s, i + 1, depth, ScanMode.StringLit)
             case '/' if i + 1 < s.length && s.charAt(i + 1) == '/' =>
               matchingClose(s, i + 2, depth, ScanMode.LineComment)
             case '/' if i + 1 < s.length && s.charAt(i + 1) == '*' =>

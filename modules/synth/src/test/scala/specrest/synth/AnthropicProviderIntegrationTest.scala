@@ -16,7 +16,7 @@ class AnthropicProviderIntegrationTest extends CatsEffectSuite:
         temperature = 1.0
       )
       provider.complete(req).map {
-        case Left(err)   => fail(s"expected Right, got $err")
+        case Left(err) => fail(s"expected Right, got $err")
         case Right(resp) =>
           assert(resp.text.nonEmpty)
           assert(resp.usage.inputTokens > 0)

@@ -216,7 +216,7 @@ object EmitPython:
     )
 
     for entity <- ctx.entities do
-      val table     = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
+      val table = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
@@ -239,7 +239,7 @@ object EmitPython:
       val initFieldViews       = nonIdFields.map(modelInitField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
-      val needsSecretStr       =
+      val needsSecretStr =
         nonIdFields.exists(f => SensitiveFields.isSensitive(f.columnName)) ||
           customRequestSchemas.exists(_.fields.exists(_.validationType == "SecretStr"))
 
@@ -349,7 +349,7 @@ object EmitPython:
       )
 
     opts.previousSnapshot match
-      case None                                      => emitInitial()
+      case None => emitInitial()
       case Some(_) if opts.existingRevisions.isEmpty =>
         emitInitial()
       case Some(prev) =>
@@ -357,7 +357,7 @@ object EmitPython:
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
           val downRev = Revision.head(opts.existingRevisions).getOrElse("001")
-          val delta   = AlembicDelta(
+          val delta = AlembicDelta(
             revision = nextRev,
             downRevision = downRev,
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
@@ -486,7 +486,7 @@ object EmitPython:
       typeLookup: Map[String, String]
   ): String =
     typeExpr match
-      case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "str")
+      case NamedTypeF(n, _) => typeLookup.getOrElse(n, "str")
       case OptionTypeF(inner, _) =>
         s"${pythonTypeForParam(inner, typeLookup)} | None"
       case _ => "str"
@@ -496,7 +496,7 @@ object EmitPython:
       entity: ProfiledEntity,
       typeLookup: Map[String, String]
   ): EnrichedOperation =
-    val endpoint            = op.endpoint
+    val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map { p =>
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
     }
@@ -523,7 +523,7 @@ object EmitPython:
           case Some(name) =>
             val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
             val pathParamNames    = endpoint.pathParams.map(_.name).toSet
-            val fields            = op.requestBodyFields.filter: f =>
+            val fields = op.requestBodyFields.filter: f =>
               !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
             (name, Some(CustomRequestSchema(name, fields.map(schemaInputField))))
 
@@ -569,9 +569,8 @@ object EmitPython:
         case _: RkOther =>
           val args = pathParamsWithTypes.map(p => s"${p.name}: ${p.domainType}") ++
             (if hasRequestBody then List(s"body: $requestBodyType") else Nil)
-          val call =
-            (pathParamsWithTypes.map(_.name) ++
-              (if hasRequestBody then List("body") else Nil)).mkString(", ")
+          val call = (pathParamsWithTypes.map(_.name) ++
+            (if hasRequestBody then List("body") else Nil)).mkString(", ")
           ("None", call, "", args.mkString(", "), "None")
 
     val pathParamName =
@@ -708,7 +707,7 @@ object EmitPython:
       customRequestSchemas: List[CustomRequestSchema]
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
+    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
     for schema <- customRequestSchemas; view <- schema.fields do
       mergeStdlibImport(stdlibByModule, view.domainType)
     finalizeStdlibImports(stdlibByModule)

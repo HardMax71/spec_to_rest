@@ -200,11 +200,11 @@ object GoExprBackend extends ExprBackend:
 
   private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
     classifyIdent(ctx.identCtx(GoReservedNames.toList), name) match
-      case _: IcReserved   => Translated.Skip(s"identifier '$name' is a Go-reserved name", span)
-      case _: IcBound      => Translated.Emit(name)
-      case _: IcBareBody   => Translated.Emit("responseData")
-      case _: IcOutput     => Translated.Emit(s"_field(responseData, ${GoLit.str(name)})")
-      case _: IcInput      => Translated.Emit(name)
+      case _: IcReserved => Translated.Skip(s"identifier '$name' is a Go-reserved name", span)
+      case _: IcBound    => Translated.Emit(name)
+      case _: IcBareBody => Translated.Emit("responseData")
+      case _: IcOutput   => Translated.Emit(s"_field(responseData, ${GoLit.str(name)})")
+      case _: IcInput    => Translated.Emit(name)
       case _: IcStateField =>
         val obj = ctx.capture match
           case CaptureMode.PostState => "postState"
@@ -257,7 +257,7 @@ object GoExprBackend extends ExprBackend:
   ): Translated =
     callee match
       case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
-      case _                    =>
+      case _ =>
         val parts = args.map(translate(_, ctx))
         ExprLift.lift1(translate(callee, ctx)): cp =>
           ExprLift.liftAll(parts, span)(ps =>
@@ -340,7 +340,7 @@ object GoExprBackend extends ExprBackend:
       span: Option[span_t]
   ): Translated =
     val basePy = translate(base, ctx)
-    val pairs  = updates.map { fa =>
+    val pairs = updates.map { fa =>
       ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
         Translated.Emit(s"${GoLit.str(fasName(fa))}, $vx")
       )
@@ -381,8 +381,8 @@ object GoExprBackend extends ExprBackend:
         val innerCtx = ctx.withBound(boundNames)
         val bodyPy   = translate(body, innerCtx)
         ExprLift.liftAll(domains :+ bodyPy, span): texts =>
-          val ds     = texts.init
-          val bp     = texts.last
+          val ds = texts.init
+          val bp = texts.last
           val helper = kind match
             case QAll() => "_all"
             case _      => "_any"

@@ -14,7 +14,7 @@ object Path:
   ): List[EndpointSpec] =
     classifications.map: c =>
       val opName = classificationOperationName(c)
-      val op     = svcOperations(ir)
+      val op = svcOperations(ir)
         .find(o => operName(o) == opName)
         .getOrElse(
           throw new RuntimeException(s"operation not found: $opName")

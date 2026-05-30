@@ -165,7 +165,7 @@ object SchemaCodec:
         snap.schemaVersion match
           case v if v == SchemaSnapshot.CurrentVersion => Right(snap)
           case 1                                       => Right(snap.copy(schemaVersion = SchemaSnapshot.CurrentVersion))
-          case other                                   =>
+          case other =>
             Left(
               s"unsupported schemaVersion $other (expected ${SchemaSnapshot.CurrentVersion} or a known prior version)"
             )

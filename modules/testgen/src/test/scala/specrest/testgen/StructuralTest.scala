@@ -87,7 +87,7 @@ class StructuralTest extends CatsEffectSuite:
 
   test("url_shortener: non-pure-output ensures clauses appear in skips with a reason"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
-      val out          = Structural.emitFor(profiled)
+      val out = Structural.emitFor(profiled)
       val shortenSkips = out.skips.filter(s =>
         s.operation == "Shorten" && s.kind.startsWith("structural_ensures")
       )

@@ -228,7 +228,7 @@ jobs:
       - name: Set up scalafmt for codegen drift check
         uses: coursier/setup-action@fd1707a76b027efdfb66ca79318b4d29b72e5a02 # v3.0.0
         with:
-          apps: scalafmt:3.11.0
+          apps: scalafmt:3.8.3
 
       - name: Detect Scala extraction drift
         run: |
