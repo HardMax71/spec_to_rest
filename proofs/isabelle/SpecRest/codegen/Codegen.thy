@@ -25,6 +25,8 @@ theory Codegen
     AlloyTypes
     AlloyBuildSigs
     VerifierDispatch
+    TargetExpr
+    DafnyTransform
     "HOL-Library.Code_Target_Int"
     "HOL-Library.Code_Target_Numeral"
 begin
@@ -329,6 +331,8 @@ export_code
     computeFieldBounds
     typeExprToSchema
     fieldToSchema
+    isSensitiveField
+    buildEntitySchemas
     mapAlloyPrimitive
     typeToSigNameAlloy
     alloyFieldTypeOf
@@ -415,6 +419,18 @@ export_code
     literalDropLeft
     literalDropRight
     extractVerbBeforeKebab
+    classifyIdent
+    classifyUserCall
+    quantifierAllIn
+    isMapLiteralExpr
+    rewriteEntityFieldRefs
+    desugarOptionGuards
+    collectExternItems
+    classifyExternItems
+    isNumericType
+    isOptionalType
+    isDateTimeType
+    collectionElementType
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

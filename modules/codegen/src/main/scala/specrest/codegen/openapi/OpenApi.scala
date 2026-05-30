@@ -1,7 +1,6 @@
 package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
-import specrest.codegen.SensitiveFields
 import specrest.convention.Naming
 import specrest.convention.ParamSpec
 import specrest.ir.PrettyPrint
@@ -177,65 +176,36 @@ object Schema:
 
 object Components:
 
-  final private case class DecoratedField(name: String, schema: SchemaObject, nullable: Boolean)
-
   def buildComponents(profiled: ProfiledService, ctx: BuildContext): ComponentsObject =
     val schemas = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
     schemas("ErrorResponse") = errorResponseSchema
     for entity <- profiled.entities do
       ctx.entityDecls.get(entity.entityName).foreach: decl =>
         val decorated = decorateFields(entity, decl, ctx)
-        schemas(entity.createSchemaName) = createSchema(decorated, entity)
-        schemas(entity.readSchemaName) = readSchema(decorated, entity)
-        schemas(entity.updateSchemaName) = updateSchema(decorated, entity)
+        val (createL, (readL, updateL)) =
+          specrest.ir.generated.SpecRestGenerated.buildEntitySchemas(entity.entityName, decorated)
+        schemas(entity.createSchemaName) = SchemaObjectAdapter.fromLifted(createL)
+        schemas(entity.readSchemaName) = SchemaObjectAdapter.fromLifted(readL)
+        schemas(entity.updateSchemaName) = SchemaObjectAdapter.fromLifted(updateL)
     ComponentsObject(schemas.toMap)
 
   private def decorateFields(
       entity: ProfiledEntity,
       decl: EntityDeclFull,
       ctx: BuildContext
-  ): List[DecoratedField] =
+  ): List[(String, (schema_object, Boolean))] =
     val irFields = decl.c.collect { case f: FieldDeclFull => f }
     entity.fields.zipWithIndex.map: (profiledField, idx) =>
       irFields(idx) match
         case FieldDeclFull(_, irType, irConstraint, _) =>
-          val fs = Schema.fieldToSchema(irType, irConstraint, ctx)
-          DecoratedField(profiledField.columnName, fs.schema, fs.nullable)
-
-  private def nonIdFields(fs: List[DecoratedField]): List[DecoratedField] =
-    fs.filterNot(_.name == "id")
-
-  private def fieldProperty(f: DecoratedField): SchemaObject =
-    if f.nullable then Schema.makeNullable(f.schema) else f.schema
-
-  private def createSchema(fields: List[DecoratedField], entity: ProfiledEntity): SchemaObject =
-    val fs = nonIdFields(fields)
-    SchemaObject(
-      `type` = Some(List("object")),
-      description = Some(s"Create payload for ${entity.entityName}"),
-      required = Some(fs.filterNot(_.nullable).map(_.name)),
-      properties = Some(fs.map(f => f.name -> fieldProperty(f)).toMap)
-    )
-
-  private def readSchema(fields: List[DecoratedField], entity: ProfiledEntity): SchemaObject =
-    val fs    = nonIdFields(fields).filterNot(f => SensitiveFields.isSensitive(f.name))
-    val props = collection.mutable.LinkedHashMap.empty[String, SchemaObject]
-    props("id") = SchemaObject(`type` = Some(List("integer")))
-    for f <- fs do props(f.name) = fieldProperty(f)
-    SchemaObject(
-      `type` = Some(List("object")),
-      description = Some(s"Read view for ${entity.entityName}"),
-      required = Some("id" +: fs.filterNot(_.nullable).map(_.name)),
-      properties = Some(props.toMap)
-    )
-
-  private def updateSchema(fields: List[DecoratedField], entity: ProfiledEntity): SchemaObject =
-    val fs = nonIdFields(fields)
-    SchemaObject(
-      `type` = Some(List("object")),
-      description = Some(s"Update payload for ${entity.entityName}"),
-      properties = Some(fs.map(f => f.name -> Schema.makeNullable(f.schema)).toMap)
-    )
+          val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
+            irType,
+            irConstraint,
+            ctx.aliasAList,
+            ctx.enumAList,
+            ctx.entityNamesList
+          )
+          (profiledField.columnName, (lifted, nullable))
 
   private def errorResponseSchema: SchemaObject =
     SchemaObject(

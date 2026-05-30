@@ -4,7 +4,6 @@ import specrest.convention.Builtins
 import specrest.ir.generated.SpecRestGenerated.*
 
 import scala.collection.immutable.ListMap
-import scala.collection.mutable
 import scala.util.boundary
 
 final case class DafnyError(message: String, span: Option[span_t])
@@ -189,69 +188,10 @@ object Generator:
   private def renderEntityInvariant(ctx: Ctx, expr: expr_full, entityName: String)(using
       DafnyLabel
   ): String =
-    val rewritten = rewriteEntityFieldRefs(expr, ctx.ir, entityName)
+    val rewritten =
+      specrest.ir.generated.SpecRestGenerated
+        .rewriteEntityFieldRefs(entityFieldNames(ctx.ir.c, entityName), expr)
     renderExpr(ctx, rewritten)
-
-  private def rewriteEntityFieldRefs(
-      expr: expr_full,
-      ir: ServiceIRFull,
-      entityName: String
-  ): expr_full =
-    val fieldNames = entityFieldNames(ir.c, entityName).toSet
-    def go(e: expr_full, bound: Set[String]): expr_full = e match
-      case IdentifierF(n, sp) if fieldNames.contains(n) && !bound.contains(n) =>
-        FieldAccessF(IdentifierF("x", sp), n, sp)
-      case LetF(v, value, body, sp) =>
-        LetF(v, go(value, bound), go(body, bound + v), sp)
-      case LambdaF(p, body, sp) =>
-        LambdaF(p, go(body, bound + p), sp)
-      case QuantifierF(q, bs, body, sp) =>
-        val bsBound = bs.collect { case b: QuantifierBindingFull => b.a }.toSet
-        val bsRewritten = bs.map {
-          case QuantifierBindingFull(a, dom, kind, bsp) =>
-            QuantifierBindingFull(a, go(dom, bound), kind, bsp)
-        }
-        QuantifierF(q, bsRewritten, go(body, bound ++ bsBound), sp)
-      case SetComprehensionF(v, dom, pred, sp) =>
-        SetComprehensionF(v, go(dom, bound), go(pred, bound + v), sp)
-      case TheF(v, dom, body, sp) =>
-        TheF(v, go(dom, bound), go(body, bound + v), sp)
-      case BinaryOpF(op, l, r, sp) => BinaryOpF(op, go(l, bound), go(r, bound), sp)
-      case UnaryOpF(op, x, sp)     => UnaryOpF(op, go(x, bound), sp)
-      case FieldAccessF(b, f, sp)  => FieldAccessF(go(b, bound), f, sp)
-      case IndexF(b, i, sp)        => IndexF(go(b, bound), go(i, bound), sp)
-      case CallF(c, args, sp)      => CallF(go(c, bound), args.map(go(_, bound)), sp)
-      case PrimeF(x, sp)           => PrimeF(go(x, bound), sp)
-      case PreF(x, sp)             => PreF(go(x, bound), sp)
-      case IfF(c, t, el, sp)       => IfF(go(c, bound), go(t, bound), go(el, bound), sp)
-      case SomeWrapF(x, sp)        => SomeWrapF(go(x, bound), sp)
-      case ConstructorF(n, fs, sp) =>
-        ConstructorF(
-          n,
-          fs.map {
-            case FieldAssignFull(fn, v, fsp) => FieldAssignFull(fn, go(v, bound), fsp)
-          },
-          sp
-        )
-      case WithF(b, fs, sp) =>
-        WithF(
-          go(b, bound),
-          fs.map {
-            case FieldAssignFull(fn, v, fsp) => FieldAssignFull(fn, go(v, bound), fsp)
-          },
-          sp
-        )
-      case MapLiteralF(es, sp) =>
-        MapLiteralF(
-          es.map {
-            case MapEntryFull(k, v, esp) => MapEntryFull(go(k, bound), go(v, bound), esp)
-          },
-          sp
-        )
-      case SetLiteralF(es, sp) => SetLiteralF(es.map(go(_, bound)), sp)
-      case SeqLiteralF(es, sp) => SeqLiteralF(es.map(go(_, bound)), sp)
-      case other               => other
-    go(expr, Set.empty)
 
   private def renderStateClass(ctx: Ctx)(using DafnyLabel): Option[String] =
     if ctx.stateFields.isEmpty then None
@@ -328,7 +268,14 @@ object Generator:
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
-    val rawEnsures = flattenAndAll(op.e.map(desugarOptionGuards(_, mctx)))
+    val optNames =
+      mctx.inputTypes.collect { case (n, _: OptionTypeF) => n }.toList :::
+        mctx.outputTypes.collect {
+          case (n, _: OptionTypeF) if !mctx.inputTypes.contains(n) => n
+        }.toList
+    val rawEnsures = flattenAndAll(
+      op.e.map(e => specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, e))
+    )
       .map(injectWFGuards(_, ensCtx))
       .map(renderExpr(ensCtx, _))
       .filter(_ != "true")
@@ -364,128 +311,32 @@ object Generator:
         Some(s"${name}Where($paramName)")
       case _ => None
 
-  private val knownBuiltins = Set("len", "dom", "ran")
-
   private def classifyExterns(ir: ServiceIRFull): (ListMap[String, ExternInfo], List[String]) =
-    val externs  = mutable.LinkedHashMap.empty[String, ExternInfo]
-    val patterns = mutable.LinkedHashSet.empty[String]
-
-    def record(name: String, arity: Int, kind: ExternKind): Unit =
-      externs.get(name) match
-        case None => externs(name) = ExternInfo(kind, arity)
-        case Some(prev) =>
-          val newKind =
-            if prev.kind == ExternKind.IntFunction || kind == ExternKind.IntFunction then
-              ExternKind.IntFunction
-            else ExternKind.Predicate
-          externs(name) = ExternInfo(newKind, math.max(prev.arity, arity))
-
-    def walk(e: expr_full, expected: ExternKind): Unit = e match
-      case CallF(IdentifierF(n, _), args, _) if knownBuiltins.contains(n) =>
-        args.foreach(walk(_, ExternKind.IntFunction))
-      case CallF(IdentifierF(n, _), args, _) =>
-        record(n, args.length, expected)
-        args.foreach(walk(_, ExternKind.IntFunction))
-      case CallF(_, args, _) =>
-        args.foreach(walk(_, ExternKind.IntFunction))
-      case BinaryOpF(BAnd() | BOr() | BImplies() | BIff(), l, r, _) =>
-        walk(l, ExternKind.Predicate); walk(r, ExternKind.Predicate)
-      case UnaryOpF(_: UNot, x, _) => walk(x, ExternKind.Predicate)
-      case BinaryOpF(_, l, r, _) =>
-        walk(l, ExternKind.IntFunction); walk(r, ExternKind.IntFunction)
-      case UnaryOpF(_, x, _)     => walk(x, ExternKind.IntFunction)
-      case PrimeF(x, _)          => walk(x, expected)
-      case PreF(x, _)            => walk(x, expected)
-      case SomeWrapF(x, _)       => walk(x, ExternKind.IntFunction)
-      case FieldAccessF(b, _, _) => walk(b, ExternKind.IntFunction)
-      case IndexF(b, i, _)       => walk(b, ExternKind.IntFunction); walk(i, ExternKind.IntFunction)
-      case MapLiteralF(es, _) =>
-        es.foreach { case MapEntryFull(k, v, _) =>
-          walk(k, ExternKind.IntFunction); walk(v, ExternKind.IntFunction)
+    def items(e: expr_full): List[extern_item] =
+      specrest.ir.generated.SpecRestGenerated.collectExternItems(EkPredicate(), e)
+    val all: List[extern_item] =
+      ir.i.collect { case InvariantDeclFull(_, e, _) => e }.flatMap(items) :::
+        ir.j.collect { case TemporalDeclFull(_, b, _) => temporalArg(b) }.flatMap(items) :::
+        ir.k.collect { case FactDeclFull(_, e, _) => e }.flatMap(items) :::
+        ir.c.collect { case e: EntityDeclFull => e }.flatMap { e =>
+          e.d.flatMap(items) :::
+            e.c.collect { case FieldDeclFull(_, _, Some(w), _) => w }.flatMap(items)
+        } :::
+        ir.e.collect { case TypeAliasDeclFull(_, _, Some(w), _) => w }.flatMap(items) :::
+        ir.g.collect { case op: OperationDeclFull => op }.flatMap { op =>
+          op.d.flatMap(items) ::: op.e.flatMap(items)
         }
-      case SetLiteralF(es, _) => es.foreach(walk(_, ExternKind.IntFunction))
-      case SeqLiteralF(es, _) => es.foreach(walk(_, ExternKind.IntFunction))
-      case IfF(c, t, e, _) =>
-        walk(c, ExternKind.Predicate); walk(t, expected); walk(e, expected)
-      case LetF(_, v, b, _) => walk(v, ExternKind.IntFunction); walk(b, expected)
-      case QuantifierF(_, bs, body, _) =>
-        bs.foreach { case b: QuantifierBindingFull =>
-          walk(b.b, ExternKind.IntFunction)
-        }
-        walk(body, ExternKind.Predicate)
-      case SetComprehensionF(_, dom, pred, _) =>
-        walk(dom, ExternKind.IntFunction); walk(pred, ExternKind.Predicate)
-      case ConstructorF(_, fs, _) =>
-        fs.foreach { case FieldAssignFull(_, v, _) => walk(v, ExternKind.IntFunction) }
-      case WithF(b, fs, _) =>
-        walk(b, ExternKind.IntFunction)
-        fs.foreach { case FieldAssignFull(_, v, _) => walk(v, ExternKind.IntFunction) }
-      case TheF(_, dom, body, _) =>
-        walk(dom, ExternKind.IntFunction); walk(body, ExternKind.Predicate)
-      case LambdaF(_, body, _) => walk(body, ExternKind.IntFunction)
-      case MatchesF(x, p, _)   => patterns += p; walk(x, ExternKind.IntFunction)
-      case _                   => ()
+    val (externsAlist, patterns) =
+      specrest.ir.generated.SpecRestGenerated.classifyExternItems(all)
+    val externs = ListMap.from(externsAlist.map { case (n, info) => n -> toScalaExternInfo(info) })
+    (externs, patterns)
 
-    ir.i.foreach { case InvariantDeclFull(_, e, _) => walk(e, ExternKind.Predicate) }
-    ir.j.foreach { case TemporalDeclFull(_, b, _) => walk(temporalArg(b), ExternKind.Predicate) }
-    ir.k.foreach { case FactDeclFull(_, e, _) => walk(e, ExternKind.Predicate) }
-    ir.c.foreach { case e: EntityDeclFull =>
-      e.d.foreach(walk(_, ExternKind.Predicate))
-      e.c.foreach {
-        case FieldDeclFull(_, _, Some(w), _) => walk(w, ExternKind.Predicate)
-        case _                               => ()
-      }
-    }
-    ir.e.foreach {
-      case TypeAliasDeclFull(_, _, Some(w), _) => walk(w, ExternKind.Predicate)
-      case _                                   => ()
-    }
-    ir.g.foreach { case op: OperationDeclFull =>
-      op.d.foreach(walk(_, ExternKind.Predicate))
-      op.e.foreach(walk(_, ExternKind.Predicate))
-    }
-
-    (externs.to(ListMap), patterns.toList)
-
-  private def desugarOptionGuards(expr: expr_full, ctx: Ctx): expr_full =
-    def isOption(name: String): Boolean =
-      ctx.inputTypes.get(name).orElse(ctx.outputTypes.get(name)).exists {
-        case _: OptionTypeF => true
-        case _              => false
-      }
-    def unwrap(body: expr_full, p: String): expr_full =
-      subst(p, FieldAccessF(IdentifierF(p, None), "value", None), body)
-    def go(e: expr_full): expr_full = e match
-      case BinaryOpF(
-            BImplies(),
-            guard @ BinaryOpF(BNeq(), IdentifierF(p, _), NoneLitF(_), _),
-            body,
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BImplies(), guard, go(unwrap(body, p)), sp)
-      case BinaryOpF(
-            BOr(),
-            guard @ BinaryOpF(BEq(), IdentifierF(p, _), NoneLitF(_), _),
-            body,
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BOr(), guard, go(unwrap(body, p)), sp)
-      case BinaryOpF(
-            BOr(),
-            body,
-            guard @ BinaryOpF(BEq(), IdentifierF(p, _), NoneLitF(_), _),
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BOr(), go(unwrap(body, p)), guard, sp)
-      case BinaryOpF(op, l, r, sp) => BinaryOpF(op, go(l), go(r), sp)
-      case UnaryOpF(op, x, sp)     => UnaryOpF(op, go(x), sp)
-      case QuantifierF(q, bs, body, sp) =>
-        val bsRewritten = bs.map { case QuantifierBindingFull(a, dom, kind, bsp) =>
-          QuantifierBindingFull(a, go(dom), kind, bsp)
-        }
-        QuantifierF(q, bsRewritten, go(body), sp)
-      case other => other
-    go(expr)
+  private def toScalaExternInfo(info: extern_info): ExternInfo = info match
+    case ExInfo(k, arity) =>
+      val kind = k match
+        case _: EkPredicate   => ExternKind.Predicate
+        case _: EkIntFunction => ExternKind.IntFunction
+      ExternInfo(kind, arity.toInt)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     collectPrimedIdentifiers(ensures).toSet

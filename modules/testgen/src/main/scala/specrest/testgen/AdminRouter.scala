@@ -102,7 +102,7 @@ object AdminRouter:
     val snake  = Naming.toSnakeCase(entity.a)
     val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
     val dtFields = entity.c.collect:
-      case FieldDeclFull(n, t, _, _) if AdminModel.isDateTimeType(t, ir, Set.empty) => n
+      case FieldDeclFull(n, t, _, _) if isDateTimeType(ir.e, t) => n
     val coercion =
       if dtFields.isEmpty then ""
       else
@@ -123,33 +123,6 @@ object AdminRouter:
         |    await session.refresh(obj)
         |    return {"$pkName": obj.$pkName}
         |""".stripMargin
-
-  private[testgen] def isNumericType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Boolean =
-    t match
-      case NamedTypeF(n, _) if Set("Int", "Long", "Float", "Double").contains(n) => true
-      case OptionTypeF(inner, _)                                                 => isNumericType(inner, ir, seen)
-      case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e.collect { case a: TypeAliasDeclFull => a }
-          .find(_.a == name)
-          .exists(alias => isNumericType(alias.b, ir, seen + name))
-      case _ => false
-
-  private[testgen] def isOptionalType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Boolean =
-    t match
-      case OptionTypeF(_, _) => true
-      case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e.collect { case a: TypeAliasDeclFull => a }
-          .find(_.a == name)
-          .exists(alias => isOptionalType(alias.b, ir, seen + name))
-      case _ => false
 
   private def projectionLine(
       f: StateFieldDeclFull,

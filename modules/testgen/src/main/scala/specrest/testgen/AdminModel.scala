@@ -64,17 +64,3 @@ object AdminModel:
   def primaryKeyField(e: EntityDeclFull): Option[String] =
     val fs = e.c.collect { case f: FieldDeclFull => f }
     fs.find(_.a == "id").map(_.a).orElse(fs.headOption.map(_.a))
-
-  def isDateTimeType(
-      t: type_expr_full,
-      ir: ServiceIRFull,
-      seen: Set[String]
-  ): Boolean =
-    t match
-      case NamedTypeF("DateTime", _) => true
-      case OptionTypeF(inner, _)     => isDateTimeType(inner, ir, seen)
-      case NamedTypeF(name, _) if !seen.contains(name) =>
-        ir.e.collect { case a: TypeAliasDeclFull => a }
-          .find(_.a == name)
-          .exists(alias => isDateTimeType(alias.b, ir, seen + name))
-      case _ => false

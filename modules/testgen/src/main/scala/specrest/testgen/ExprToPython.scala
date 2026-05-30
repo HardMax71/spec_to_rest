@@ -43,7 +43,6 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
   "case"
 )
 
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object ExprToPython extends ExprBackend:
 
   def stringLiteral(s: String): String = pyString(s)
@@ -61,7 +60,7 @@ object ExprToPython extends ExprBackend:
     case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
 
     case BinaryOpF(BAdd(), l, r, _)
-        if l.isInstanceOf[MapLiteralF] || r.isInstanceOf[MapLiteralF] =>
+        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
       lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
         Translated.Emit(s"{**($lp), **($rp)}")
       )
@@ -141,31 +140,26 @@ object ExprToPython extends ExprBackend:
     case SomeWrapF(inner, _) => translate(inner, ctx)
 
   private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
-    if PythonReservedNames.contains(name) &&
-      (ctx.boundVars.contains(name) || ctx.inputs.contains(name))
-    then Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
-    else if ctx.boundVars.contains(name) then Translated.Emit(name)
-    else if ctx.bareBodyOutput.contains(name) then Translated.Emit("response_data")
-    else if ctx.outputs.contains(name) then Translated.Emit(s"response_data[${pyString(name)}]")
-    else if ctx.inputs.contains(name) then Translated.Emit(name)
-    else if ctx.stateFields.contains(name) then
-      if ctx.unbackedStateFields.contains(name) then
+    classifyIdent(ctx.identCtx(PythonReservedNames.toList), name) match
+      case _: IcReserved => Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
+      case _: IcBound    => Translated.Emit(name)
+      case _: IcBareBody => Translated.Emit("response_data")
+      case _: IcOutput   => Translated.Emit(s"response_data[${pyString(name)}]")
+      case _: IcInput    => Translated.Emit(name)
+      case _: IcStateField =>
+        val dict = ctx.capture match
+          case CaptureMode.PostState => "post_state"
+          case CaptureMode.PreState  => "pre_state"
+        Translated.Emit(s"$dict[${pyString(name)}]")
+      case _: IcUnbackedState =>
         Translated.Skip(
           s"state field '$name' is not backed by an entity table; the test-admin " +
             "/state endpoint projects it as null, so it cannot be asserted black-box",
           span
         )
-      else
-        val dict = ctx.capture match
-          case CaptureMode.PostState => "post_state"
-          case CaptureMode.PreState  => "pre_state"
-        Translated.Emit(s"$dict[${pyString(name)}]")
-    else if ctx.enumValues.contains(name) then
-      Translated.Skip(s"enum-type identifier '$name'", span)
-    else
-      ctx.enumValues.find { case (_, vs) => vs.contains(name) } match
-        case Some(_) => Translated.Emit(pyString(name))
-        case None    => Translated.Skip(s"unbound identifier '$name'", span)
+      case _: IcEnumType  => Translated.Skip(s"enum-type identifier '$name'", span)
+      case _: IcEnumValue => Translated.Emit(pyString(name))
+      case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
 
   private def binOpText(op: bin_op_full, l: String, r: String): Translated =
     op match
@@ -237,19 +231,15 @@ object ExprToPython extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    val expectedArity = ctx.userFunctions
-      .get(fname)
-      .map(_.b.size)
-      .orElse(ctx.userPredicates.get(fname).map(_.b.size))
-    expectedArity match
-      case None =>
+    classifyUserCall(ctx.fnArities, ctx.predArities, fname, BigInt(args.size)) match
+      case _: UcUnknown =>
         Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-      case Some(n) if n != args.size =>
+      case w: UcWrongArity =>
         Translated.Skip(
-          s"wrong arity for user-defined call '$fname': expected $n, got ${args.size}",
+          s"wrong arity for user-defined call '$fname': expected ${w.a}, got ${args.size}",
           span
         )
-      case Some(_) =>
+      case _: UcOk =>
         val parts  = args.map(translate(_, ctx))
         val pyName = Naming.toSnakeCase(fname)
         liftAll(parts, span)(ps => Translated.Emit(s"$pyName(${ps.mkString(", ")})"))
@@ -316,10 +306,7 @@ object ExprToPython extends ExprBackend:
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
-    val isAllIn = bindings.forall:
-      case QuantifierBindingFull(_, _, BkIn(), _) => true
-      case _                                      => false
-    if !isAllIn then Translated.Skip("quantifier with non-`in` binding", span)
+    if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
     else
       val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
       val domains    = bindings.collect { case QuantifierBindingFull(_, d, _, _) => translate(d, ctx) }

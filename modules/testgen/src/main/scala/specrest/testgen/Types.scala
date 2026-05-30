@@ -81,6 +81,25 @@ final case class TestCtx(
   def withCapture(c: CaptureMode): TestCtx        = copy(capture = c)
   def withBound(names: Iterable[String]): TestCtx = copy(boundVars = boundVars ++ names)
 
+  def identCtx(reserved: List[String]): ident_ctx =
+    IdentCtx(
+      reserved,
+      boundVars.toList,
+      bareBodyOutput,
+      outputs.toList,
+      inputs.toList,
+      stateFields.toList,
+      unbackedStateFields.toList,
+      enumValues.keys.toList,
+      enumValues.values.flatten.toList
+    )
+
+  def fnArities: List[(String, BigInt)] =
+    userFunctions.view.mapValues(f => BigInt(f.b.size)).toList
+
+  def predArities: List[(String, BigInt)] =
+    userPredicates.view.mapValues(p => BigInt(p.b.size)).toList
+
 object TestCtx:
   def fromOperation(
       op: OperationDeclFull,
