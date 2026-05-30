@@ -312,8 +312,8 @@ object GoExprBackend extends ExprBackend:
   ): Translated =
     if entries.isEmpty then Translated.Emit("map[string]any{}")
     else
-      val pairs = entries.collect { case MapEntryFull(k, v, _) =>
-        ExprLift.lift2(translate(k, ctx), translate(v, ctx))((kx, vx) =>
+      val pairs = entries.map { e =>
+        ExprLift.lift2(translate(mpeKey(e), ctx), translate(mpeValue(e), ctx))((kx, vx) =>
           Translated.Emit(s"$kx, $vx")
         )
       }
@@ -326,8 +326,10 @@ object GoExprBackend extends ExprBackend:
   ): Translated =
     if fields.isEmpty then Translated.Emit("map[string]any{}")
     else
-      val pairs = fields.collect { case FieldAssignFull(n, v, _) =>
-        ExprLift.lift1(translate(v, ctx))(vx => Translated.Emit(s"${GoLit.str(n)}, $vx"))
+      val pairs = fields.map { fa =>
+        ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
+          Translated.Emit(s"${GoLit.str(fasName(fa))}, $vx")
+        )
       }
       ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"_mapOf(${ps.mkString(", ")})"))
 
@@ -338,8 +340,10 @@ object GoExprBackend extends ExprBackend:
       span: Option[span_t]
   ): Translated =
     val basePy = translate(base, ctx)
-    val pairs = updates.collect { case FieldAssignFull(n, v, _) =>
-      ExprLift.lift1(translate(v, ctx))(vx => Translated.Emit(s"${GoLit.str(n)}, $vx"))
+    val pairs = updates.map { fa =>
+      ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
+        Translated.Emit(s"${GoLit.str(fasName(fa))}, $vx")
+      )
     }
     ExprLift.lift1(basePy): bp =>
       ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"_with($bp, ${ps.mkString(", ")})"))
@@ -369,13 +373,11 @@ object GoExprBackend extends ExprBackend:
   ): Translated =
     if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
     else
-      val boundNames = bindings.collect { case QuantifierBindingFull(n, _, _, _) => n }
+      val boundNames = bindings.map(qbdVar)
       if boundNames.exists(GoReservedNames.contains) then
         Translated.Skip("quantifier with Go-reserved binding name", span)
       else
-        val domains = bindings.collect { case QuantifierBindingFull(_, d, _, _) =>
-          translate(d, ctx)
-        }
+        val domains  = bindings.map(b => translate(qbdCollection(b), ctx))
         val innerCtx = ctx.withBound(boundNames)
         val bodyPy   = translate(body, innerCtx)
         ExprLift.liftAll(domains :+ bodyPy, span): texts =>

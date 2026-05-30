@@ -33,7 +33,7 @@ object Validate:
 
   // Per-property metadata used by the cross-cutting validator. Each property
   // declares which target kinds it applies to and whether it requires a
-  // qualifier (rule.b, the second-dotted-ident or string-literal qualifier).
+  // qualifier (cvrQualifier, the second-dotted-ident or string-literal qualifier).
   // Value-shape validation lives in the lifted Isabelle parseConventionValue;
   // here we only deal with cross-cutting concerns (duplicates, target/
   // property matrix, IR-context checks for partial_index column / test_strategy
@@ -70,26 +70,27 @@ object Validate:
   ): List[ConventionDiagnostic] =
     conventions match
       case None => Nil
-      case Some(ConventionsDeclFull(rules, _)) =>
+      case Some(cd) =>
+        val rules       = cvdRules(cd)
         val ix          = ir.idx
-        val opNames     = ir.g.collect { case OperationDeclFull(n, _, _, _, _, _) => n }.toSet
+        val opNames     = svcOperations(ir).map(operName).toSet
         val entityNames = ix.entityNames
         val aliasNames  = ix.aliasNames
         val enumNames   = ix.enumNames
         val diagnostics = List.newBuilder[ConventionDiagnostic]
-        val seen        = scala.collection.mutable.Map.empty[String, ConventionRuleFull]
+        val seen        = scala.collection.mutable.Map.empty[String, convention_rule_full]
 
-        for case rule: ConventionRuleFull <- rules do
-          val propName = rule.b
+        for rule <- rules do
+          val propName = cvrProperty(rule)
           val propOpt  = byName.get(propName)
 
-          val key = (propOpt, rule.c) match
-            case (Some(p), Some(q)) if p.qualifierIsIdentity => s"${rule.a}.$propName:$q"
-            case _                                           => s"${rule.a}.$propName"
+          val key = (propOpt, cvrQualifier(rule)) match
+            case (Some(p), Some(q)) if p.qualifierIsIdentity => s"${cvrTarget(rule)}.$propName:$q"
+            case _                                           => s"${cvrTarget(rule)}.$propName"
 
           seen.get(key) match
             case Some(existing) =>
-              val loc = existing.e
+              val loc = cvrSpan(existing)
                 .map { case SpanT(sl, sc, _, _) =>
                   s" (first defined at $sl:$sc)"
                 }
@@ -97,16 +98,16 @@ object Validate:
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"duplicate override for $key$loc",
-                rule.e,
-                rule.a,
+                cvrSpan(rule),
+                cvrTarget(rule),
                 propName
               )
             case None => seen(key) = rule
 
           val targetKind: Option[ConventionTarget] =
-            if opNames.contains(rule.a) then Some(ConventionTarget.Operation)
-            else if entityNames.contains(rule.a) then Some(ConventionTarget.Entity)
-            else if aliasNames.contains(rule.a) || enumNames.contains(rule.a) then
+            if opNames.contains(cvrTarget(rule)) then Some(ConventionTarget.Operation)
+            else if entityNames.contains(cvrTarget(rule)) then Some(ConventionTarget.Entity)
+            else if aliasNames.contains(cvrTarget(rule)) || enumNames.contains(cvrTarget(rule)) then
               Some(ConventionTarget.AliasOrEnum)
             else None
 
@@ -114,35 +115,35 @@ object Validate:
             case (None, _) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
-                s"no operation, entity, type alias, or enum named '${rule.a}'",
-                rule.e,
-                rule.a,
+                s"no operation, entity, type alias, or enum named '${cvrTarget(rule)}'",
+                cvrSpan(rule),
+                cvrTarget(rule),
                 propName
               )
             case (Some(_), None) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 s"unknown convention property '$propName'",
-                rule.e,
-                rule.a,
+                cvrSpan(rule),
+                cvrTarget(rule),
                 propName
               )
             case (Some(target), Some(prop)) if !prop.appliesTo.contains(target) =>
               diagnostics += ConventionDiagnostic(
                 DiagnosticLevel.Error,
                 mismatchMessage(rule, prop, target),
-                rule.e,
-                rule.a,
+                cvrSpan(rule),
+                cvrTarget(rule),
                 propName
               )
             case (Some(_), Some(prop)) =>
               // Value-shape diagnostic: surfaced by the parser as CvBad.
-              rule.d match
+              cvrValue(rule) match
                 case CvBad(failure, _) =>
                   err(rule, failureMsg(rule, failure), diagnostics)
                 case _ => ()
               // Cross-cutting qualifier-required check.
-              if prop.qualifierIsIdentity && rule.c.isEmpty then
+              if prop.qualifierIsIdentity && cvrQualifier(rule).isEmpty then
                 err(rule, qualifierMissingMsg(rule), diagnostics)
               // IR-context checks (need the full service IR — can't be parser-time).
               validateIrContext(rule, ir, diagnostics)
@@ -152,41 +153,52 @@ object Validate:
 
   // Format a parser-emitted validation_failure into a diagnostic message keyed
   // to the rule's target + property name.
-  private def failureMsg(rule: ConventionRuleFull, f: validation_failure): String = f match
+  private def failureMsg(rule: convention_rule_full, f: validation_failure): String = f match
     case _: ExpectedString =>
-      s"invalid value for ${rule.a}.${rule.b} — expected a string"
+      s"invalid value for ${cvrTarget(rule)}.${cvrProperty(rule)} — expected a string"
     case _: ExpectedInteger =>
-      s"invalid value for ${rule.a}.${rule.b} — expected an integer"
+      s"invalid value for ${cvrTarget(rule)}.${cvrProperty(rule)} — expected an integer"
     case _: ExpectedBoolean =>
-      s"invalid value for ${rule.a}.${rule.b} — expected true or false"
+      s"invalid value for ${cvrTarget(rule)}.${cvrProperty(rule)} — expected true or false"
     case _: EmptyString =>
-      s"invalid value for ${rule.a}.${rule.b} — cannot be empty"
+      s"invalid value for ${cvrTarget(rule)}.${cvrProperty(rule)} — cannot be empty"
     case BadHttpMethod(v) =>
-      s"""invalid value for ${rule
-          .a}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got "$v""""
+      s"""invalid value for ${cvrTarget(
+          rule
+        )}.http_method — expected one of GET, POST, PUT, PATCH, DELETE, got "$v""""
     case HttpStatusOutOfRange(v) =>
-      s"invalid value for ${rule.a}.http_status_success — expected integer between 100 and 599, got $v"
+      s"invalid value for ${cvrTarget(rule)}.http_status_success — expected integer between 100 and 599, got $v"
     case _: HttpPathMissingSlash =>
-      s"invalid value for ${rule.a}.http_path — path must start with '/'"
+      s"invalid value for ${cvrTarget(rule)}.http_path — path must start with '/'"
     case BadTestStrategy(v) =>
-      s"""invalid value for ${rule.a}.test_strategy — expected "live" or "redacted", got "$v""""
+      s"""invalid value for ${cvrTarget(
+          rule
+        )}.test_strategy — expected "live" or "redacted", got "$v""""
     case BadStrategyFormat(v) =>
-      s"""invalid value for ${rule
-          .a}.strategy — expected "module:symbol" (e.g., "tests.strategies_user:valid_url"), got "$v""""
+      s"""invalid value for ${cvrTarget(
+          rule
+        )}.strategy — expected "module:symbol" (e.g., "tests.strategies_user:valid_url"), got "$v""""
 
-  private def qualifierMissingMsg(rule: ConventionRuleFull): String = rule.b match
+  private def qualifierMissingMsg(rule: convention_rule_full): String = cvrProperty(rule) match
     case "http_header" =>
-      s"""${rule.a}.http_header requires a header name qualifier (e.g., http_header "Location")"""
+      s"""${cvrTarget(
+          rule
+        )}.http_header requires a header name qualifier (e.g., http_header "Location")"""
     case "partial_index" =>
-      s"""${rule.a}.partial_index requires a column qualifier (e.g., ${rule.a}.partial_index "active" = "active = true")"""
+      s"""${cvrTarget(rule)}.partial_index requires a column qualifier (e.g., ${cvrTarget(
+          rule
+        )}.partial_index "active" = "active = true")"""
     case "test_strategy" =>
-      s"""${rule.a}.test_strategy requires a field qualifier (e.g., ${rule
-          .a}.test_strategy "password" = "redacted" or ${rule.a}.password.test_strategy = "redacted")"""
+      s"""${cvrTarget(rule)}.test_strategy requires a field qualifier (e.g., ${cvrTarget(
+          rule
+        )}.test_strategy "password" = "redacted" or ${cvrTarget(
+          rule
+        )}.password.test_strategy = "redacted")"""
     case _ =>
-      s"${rule.a}.${rule.b} requires a qualifier"
+      s"${cvrTarget(rule)}.${cvrProperty(rule)} requires a qualifier"
 
   private def mismatchMessage(
-      rule: ConventionRuleFull,
+      rule: convention_rule_full,
       prop: ConventionProperty,
       target: ConventionTarget
   ): String =
@@ -194,7 +206,7 @@ object Validate:
       case ConventionTarget.AliasOrEnum =>
         if prop.appliesTo.size > 1 then
           val applicable = ConventionTarget.describePlural(prop.appliesTo)
-          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; it applies to $applicable"
+          s"property '${cvrProperty(rule)}' is not valid for type alias / enum '${cvrTarget(rule)}'; it applies to $applicable"
         else
           val aliasProps = Registry
             .filter(_.appliesTo.contains(ConventionTarget.AliasOrEnum))
@@ -203,17 +215,17 @@ object Validate:
             case Nil     => "no properties apply"
             case List(p) => s"only $p applies"
             case ps      => s"only ${ps.mkString(", ")} apply"
-          s"property '${rule.b}' is not valid for type alias / enum '${rule.a}'; $hint"
+          s"property '${cvrProperty(rule)}' is not valid for type alias / enum '${cvrTarget(rule)}'; $hint"
       case _ =>
         val applicable = ConventionTarget.describePlural(prop.appliesTo)
-        s"property '${rule.b}' is not valid for ${target.labelSingular} '${rule.a}'; it applies to $applicable"
+        s"property '${cvrProperty(rule)}' is not valid for ${target.labelSingular} '${cvrTarget(rule)}'; it applies to $applicable"
 
   private def validateIrContext(
-      rule: ConventionRuleFull,
+      rule: convention_rule_full,
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
-    validateIrContextRule(rule, ir.c, ir.g).foreach:
+    validateIrContextRule(rule, svcEntities(ir), svcOperations(ir)).foreach:
       case PartialIndexFieldMissing(target, field) =>
         err(
           rule,
@@ -236,24 +248,24 @@ object Validate:
     val tuples      = extractTsTuples(rules, entityNames)
     rules.foreach:
       case rule @ ConventionRuleFull(_, "test_strategy", Some(field), CvOk(PvBool(_)), _)
-          if ir.idx.entityNames.contains(rule.a) =>
+          if ir.idx.entityNames.contains(cvrTarget(rule)) =>
         val pairs = collisionsForRule(rule, tuples, entityNames)
         if pairs.nonEmpty then
           val others = pairs.map((t, v) => s"$t=$v").mkString(", ")
           diagnostics += ConventionDiagnostic(
             DiagnosticLevel.Error,
             s"conflicting test_strategy for field '$field' across entities ($others); operation inputs named '$field' would resolve ambiguously",
-            rule.e,
-            rule.a,
+            cvrSpan(rule),
+            cvrTarget(rule),
             "test_strategy"
           )
       case _ => ()
 
-  private def err(rule: ConventionRuleFull, msg: String, diagnostics: DiagBuilder): Unit =
+  private def err(rule: convention_rule_full, msg: String, diagnostics: DiagBuilder): Unit =
     diagnostics += ConventionDiagnostic(
       DiagnosticLevel.Error,
       msg,
-      rule.e,
-      rule.a,
-      rule.b
+      cvrSpan(rule),
+      cvrTarget(rule),
+      cvrProperty(rule)
     )

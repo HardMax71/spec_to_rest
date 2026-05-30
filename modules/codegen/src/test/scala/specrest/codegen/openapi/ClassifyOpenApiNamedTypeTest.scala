@@ -13,8 +13,8 @@ class ClassifyOpenApiNamedTypeTest extends CatsEffectSuite:
 
   private def classify(
       name: String,
-      aliases: List[(String, TypeAliasDeclFull)] = Nil,
-      enums: List[(String, EnumDeclFull)] = Nil,
+      aliases: List[(String, type_alias_decl_full)] = Nil,
+      enums: List[(String, enum_decl_full)] = Nil,
       entityNames: List[String] = Nil
   ): openapi_named_kind =
     classifyOpenApiNamedType(name, aliases, enums, entityNames)

@@ -137,7 +137,7 @@ object EmitTs:
     val baseTypeLookup = profiled.profile.typeMap.map: (k, v) =>
       k -> v.domain
     val aliasExprs =
-      profiled.ir.e.collect { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
+      svcTypeAliases(profiled.ir).map(a => talName(a) -> talType(a)).toMap
     def resolveAliasType(te: type_expr_full, seen: Set[String] = Set.empty): Option[String] =
       te match
         case NamedTypeF(n, _) =>

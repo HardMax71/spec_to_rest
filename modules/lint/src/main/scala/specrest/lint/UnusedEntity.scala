@@ -5,9 +5,10 @@ import specrest.ir.generated.SpecRestGenerated.*
 object UnusedEntity extends LintPass:
   val code = "L05"
 
-  def run(ir: ServiceIRFull): List[LintDiagnostic] =
+  def run(ir: service_ir_full): List[LintDiagnostic] =
     val refs = referencedNames(ir)
-    ir.c.flatMap { case EntityDeclFull(name, _, _, _, span) =>
+    svcEntities(ir).flatMap { e =>
+      val name = entName(e)
       if refs.contains(name) then Nil
       else
         List(
@@ -15,7 +16,7 @@ object UnusedEntity extends LintPass:
             code,
             LintLevel.Warning,
             s"entity '$name' is declared but never referenced in state, operations, invariants, or other entities",
-            span
+            entSpan(e)
           )
         )
     }
@@ -24,48 +25,44 @@ object UnusedEntity extends LintPass:
   // bounded by the number of distinct names. Matches the original
   // walker shape — avoids materialising duplicate-heavy intermediate
   // Lists per IR slot before deduplication.
-  private def referencedNames(ir: ServiceIRFull): Set[String] =
+  private def referencedNames(ir: service_ir_full): Set[String] =
     val acc = scala.collection.mutable.Set.empty[String]
 
     def addExpr(e: expr_full): Unit      = acc ++= collectExprNames(e)
     def addType(t: type_expr_full): Unit = acc ++= collectTypeNames(t)
 
-    ir.f.toList.foreach { case StateDeclFull(fs, _) =>
-      fs.foreach { case StateFieldDeclFull(_, t, _) => addType(t) }
-    }
+    svcState(ir).toList.foreach(sd => stdFields(sd).foreach(sf => addType(stfType(sf))))
 
-    for case OperationDeclFull(_, inputs, outputs, requires, ensures, _) <- ir.g do
-      inputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
-      outputs.foreach { case ParamDeclFull(_, t, _) => addType(t) }
-      requires.foreach(addExpr)
-      ensures.foreach(addExpr)
+    for op <- svcOperations(ir) do
+      operInputs(op).foreach(p => addType(prmType(p)))
+      operOutputs(op).foreach(p => addType(prmType(p)))
+      operRequires(op).foreach(addExpr)
+      operEnsures(op).foreach(addExpr)
 
-    for case EntityDeclFull(_, parent, fields, invs, _) <- ir.c do
-      parent.foreach(acc += _)
-      fields.foreach { case FieldDeclFull(_, t, c, _) =>
-        addType(t); c.foreach(addExpr)
+    for e <- svcEntities(ir) do
+      entParent(e).foreach(acc += _)
+      entFields(e).foreach { f =>
+        addType(fldType(f)); fldDefault(f).foreach(addExpr)
       }
-      invs.foreach(addExpr)
+      entInvariants(e).foreach(addExpr)
 
-    ir.i.foreach { case InvariantDeclFull(_, e, _) => addExpr(e) }
-    ir.j.foreach { case TemporalDeclFull(_, b, _) => addExpr(temporalArg(b)) }
-    ir.k.foreach { case FactDeclFull(_, e, _) => addExpr(e) }
+    svcInvariants(ir).foreach(inv => addExpr(invBody(inv)))
+    svcTemporals(ir).foreach(t => addExpr(temporalArg(tmpBody(t))))
+    svcFacts(ir).foreach(f => addExpr(fctBody(f)))
 
-    for case FunctionDeclFull(_, params, ret, body, _) <- ir.l do
-      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
-      addType(ret); addExpr(body)
+    for fn <- svcFunctions(ir) do
+      fncParams(fn).foreach(p => addType(prmType(p)))
+      addType(fncRetType(fn)); addExpr(fncBody(fn))
 
-    for case PredicateDeclFull(_, params, body, _) <- ir.m do
-      params.foreach { case ParamDeclFull(_, t, _) => addType(t) }
-      addExpr(body)
+    for p <- svcPredicates(ir) do
+      prdParams(p).foreach(pp => addType(prmType(pp)))
+      addExpr(prdBody(p))
 
-    for case TransitionDeclFull(_, _, _, rules, _) <- ir.h do
-      rules.foreach { case TransitionRuleFull(_, _, _, guard, _) =>
-        guard.foreach(addExpr)
-      }
+    for tr <- svcTransitions(ir) do
+      trnRules(tr).foreach(r => trlGuard(r).foreach(addExpr))
 
-    ir.e.foreach { case TypeAliasDeclFull(_, t, c, _) =>
-      addType(t); c.foreach(addExpr)
+    svcTypeAliases(ir).foreach { a =>
+      addType(talType(a)); talConstraint(a).foreach(addExpr)
     }
 
     acc.toSet

@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object TypeMismatch extends LintPass:
   val code = "L01"
 
-  def run(ir: ServiceIRFull): List[LintDiagnostic] =
+  def run(ir: service_ir_full): List[LintDiagnostic] =
     val out = List.newBuilder[LintDiagnostic]
 
     def visitAll(e: expr_full): Unit =
@@ -13,19 +13,19 @@ object TypeMismatch extends LintPass:
         out += LintDiagnostic(code, LintLevel.Error, render(kind), span)
       }
 
-    for case OperationDeclFull(_, _, _, requires, ensures, _) <- ir.g do
-      requires.foreach(visitAll)
-      ensures.foreach(visitAll)
-    ir.i.foreach { case InvariantDeclFull(_, e, _) => visitAll(e) }
-    ir.j.foreach { case TemporalDeclFull(_, b, _) => visitAll(temporalArg(b)) }
-    ir.k.foreach { case FactDeclFull(_, e, _) => visitAll(e) }
-    ir.l.foreach { case FunctionDeclFull(_, _, _, body, _) => visitAll(body) }
-    ir.m.foreach { case PredicateDeclFull(_, _, body, _) => visitAll(body) }
-    ir.c.foreach { case EntityDeclFull(_, _, fields, invs, _) =>
-      fields.foreach { case FieldDeclFull(_, _, c, _) => c.foreach(visitAll) }
-      invs.foreach(visitAll)
+    for op <- svcOperations(ir) do
+      operRequires(op).foreach(visitAll)
+      operEnsures(op).foreach(visitAll)
+    svcInvariants(ir).foreach(inv => visitAll(invBody(inv)))
+    svcTemporals(ir).foreach(t => visitAll(temporalArg(tmpBody(t))))
+    svcFacts(ir).foreach(f => visitAll(fctBody(f)))
+    svcFunctions(ir).foreach(fn => visitAll(fncBody(fn)))
+    svcPredicates(ir).foreach(p => visitAll(prdBody(p)))
+    svcEntities(ir).foreach { e =>
+      entFields(e).foreach(f => fldDefault(f).foreach(visitAll))
+      entInvariants(e).foreach(visitAll)
     }
-    ir.e.foreach { case TypeAliasDeclFull(_, _, c, _) => c.foreach(visitAll) }
+    svcTypeAliases(ir).foreach(a => talConstraint(a).foreach(visitAll))
 
     out.result()
 

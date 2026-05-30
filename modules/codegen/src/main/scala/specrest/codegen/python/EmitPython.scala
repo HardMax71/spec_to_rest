@@ -458,24 +458,24 @@ object EmitPython:
   private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
     val base = mutable.Map.empty[String, String]
     for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.domain
-    val aliasesByName = profiled.ir.e.collect { case a: TypeAliasDeclFull => a.a -> a }.toMap
-    for case alias @ TypeAliasDeclFull(aliasName, aliasType, _, _) <- profiled.ir.e do
-      val resolved = resolveAliasToPython(aliasType, base.toMap, aliasesByName, Set.empty)
-      resolved.foreach(r => base(aliasName) = r)
+    val aliasesByName = svcTypeAliases(profiled.ir).map(a => talName(a) -> a).toMap
+    for alias <- svcTypeAliases(profiled.ir) do
+      val resolved = resolveAliasToPython(talType(alias), base.toMap, aliasesByName, Set.empty)
+      resolved.foreach(r => base(talName(alias)) = r)
     base.toMap
 
   private def resolveAliasToPython(
       typeExpr: type_expr_full,
       base: Map[String, String],
-      aliasesByName: Map[String, TypeAliasDeclFull],
+      aliasesByName: Map[String, type_alias_decl_full],
       visited: Set[String]
   ): Option[String] = typeExpr match
     case NamedTypeF(name, _) =>
       base.get(name).orElse:
         if visited.contains(name) then None
         else
-          aliasesByName.get(name).flatMap { case TypeAliasDeclFull(_, t, _, _) =>
-            resolveAliasToPython(t, base, aliasesByName, visited + name)
+          aliasesByName.get(name).flatMap { ta =>
+            resolveAliasToPython(talType(ta), base, aliasesByName, visited + name)
           }
     case OptionTypeF(inner, _) =>
       resolveAliasToPython(inner, base, aliasesByName, visited).map(i => s"$i | None")

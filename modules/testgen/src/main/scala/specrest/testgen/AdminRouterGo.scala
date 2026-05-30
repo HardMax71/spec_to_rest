@@ -1,11 +1,16 @@
 package specrest.testgen
 
 import specrest.convention.Naming
-import specrest.ir.generated.SpecRestGenerated.EntityDeclFull
-import specrest.ir.generated.SpecRestGenerated.FieldDeclFull
-import specrest.ir.generated.SpecRestGenerated.StateDeclFull
-import specrest.ir.generated.SpecRestGenerated.StateFieldDeclFull
-import specrest.ir.generated.SpecRestGenerated.TransitionDeclFull
+import specrest.ir.generated.SpecRestGenerated.entFields
+import specrest.ir.generated.SpecRestGenerated.entName
+import specrest.ir.generated.SpecRestGenerated.entity_decl_full
+import specrest.ir.generated.SpecRestGenerated.fldName
+import specrest.ir.generated.SpecRestGenerated.stdFields
+import specrest.ir.generated.SpecRestGenerated.stfName
+import specrest.ir.generated.SpecRestGenerated.svcEntities
+import specrest.ir.generated.SpecRestGenerated.svcState
+import specrest.ir.generated.SpecRestGenerated.svcTransitions
+import specrest.ir.generated.SpecRestGenerated.trnEntity
 import specrest.profile.ProfiledService
 
 // Spec-derived test-admin router for go-chi, build-tagged `conformance` (Go
@@ -18,10 +23,10 @@ object AdminRouterGo:
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
-    val entities = ir.c.collect { case e: EntityDeclFull => e }
+    val entities = svcEntities(ir)
     val isPg     = profiled.profile.database == "postgres"
 
-    def tbl(e: EntityDeclFull): String = Naming.toTableName(e.a)
+    def tbl(e: entity_decl_full): String = Naming.toTableName(entName(e))
 
     val resetStmts =
       if entities.isEmpty then "\t\t// no entities"
@@ -34,9 +39,7 @@ object AdminRouterGo:
           )
           .mkString("\n")
 
-    val stateFields = ir.f.toList.flatMap {
-      case StateDeclFull(fs, _) => fs.collect { case sf: StateFieldDeclFull => sf }
-    }
+    val stateFields = svcState(ir).toList.flatMap(stdFields)
     val stateAssigns = stateFields
       .map: f =>
         AdminModel.projectionFor(f, ir) match
@@ -47,7 +50,7 @@ object AdminRouterGo:
               case AdminModel.ProjectionValue.PrimitiveField(name) =>
                 s"row[${GoLit.str(Naming.toColumnName(name))}]"
             val srcTbl = entities
-              .find(_.a == p.entityName)
+              .find(e => entName(e) == p.entityName)
               .map(tbl)
               .getOrElse(Naming.toTableName(p.entityName))
             s"""\t\t{
@@ -60,14 +63,14 @@ object AdminRouterGo:
                |\t\t\tfor _, row := range rows {
                |\t\t\t\tm[fmt.Sprintf("%v", row[${GoLit.str(keyCol)}])] = $valExpr
                |\t\t\t}
-               |\t\t\tstate[${GoLit.str(f.a)}] = m
+               |\t\t\tstate[${GoLit.str(stfName(f))}] = m
                |\t\t}""".stripMargin
           case None =>
-            s"\t\tstate[${GoLit.str(f.a)}] = nil"
+            s"\t\tstate[${GoLit.str(stfName(f))}] = nil"
       .mkString("\n")
 
-    val seedEntities = ir.h.collect { case TransitionDeclFull(_, en, _, _, _) => en }.toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(e.a))
+    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
+    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
     val seedHandlers = seedTargets
       .map(e => seedHandler(e, isPg))
       .mkString("\n\n")
@@ -181,12 +184,12 @@ object AdminRouterGo:
         |}
         |""".stripMargin
 
-  private def seedHandler(e: EntityDeclFull, isPg: Boolean): String =
-    val snake  = Naming.toSnakeCase(e.a)
+  private def seedHandler(e: entity_decl_full, isPg: Boolean): String =
+    val snake  = Naming.toSnakeCase(entName(e))
     val pk     = AdminModel.primaryKeyField(e).getOrElse("id")
     val pkCol  = Naming.toColumnName(pk)
-    val fields = e.c.collect { case f: FieldDeclFull => f }
-    val cols   = fields.map(f => (f.a, Naming.toColumnName(f.a)))
+    val fields = entFields(e)
+    val cols   = fields.map(f => (fldName(f), Naming.toColumnName(fldName(f))))
     val colChecks = cols
       .map: (_, col) =>
         s"""\t\tif v, ok := body[${GoLit.str(col)}]; ok {
@@ -197,7 +200,7 @@ object AdminRouterGo:
     val insertExec =
       if isPg then
         s"""\t\tq := fmt.Sprintf("INSERT INTO ${Naming.toTableName(
-            e.a
+            entName(e)
           )} (%s) VALUES (%s) RETURNING ${pkCol}", join(colNames), placeholders(len(args), true))
            |\t\tvar id any
            |\t\tif err := db.QueryRowContext(ctx, q, args...).Scan(&id); err != nil {
@@ -206,7 +209,7 @@ object AdminRouterGo:
            |\t\t}""".stripMargin
       else
         s"""\t\tq := fmt.Sprintf("INSERT INTO ${Naming.toTableName(
-            e.a
+            entName(e)
           )} (%s) VALUES (%s)", join(colNames), placeholders(len(args), false))
            |\t\tres, err := db.ExecContext(ctx, q, args...)
            |\t\tif err != nil {

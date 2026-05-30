@@ -16,7 +16,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     ParamDeclFull("s", NamedTypeF("String", None), None)
   private val emailBody = MatchesF(id("s"), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", None)
 
-  private val preamblePredicates: Map[String, PredicateDeclFull] = Map(
+  private val preamblePredicates: Map[String, predicate_decl_full] = Map(
     "isValidURI"   -> PredicateDeclFull("isValidURI", List(uriParam), uriBody, None),
     "isValidEmail" -> PredicateDeclFull("isValidEmail", List(emailParam), emailBody, None)
   )
@@ -192,7 +192,7 @@ class ExprToPythonTest extends CatsEffectSuite:
       BinaryOpF(BGt(), id("n"), i(0), None),
       None
     )
-    val ctxWithFn = ctx.copy(userFunctions = Map("isPositive" -> fn))
+    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl_full]("isPositive" -> fn))
     val callE     = CallF(id("isPositive"), List(i(5)), None)
     assertEquals(py(ExprToPython.translate(callE, ctxWithFn)), "is_positive(5)")
 
@@ -227,7 +227,7 @@ class ExprToPythonTest extends CatsEffectSuite:
       BinaryOpF(BGt(), id("n"), i(0), None),
       None
     )
-    val ctxWithFn = ctx.copy(userFunctions = Map("isPositive" -> fn))
+    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl_full]("isPositive" -> fn))
     val callE     = CallF(id("isPositive"), List(i(5), i(6)), None)
     val r         = reason(ExprToPython.translate(callE, ctxWithFn))
     assert(r.contains("wrong arity"), s"expected arity-mismatch reason, got: $r")

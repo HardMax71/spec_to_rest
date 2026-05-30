@@ -4,6 +4,7 @@ import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.DialectView
 import specrest.convention.EndpointSpec
 import specrest.ir.generated.SpecRestGenerated.database_schema
+import specrest.ir.generated.SpecRestGenerated.svcName
 import specrest.profile.DependencySpec
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
@@ -62,9 +63,9 @@ object RenderContext:
   ): RenderContext =
     RenderContext(
       service = ServiceNames(
-        name = profiled.ir.a,
-        snakeName = Naming.toSnakeCase(profiled.ir.a),
-        kebabName = Naming.toKebabCase(profiled.ir.a)
+        name = svcName(profiled.ir),
+        snakeName = Naming.toSnakeCase(svcName(profiled.ir)),
+        kebabName = Naming.toKebabCase(svcName(profiled.ir))
       ),
       profile = convertProfile(profiled.profile),
       entities = profiled.entities,
@@ -73,7 +74,7 @@ object RenderContext:
       schema = profiled.schema,
       db = Dialect
         .forDatabase(profiled.profile.database)
-        .deployment(Naming.toSnakeCase(profiled.ir.a)),
+        .deployment(Naming.toSnakeCase(svcName(profiled.ir))),
       dafnyKernel = dafnyKernel
     )
 

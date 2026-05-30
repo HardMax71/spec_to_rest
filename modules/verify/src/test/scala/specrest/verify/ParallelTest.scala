@@ -3,6 +3,7 @@ package specrest.verify
 import cats.effect.IO
 import cats.effect.Resource
 import munit.CatsEffectSuite
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.certificates.DumpSink
 import specrest.verify.testutil.SpecFixtures
 
@@ -94,9 +95,9 @@ class ParallelTest extends CatsEffectSuite:
       ir     <- SpecFixtures.loadIR("url_shortener")
       report <- Consistency.runConsistencyChecks(ir, cfg)
     yield
-      val n = ir.g.size
-      val m = ir.i.size
-      val t = ir.j.size
+      val n = svcOperations(ir).size
+      val m = svcInvariants(ir).size
+      val t = svcTemporals(ir).size
       assertEquals(
         report.checks.size,
         1 + 2 * n + n * m + t,

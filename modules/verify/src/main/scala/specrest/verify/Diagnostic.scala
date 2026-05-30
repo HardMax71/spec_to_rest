@@ -45,9 +45,9 @@ object Diagnostic:
   private val MaxSuggestionLength = 200
 
   final case class SuggestionContext(
-      ir: ServiceIRFull,
-      op: Option[OperationDeclFull],
-      invariantDecl: Option[InvariantDeclFull],
+      ir: service_ir_full,
+      op: Option[operation_decl_full],
+      invariantDecl: Option[invariant_decl_full],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -139,7 +139,7 @@ object Diagnostic:
   private def invariantViolationSuggestion(ctx: SuggestionContext): Option[String] =
     (ctx.operationName, ctx.invariantName, ctx.invariantDecl) match
       case (Some(op), Some(inv), Some(decl)) =>
-        val fields = collectFieldAccessNames(decl.b)
+        val fields = collectFieldAccessNames(invBody(decl))
         if fields.isEmpty then
           Some(
             s"'$op' violates '$inv'. Tighten 'ensures' so the fields '$inv' constrains are pinned by '=' or a range predicate; see counterexample."
@@ -152,7 +152,7 @@ object Diagnostic:
       case _ => suggestionFor(DiagnosticCategory.InvariantViolationByOperation)
 
   private def solverTimeoutSuggestion(ctx: SuggestionContext): Option[String] =
-    val features = ctx.invariantDecl.map(_.b).toList.flatMap(featureSummary).distinct
+    val features = ctx.invariantDecl.map(invBody).toList.flatMap(featureSummary).distinct
     val featureClause =
       if features.isEmpty then ""
       else s" (uses ${features.mkString(", ")})"
@@ -163,9 +163,9 @@ object Diagnostic:
       s"Solver timed out on '${ctx.checkId}' after ${ctx.timeoutMs}ms. Increase --timeout$invClause, or split a heavy quantifier into smaller predicates."
     )
 
-  private def invariantDisplayNames(ir: ServiceIRFull): List[String] =
-    ir.i.zipWithIndex.map: (inv, i) =>
-      inv match { case InvariantDeclFull(n, _, _) => n.getOrElse(s"inv_$i") }
+  private def invariantDisplayNames(ir: service_ir_full): List[String] =
+    svcInvariants(ir).zipWithIndex.map: (inv, i) =>
+      invName(inv).getOrElse(s"inv_$i")
 
   private def formatNameList(names: List[String], max: Int): String =
     val quoted = names.map(n => s"'$n'")
@@ -181,7 +181,7 @@ object Diagnostic:
     def walk(x: expr_full, depthQuant: Int): Unit = x match
       case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"
-        bs.foreach { case QuantifierBindingFull(_, dom, _, _) => walk(dom, depthQuant) }
+        bs.foreach(b => walk(qbdCollection(b), depthQuant))
         walk(body, depthQuant + 1)
       case SetComprehensionF(_, d, p, _) =>
         out += "set comprehension"

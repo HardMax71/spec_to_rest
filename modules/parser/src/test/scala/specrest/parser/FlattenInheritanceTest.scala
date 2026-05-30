@@ -10,7 +10,7 @@ class FlattenInheritanceTest extends CatsEffectSuite:
       case sv: ServiceIRFull => sv
 
   private def childInvs(s: ServiceIRFull): List[expr_full] =
-    s.c.collect { case EntityDeclFull("C", _, _, invs, _) => invs }.head
+    svcEntities(s).filter(e => entName(e) == "C").map(entInvariants).head
 
   private def identCount(invs: List[expr_full], name: String): Int =
     invs.count { case IdentifierF(n, _) => n == name; case _ => false }

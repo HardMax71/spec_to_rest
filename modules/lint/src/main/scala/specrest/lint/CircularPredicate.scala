@@ -5,23 +5,23 @@ import specrest.ir.generated.SpecRestGenerated.*
 object CircularPredicate extends LintPass:
   val code = "L06"
 
-  def run(ir: ServiceIRFull): List[LintDiagnostic] =
-    val predNames = ir.m.collect { case PredicateDeclFull(n, _, _, _) => n }
-    val funcNames = ir.l.collect { case FunctionDeclFull(n, _, _, _, _) => n }
+  def run(ir: service_ir_full): List[LintDiagnostic] =
+    val predNames = svcPredicates(ir).map(prdName)
+    val funcNames = svcFunctions(ir).map(fncName)
     val nodes     = (predNames ++ funcNames).distinct
     if nodes.isEmpty then Nil
     else
       val spans = (
-        ir.m.collect { case PredicateDeclFull(n, _, _, sp) => n -> sp } ++
-          ir.l.collect { case FunctionDeclFull(n, _, _, _, sp) => n -> sp }
+        svcPredicates(ir).map(p => prdName(p) -> prdSpan(p)) ++
+          svcFunctions(ir).map(fn => fncName(fn) -> fncSpan(fn))
       ).toMap
 
       val edges =
-        ir.m.collect { case PredicateDeclFull(n, _, body, _) =>
-          n -> collectCallNames(body, nodes).distinct
+        svcPredicates(ir).map { p =>
+          prdName(p) -> collectCallNames(prdBody(p), nodes).distinct
         } ++
-          ir.l.collect { case FunctionDeclFull(n, _, _, body, _) =>
-            n -> collectCallNames(body, nodes).distinct
+          svcFunctions(ir).map { fn =>
+            fncName(fn) -> collectCallNames(fncBody(fn), nodes).distinct
           }
 
       // Lifted findCycles takes sorted node list and AList edges. Sort to

@@ -1,7 +1,7 @@
 package specrest.profile
 
 import munit.CatsEffectSuite
-import specrest.ir.generated.SpecRestGenerated.schemaTables
+import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.testutil.SpecFixtures
 
 class ProfileSmokeTest extends CatsEffectSuite:
@@ -62,8 +62,8 @@ class ProfileSmokeTest extends CatsEffectSuite:
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
 
-      assertEquals(ps.operations.size, ir.g.size)
-      assertEquals(ps.entities.size, ir.c.size)
+      assertEquals(ps.operations.size, svcOperations(ir).size)
+      assertEquals(ps.entities.size, svcEntities(ir).size)
       assert(schemaTables(ps.schema).nonEmpty)
       assert(ps.endpoints.nonEmpty)
 
@@ -89,4 +89,4 @@ class ProfileSmokeTest extends CatsEffectSuite:
     test(s"fixture $n builds a profiled service"):
       SpecFixtures.loadIR(n).map: ir =>
         val ps = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
-        assertEquals(ps.ir.a, ir.a, s"fixture $n")
+        assertEquals(svcName(ps.ir), svcName(ir), s"fixture $n")

@@ -21,7 +21,7 @@ object Annotate:
     val ctx = TypeContext(
       entityNames = ix.entityNames,
       enumNames = ix.enumNames,
-      aliasMap = ix.aliases.map { case TypeAliasDeclFull(n, t, _, _) => n -> t }.toMap
+      aliasMap = ix.aliases.map(a => talName(a) -> talType(a)).toMap
     )
 
     val classificationMap = classifications.map(c => classificationOperationName(c) -> c).toMap
@@ -30,21 +30,21 @@ object Annotate:
 
     val entities = ix.entities.map { entity =>
       val tableName = Path
-        .getConvention(ir.n, entity.a, "db_table")
-        .getOrElse(Naming.toTableName(entity.a))
+        .getConvention(svcConventions(ir), entName(entity), "db_table")
+        .getOrElse(Naming.toTableName(entName(entity)))
       profileEntity(
-        entity.a,
+        entName(entity),
         tableName,
-        entity.c.collect { case f: FieldDeclFull => f },
+        entFields(entity),
         profile,
         ctx,
-        tableMap.contains(entity.a)
+        tableMap.contains(entName(entity))
       )
     }
 
-    val operations = ir.g.collect { case op: OperationDeclFull =>
-      val classification = classificationMap(op.a)
-      val endpoint       = endpointMap(op.a)
+    val operations = svcOperations(ir).map { op =>
+      val classification = classificationMap(operName(op))
+      val endpoint       = endpointMap(operName(op))
       profileOperation(
         op,
         classificationKind(classification),
@@ -73,17 +73,15 @@ object Annotate:
   private def profileEntity(
       entityName: String,
       tableName: String,
-      fields: List[FieldDeclFull],
+      fields: List[field_decl_full],
       profile: DeploymentProfile,
       ctx: TypeContext,
       hasTable: Boolean
   ): ProfiledEntity =
-    val _           = hasTable
-    val snakeName   = Naming.toSnakeCase(entityName)
-    val pluralSnake = Naming.toSnakeCase(Naming.pluralize(entityName))
-    val profiledFlds = fields.map { case FieldDeclFull(n, t, _, _) =>
-      profileField(n, t, profile, ctx)
-    }
+    val _            = hasTable
+    val snakeName    = Naming.toSnakeCase(entityName)
+    val pluralSnake  = Naming.toSnakeCase(Naming.pluralize(entityName))
+    val profiledFlds = fields.map(f => profileField(fldName(f), fldType(f), profile, ctx))
     ProfiledEntity(
       entityName = entityName,
       tableName = tableName,
@@ -159,7 +157,7 @@ object Annotate:
         case _    => Python
 
   private def profileOperation(
-      op: OperationDeclFull,
+      op: operation_decl_full,
       kind: operation_kind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,
@@ -167,13 +165,13 @@ object Annotate:
       ctx: TypeContext
   ): ProfiledOperation =
     ProfiledOperation(
-      operationName = op.a,
-      handlerName = Naming.toSnakeCase(op.a),
+      operationName = operName(op),
+      handlerName = Naming.toSnakeCase(operName(op)),
       endpoint = endpoint,
       kind = kind,
       targetEntity = targetEntity,
       requestBodyFields =
-        op.b.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) },
+        operInputs(op).map(p => profileField(prmName(p), prmType(p), profile, ctx)),
       responseFields =
-        op.c.collect { case ParamDeclFull(n, t, _) => profileField(n, t, profile, ctx) }
+        operOutputs(op).map(p => profileField(prmName(p), prmType(p), profile, ctx))
     )

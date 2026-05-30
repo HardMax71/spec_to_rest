@@ -30,13 +30,12 @@ class ConventionGrammarTest extends CatsEffectSuite:
     SpecFixtures
       .buildFromSource("two-seg", withConventions("""    Register.http_method = "POST""""))
       .map: ir =>
-        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
-          .collect { case r: ConventionRuleFull => r }
+        val rules = svcConventions(ir).toList.flatMap(cvdRules)
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.a, "Register")
-        assertEquals(r.b, "http_method")
-        assertEquals(r.c, None)
+        assertEquals(cvrTarget(r), "Register")
+        assertEquals(cvrProperty(r), "http_method")
+        assertEquals(cvrQualifier(r), None)
 
   test("three-segment dotted convention rule populates qualifier"):
     SpecFixtures
@@ -45,14 +44,13 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    User.password_hash.test_strategy = "redacted"""")
       )
       .map: ir =>
-        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
-          .collect { case r: ConventionRuleFull => r }
+        val rules = svcConventions(ir).toList.flatMap(cvdRules)
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.a, "User")
-        assertEquals(r.b, "test_strategy")
-        assertEquals(r.c, Some("password_hash"))
-        r.d match
+        assertEquals(cvrTarget(r), "User")
+        assertEquals(cvrProperty(r), "test_strategy")
+        assertEquals(cvrQualifier(r), Some("password_hash"))
+        cvrValue(r) match
           case CvOk(PvBool(false)) => ()
           case other               => fail(s"expected CvOk(PvBool(false)), got $other")
 
@@ -63,13 +61,12 @@ class ConventionGrammarTest extends CatsEffectSuite:
         withConventions("""    Register.http_header "Location" = "/users/{id}"""")
       )
       .map: ir =>
-        val rules = ir.n.toList.flatMap { case ConventionsDeclFull(rs, _) => rs }
-          .collect { case r: ConventionRuleFull => r }
+        val rules = svcConventions(ir).toList.flatMap(cvdRules)
         assertEquals(rules.size, 1)
         val r = rules.head
-        assertEquals(r.a, "Register")
-        assertEquals(r.b, "http_header")
-        assertEquals(r.c, Some("Location"))
+        assertEquals(cvrTarget(r), "Register")
+        assertEquals(cvrProperty(r), "http_header")
+        assertEquals(cvrQualifier(r), Some("Location"))
 
   test("mixing dotted qualifier with string qualifier is rejected"):
     val src = withConventions("""    User.password_hash.test_strategy "extra" = "redacted"""")

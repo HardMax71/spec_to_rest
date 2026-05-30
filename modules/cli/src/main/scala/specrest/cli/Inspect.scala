@@ -81,11 +81,11 @@ object Inspect:
       case InspectFormat.Summary =>
         val (direct, llm) = strategyTally(classifications)
         val opsLine =
-          s"  ${ir.c.length} entities, ${ir.d.length} enums, ${ir.g.length} operations " +
-            s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${ir.i.length} invariants"
+          s"  ${svcEntities(ir).length} entities, ${svcEnums(ir).length} enums, ${svcOperations(ir).length} operations " +
+            s"($direct DIRECT_EMIT, $llm LLM_SYNTHESIS), ${svcInvariants(ir).length} invariants"
         val perOp = classifications.map: c =>
           s"    ${classificationOperationName(c)}: ${synthesisStrategyLabel(classificationStrategy(c))}"
-        Right((s"Service: ${ir.a}" :: opsLine :: perOp).mkString("\n"))
+        Right((s"Service: ${svcName(ir)}" :: opsLine :: perOp).mkString("\n"))
       case InspectFormat.Ir =>
         Right(ir.toString)
       case InspectFormat.Dafny =>

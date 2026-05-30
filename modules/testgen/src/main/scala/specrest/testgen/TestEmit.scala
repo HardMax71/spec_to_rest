@@ -2,6 +2,7 @@ package specrest.testgen
 
 import specrest.codegen.EmittedFile
 import specrest.convention.Naming
+import specrest.ir.generated.SpecRestGenerated.svcName
 import specrest.profile.ProfiledService
 
 object TestEmit:
@@ -18,14 +19,14 @@ object TestEmit:
   // always-present `!conformance` no-op stub + main.go wiring).
   private def emitGo(profiled: ProfiledService): List[EmittedFile] =
     val ir            = profiled.ir
-    val serviceSnake  = Naming.toSnakeCase(ir.a)
+    val serviceSnake  = Naming.toSnakeCase(svcName(ir))
     val harness       = GoTestHarness
     val stratSpecs    = Strategies.forIR(ir, GoRapidStrategy)
     val behavioralOut = GoBehavioral.emitFor(profiled)
     val statefulOut   = GoStateful.emitFor(profiled)
     val structuralOut = GoStructural.emitFor(profiled)
     val skipsJson = renderSkipsJson(
-      ir.a,
+      svcName(ir),
       stratSpecs,
       behavioralOut.skips ++ statefulOut.skips,
       structuralOut.skips
@@ -66,14 +67,14 @@ object TestEmit:
   // exercised by the stateful suite. Behavioral/stateful are the TS emitters.
   private def emitTs(profiled: ProfiledService): List[EmittedFile] =
     val ir            = profiled.ir
-    val serviceSnake  = Naming.toSnakeCase(ir.a)
+    val serviceSnake  = Naming.toSnakeCase(svcName(ir))
     val harness       = TsVitestHarness
     val stratSpecs    = Strategies.forIR(ir, TsFastCheckStrategy)
     val behavioralOut = TsBehavioral.emitFor(profiled)
     val statefulOut   = TsStateful.emitFor(profiled)
     val structuralOut = TsStructural.emitFor(profiled)
     val skipsJson = renderSkipsJson(
-      ir.a,
+      svcName(ir),
       stratSpecs,
       behavioralOut.skips ++ statefulOut.skips,
       structuralOut.skips
@@ -129,7 +130,7 @@ object TestEmit:
 
   private def emitPython(profiled: ProfiledService): List[EmittedFile] =
     val ir            = profiled.ir
-    val serviceSnake  = Naming.toSnakeCase(ir.a)
+    val serviceSnake  = Naming.toSnakeCase(svcName(ir))
     val harness       = TestBackend.harnessFor(profiled)
     val strategySpecs = Strategies.forIR(ir)
     val behavioralOut = Behavioral.emitFor(profiled)
@@ -143,10 +144,10 @@ object TestEmit:
         (FilePaths.AdminRouterFileTs, AdminRouterTs.emit(profiled))
       else (FilePaths.AdminRouterFile, AdminRouter.emit(profiled))
     val strategiesPy = renderStrategiesFile(strategySpecs)
-    val behavioralPy = renderBehavioralFile(behavioralOut.tests, ir.a, strategySpecs)
+    val behavioralPy = renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs)
     val skipsJson =
       renderSkipsJson(
-        ir.a,
+        svcName(ir),
         strategySpecs,
         behavioralOut.skips ++ statefulOut.skips,
         structuralOut.skips

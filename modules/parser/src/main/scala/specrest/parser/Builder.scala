@@ -69,11 +69,11 @@ object Builder:
     if mergePreamble then raw.map(mergeWithPreamble) else raw
 
   private def mergeWithPreamble(ir: ServiceIRFull): ServiceIRFull =
-    val userNames = ir.m.map { case PredicateDeclFull(n, _, _, _) => n }.toSet
+    val userNames = svcPredicates(ir).map(prdName).toSet
     val toAdd =
-      Preamble.predicates.filterNot { case PredicateDeclFull(n, _, _, _) => userNames.contains(n) }
+      Preamble.predicates.filterNot(p => userNames.contains(prdName(p)))
     if toAdd.isEmpty then ir
-    else ir.copy(m = ir.m ++ toAdd)
+    else ir.copy(m = svcPredicates(ir) ++ toAdd)
 
   def buildIR(tree: SpecFileContext): IO[Either[VerifyError.Build, ServiceIRFull]] =
     IO.delay(buildIRCore(tree, mergePreamble = true))

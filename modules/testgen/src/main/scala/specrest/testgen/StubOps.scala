@@ -13,8 +13,8 @@ object StubOps:
 
   // A `list` route returns the array as the bare response body, so its single declared
   // output is the whole body — `response_data`, not `response_data["<name>"]`.
-  def bareBodyOutput(op: ProfiledOperation, opDecl: OperationDeclFull): Option[String] =
-    val outs = opDecl.c.collect { case ParamDeclFull(n, _, _) => n }
+  def bareBodyOutput(op: ProfiledOperation, opDecl: operation_decl_full): Option[String] =
+    val outs = operOutputs(opDecl).map(prmName)
     val isList = OperationContext.initialRouteKind(op) match
       case _: RkList => true
       case _         => false

@@ -1,12 +1,22 @@
 package specrest.testgen
 
 import specrest.codegen.EmittedFile
-import specrest.ir.generated.SpecRestGenerated.EnumDeclFull
-import specrest.ir.generated.SpecRestGenerated.FunctionDeclFull
-import specrest.ir.generated.SpecRestGenerated.ParamDeclFull
-import specrest.ir.generated.SpecRestGenerated.PredicateDeclFull
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.enmName
+import specrest.ir.generated.SpecRestGenerated.enmVariants
 import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.fncBody
+import specrest.ir.generated.SpecRestGenerated.fncName
+import specrest.ir.generated.SpecRestGenerated.fncParams
+import specrest.ir.generated.SpecRestGenerated.function_decl_full
+import specrest.ir.generated.SpecRestGenerated.prdBody
+import specrest.ir.generated.SpecRestGenerated.prdName
+import specrest.ir.generated.SpecRestGenerated.prdParams
+import specrest.ir.generated.SpecRestGenerated.predicate_decl_full
+import specrest.ir.generated.SpecRestGenerated.prmName
+import specrest.ir.generated.SpecRestGenerated.svcEnums
+import specrest.ir.generated.SpecRestGenerated.svcFunctions
+import specrest.ir.generated.SpecRestGenerated.svcPredicates
 
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
@@ -64,15 +74,15 @@ object GoTestHarness extends HarnessTemplates:
     PredicatesHeader + renderUserDefinitions(ir)
 
   private def renderUserDefinitions(ir: ServiceIRFull): String =
-    val parts = ir.l.collect { case _f: FunctionDeclFull => renderFunction(_f, ir) } ++
-      ir.m.collect { case _p: PredicateDeclFull => renderPredicate(_p, ir) }
+    val parts = svcFunctions(ir).map(renderFunction(_, ir)) ++
+      svcPredicates(ir).map(renderPredicate(_, ir))
     parts.mkString("")
 
-  private def renderFunction(fn: FunctionDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(fn.a, fn.b.collect { case ParamDeclFull(_n, _, _) => _n }, fn.d, ir)
+  private def renderFunction(fn: function_decl_full, ir: ServiceIRFull): String =
+    renderUserDef(fncName(fn), fncParams(fn).map(prmName), fncBody(fn), ir)
 
-  private def renderPredicate(pr: PredicateDeclFull, ir: ServiceIRFull): String =
-    renderUserDef(pr.a, pr.b.collect { case ParamDeclFull(_n, _, _) => _n }, pr.c, ir)
+  private def renderPredicate(pr: predicate_decl_full, ir: ServiceIRFull): String =
+    renderUserDef(prdName(pr), prdParams(pr).map(prmName), prdBody(pr), ir)
 
   private def renderUserDef(
       specName: String,
@@ -106,9 +116,9 @@ object GoTestHarness extends HarnessTemplates:
       outputs = Set.empty,
       stateFields = Set.empty,
       mapStateFields = Set.empty,
-      enumValues = ir.d.collect { case e: EnumDeclFull => e.a -> e.b.toSet }.toMap,
-      userFunctions = ir.l.collect { case f: FunctionDeclFull => f.a -> f }.toMap,
-      userPredicates = ir.m.collect { case p: PredicateDeclFull => p.a -> p }.toMap,
+      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
       boundVars = Set.empty,
       capture = CaptureMode.PostState
     )

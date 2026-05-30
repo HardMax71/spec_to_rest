@@ -25,7 +25,7 @@ object Z3CounterExample:
       sortMap: Map[String, Sort],
       funcMap: Map[String, FuncDecl[?]],
       artifact: TranslatorArtifact,
-      ir: ServiceIRFull
+      ir: service_ir_full
   ): DecodedCounterExample =
     val rawToLabel  = mutable.LinkedHashMap.empty[String, String]
     val typingFails = mutable.ListBuffer.empty[String]
@@ -127,7 +127,7 @@ object Z3CounterExample:
     case Z3Sort.Uninterp(name) =>
       if tc_enums(ctx).contains(name) then Some(TEnum(name))
       else if tc_entities(ctx)
-          .exists { case EntityDeclFull(n, _, _, _, _) => n == name }
+          .exists(e => entName(e) == name)
       then
         Some(TEntity(name))
       else None
