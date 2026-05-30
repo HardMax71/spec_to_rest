@@ -177,4 +177,118 @@ lemmas desugarGo_code [code]           = desugarGo.simps
 lemmas desugarBindings_code [code]     = desugarBindings.simps
 lemmas desugarOptionGuards_code [code] = desugarOptionGuards_def
 
+text \<open>Lift of \<open>convention.dafny.Generator.classifyExterns\<close>'s analysis. The Scala walks
+  every spec expression threading an "expected kind" (Predicate vs IntFunction) and records
+  each non-builtin \<open>CallF\<close> callee as an extern, merging duplicates (IntFunction dominates;
+  arity = max) into an insertion-ordered map, plus the \<open>MatchesF\<close> regex patterns into an
+  insertion-ordered set.
+
+  Split into two lifted pieces: \<open>collectExternItems\<close> is the structural walk that emits a flat
+  \<open>extern_item list\<close> in traversal order (the kind-threading is the lifted decision); the Scala
+  driver calls it per top-level declaration in the original order and concatenates. Then
+  \<open>classifyExternItems\<close> folds that list into the order-preserving merged extern alist + the
+  deduplicated pattern list, reproducing the \<open>LinkedHashMap\<close>/\<open>LinkedHashSet\<close> semantics. The
+  info constructor is \<open>ExInfo\<close> (not \<open>ExternInfo\<close>) so it doesn't clash with the Scala
+  \<open>ExternInfo\<close> case class the adapter targets.\<close>
+
+datatype extern_kind = EkPredicate | EkIntFunction
+datatype extern_info = ExInfo extern_kind int
+datatype extern_item = EiExtern String.literal int extern_kind | EiPattern String.literal
+
+definition knownBuiltinNames :: "String.literal list" where
+  "knownBuiltinNames = [STR ''len'', STR ''dom'', STR ''ran'']"
+
+fun collectExternItems :: "extern_kind \<Rightarrow> expr_full \<Rightarrow> extern_item list"
+  and collectExternItemsArgs :: "expr_full list \<Rightarrow> extern_item list"
+  and collectExternItemsFields :: "field_assign_full list \<Rightarrow> extern_item list"
+  and collectExternItemsEntries :: "map_entry_full list \<Rightarrow> extern_item list"
+  and collectExternItemsBindings :: "quantifier_binding_full list \<Rightarrow> extern_item list"
+where
+  "collectExternItems expected (CallF c args sp) =
+     (case c of
+        IdentifierF n _ \<Rightarrow>
+          (if string_in_list n knownBuiltinNames
+             then collectExternItemsArgs args
+             else EiExtern n (int (length args)) expected # collectExternItemsArgs args)
+      | _ \<Rightarrow> collectExternItemsArgs args)"
+| "collectExternItems expected (BinaryOpF op l r sp) =
+     (if op = BAnd \<or> op = BOr \<or> op = BImplies \<or> op = BIff
+        then collectExternItems EkPredicate l @ collectExternItems EkPredicate r
+        else collectExternItems EkIntFunction l @ collectExternItems EkIntFunction r)"
+| "collectExternItems expected (UnaryOpF op x sp) =
+     (if op = UNot then collectExternItems EkPredicate x else collectExternItems EkIntFunction x)"
+| "collectExternItems expected (PrimeF x sp) = collectExternItems expected x"
+| "collectExternItems expected (PreF x sp) = collectExternItems expected x"
+| "collectExternItems expected (SomeWrapF x sp) = collectExternItems EkIntFunction x"
+| "collectExternItems expected (FieldAccessF b f sp) = collectExternItems EkIntFunction b"
+| "collectExternItems expected (IndexF b i sp) =
+     collectExternItems EkIntFunction b @ collectExternItems EkIntFunction i"
+| "collectExternItems expected (MapLiteralF es sp) = collectExternItemsEntries es"
+| "collectExternItems expected (SetLiteralF es sp) = collectExternItemsArgs es"
+| "collectExternItems expected (SeqLiteralF es sp) = collectExternItemsArgs es"
+| "collectExternItems expected (IfF c t e sp) =
+     collectExternItems EkPredicate c @ collectExternItems expected t @ collectExternItems expected e"
+| "collectExternItems expected (LetF v val b sp) =
+     collectExternItems EkIntFunction val @ collectExternItems expected b"
+| "collectExternItems expected (QuantifierF q bs body sp) =
+     collectExternItemsBindings bs @ collectExternItems EkPredicate body"
+| "collectExternItems expected (SetComprehensionF v dm pr sp) =
+     collectExternItems EkIntFunction dm @ collectExternItems EkPredicate pr"
+| "collectExternItems expected (ConstructorF n fs sp) = collectExternItemsFields fs"
+| "collectExternItems expected (WithF b fs sp) =
+     collectExternItems EkIntFunction b @ collectExternItemsFields fs"
+| "collectExternItems expected (TheF v dm body sp) =
+     collectExternItems EkIntFunction dm @ collectExternItems EkPredicate body"
+| "collectExternItems expected (LambdaF p body sp) = collectExternItems EkIntFunction body"
+| "collectExternItems expected (MatchesF x p sp) = EiPattern p # collectExternItems EkIntFunction x"
+| "collectExternItems _ _ = []"
+| "collectExternItemsArgs [] = []"
+| "collectExternItemsArgs (e # es) = collectExternItems EkIntFunction e @ collectExternItemsArgs es"
+| "collectExternItemsFields [] = []"
+| "collectExternItemsFields (FieldAssignFull f v sp # fs) =
+     collectExternItems EkIntFunction v @ collectExternItemsFields fs"
+| "collectExternItemsEntries [] = []"
+| "collectExternItemsEntries (MapEntryFull k v sp # es) =
+     collectExternItems EkIntFunction k @ collectExternItems EkIntFunction v
+       @ collectExternItemsEntries es"
+| "collectExternItemsBindings [] = []"
+| "collectExternItemsBindings (QuantifierBindingFull a d kind sp # bs) =
+     collectExternItems EkIntFunction d @ collectExternItemsBindings bs"
+
+fun mergeExternInfo :: "extern_info \<Rightarrow> int \<Rightarrow> extern_kind \<Rightarrow> extern_info" where
+  "mergeExternInfo (ExInfo prevKind prevArity) arity kind =
+     ExInfo (if prevKind = EkIntFunction \<or> kind = EkIntFunction then EkIntFunction else EkPredicate)
+            (max prevArity arity)"
+
+fun upsertExtern ::
+  "(String.literal \<times> extern_info) list \<Rightarrow> String.literal \<Rightarrow> int \<Rightarrow> extern_kind
+    \<Rightarrow> (String.literal \<times> extern_info) list"
+where
+  "upsertExtern [] name arity kind = [(name, ExInfo kind arity)]"
+| "upsertExtern ((n, info) # rest) name arity kind =
+     (if n = name then (n, mergeExternInfo info arity kind) # rest
+      else (n, info) # upsertExtern rest name arity kind)"
+
+fun foldExternItems ::
+  "extern_item list \<Rightarrow> (String.literal \<times> extern_info) list \<Rightarrow> String.literal list
+    \<Rightarrow> (String.literal \<times> extern_info) list \<times> String.literal list"
+where
+  "foldExternItems [] externs patterns = (externs, patterns)"
+| "foldExternItems (EiExtern name arity kind # rest) externs patterns =
+     foldExternItems rest (upsertExtern externs name arity kind) patterns"
+| "foldExternItems (EiPattern p # rest) externs patterns =
+     foldExternItems rest externs (if string_in_list p patterns then patterns else patterns @ [p])"
+
+definition classifyExternItems ::
+  "extern_item list \<Rightarrow> (String.literal \<times> extern_info) list \<times> String.literal list"
+where
+  "classifyExternItems items = foldExternItems items [] []"
+
+lemmas knownBuiltinNames_code [code]   = knownBuiltinNames_def
+lemmas collectExternItems_code [code]  = collectExternItems.simps
+lemmas mergeExternInfo_code [code]     = mergeExternInfo.simps
+lemmas upsertExtern_code [code]        = upsertExtern.simps
+lemmas foldExternItems_code [code]     = foldExternItems.simps
+lemmas classifyExternItems_code [code] = classifyExternItems_def
+
 end

@@ -893,6 +893,17 @@ object SpecRestGenerated {
   final case class IntConstraint(a: Option[BigInt], b: Option[BigInt], c: List[String])
       extends int_constraint
 
+  sealed abstract class extern_kind
+  final case class EkPredicate()   extends extern_kind
+  final case class EkIntFunction() extends extern_kind
+
+  sealed abstract class extern_info
+  final case class ExInfo(a: extern_kind, b: BigInt) extends extern_info
+
+  sealed abstract class extern_item
+  final case class EiExtern(a: String, b: BigInt, c: extern_kind) extends extern_item
+  final case class EiPattern(a: String)                           extends extern_item
+
   sealed abstract class dialect_caps
   final case class DialectCaps(
       a: Boolean,
@@ -10015,6 +10026,41 @@ object SpecRestGenerated {
     case OperationClassification(uu, k, uv, uw, ux, uy, uz) => k
   }
 
+  def equal_extern_kind(x0: extern_kind, x1: extern_kind): Boolean = (x0, x1) match {
+    case (EkPredicate(), EkIntFunction())   => false
+    case (EkIntFunction(), EkPredicate())   => false
+    case (EkIntFunction(), EkIntFunction()) => true
+    case (EkPredicate(), EkPredicate())     => true
+  }
+
+  def mergeExternInfo(x0: extern_info, arity: BigInt, kind: extern_kind): extern_info =
+    (x0, arity, kind) match {
+      case (ExInfo(prevKind, prevArity), arity, kind) =>
+        ExInfo(
+          equal_extern_kind(prevKind, EkIntFunction()) ||
+            equal_extern_kind(kind, EkIntFunction()) match {
+            case true  => EkIntFunction()
+            case false => EkPredicate()
+          },
+          max[BigInt](prevArity, arity)
+        )
+    }
+
+  def upsertExtern(
+      x0: List[(String, extern_info)],
+      name: String,
+      arity: BigInt,
+      kind: extern_kind
+  ): List[(String, extern_info)] =
+    (x0, name, arity, kind) match {
+      case (Nil, name, arity, kind) => List((name, ExInfo(kind, arity)))
+      case ((n, info) :: rest, name, arity, kind) =>
+        n == name match {
+          case true  => (n, mergeExternInfo(info, arity, kind)) :: rest
+          case false => (n, info) :: upsertExtern(rest, name, arity, kind)
+        }
+    }
+
   def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match {
       case BinaryOpF(op, l, r, _) =>
@@ -12511,6 +12557,26 @@ object SpecRestGenerated {
     case OperationClassification(uu, uv, uw, ux, uy, uz, sg) => sg
   }
 
+  def foldExternItems(
+      x0: List[extern_item],
+      externs: List[(String, extern_info)],
+      patterns: List[String]
+  ): (List[(String, extern_info)], List[String]) =
+    (x0, externs, patterns) match {
+      case (Nil, externs, patterns) => (externs, patterns)
+      case (EiExtern(name, arity, kind) :: rest, externs, patterns) =>
+        foldExternItems(rest, upsertExtern(externs, name, arity, kind), patterns)
+      case (EiPattern(p) :: rest, externs, patterns) =>
+        foldExternItems(
+          rest,
+          externs,
+          string_in_list(p, patterns) match {
+            case true  => patterns
+            case false => patterns ++ List(p)
+          }
+        )
+    }
+
   def sqliteTypeRender(x0: canonical_type): String = x0 match {
     case CtText()        => "TEXT"
     case CtVarchar(uu)   => "TEXT"
@@ -13224,6 +13290,8 @@ object SpecRestGenerated {
     case ServiceIRFull(uu, uv, uw, es, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
   }
 
+  def knownBuiltinNames: List[String] = List("len", "dom", "ran")
+
   def saTypeImportModule(x0: sa_type): Option[String] = x0 match {
     case SaType(uu, m) => m
   }
@@ -13825,6 +13893,145 @@ object SpecRestGenerated {
     case AqNo()     => "no"
   }
 
+  def equal_un_op_full(x0: un_op_full, x1: un_op_full): Boolean = (x0, x1) match {
+    case (UCardinality(), UPower())       => false
+    case (UPower(), UCardinality())       => false
+    case (UNegate(), UPower())            => false
+    case (UPower(), UNegate())            => false
+    case (UNegate(), UCardinality())      => false
+    case (UCardinality(), UNegate())      => false
+    case (UNot(), UPower())               => false
+    case (UPower(), UNot())               => false
+    case (UNot(), UCardinality())         => false
+    case (UCardinality(), UNot())         => false
+    case (UNot(), UNegate())              => false
+    case (UNegate(), UNot())              => false
+    case (UPower(), UPower())             => true
+    case (UCardinality(), UCardinality()) => true
+    case (UNegate(), UNegate())           => true
+    case (UNot(), UNot())                 => true
+  }
+
+  def collectExternItemsBindings(x0: List[quantifier_binding_full]): List[extern_item] =
+    x0 match {
+      case Nil => Nil
+      case QuantifierBindingFull(a, d, kind, sp) :: bs =>
+        collectExternItems(EkIntFunction(), d) ++ collectExternItemsBindings(bs)
+    }
+
+  def collectExternItemsEntries(x0: List[map_entry_full]): List[extern_item] =
+    x0 match {
+      case Nil => Nil
+      case MapEntryFull(k, v, sp) :: es =>
+        collectExternItems(EkIntFunction(), k) ++
+          (collectExternItems(EkIntFunction(), v) ++ collectExternItemsEntries(es))
+    }
+
+  def collectExternItemsFields(x0: List[field_assign_full]): List[extern_item] =
+    x0 match {
+      case Nil => Nil
+      case FieldAssignFull(f, v, sp) :: fs =>
+        collectExternItems(EkIntFunction(), v) ++ collectExternItemsFields(fs)
+    }
+
+  def collectExternItemsArgs(x0: List[expr_full]): List[extern_item] = x0 match {
+    case Nil => Nil
+    case e :: es =>
+      collectExternItems(EkIntFunction(), e) ++ collectExternItemsArgs(es)
+  }
+
+  def collectExternItems(expected: extern_kind, x1: expr_full): List[extern_item] =
+    (expected, x1) match {
+      case (expected, CallF(c, args, sp)) =>
+        c match {
+          case BinaryOpF(_, _, _, _)         => collectExternItemsArgs(args)
+          case UnaryOpF(_, _, _)             => collectExternItemsArgs(args)
+          case QuantifierF(_, _, _, _)       => collectExternItemsArgs(args)
+          case SomeWrapF(_, _)               => collectExternItemsArgs(args)
+          case TheF(_, _, _, _)              => collectExternItemsArgs(args)
+          case FieldAccessF(_, _, _)         => collectExternItemsArgs(args)
+          case EnumAccessF(_, _, _)          => collectExternItemsArgs(args)
+          case IndexF(_, _, _)               => collectExternItemsArgs(args)
+          case CallF(_, _, _)                => collectExternItemsArgs(args)
+          case PrimeF(_, _)                  => collectExternItemsArgs(args)
+          case PreF(_, _)                    => collectExternItemsArgs(args)
+          case WithF(_, _, _)                => collectExternItemsArgs(args)
+          case IfF(_, _, _, _)               => collectExternItemsArgs(args)
+          case LetF(_, _, _, _)              => collectExternItemsArgs(args)
+          case LambdaF(_, _, _)              => collectExternItemsArgs(args)
+          case ConstructorF(_, _, _)         => collectExternItemsArgs(args)
+          case SetLiteralF(_, _)             => collectExternItemsArgs(args)
+          case MapLiteralF(_, _)             => collectExternItemsArgs(args)
+          case SetComprehensionF(_, _, _, _) => collectExternItemsArgs(args)
+          case SeqLiteralF(_, _)             => collectExternItemsArgs(args)
+          case MatchesF(_, _, _)             => collectExternItemsArgs(args)
+          case IntLitF(_, _)                 => collectExternItemsArgs(args)
+          case FloatLitF(_, _)               => collectExternItemsArgs(args)
+          case StringLitF(_, _)              => collectExternItemsArgs(args)
+          case BoolLitF(_, _)                => collectExternItemsArgs(args)
+          case NoneLitF(_)                   => collectExternItemsArgs(args)
+          case IdentifierF(n, _) =>
+            string_in_list(n, knownBuiltinNames) match {
+              case true => collectExternItemsArgs(args)
+              case false => EiExtern(n, int_of_nat(size_list[expr_full](args)), expected) ::
+                  collectExternItemsArgs(args)
+            }
+        }
+      case (expected, BinaryOpF(op, l, r, sp)) =>
+        equal_bin_op_full(op, BAnd()) ||
+          (equal_bin_op_full(op, BOr()) ||
+            (equal_bin_op_full(op, BImplies()) ||
+              equal_bin_op_full(op, BIff()))) match {
+          case true => collectExternItems(EkPredicate(), l) ++
+              collectExternItems(EkPredicate(), r)
+          case false => collectExternItems(EkIntFunction(), l) ++
+              collectExternItems(EkIntFunction(), r)
+        }
+      case (expected, UnaryOpF(op, x, sp)) =>
+        equal_un_op_full(op, UNot()) match {
+          case true  => collectExternItems(EkPredicate(), x)
+          case false => collectExternItems(EkIntFunction(), x)
+        }
+      case (expected, PrimeF(x, sp))    => collectExternItems(expected, x)
+      case (expected, PreF(x, sp))      => collectExternItems(expected, x)
+      case (expected, SomeWrapF(x, sp)) => collectExternItems(EkIntFunction(), x)
+      case (expected, FieldAccessF(b, f, sp)) =>
+        collectExternItems(EkIntFunction(), b)
+      case (expected, IndexF(b, i, sp)) =>
+        collectExternItems(EkIntFunction(), b) ++
+          collectExternItems(EkIntFunction(), i)
+      case (expected, MapLiteralF(es, sp)) => collectExternItemsEntries(es)
+      case (expected, SetLiteralF(es, sp)) => collectExternItemsArgs(es)
+      case (expected, SeqLiteralF(es, sp)) => collectExternItemsArgs(es)
+      case (expected, IfF(c, t, e, sp)) =>
+        collectExternItems(EkPredicate(), c) ++
+          (collectExternItems(expected, t) ++ collectExternItems(expected, e))
+      case (expected, LetF(v, vala, b, sp)) =>
+        collectExternItems(EkIntFunction(), vala) ++ collectExternItems(expected, b)
+      case (expected, QuantifierF(q, bs, body, sp)) =>
+        collectExternItemsBindings(bs) ++ collectExternItems(EkPredicate(), body)
+      case (expected, SetComprehensionF(v, dm, pr, sp)) =>
+        collectExternItems(EkIntFunction(), dm) ++
+          collectExternItems(EkPredicate(), pr)
+      case (expected, ConstructorF(n, fs, sp)) => collectExternItemsFields(fs)
+      case (expected, WithF(b, fs, sp)) =>
+        collectExternItems(EkIntFunction(), b) ++ collectExternItemsFields(fs)
+      case (expected, TheF(v, dm, body, sp)) =>
+        collectExternItems(EkIntFunction(), dm) ++
+          collectExternItems(EkPredicate(), body)
+      case (expected, LambdaF(p, body, sp)) =>
+        collectExternItems(EkIntFunction(), body)
+      case (expected, MatchesF(x, p, sp)) =>
+        EiPattern(p) :: collectExternItems(EkIntFunction(), x)
+      case (uu, EnumAccessF(v, va, vb)) => Nil
+      case (uu, IntLitF(v, va))         => Nil
+      case (uu, FloatLitF(v, va))       => Nil
+      case (uu, StringLitF(v, va))      => Nil
+      case (uu, BoolLitF(v, va))        => Nil
+      case (uu, NoneLitF(v))            => Nil
+      case (uu, IdentifierF(v, va))     => Nil
+    }
+
   def fieldNameIfStateIndex(e: expr_full, inputName: String, stateName: String): Option[String] =
     e match {
       case BinaryOpF(_, _, _, _)                                     => None
@@ -14070,6 +14277,9 @@ object SpecRestGenerated {
   def signalsPreservedRelations(x0: analysis_signals): List[String] = x0 match {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
+
+  def classifyExternItems(items: List[extern_item]): (List[(String, extern_info)], List[String]) =
+    foldExternItems(items, Nil, Nil)
 
   def desugarOptionGuards(opts: List[String], e: expr_full): expr_full =
     desugarGo(plus_nat(size_list[expr_full](allSubexprs(e)), nat_of_integer(BigInt(100))), opts, e)

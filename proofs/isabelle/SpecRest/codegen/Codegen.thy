@@ -425,6 +425,8 @@ export_code
     isMapLiteralExpr
     rewriteEntityFieldRefs
     desugarOptionGuards
+    collectExternItems
+    classifyExternItems
     isNumericType
     isOptionalType
     isDateTimeType
