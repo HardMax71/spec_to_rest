@@ -94,6 +94,9 @@ lazy val commonTestDeps = Seq(
   "org.typelevel" %% "munit-cats-effect" % munitCEVersion % Test
 )
 
+// The `dependsOn` graph below is the module architecture; it is asserted explicitly by
+// modules/arch/ArchitectureTest (`sbt arch/test`). Adding a module or changing a `dependsOn`
+// requires updating that test's layeredArchitecture rule. See CONTRIBUTING.md.
 lazy val ir = (project in file("modules/ir"))
   .settings(noTestWarts *)
   .settings(skipGeneratedScalafix *)
@@ -265,6 +268,34 @@ lazy val cli = (project in file("modules/cli"))
     )
   )
 
+// Test-only module: depends on every other module so ArchUnit can analyze the whole
+// codebase's bytecode in one place and assert the module layering (mirrors the
+// `dependsOn` graph above) + package-cycle-freedom. No main sources.
+lazy val arch = (project in file("modules/arch"))
+  .settings(noTestWarts *)
+  .dependsOn(
+    ir,
+    parser,
+    convention,
+    dafny,
+    profile,
+    verify,
+    codegen,
+    synth,
+    testgen,
+    lint,
+    bench,
+    cli
+  )
+  .settings(
+    name            := "spec-arch",
+    publish / skip  := true,
+    coverageEnabled := false,
+    libraryDependencies ++= Seq(
+      "com.tngtech.archunit" % "archunit" % "1.3.0" % Test
+    ) ++ commonMainDeps ++ commonTestDeps
+  )
+
 lazy val root = (project in file("."))
   .aggregate(
     ir,
@@ -278,7 +309,8 @@ lazy val root = (project in file("."))
     lint,
     synth,
     cli,
-    bench
+    bench,
+    arch
   )
   .settings(
     name           := "spec-to-rest-root",
