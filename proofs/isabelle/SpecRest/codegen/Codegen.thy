@@ -424,6 +424,7 @@ export_code
     quantifierAllIn
     isMapLiteralExpr
     rewriteEntityFieldRefs
+    desugarOptionGuards
     isNumericType
     isOptionalType
     isDateTimeType

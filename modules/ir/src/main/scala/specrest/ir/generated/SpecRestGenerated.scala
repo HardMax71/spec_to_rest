@@ -6319,6 +6319,769 @@ object SpecRestGenerated {
         }
     }
 
+  def equal_bin_op_full(x0: bin_op_full, x1: bin_op_full): Boolean = (x0, x1) match {
+    case (BMul(), BDiv())             => false
+    case (BDiv(), BMul())             => false
+    case (BSub(), BDiv())             => false
+    case (BDiv(), BSub())             => false
+    case (BSub(), BMul())             => false
+    case (BMul(), BSub())             => false
+    case (BAdd(), BDiv())             => false
+    case (BDiv(), BAdd())             => false
+    case (BAdd(), BMul())             => false
+    case (BMul(), BAdd())             => false
+    case (BAdd(), BSub())             => false
+    case (BSub(), BAdd())             => false
+    case (BDiff(), BDiv())            => false
+    case (BDiv(), BDiff())            => false
+    case (BDiff(), BMul())            => false
+    case (BMul(), BDiff())            => false
+    case (BDiff(), BSub())            => false
+    case (BSub(), BDiff())            => false
+    case (BDiff(), BAdd())            => false
+    case (BAdd(), BDiff())            => false
+    case (BIntersect(), BDiv())       => false
+    case (BDiv(), BIntersect())       => false
+    case (BIntersect(), BMul())       => false
+    case (BMul(), BIntersect())       => false
+    case (BIntersect(), BSub())       => false
+    case (BSub(), BIntersect())       => false
+    case (BIntersect(), BAdd())       => false
+    case (BAdd(), BIntersect())       => false
+    case (BIntersect(), BDiff())      => false
+    case (BDiff(), BIntersect())      => false
+    case (BUnion(), BDiv())           => false
+    case (BDiv(), BUnion())           => false
+    case (BUnion(), BMul())           => false
+    case (BMul(), BUnion())           => false
+    case (BUnion(), BSub())           => false
+    case (BSub(), BUnion())           => false
+    case (BUnion(), BAdd())           => false
+    case (BAdd(), BUnion())           => false
+    case (BUnion(), BDiff())          => false
+    case (BDiff(), BUnion())          => false
+    case (BUnion(), BIntersect())     => false
+    case (BIntersect(), BUnion())     => false
+    case (BSubset(), BDiv())          => false
+    case (BDiv(), BSubset())          => false
+    case (BSubset(), BMul())          => false
+    case (BMul(), BSubset())          => false
+    case (BSubset(), BSub())          => false
+    case (BSub(), BSubset())          => false
+    case (BSubset(), BAdd())          => false
+    case (BAdd(), BSubset())          => false
+    case (BSubset(), BDiff())         => false
+    case (BDiff(), BSubset())         => false
+    case (BSubset(), BIntersect())    => false
+    case (BIntersect(), BSubset())    => false
+    case (BSubset(), BUnion())        => false
+    case (BUnion(), BSubset())        => false
+    case (BNotIn(), BDiv())           => false
+    case (BDiv(), BNotIn())           => false
+    case (BNotIn(), BMul())           => false
+    case (BMul(), BNotIn())           => false
+    case (BNotIn(), BSub())           => false
+    case (BSub(), BNotIn())           => false
+    case (BNotIn(), BAdd())           => false
+    case (BAdd(), BNotIn())           => false
+    case (BNotIn(), BDiff())          => false
+    case (BDiff(), BNotIn())          => false
+    case (BNotIn(), BIntersect())     => false
+    case (BIntersect(), BNotIn())     => false
+    case (BNotIn(), BUnion())         => false
+    case (BUnion(), BNotIn())         => false
+    case (BNotIn(), BSubset())        => false
+    case (BSubset(), BNotIn())        => false
+    case (BIn(), BDiv())              => false
+    case (BDiv(), BIn())              => false
+    case (BIn(), BMul())              => false
+    case (BMul(), BIn())              => false
+    case (BIn(), BSub())              => false
+    case (BSub(), BIn())              => false
+    case (BIn(), BAdd())              => false
+    case (BAdd(), BIn())              => false
+    case (BIn(), BDiff())             => false
+    case (BDiff(), BIn())             => false
+    case (BIn(), BIntersect())        => false
+    case (BIntersect(), BIn())        => false
+    case (BIn(), BUnion())            => false
+    case (BUnion(), BIn())            => false
+    case (BIn(), BSubset())           => false
+    case (BSubset(), BIn())           => false
+    case (BIn(), BNotIn())            => false
+    case (BNotIn(), BIn())            => false
+    case (BGe(), BDiv())              => false
+    case (BDiv(), BGe())              => false
+    case (BGe(), BMul())              => false
+    case (BMul(), BGe())              => false
+    case (BGe(), BSub())              => false
+    case (BSub(), BGe())              => false
+    case (BGe(), BAdd())              => false
+    case (BAdd(), BGe())              => false
+    case (BGe(), BDiff())             => false
+    case (BDiff(), BGe())             => false
+    case (BGe(), BIntersect())        => false
+    case (BIntersect(), BGe())        => false
+    case (BGe(), BUnion())            => false
+    case (BUnion(), BGe())            => false
+    case (BGe(), BSubset())           => false
+    case (BSubset(), BGe())           => false
+    case (BGe(), BNotIn())            => false
+    case (BNotIn(), BGe())            => false
+    case (BGe(), BIn())               => false
+    case (BIn(), BGe())               => false
+    case (BLe(), BDiv())              => false
+    case (BDiv(), BLe())              => false
+    case (BLe(), BMul())              => false
+    case (BMul(), BLe())              => false
+    case (BLe(), BSub())              => false
+    case (BSub(), BLe())              => false
+    case (BLe(), BAdd())              => false
+    case (BAdd(), BLe())              => false
+    case (BLe(), BDiff())             => false
+    case (BDiff(), BLe())             => false
+    case (BLe(), BIntersect())        => false
+    case (BIntersect(), BLe())        => false
+    case (BLe(), BUnion())            => false
+    case (BUnion(), BLe())            => false
+    case (BLe(), BSubset())           => false
+    case (BSubset(), BLe())           => false
+    case (BLe(), BNotIn())            => false
+    case (BNotIn(), BLe())            => false
+    case (BLe(), BIn())               => false
+    case (BIn(), BLe())               => false
+    case (BLe(), BGe())               => false
+    case (BGe(), BLe())               => false
+    case (BGt(), BDiv())              => false
+    case (BDiv(), BGt())              => false
+    case (BGt(), BMul())              => false
+    case (BMul(), BGt())              => false
+    case (BGt(), BSub())              => false
+    case (BSub(), BGt())              => false
+    case (BGt(), BAdd())              => false
+    case (BAdd(), BGt())              => false
+    case (BGt(), BDiff())             => false
+    case (BDiff(), BGt())             => false
+    case (BGt(), BIntersect())        => false
+    case (BIntersect(), BGt())        => false
+    case (BGt(), BUnion())            => false
+    case (BUnion(), BGt())            => false
+    case (BGt(), BSubset())           => false
+    case (BSubset(), BGt())           => false
+    case (BGt(), BNotIn())            => false
+    case (BNotIn(), BGt())            => false
+    case (BGt(), BIn())               => false
+    case (BIn(), BGt())               => false
+    case (BGt(), BGe())               => false
+    case (BGe(), BGt())               => false
+    case (BGt(), BLe())               => false
+    case (BLe(), BGt())               => false
+    case (BLt(), BDiv())              => false
+    case (BDiv(), BLt())              => false
+    case (BLt(), BMul())              => false
+    case (BMul(), BLt())              => false
+    case (BLt(), BSub())              => false
+    case (BSub(), BLt())              => false
+    case (BLt(), BAdd())              => false
+    case (BAdd(), BLt())              => false
+    case (BLt(), BDiff())             => false
+    case (BDiff(), BLt())             => false
+    case (BLt(), BIntersect())        => false
+    case (BIntersect(), BLt())        => false
+    case (BLt(), BUnion())            => false
+    case (BUnion(), BLt())            => false
+    case (BLt(), BSubset())           => false
+    case (BSubset(), BLt())           => false
+    case (BLt(), BNotIn())            => false
+    case (BNotIn(), BLt())            => false
+    case (BLt(), BIn())               => false
+    case (BIn(), BLt())               => false
+    case (BLt(), BGe())               => false
+    case (BGe(), BLt())               => false
+    case (BLt(), BLe())               => false
+    case (BLe(), BLt())               => false
+    case (BLt(), BGt())               => false
+    case (BGt(), BLt())               => false
+    case (BNeq(), BDiv())             => false
+    case (BDiv(), BNeq())             => false
+    case (BNeq(), BMul())             => false
+    case (BMul(), BNeq())             => false
+    case (BNeq(), BSub())             => false
+    case (BSub(), BNeq())             => false
+    case (BNeq(), BAdd())             => false
+    case (BAdd(), BNeq())             => false
+    case (BNeq(), BDiff())            => false
+    case (BDiff(), BNeq())            => false
+    case (BNeq(), BIntersect())       => false
+    case (BIntersect(), BNeq())       => false
+    case (BNeq(), BUnion())           => false
+    case (BUnion(), BNeq())           => false
+    case (BNeq(), BSubset())          => false
+    case (BSubset(), BNeq())          => false
+    case (BNeq(), BNotIn())           => false
+    case (BNotIn(), BNeq())           => false
+    case (BNeq(), BIn())              => false
+    case (BIn(), BNeq())              => false
+    case (BNeq(), BGe())              => false
+    case (BGe(), BNeq())              => false
+    case (BNeq(), BLe())              => false
+    case (BLe(), BNeq())              => false
+    case (BNeq(), BGt())              => false
+    case (BGt(), BNeq())              => false
+    case (BNeq(), BLt())              => false
+    case (BLt(), BNeq())              => false
+    case (BEq(), BDiv())              => false
+    case (BDiv(), BEq())              => false
+    case (BEq(), BMul())              => false
+    case (BMul(), BEq())              => false
+    case (BEq(), BSub())              => false
+    case (BSub(), BEq())              => false
+    case (BEq(), BAdd())              => false
+    case (BAdd(), BEq())              => false
+    case (BEq(), BDiff())             => false
+    case (BDiff(), BEq())             => false
+    case (BEq(), BIntersect())        => false
+    case (BIntersect(), BEq())        => false
+    case (BEq(), BUnion())            => false
+    case (BUnion(), BEq())            => false
+    case (BEq(), BSubset())           => false
+    case (BSubset(), BEq())           => false
+    case (BEq(), BNotIn())            => false
+    case (BNotIn(), BEq())            => false
+    case (BEq(), BIn())               => false
+    case (BIn(), BEq())               => false
+    case (BEq(), BGe())               => false
+    case (BGe(), BEq())               => false
+    case (BEq(), BLe())               => false
+    case (BLe(), BEq())               => false
+    case (BEq(), BGt())               => false
+    case (BGt(), BEq())               => false
+    case (BEq(), BLt())               => false
+    case (BLt(), BEq())               => false
+    case (BEq(), BNeq())              => false
+    case (BNeq(), BEq())              => false
+    case (BIff(), BDiv())             => false
+    case (BDiv(), BIff())             => false
+    case (BIff(), BMul())             => false
+    case (BMul(), BIff())             => false
+    case (BIff(), BSub())             => false
+    case (BSub(), BIff())             => false
+    case (BIff(), BAdd())             => false
+    case (BAdd(), BIff())             => false
+    case (BIff(), BDiff())            => false
+    case (BDiff(), BIff())            => false
+    case (BIff(), BIntersect())       => false
+    case (BIntersect(), BIff())       => false
+    case (BIff(), BUnion())           => false
+    case (BUnion(), BIff())           => false
+    case (BIff(), BSubset())          => false
+    case (BSubset(), BIff())          => false
+    case (BIff(), BNotIn())           => false
+    case (BNotIn(), BIff())           => false
+    case (BIff(), BIn())              => false
+    case (BIn(), BIff())              => false
+    case (BIff(), BGe())              => false
+    case (BGe(), BIff())              => false
+    case (BIff(), BLe())              => false
+    case (BLe(), BIff())              => false
+    case (BIff(), BGt())              => false
+    case (BGt(), BIff())              => false
+    case (BIff(), BLt())              => false
+    case (BLt(), BIff())              => false
+    case (BIff(), BNeq())             => false
+    case (BNeq(), BIff())             => false
+    case (BIff(), BEq())              => false
+    case (BEq(), BIff())              => false
+    case (BImplies(), BDiv())         => false
+    case (BDiv(), BImplies())         => false
+    case (BImplies(), BMul())         => false
+    case (BMul(), BImplies())         => false
+    case (BImplies(), BSub())         => false
+    case (BSub(), BImplies())         => false
+    case (BImplies(), BAdd())         => false
+    case (BAdd(), BImplies())         => false
+    case (BImplies(), BDiff())        => false
+    case (BDiff(), BImplies())        => false
+    case (BImplies(), BIntersect())   => false
+    case (BIntersect(), BImplies())   => false
+    case (BImplies(), BUnion())       => false
+    case (BUnion(), BImplies())       => false
+    case (BImplies(), BSubset())      => false
+    case (BSubset(), BImplies())      => false
+    case (BImplies(), BNotIn())       => false
+    case (BNotIn(), BImplies())       => false
+    case (BImplies(), BIn())          => false
+    case (BIn(), BImplies())          => false
+    case (BImplies(), BGe())          => false
+    case (BGe(), BImplies())          => false
+    case (BImplies(), BLe())          => false
+    case (BLe(), BImplies())          => false
+    case (BImplies(), BGt())          => false
+    case (BGt(), BImplies())          => false
+    case (BImplies(), BLt())          => false
+    case (BLt(), BImplies())          => false
+    case (BImplies(), BNeq())         => false
+    case (BNeq(), BImplies())         => false
+    case (BImplies(), BEq())          => false
+    case (BEq(), BImplies())          => false
+    case (BImplies(), BIff())         => false
+    case (BIff(), BImplies())         => false
+    case (BOr(), BDiv())              => false
+    case (BDiv(), BOr())              => false
+    case (BOr(), BMul())              => false
+    case (BMul(), BOr())              => false
+    case (BOr(), BSub())              => false
+    case (BSub(), BOr())              => false
+    case (BOr(), BAdd())              => false
+    case (BAdd(), BOr())              => false
+    case (BOr(), BDiff())             => false
+    case (BDiff(), BOr())             => false
+    case (BOr(), BIntersect())        => false
+    case (BIntersect(), BOr())        => false
+    case (BOr(), BUnion())            => false
+    case (BUnion(), BOr())            => false
+    case (BOr(), BSubset())           => false
+    case (BSubset(), BOr())           => false
+    case (BOr(), BNotIn())            => false
+    case (BNotIn(), BOr())            => false
+    case (BOr(), BIn())               => false
+    case (BIn(), BOr())               => false
+    case (BOr(), BGe())               => false
+    case (BGe(), BOr())               => false
+    case (BOr(), BLe())               => false
+    case (BLe(), BOr())               => false
+    case (BOr(), BGt())               => false
+    case (BGt(), BOr())               => false
+    case (BOr(), BLt())               => false
+    case (BLt(), BOr())               => false
+    case (BOr(), BNeq())              => false
+    case (BNeq(), BOr())              => false
+    case (BOr(), BEq())               => false
+    case (BEq(), BOr())               => false
+    case (BOr(), BIff())              => false
+    case (BIff(), BOr())              => false
+    case (BOr(), BImplies())          => false
+    case (BImplies(), BOr())          => false
+    case (BAnd(), BDiv())             => false
+    case (BDiv(), BAnd())             => false
+    case (BAnd(), BMul())             => false
+    case (BMul(), BAnd())             => false
+    case (BAnd(), BSub())             => false
+    case (BSub(), BAnd())             => false
+    case (BAnd(), BAdd())             => false
+    case (BAdd(), BAnd())             => false
+    case (BAnd(), BDiff())            => false
+    case (BDiff(), BAnd())            => false
+    case (BAnd(), BIntersect())       => false
+    case (BIntersect(), BAnd())       => false
+    case (BAnd(), BUnion())           => false
+    case (BUnion(), BAnd())           => false
+    case (BAnd(), BSubset())          => false
+    case (BSubset(), BAnd())          => false
+    case (BAnd(), BNotIn())           => false
+    case (BNotIn(), BAnd())           => false
+    case (BAnd(), BIn())              => false
+    case (BIn(), BAnd())              => false
+    case (BAnd(), BGe())              => false
+    case (BGe(), BAnd())              => false
+    case (BAnd(), BLe())              => false
+    case (BLe(), BAnd())              => false
+    case (BAnd(), BGt())              => false
+    case (BGt(), BAnd())              => false
+    case (BAnd(), BLt())              => false
+    case (BLt(), BAnd())              => false
+    case (BAnd(), BNeq())             => false
+    case (BNeq(), BAnd())             => false
+    case (BAnd(), BEq())              => false
+    case (BEq(), BAnd())              => false
+    case (BAnd(), BIff())             => false
+    case (BIff(), BAnd())             => false
+    case (BAnd(), BImplies())         => false
+    case (BImplies(), BAnd())         => false
+    case (BAnd(), BOr())              => false
+    case (BOr(), BAnd())              => false
+    case (BDiv(), BDiv())             => true
+    case (BMul(), BMul())             => true
+    case (BSub(), BSub())             => true
+    case (BAdd(), BAdd())             => true
+    case (BDiff(), BDiff())           => true
+    case (BIntersect(), BIntersect()) => true
+    case (BUnion(), BUnion())         => true
+    case (BSubset(), BSubset())       => true
+    case (BNotIn(), BNotIn())         => true
+    case (BIn(), BIn())               => true
+    case (BGe(), BGe())               => true
+    case (BLe(), BLe())               => true
+    case (BGt(), BGt())               => true
+    case (BLt(), BLt())               => true
+    case (BNeq(), BNeq())             => true
+    case (BEq(), BEq())               => true
+    case (BIff(), BIff())             => true
+    case (BImplies(), BImplies())     => true
+    case (BOr(), BOr())               => true
+    case (BAnd(), BAnd())             => true
+  }
+
+  def neqNoneName(e: expr_full): Option[String] =
+    e match {
+      case BinaryOpF(BAnd(), _, _, _)                                     => None
+      case BinaryOpF(BOr(), _, _, _)                                      => None
+      case BinaryOpF(BImplies(), _, _, _)                                 => None
+      case BinaryOpF(BIff(), _, _, _)                                     => None
+      case BinaryOpF(BEq(), _, _, _)                                      => None
+      case BinaryOpF(BNeq(), BinaryOpF(_, _, _, _), _, _)                 => None
+      case BinaryOpF(BNeq(), UnaryOpF(_, _, _), _, _)                     => None
+      case BinaryOpF(BNeq(), QuantifierF(_, _, _, _), _, _)               => None
+      case BinaryOpF(BNeq(), SomeWrapF(_, _), _, _)                       => None
+      case BinaryOpF(BNeq(), TheF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BNeq(), FieldAccessF(_, _, _), _, _)                 => None
+      case BinaryOpF(BNeq(), EnumAccessF(_, _, _), _, _)                  => None
+      case BinaryOpF(BNeq(), IndexF(_, _, _), _, _)                       => None
+      case BinaryOpF(BNeq(), CallF(_, _, _), _, _)                        => None
+      case BinaryOpF(BNeq(), PrimeF(_, _), _, _)                          => None
+      case BinaryOpF(BNeq(), PreF(_, _), _, _)                            => None
+      case BinaryOpF(BNeq(), WithF(_, _, _), _, _)                        => None
+      case BinaryOpF(BNeq(), IfF(_, _, _, _), _, _)                       => None
+      case BinaryOpF(BNeq(), LetF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BNeq(), LambdaF(_, _, _), _, _)                      => None
+      case BinaryOpF(BNeq(), ConstructorF(_, _, _), _, _)                 => None
+      case BinaryOpF(BNeq(), SetLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BNeq(), MapLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BNeq(), SetComprehensionF(_, _, _, _), _, _)         => None
+      case BinaryOpF(BNeq(), SeqLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BNeq(), MatchesF(_, _, _), _, _)                     => None
+      case BinaryOpF(BNeq(), IntLitF(_, _), _, _)                         => None
+      case BinaryOpF(BNeq(), FloatLitF(_, _), _, _)                       => None
+      case BinaryOpF(BNeq(), StringLitF(_, _), _, _)                      => None
+      case BinaryOpF(BNeq(), BoolLitF(_, _), _, _)                        => None
+      case BinaryOpF(BNeq(), NoneLitF(_), _, _)                           => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), BinaryOpF(_, _, _, _), _) => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), UnaryOpF(_, _, _), _)     => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), QuantifierF(_, _, _, _), _) =>
+        None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), SomeWrapF(_, _), _)               => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), TheF(_, _, _, _), _)              => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), FieldAccessF(_, _, _), _)         => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), EnumAccessF(_, _, _), _)          => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), IndexF(_, _, _), _)               => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), CallF(_, _, _), _)                => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), PrimeF(_, _), _)                  => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), PreF(_, _), _)                    => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), WithF(_, _, _), _)                => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), IfF(_, _, _, _), _)               => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), LetF(_, _, _, _), _)              => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), LambdaF(_, _, _), _)              => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), ConstructorF(_, _, _), _)         => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), SetLiteralF(_, _), _)             => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), MapLiteralF(_, _), _)             => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), SetComprehensionF(_, _, _, _), _) => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), SeqLiteralF(_, _), _)             => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), MatchesF(_, _, _), _)             => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), IntLitF(_, _), _)                 => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), FloatLitF(_, _), _)               => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), StringLitF(_, _), _)              => None
+      case BinaryOpF(BNeq(), IdentifierF(_, _), BoolLitF(_, _), _)                => None
+      case BinaryOpF(BNeq(), IdentifierF(p, _), NoneLitF(_), _) =>
+        Some[String](p)
+      case BinaryOpF(BNeq(), IdentifierF(_, _), IdentifierF(_, _), _) => None
+      case BinaryOpF(BLt(), _, _, _)                                  => None
+      case BinaryOpF(BGt(), _, _, _)                                  => None
+      case BinaryOpF(BLe(), _, _, _)                                  => None
+      case BinaryOpF(BGe(), _, _, _)                                  => None
+      case BinaryOpF(BIn(), _, _, _)                                  => None
+      case BinaryOpF(BNotIn(), _, _, _)                               => None
+      case BinaryOpF(BSubset(), _, _, _)                              => None
+      case BinaryOpF(BUnion(), _, _, _)                               => None
+      case BinaryOpF(BIntersect(), _, _, _)                           => None
+      case BinaryOpF(BDiff(), _, _, _)                                => None
+      case BinaryOpF(BAdd(), _, _, _)                                 => None
+      case BinaryOpF(BSub(), _, _, _)                                 => None
+      case BinaryOpF(BMul(), _, _, _)                                 => None
+      case BinaryOpF(BDiv(), _, _, _)                                 => None
+      case UnaryOpF(_, _, _)                                          => None
+      case QuantifierF(_, _, _, _)                                    => None
+      case SomeWrapF(_, _)                                            => None
+      case TheF(_, _, _, _)                                           => None
+      case FieldAccessF(_, _, _)                                      => None
+      case EnumAccessF(_, _, _)                                       => None
+      case IndexF(_, _, _)                                            => None
+      case CallF(_, _, _)                                             => None
+      case PrimeF(_, _)                                               => None
+      case PreF(_, _)                                                 => None
+      case WithF(_, _, _)                                             => None
+      case IfF(_, _, _, _)                                            => None
+      case LetF(_, _, _, _)                                           => None
+      case LambdaF(_, _, _)                                           => None
+      case ConstructorF(_, _, _)                                      => None
+      case SetLiteralF(_, _)                                          => None
+      case MapLiteralF(_, _)                                          => None
+      case SetComprehensionF(_, _, _, _)                              => None
+      case SeqLiteralF(_, _)                                          => None
+      case MatchesF(_, _, _)                                          => None
+      case IntLitF(_, _)                                              => None
+      case FloatLitF(_, _)                                            => None
+      case StringLitF(_, _)                                           => None
+      case BoolLitF(_, _)                                             => None
+      case NoneLitF(_)                                                => None
+      case IdentifierF(_, _)                                          => None
+    }
+
+  def substValue(p: String, body: expr_full): expr_full =
+    subst(p, FieldAccessF(IdentifierF(p, None), "value", None), body)
+
+  def eqNoneName(e: expr_full): Option[String] =
+    e match {
+      case BinaryOpF(BAnd(), _, _, _)                                    => None
+      case BinaryOpF(BOr(), _, _, _)                                     => None
+      case BinaryOpF(BImplies(), _, _, _)                                => None
+      case BinaryOpF(BIff(), _, _, _)                                    => None
+      case BinaryOpF(BEq(), BinaryOpF(_, _, _, _), _, _)                 => None
+      case BinaryOpF(BEq(), UnaryOpF(_, _, _), _, _)                     => None
+      case BinaryOpF(BEq(), QuantifierF(_, _, _, _), _, _)               => None
+      case BinaryOpF(BEq(), SomeWrapF(_, _), _, _)                       => None
+      case BinaryOpF(BEq(), TheF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BEq(), FieldAccessF(_, _, _), _, _)                 => None
+      case BinaryOpF(BEq(), EnumAccessF(_, _, _), _, _)                  => None
+      case BinaryOpF(BEq(), IndexF(_, _, _), _, _)                       => None
+      case BinaryOpF(BEq(), CallF(_, _, _), _, _)                        => None
+      case BinaryOpF(BEq(), PrimeF(_, _), _, _)                          => None
+      case BinaryOpF(BEq(), PreF(_, _), _, _)                            => None
+      case BinaryOpF(BEq(), WithF(_, _, _), _, _)                        => None
+      case BinaryOpF(BEq(), IfF(_, _, _, _), _, _)                       => None
+      case BinaryOpF(BEq(), LetF(_, _, _, _), _, _)                      => None
+      case BinaryOpF(BEq(), LambdaF(_, _, _), _, _)                      => None
+      case BinaryOpF(BEq(), ConstructorF(_, _, _), _, _)                 => None
+      case BinaryOpF(BEq(), SetLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BEq(), MapLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BEq(), SetComprehensionF(_, _, _, _), _, _)         => None
+      case BinaryOpF(BEq(), SeqLiteralF(_, _), _, _)                     => None
+      case BinaryOpF(BEq(), MatchesF(_, _, _), _, _)                     => None
+      case BinaryOpF(BEq(), IntLitF(_, _), _, _)                         => None
+      case BinaryOpF(BEq(), FloatLitF(_, _), _, _)                       => None
+      case BinaryOpF(BEq(), StringLitF(_, _), _, _)                      => None
+      case BinaryOpF(BEq(), BoolLitF(_, _), _, _)                        => None
+      case BinaryOpF(BEq(), NoneLitF(_), _, _)                           => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), BinaryOpF(_, _, _, _), _) => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), UnaryOpF(_, _, _), _)     => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), QuantifierF(_, _, _, _), _) =>
+        None
+      case BinaryOpF(BEq(), IdentifierF(_, _), SomeWrapF(_, _), _)               => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), TheF(_, _, _, _), _)              => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), FieldAccessF(_, _, _), _)         => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), EnumAccessF(_, _, _), _)          => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), IndexF(_, _, _), _)               => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), CallF(_, _, _), _)                => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), PrimeF(_, _), _)                  => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), PreF(_, _), _)                    => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), WithF(_, _, _), _)                => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), IfF(_, _, _, _), _)               => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), LetF(_, _, _, _), _)              => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), LambdaF(_, _, _), _)              => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), ConstructorF(_, _, _), _)         => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), SetLiteralF(_, _), _)             => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), MapLiteralF(_, _), _)             => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), SetComprehensionF(_, _, _, _), _) => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), SeqLiteralF(_, _), _)             => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), MatchesF(_, _, _), _)             => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), IntLitF(_, _), _)                 => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), FloatLitF(_, _), _)               => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), StringLitF(_, _), _)              => None
+      case BinaryOpF(BEq(), IdentifierF(_, _), BoolLitF(_, _), _)                => None
+      case BinaryOpF(BEq(), IdentifierF(p, _), NoneLitF(_), _)                   => Some[String](p)
+      case BinaryOpF(BEq(), IdentifierF(_, _), IdentifierF(_, _), _)             => None
+      case BinaryOpF(BNeq(), _, _, _)                                            => None
+      case BinaryOpF(BLt(), _, _, _)                                             => None
+      case BinaryOpF(BGt(), _, _, _)                                             => None
+      case BinaryOpF(BLe(), _, _, _)                                             => None
+      case BinaryOpF(BGe(), _, _, _)                                             => None
+      case BinaryOpF(BIn(), _, _, _)                                             => None
+      case BinaryOpF(BNotIn(), _, _, _)                                          => None
+      case BinaryOpF(BSubset(), _, _, _)                                         => None
+      case BinaryOpF(BUnion(), _, _, _)                                          => None
+      case BinaryOpF(BIntersect(), _, _, _)                                      => None
+      case BinaryOpF(BDiff(), _, _, _)                                           => None
+      case BinaryOpF(BAdd(), _, _, _)                                            => None
+      case BinaryOpF(BSub(), _, _, _)                                            => None
+      case BinaryOpF(BMul(), _, _, _)                                            => None
+      case BinaryOpF(BDiv(), _, _, _)                                            => None
+      case UnaryOpF(_, _, _)                                                     => None
+      case QuantifierF(_, _, _, _)                                               => None
+      case SomeWrapF(_, _)                                                       => None
+      case TheF(_, _, _, _)                                                      => None
+      case FieldAccessF(_, _, _)                                                 => None
+      case EnumAccessF(_, _, _)                                                  => None
+      case IndexF(_, _, _)                                                       => None
+      case CallF(_, _, _)                                                        => None
+      case PrimeF(_, _)                                                          => None
+      case PreF(_, _)                                                            => None
+      case WithF(_, _, _)                                                        => None
+      case IfF(_, _, _, _)                                                       => None
+      case LetF(_, _, _, _)                                                      => None
+      case LambdaF(_, _, _)                                                      => None
+      case ConstructorF(_, _, _)                                                 => None
+      case SetLiteralF(_, _)                                                     => None
+      case MapLiteralF(_, _)                                                     => None
+      case SetComprehensionF(_, _, _, _)                                         => None
+      case SeqLiteralF(_, _)                                                     => None
+      case MatchesF(_, _, _)                                                     => None
+      case IntLitF(_, _)                                                         => None
+      case FloatLitF(_, _)                                                       => None
+      case StringLitF(_, _)                                                      => None
+      case BoolLitF(_, _)                                                        => None
+      case NoneLitF(_)                                                           => None
+      case IdentifierF(_, _)                                                     => None
+    }
+
+  def desugarBindings(
+      fuel: nat,
+      uv: List[String],
+      bs: List[quantifier_binding_full]
+  ): List[quantifier_binding_full] =
+    equal_nat(fuel, zero_nat) match {
+      case true => bs
+      case false => bs match {
+          case Nil => Nil
+          case QuantifierBindingFull(a, d, kind, bsp) :: rest =>
+            QuantifierBindingFull(a, desugarGo(minus_nat(fuel, one_nat), uv, d), kind, bsp) ::
+              desugarBindings(minus_nat(fuel, one_nat), uv, rest)
+        }
+    }
+
+  def desugarGo(fuel: nat, uu: List[String], e: expr_full): expr_full =
+    equal_nat(fuel, zero_nat) match {
+      case true => e
+      case false => e match {
+          case BinaryOpF(op, l, r, sp) =>
+            equal_bin_op_full(op, BImplies()) match {
+              case true => neqNoneName(l) match {
+                  case None =>
+                    BinaryOpF(
+                      op,
+                      desugarGo(minus_nat(fuel, one_nat), uu, l),
+                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                      sp
+                    )
+                  case Some(p) =>
+                    string_in_list(p, uu) match {
+                      case true => BinaryOpF(
+                          BImplies(),
+                          l,
+                          desugarGo(minus_nat(fuel, one_nat), uu, substValue(p, r)),
+                          sp
+                        )
+                      case false => BinaryOpF(
+                          op,
+                          desugarGo(minus_nat(fuel, one_nat), uu, l),
+                          desugarGo(minus_nat(fuel, one_nat), uu, r),
+                          sp
+                        )
+                    }
+                }
+              case false => equal_bin_op_full(op, BOr()) match {
+                  case true => eqNoneName(l) match {
+                      case None =>
+                        eqNoneName(r) match {
+                          case None =>
+                            BinaryOpF(
+                              op,
+                              desugarGo(minus_nat(fuel, one_nat), uu, l),
+                              desugarGo(minus_nat(fuel, one_nat), uu, r),
+                              sp
+                            )
+                          case Some(q) =>
+                            string_in_list(q, uu) match {
+                              case true => BinaryOpF(
+                                  BOr(),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, substValue(q, l)),
+                                  r,
+                                  sp
+                                )
+                              case false => BinaryOpF(
+                                  op,
+                                  desugarGo(minus_nat(fuel, one_nat), uu, l),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                  sp
+                                )
+                            }
+                        }
+                      case Some(p) =>
+                        string_in_list(p, uu) match {
+                          case true => BinaryOpF(
+                              BOr(),
+                              l,
+                              desugarGo(minus_nat(fuel, one_nat), uu, substValue(p, r)),
+                              sp
+                            )
+                          case false => eqNoneName(r) match {
+                              case None =>
+                                BinaryOpF(
+                                  op,
+                                  desugarGo(minus_nat(fuel, one_nat), uu, l),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                  sp
+                                )
+                              case Some(q) =>
+                                string_in_list(q, uu) match {
+                                  case true => BinaryOpF(
+                                      BOr(),
+                                      desugarGo(minus_nat(fuel, one_nat), uu, substValue(q, l)),
+                                      r,
+                                      sp
+                                    )
+                                  case false => BinaryOpF(
+                                      op,
+                                      desugarGo(minus_nat(fuel, one_nat), uu, l),
+                                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                      sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                  case false => BinaryOpF(
+                      op,
+                      desugarGo(minus_nat(fuel, one_nat), uu, l),
+                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                      sp
+                    )
+                }
+            }
+          case UnaryOpF(op, x, a) =>
+            UnaryOpF(op, desugarGo(minus_nat(fuel, one_nat), uu, x), a)
+          case QuantifierF(q, bs, body, a) =>
+            QuantifierF(
+              q,
+              desugarBindings(minus_nat(fuel, one_nat), uu, bs),
+              desugarGo(minus_nat(fuel, one_nat), uu, body),
+              a
+            )
+          case SomeWrapF(_, _)               => e
+          case TheF(_, _, _, _)              => e
+          case FieldAccessF(_, _, _)         => e
+          case EnumAccessF(_, _, _)          => e
+          case IndexF(_, _, _)               => e
+          case CallF(_, _, _)                => e
+          case PrimeF(_, _)                  => e
+          case PreF(_, _)                    => e
+          case WithF(_, _, _)                => e
+          case IfF(_, _, _, _)               => e
+          case LetF(_, _, _, _)              => e
+          case LambdaF(_, _, _)              => e
+          case ConstructorF(_, _, _)         => e
+          case SetLiteralF(_, _)             => e
+          case MapLiteralF(_, _)             => e
+          case SetComprehensionF(_, _, _, _) => e
+          case SeqLiteralF(_, _)             => e
+          case MatchesF(_, _, _)             => e
+          case IntLitF(_, _)                 => e
+          case FloatLitF(_, _)               => e
+          case StringLitF(_, _)              => e
+          case BoolLitF(_, _)                => e
+          case NoneLitF(_)                   => e
+          case IdentifierF(_, _)             => e
+        }
+    }
+
   def saTypeExpr(x0: sa_type): String = x0 match {
     case SaType(e, uu) => e
   }
@@ -13307,6 +14070,9 @@ object SpecRestGenerated {
   def signalsPreservedRelations(x0: analysis_signals): List[String] = x0 match {
     case AnalysisSignals(uu, p, uv, uw, ux, uy, uz, va, vb) => p
   }
+
+  def desugarOptionGuards(opts: List[String], e: expr_full): expr_full =
+    desugarGo(plus_nat(size_list[expr_full](allSubexprs(e)), nat_of_integer(BigInt(100))), opts, e)
 
   def rewriteFieldRefsBindings(
       vk: List[String],

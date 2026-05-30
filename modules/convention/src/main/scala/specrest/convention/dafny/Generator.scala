@@ -269,7 +269,14 @@ object Generator:
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
-    val rawEnsures = flattenAndAll(op.e.map(desugarOptionGuards(_, mctx)))
+    val optNames =
+      mctx.inputTypes.collect { case (n, _: OptionTypeF) => n }.toList :::
+        mctx.outputTypes.collect {
+          case (n, _: OptionTypeF) if !mctx.inputTypes.contains(n) => n
+        }.toList
+    val rawEnsures = flattenAndAll(
+      op.e.map(e => specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, e))
+    )
       .map(injectWFGuards(_, ensCtx))
       .map(renderExpr(ensCtx, _))
       .filter(_ != "true")
@@ -387,46 +394,6 @@ object Generator:
     }
 
     (externs.to(ListMap), patterns.toList)
-
-  private def desugarOptionGuards(expr: expr_full, ctx: Ctx): expr_full =
-    def isOption(name: String): Boolean =
-      ctx.inputTypes.get(name).orElse(ctx.outputTypes.get(name)).exists {
-        case _: OptionTypeF => true
-        case _              => false
-      }
-    def unwrap(body: expr_full, p: String): expr_full =
-      subst(p, FieldAccessF(IdentifierF(p, None), "value", None), body)
-    def go(e: expr_full): expr_full = e match
-      case BinaryOpF(
-            BImplies(),
-            guard @ BinaryOpF(BNeq(), IdentifierF(p, _), NoneLitF(_), _),
-            body,
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BImplies(), guard, go(unwrap(body, p)), sp)
-      case BinaryOpF(
-            BOr(),
-            guard @ BinaryOpF(BEq(), IdentifierF(p, _), NoneLitF(_), _),
-            body,
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BOr(), guard, go(unwrap(body, p)), sp)
-      case BinaryOpF(
-            BOr(),
-            body,
-            guard @ BinaryOpF(BEq(), IdentifierF(p, _), NoneLitF(_), _),
-            sp
-          ) if isOption(p) =>
-        BinaryOpF(BOr(), go(unwrap(body, p)), guard, sp)
-      case BinaryOpF(op, l, r, sp) => BinaryOpF(op, go(l), go(r), sp)
-      case UnaryOpF(op, x, sp)     => UnaryOpF(op, go(x), sp)
-      case QuantifierF(q, bs, body, sp) =>
-        val bsRewritten = bs.map { case QuantifierBindingFull(a, dom, kind, bsp) =>
-          QuantifierBindingFull(a, go(dom), kind, bsp)
-        }
-        QuantifierF(q, bsRewritten, go(body), sp)
-      case other => other
-    go(expr)
 
   private def primedStateFields(ensures: List[expr_full]): Set[String] =
     collectPrimedIdentifiers(ensures).toSet
