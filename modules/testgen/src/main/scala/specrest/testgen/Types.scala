@@ -107,11 +107,9 @@ object TestCtx:
       capture: CaptureMode,
       bareBodyOutput: Option[String] = None
   ): TestCtx =
-    val stateNames = svcState(ir).toList.flatMap(s => stdFields(s).map(stfName)).toSet
-    val mapStateNames = svcState(ir).toList.flatMap { s =>
-      stdFields(s).filter(f => isMapType(stfType(f))).map(stfName)
-    }.toSet
-    val enumVals = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap
+    val stateNames    = irStateFieldNames(ir).toSet
+    val mapStateNames = irStateFields(ir).filter(f => isMapType(stfType(f))).map(stfName).toSet
+    val enumVals      = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap
     TestCtx(
       inputs = operInputs(op).map(prmName).toSet,
       outputs = operOutputs(op).map(prmName).toSet,

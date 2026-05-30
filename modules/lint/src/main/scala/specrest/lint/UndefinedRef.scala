@@ -8,7 +8,7 @@ object UndefinedRef extends LintPass:
 
   def run(ir: service_ir_full): List[LintDiagnostic] =
     val out         = List.newBuilder[LintDiagnostic]
-    val stateFields = svcState(ir).toList.flatMap(sd => stdFields(sd).map(stfName)).toSet
+    val stateFields = irStateFieldNames(ir).toSet
     val entityNames = svcEntities(ir).map(entName).toSet
     val enumNames   = svcEnums(ir).map(enmName).toSet
     val enumMembers = svcEnums(ir).flatMap(enmVariants).toSet

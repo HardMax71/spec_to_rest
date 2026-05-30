@@ -7140,6 +7140,20 @@ object SpecRestGenerated {
     case FieldDeclFull(uu, t, uv, uw) => t
   }
 
+  def stdFields(x0: state_decl_full): List[state_field_decl_full] = x0 match {
+    case StateDeclFull(x1, x2) => x1
+  }
+
+  def svcState(x0: service_ir_full): Option[state_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x6
+  }
+
+  def irStateFields(ir: service_ir_full): List[state_field_decl_full] =
+    svcState(ir) match {
+      case None    => Nil
+      case Some(a) => stdFields(a)
+    }
+
   def paramTypeFull(x0: param_decl_full): type_expr_full = x0 match {
     case ParamDeclFull(uu, t, uv) => t
   }
@@ -10145,10 +10159,6 @@ object SpecRestGenerated {
     case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x11
   }
 
-  def svcState(x0: service_ir_full): Option[state_decl_full] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x6
-  }
-
   def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match {
       case BinaryOpF(op, l, r, _) =>
@@ -11399,10 +11409,6 @@ object SpecRestGenerated {
     case FieldAssignFull(x1, x2, x3) => x3
   }
 
-  def stdFields(x0: state_decl_full): List[state_field_decl_full] = x0 match {
-    case StateDeclFull(x1, x2) => x1
-  }
-
   def describeLitClass(x0: lit_class): String = x0 match {
     case LcNumeric()    => "numeric"
     case LcBool()       => "boolean"
@@ -11638,6 +11644,27 @@ object SpecRestGenerated {
 
   def findFieldDeclFull(fs: List[field_decl_full], nm: String): Option[field_decl_full] =
     find[field_decl_full]((fd: field_decl_full) => fieldNameFull(fd) == nm, fs)
+
+  def svcConventions(x0: service_ir_full): Option[conventions_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x14
+  }
+
+  def cvdRules(x0: conventions_decl_full): List[convention_rule_full] = x0 match {
+    case ConventionsDeclFull(x1, x2) => x1
+  }
+
+  def irConventionRules(ir: service_ir_full): List[convention_rule_full] =
+    svcConventions(ir) match {
+      case None    => Nil
+      case Some(a) => cvdRules(a)
+    }
+
+  def stfName(x0: state_field_decl_full): String = x0 match {
+    case StateFieldDeclFull(x1, x2, x3) => x1
+  }
+
+  def irStateFieldNames(ir: service_ir_full): List[String] =
+    map[state_field_decl_full, String]((a: state_field_decl_full) => stfName(a), irStateFields(ir))
 
   def isDestructiveOp(x0: migration_op): Boolean = x0 match {
     case CreateTable(uu)                     => false
@@ -13560,10 +13587,6 @@ object SpecRestGenerated {
     case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x13
   }
 
-  def stfName(x0: state_field_decl_full): String = x0 match {
-    case StateFieldDeclFull(x1, x2, x3) => x1
-  }
-
   def stfSpan(x0: state_field_decl_full): Option[span_t] = x0 match {
     case StateFieldDeclFull(x1, x2, x3) => x3
   }
@@ -14324,10 +14347,6 @@ object SpecRestGenerated {
     case ConventionRuleFull(x1, x2, x3, x4, x5) => x1
   }
 
-  def cvdRules(x0: conventions_decl_full): List[convention_rule_full] = x0 match {
-    case ConventionsDeclFull(x1, x2) => x1
-  }
-
   def entInvariants(x0: entity_decl_full): List[expr_full] = x0 match {
     case EntityDeclFull(x1, x2, x3, x4, x5) => x4
   }
@@ -14338,10 +14357,6 @@ object SpecRestGenerated {
 
   def qbdVar(x0: quantifier_binding_full): String = x0 match {
     case QuantifierBindingFull(x1, x2, x3, x4) => x1
-  }
-
-  def svcConventions(x0: service_ir_full): Option[conventions_decl_full] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x14
   }
 
   def svcTransitions(x0: service_ir_full): List[transition_decl_full] = x0 match {

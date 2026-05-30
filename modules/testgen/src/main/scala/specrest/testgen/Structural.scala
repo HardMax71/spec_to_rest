@@ -91,9 +91,8 @@ object Structural:
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
-      stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet,
-      mapStateFields = svcState(ir).toList
-        .flatMap(stdFields)
+      stateFields = irStateFieldNames(ir).toSet,
+      mapStateFields = irStateFields(ir)
         .filter(f => stfType(f).isInstanceOf[MapTypeF])
         .map(stfName)
         .toSet,
@@ -118,7 +117,7 @@ object Structural:
     if !isCreateLike then Nil
     else
       val opSnake         = Naming.toSnakeCase(operName(opDecl))
-      val stateFields     = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+      val stateFields     = irStateFieldNames(ir).toSet
       val outputNames     = operOutputs(opDecl).map(prmName).toSet
       val outputNamesList = outputNames.toList
       val stateFieldsList = stateFields.toList

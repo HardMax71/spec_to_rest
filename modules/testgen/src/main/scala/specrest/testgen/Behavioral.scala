@@ -111,7 +111,7 @@ object Behavioral:
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
-    val stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    val stateFields = irStateFieldNames(ir).toSet
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
 
     val requiresHasStateRef =
@@ -167,7 +167,7 @@ object Behavioral:
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
     val inputs      = operInputs(opDecl).map(prmName).toSet
-    val stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    val stateFields = irStateFieldNames(ir).toSet
 
     operRequires(opDecl).zipWithIndex.flatMap: (req, idx) =>
       keyExistencePair(req).filter((in, st) =>
@@ -213,7 +213,7 @@ object Behavioral:
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    val stateFields = irStateFieldNames(ir).toSet
 
     if operRequires(opDecl).exists(e => hasPrePrime(e) || free_vars(e).exists(stateFields.contains))
     then
@@ -259,7 +259,7 @@ object Behavioral:
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val stateFields = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+    val stateFields = irStateFieldNames(ir).toSet
     val temporals   = svcTemporals(ir)
     if temporals.isEmpty then Nil
     else if operRequires(opDecl).exists(e =>
@@ -706,8 +706,7 @@ object Behavioral:
     s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
 
   private def stateFieldForEntity(entityName: String, ir: ServiceIRFull): Option[String] =
-    svcState(ir).toList
-      .flatMap(stdFields)
+    irStateFields(ir)
       .find(f => relationTargetsEntity(stfType(f), entityName))
       .map(stfName)
 
@@ -894,8 +893,7 @@ object Behavioral:
       case _ => None
 
   private def entityForStateField(stateFieldName: String, ir: ServiceIRFull): Option[String] =
-    svcState(ir).toList
-      .flatMap(stdFields)
+    irStateFields(ir)
       .find(f => stfName(f) == stateFieldName)
       .map(stfType)
       .flatMap(relationTargetEntityName)

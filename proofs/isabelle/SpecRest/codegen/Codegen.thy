@@ -169,6 +169,9 @@ export_code
     entityFieldDeclLookup
     entityHasField
     entityFieldNames
+    irStateFields
+    irStateFieldNames
+    irConventionRules
     entityNameInList
     isCollectionType
     rootIdentifier

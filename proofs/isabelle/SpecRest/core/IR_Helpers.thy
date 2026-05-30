@@ -292,6 +292,24 @@ definition entityFieldNames ::
         None    \<Rightarrow> []
       | Some ed \<Rightarrow> map fieldNameFull (entityFieldsFull ed))"
 
+definition irStateFields ::
+  "service_ir_full \<Rightarrow> state_field_decl_full list" where
+  "irStateFields ir \<equiv>
+     (case svcState ir of
+        None   \<Rightarrow> []
+      | Some s \<Rightarrow> stdFields s)"
+
+definition irStateFieldNames ::
+  "service_ir_full \<Rightarrow> String.literal list" where
+  "irStateFieldNames ir \<equiv> map stfName (irStateFields ir)"
+
+definition irConventionRules ::
+  "service_ir_full \<Rightarrow> convention_rule_full list" where
+  "irConventionRules ir \<equiv>
+     (case svcConventions ir of
+        None   \<Rightarrow> []
+      | Some c \<Rightarrow> cvdRules c)"
+
 definition entityNameInList ::
   "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
   "entityNameInList es nm \<equiv>

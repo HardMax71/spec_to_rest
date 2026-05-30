@@ -21,7 +21,7 @@ object AdminRouter:
           .map(e => s"    await session.execute(delete(${entName(e)}))")
           .mkString("\n")
 
-    val stateFieldsList = svcState(ir).toList.flatMap(stdFields)
+    val stateFieldsList = irStateFields(ir)
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else

@@ -103,7 +103,7 @@ object Narration:
 
   private def contributingField(e: expr_full, ir: service_ir_full): Option[String] =
     collectFieldAccessNames(e).headOption.orElse:
-      val stateFieldNames = svcState(ir).toList.flatMap(stdFields).map(stfName).toSet
+      val stateFieldNames = irStateFieldNames(ir).toSet
       collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def describePreInputs(

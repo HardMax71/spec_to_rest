@@ -5,10 +5,9 @@ import specrest.ir.generated.SpecRestGenerated.entFields
 import specrest.ir.generated.SpecRestGenerated.entName
 import specrest.ir.generated.SpecRestGenerated.entity_decl_full
 import specrest.ir.generated.SpecRestGenerated.fldName
-import specrest.ir.generated.SpecRestGenerated.stdFields
+import specrest.ir.generated.SpecRestGenerated.irStateFields
 import specrest.ir.generated.SpecRestGenerated.stfName
 import specrest.ir.generated.SpecRestGenerated.svcEntities
-import specrest.ir.generated.SpecRestGenerated.svcState
 import specrest.ir.generated.SpecRestGenerated.svcTransitions
 import specrest.ir.generated.SpecRestGenerated.trnEntity
 import specrest.profile.ProfiledService
@@ -39,7 +38,7 @@ object AdminRouterGo:
           )
           .mkString("\n")
 
-    val stateFields = svcState(ir).toList.flatMap(stdFields)
+    val stateFields = irStateFields(ir)
     val stateAssigns = stateFields
       .map: f =>
         AdminModel.projectionFor(f, ir) match
