@@ -431,6 +431,29 @@ export_code
     isOptionalType
     isDateTimeType
     collectionElementType
+    fldName fldType fldDefault fldSpan
+    entName entParent entFields entInvariants entSpan
+    enmName enmVariants enmSpan
+    talName talType talConstraint talSpan
+    stfName stfType stfSpan
+    stdFields stdSpan
+    prmName prmType prmSpan
+    operName operInputs operOutputs operRequires operEnsures operSpan
+    trlFrom trlTo trlVia trlGuard trlSpan
+    trnName trnEntity trnField trnRules trnSpan
+    invName invBody invSpan
+    tmpName tmpBody tmpSpan
+    fctName fctBody fctSpan
+    fncName fncParams fncRetType fncBody fncSpan
+    prdName prdParams prdBody prdSpan
+    cvrTarget cvrProperty cvrQualifier cvrValue cvrSpan
+    cvdRules cvdSpan
+    fasName fasValue fasSpan
+    mpeKey mpeValue mpeSpan
+    qbdVar qbdCollection qbdKind qbdSpan
+    svcName svcImports svcEntities svcEnums svcTypeAliases svcState
+    svcOperations svcTransitions svcInvariants svcTemporals svcFacts
+    svcFunctions svcPredicates svcConventions svcSpan
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

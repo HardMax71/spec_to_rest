@@ -154,44 +154,44 @@ datatype (plugins only: code size) expr_full =
   | NoneLitF option_span
   | IdentifierF "String.literal" option_span
 and field_assign_full =
-    FieldAssignFull "String.literal" expr_full option_span
+    FieldAssignFull (fasName: "String.literal") (fasValue: expr_full) (fasSpan: option_span)
 and map_entry_full =
-    MapEntryFull expr_full expr_full option_span
+    MapEntryFull (mpeKey: expr_full) (mpeValue: expr_full) (mpeSpan: option_span)
 and quantifier_binding_full =
-    QuantifierBindingFull "String.literal" expr_full binding_kind_full option_span
+    QuantifierBindingFull (qbdVar: "String.literal") (qbdCollection: expr_full) (qbdKind: binding_kind_full) (qbdSpan: option_span)
 
 datatype (plugins only: code size) field_decl_full =
-    FieldDeclFull "String.literal" type_expr_full "expr_full option" option_span
+    FieldDeclFull (fldName: "String.literal") (fldType: type_expr_full) (fldDefault: "expr_full option") (fldSpan: option_span)
 
 datatype (plugins only: code size) entity_decl_full =
-    EntityDeclFull "String.literal" "String.literal option" "field_decl_full list" "expr_full list" option_span
+    EntityDeclFull (entName: "String.literal") (entParent: "String.literal option") (entFields: "field_decl_full list") (entInvariants: "expr_full list") (entSpan: option_span)
 
 datatype (plugins only: code size) enum_decl_full =
-    EnumDeclFull "String.literal" "String.literal list" option_span
+    EnumDeclFull (enmName: "String.literal") (enmVariants: "String.literal list") (enmSpan: option_span)
 
 datatype (plugins only: code size) type_alias_decl_full =
-    TypeAliasDeclFull "String.literal" type_expr_full "expr_full option" option_span
+    TypeAliasDeclFull (talName: "String.literal") (talType: type_expr_full) (talConstraint: "expr_full option") (talSpan: option_span)
 
 datatype (plugins only: code size) state_field_decl_full =
-    StateFieldDeclFull "String.literal" type_expr_full option_span
+    StateFieldDeclFull (stfName: "String.literal") (stfType: type_expr_full) (stfSpan: option_span)
 
 datatype (plugins only: code size) state_decl_full =
-    StateDeclFull "state_field_decl_full list" option_span
+    StateDeclFull (stdFields: "state_field_decl_full list") (stdSpan: option_span)
 
 datatype (plugins only: code size) param_decl_full =
-    ParamDeclFull "String.literal" type_expr_full option_span
+    ParamDeclFull (prmName: "String.literal") (prmType: type_expr_full) (prmSpan: option_span)
 
 datatype (plugins only: code size) operation_decl_full =
-    OperationDeclFull "String.literal" "param_decl_full list" "param_decl_full list" "expr_full list" "expr_full list" option_span
+    OperationDeclFull (operName: "String.literal") (operInputs: "param_decl_full list") (operOutputs: "param_decl_full list") (operRequires: "expr_full list") (operEnsures: "expr_full list") (operSpan: option_span)
 
 datatype (plugins only: code size) transition_rule_full =
-    TransitionRuleFull "String.literal" "String.literal" "String.literal" "expr_full option" option_span
+    TransitionRuleFull (trlFrom: "String.literal") (trlTo: "String.literal") (trlVia: "String.literal") (trlGuard: "expr_full option") (trlSpan: option_span)
 
 datatype (plugins only: code size) transition_decl_full =
-    TransitionDeclFull "String.literal" "String.literal" "String.literal" "transition_rule_full list" option_span
+    TransitionDeclFull (trnName: "String.literal") (trnEntity: "String.literal") (trnField: "String.literal") (trnRules: "transition_rule_full list") (trnSpan: option_span)
 
 datatype (plugins only: code size) invariant_decl_full =
-    InvariantDeclFull "String.literal option" expr_full option_span
+    InvariantDeclFull (invName: "String.literal option") (invBody: expr_full) (invSpan: option_span)
 
 datatype (plugins only: code size) temporal_body =
     TbAlways expr_full
@@ -200,16 +200,16 @@ datatype (plugins only: code size) temporal_body =
   | TbInvalid expr_full
 
 datatype (plugins only: code size) temporal_decl_full =
-    TemporalDeclFull "String.literal" temporal_body option_span
+    TemporalDeclFull (tmpName: "String.literal") (tmpBody: temporal_body) (tmpSpan: option_span)
 
 datatype (plugins only: code size) fact_decl_full =
-    FactDeclFull "String.literal option" expr_full option_span
+    FactDeclFull (fctName: "String.literal option") (fctBody: expr_full) (fctSpan: option_span)
 
 datatype (plugins only: code size) function_decl_full =
-    FunctionDeclFull "String.literal" "param_decl_full list" type_expr_full expr_full option_span
+    FunctionDeclFull (fncName: "String.literal") (fncParams: "param_decl_full list") (fncRetType: type_expr_full) (fncBody: expr_full) (fncSpan: option_span)
 
 datatype (plugins only: code size) predicate_decl_full =
-    PredicateDeclFull "String.literal" "param_decl_full list" expr_full option_span
+    PredicateDeclFull (prdName: "String.literal") (prdParams: "param_decl_full list") (prdBody: expr_full) (prdSpan: option_span)
 
 text \<open>Convention values: parse-don't-validate shape, streamlined to a small
   fixed set of payload shapes. The parser dispatches on the property name
@@ -257,22 +257,21 @@ datatype (plugins only: code size) convention_value =
   | CvUnknown expr_full                       \<comment> \<open>unrecognised property name\<close>
 
 datatype (plugins only: code size) convention_rule_full =
-    ConventionRuleFull "String.literal" "String.literal" "String.literal option"
-                       convention_value option_span
-                       \<comment> \<open>target, property_name, qualifier_opt, value, span\<close>
+    ConventionRuleFull (cvrTarget: "String.literal") (cvrProperty: "String.literal") (cvrQualifier: "String.literal option")
+                       (cvrValue: convention_value) (cvrSpan: option_span)
 
 datatype (plugins only: code size) conventions_decl_full =
-    ConventionsDeclFull "convention_rule_full list" option_span
+    ConventionsDeclFull (cvdRules: "convention_rule_full list") (cvdSpan: option_span)
 
 datatype (plugins only: code size) service_ir_full =
-    ServiceIRFull "String.literal" "String.literal list"
-                  "entity_decl_full list" "enum_decl_full list"
-                  "type_alias_decl_full list" "state_decl_full option"
-                  "operation_decl_full list" "transition_decl_full list"
-                  "invariant_decl_full list" "temporal_decl_full list"
-                  "fact_decl_full list" "function_decl_full list"
-                  "predicate_decl_full list" "conventions_decl_full option"
-                  option_span
+    ServiceIRFull (svcName: "String.literal") (svcImports: "String.literal list")
+                  (svcEntities: "entity_decl_full list") (svcEnums: "enum_decl_full list")
+                  (svcTypeAliases: "type_alias_decl_full list") (svcState: "state_decl_full option")
+                  (svcOperations: "operation_decl_full list") (svcTransitions: "transition_decl_full list")
+                  (svcInvariants: "invariant_decl_full list") (svcTemporals: "temporal_decl_full list")
+                  (svcFacts: "fact_decl_full list") (svcFunctions: "function_decl_full list")
+                  (svcPredicates: "predicate_decl_full list") (svcConventions: "conventions_decl_full option")
+                  (svcSpan: option_span)
 
 text \<open>\<open>string_in_list\<close> is the monomorphic membership predicate over
   \<open>String.literal list\<close>. Hoisted to the top of the file because using

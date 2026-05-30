@@ -7100,6 +7100,10 @@ object SpecRestGenerated {
   def sqliteCaps: dialect_caps =
     DialectCaps(true, true, true, false, false, true)
 
+  def mpeKey(x0: map_entry_full): expr_full = x0 match {
+    case MapEntryFull(x1, x2, x3) => x1
+  }
+
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -8670,6 +8674,30 @@ object SpecRestGenerated {
     case CtJson()           => SaType("sa.JSON()", None)
   }
 
+  def enmName(x0: enum_decl_full): String = x0 match {
+    case EnumDeclFull(x1, x2, x3) => x1
+  }
+
+  def enmSpan(x0: enum_decl_full): Option[span_t] = x0 match {
+    case EnumDeclFull(x1, x2, x3) => x3
+  }
+
+  def fctBody(x0: fact_decl_full): expr_full = x0 match {
+    case FactDeclFull(x1, x2, x3) => x2
+  }
+
+  def fctName(x0: fact_decl_full): Option[String] = x0 match {
+    case FactDeclFull(x1, x2, x3) => x1
+  }
+
+  def fctSpan(x0: fact_decl_full): Option[span_t] = x0 match {
+    case FactDeclFull(x1, x2, x3) => x3
+  }
+
+  def mpeSpan(x0: map_entry_full): Option[span_t] = x0 match {
+    case MapEntryFull(x1, x2, x3) => x3
+  }
+
   def enumLiteralOf(x0: expr_full, ms: List[String]): Option[String] = (x0, ms) match {
     case (EnumAccessF(uu, m, uv), ms) =>
       string_in_list(m, ms) match {
@@ -9349,6 +9377,46 @@ object SpecRestGenerated {
     case CtNumeric(p, None) => SaType("sa.Numeric(" + showInt(p) + ")", None)
     case CtBytes()          => SaType("sa.LargeBinary()", None)
     case CtJson()           => SaType("sa.JSON()", None)
+  }
+
+  def fldName(x0: field_decl_full): String = x0 match {
+    case FieldDeclFull(x1, x2, x3, x4) => x1
+  }
+
+  def fldSpan(x0: field_decl_full): Option[span_t] = x0 match {
+    case FieldDeclFull(x1, x2, x3, x4) => x4
+  }
+
+  def fldType(x0: field_decl_full): type_expr_full = x0 match {
+    case FieldDeclFull(x1, x2, x3, x4) => x2
+  }
+
+  def mpeValue(x0: map_entry_full): expr_full = x0 match {
+    case MapEntryFull(x1, x2, x3) => x2
+  }
+
+  def prmName(x0: param_decl_full): String = x0 match {
+    case ParamDeclFull(x1, x2, x3) => x1
+  }
+
+  def prmSpan(x0: param_decl_full): Option[span_t] = x0 match {
+    case ParamDeclFull(x1, x2, x3) => x3
+  }
+
+  def prmType(x0: param_decl_full): type_expr_full = x0 match {
+    case ParamDeclFull(x1, x2, x3) => x2
+  }
+
+  def svcName(x0: service_ir_full): String = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x1
+  }
+
+  def svcSpan(x0: service_ir_full): Option[span_t] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x15
+  }
+
+  def stdSpan(x0: state_decl_full): Option[span_t] = x0 match {
+    case StateDeclFull(x1, x2) => x2
   }
 
   def equal_lit_class(x0: lit_class, x1: lit_class): Boolean = (x0, x1) match {
@@ -10060,6 +10128,26 @@ object SpecRestGenerated {
           case false => (n, info) :: upsertExtern(rest, name, arity, kind)
         }
     }
+
+  def entName(x0: entity_decl_full): String = x0 match {
+    case EntityDeclFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def entSpan(x0: entity_decl_full): Option[span_t] = x0 match {
+    case EntityDeclFull(x1, x2, x3, x4, x5) => x5
+  }
+
+  def svcEnums(x0: service_ir_full): List[enum_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x4
+  }
+
+  def svcFacts(x0: service_ir_full): List[fact_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x11
+  }
+
+  def svcState(x0: service_ir_full): Option[state_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x6
+  }
 
   def isKeyExistsConj(c: expr_full, inputName: String, stateName: String): Boolean =
     c match {
@@ -11303,6 +11391,18 @@ object SpecRestGenerated {
       SaType("postgresql.JSONB()", Some[String]("sqlalchemy.dialects.postgresql"))
   }
 
+  def fasName(x0: field_assign_full): String = x0 match {
+    case FieldAssignFull(x1, x2, x3) => x1
+  }
+
+  def fasSpan(x0: field_assign_full): Option[span_t] = x0 match {
+    case FieldAssignFull(x1, x2, x3) => x3
+  }
+
+  def stdFields(x0: state_decl_full): List[state_field_decl_full] = x0 match {
+    case StateDeclFull(x1, x2) => x1
+  }
+
   def describeLitClass(x0: lit_class): String = x0 match {
     case LcNumeric()    => "numeric"
     case LcBool()       => "boolean"
@@ -12043,6 +12143,58 @@ object SpecRestGenerated {
     case CtJson()           => "JSON"
   }
 
+  def entFields(x0: entity_decl_full): List[field_decl_full] = x0 match {
+    case EntityDeclFull(x1, x2, x3, x4, x5) => x3
+  }
+
+  def entParent(x0: entity_decl_full): Option[String] = x0 match {
+    case EntityDeclFull(x1, x2, x3, x4, x5) => x2
+  }
+
+  def enmVariants(x0: enum_decl_full): List[String] = x0 match {
+    case EnumDeclFull(x1, x2, x3) => x2
+  }
+
+  def fasValue(x0: field_assign_full): expr_full = x0 match {
+    case FieldAssignFull(x1, x2, x3) => x2
+  }
+
+  def fldDefault(x0: field_decl_full): Option[expr_full] = x0 match {
+    case FieldDeclFull(x1, x2, x3, x4) => x3
+  }
+
+  def fncBody(x0: function_decl_full): expr_full = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x4
+  }
+
+  def fncName(x0: function_decl_full): String = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def fncSpan(x0: function_decl_full): Option[span_t] = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x5
+  }
+
+  def svcImports(x0: service_ir_full): List[String] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x2
+  }
+
+  def tmpBody(x0: temporal_decl_full): temporal_body = x0 match {
+    case TemporalDeclFull(x1, x2, x3) => x2
+  }
+
+  def tmpName(x0: temporal_decl_full): String = x0 match {
+    case TemporalDeclFull(x1, x2, x3) => x1
+  }
+
+  def tmpSpan(x0: temporal_decl_full): Option[span_t] = x0 match {
+    case TemporalDeclFull(x1, x2, x3) => x3
+  }
+
+  def trlTo(x0: transition_rule_full): String = x0 match {
+    case TransitionRuleFull(x1, x2, x3, x4, x5) => x2
+  }
+
   def extractMapEntriesPairs(x0: List[map_entry_full]): List[(expr_full, expr_full)] =
     x0 match {
       case Nil                            => Nil
@@ -12596,6 +12748,38 @@ object SpecRestGenerated {
     case CtJson()           => "TEXT"
   }
 
+  def invBody(x0: invariant_decl_full): expr_full = x0 match {
+    case InvariantDeclFull(x1, x2, x3) => x2
+  }
+
+  def invName(x0: invariant_decl_full): Option[String] = x0 match {
+    case InvariantDeclFull(x1, x2, x3) => x1
+  }
+
+  def invSpan(x0: invariant_decl_full): Option[span_t] = x0 match {
+    case InvariantDeclFull(x1, x2, x3) => x3
+  }
+
+  def prdBody(x0: predicate_decl_full): expr_full = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x3
+  }
+
+  def prdName(x0: predicate_decl_full): String = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x1
+  }
+
+  def prdSpan(x0: predicate_decl_full): Option[span_t] = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x4
+  }
+
+  def svcEntities(x0: service_ir_full): List[entity_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x3
+  }
+
+  def trlVia(x0: transition_rule_full): String = x0 match {
+    case TransitionRuleFull(x1, x2, x3, x4, x5) => x3
+  }
+
   def detectCreatePattern(es: List[expr_full], stateFields: List[String]): Option[String] =
     maps[expr_full, String](
       (a: expr_full) => createPatternOf(stateFields, a),
@@ -12919,6 +13103,58 @@ object SpecRestGenerated {
       case DirectEmit()   => "DIRECT_EMIT"
       case LlmSynthesis() => "LLM_SYNTHESIS"
     }
+
+  def cvrSpan(x0: convention_rule_full): Option[span_t] = x0 match {
+    case ConventionRuleFull(x1, x2, x3, x4, x5) => x5
+  }
+
+  def fncParams(x0: function_decl_full): List[param_decl_full] = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x2
+  }
+
+  def operName(x0: operation_decl_full): String = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x1
+  }
+
+  def operSpan(x0: operation_decl_full): Option[span_t] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x6
+  }
+
+  def svcFunctions(x0: service_ir_full): List[function_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x12
+  }
+
+  def svcTemporals(x0: service_ir_full): List[temporal_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x10
+  }
+
+  def trnName(x0: transition_decl_full): String = x0 match {
+    case TransitionDeclFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def trnSpan(x0: transition_decl_full): Option[span_t] = x0 match {
+    case TransitionDeclFull(x1, x2, x3, x4, x5) => x5
+  }
+
+  def trlFrom(x0: transition_rule_full): String = x0 match {
+    case TransitionRuleFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def trlSpan(x0: transition_rule_full): Option[span_t] = x0 match {
+    case TransitionRuleFull(x1, x2, x3, x4, x5) => x5
+  }
+
+  def talName(x0: type_alias_decl_full): String = x0 match {
+    case TypeAliasDeclFull(x1, x2, x3, x4) => x1
+  }
+
+  def talSpan(x0: type_alias_decl_full): Option[span_t] = x0 match {
+    case TypeAliasDeclFull(x1, x2, x3, x4) => x4
+  }
+
+  def talType(x0: type_alias_decl_full): type_expr_full = x0 match {
+    case TypeAliasDeclFull(x1, x2, x3, x4) => x2
+  }
 
   def identifierNameSelect(x0: expr_full): List[String] = x0 match {
     case IdentifierF(n, uu)               => List(n)
@@ -13294,6 +13530,58 @@ object SpecRestGenerated {
 
   def saTypeImportModule(x0: sa_type): Option[String] = x0 match {
     case SaType(uu, m) => m
+  }
+
+  def cvrValue(x0: convention_rule_full): convention_value = x0 match {
+    case ConventionRuleFull(x1, x2, x3, x4, x5) => x4
+  }
+
+  def cvdSpan(x0: conventions_decl_full): Option[span_t] = x0 match {
+    case ConventionsDeclFull(x1, x2) => x2
+  }
+
+  def fncRetType(x0: function_decl_full): type_expr_full = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x3
+  }
+
+  def prdParams(x0: predicate_decl_full): List[param_decl_full] = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x2
+  }
+
+  def svcInvariants(x0: service_ir_full): List[invariant_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x9
+  }
+
+  def svcOperations(x0: service_ir_full): List[operation_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x7
+  }
+
+  def svcPredicates(x0: service_ir_full): List[predicate_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x13
+  }
+
+  def stfName(x0: state_field_decl_full): String = x0 match {
+    case StateFieldDeclFull(x1, x2, x3) => x1
+  }
+
+  def stfSpan(x0: state_field_decl_full): Option[span_t] = x0 match {
+    case StateFieldDeclFull(x1, x2, x3) => x3
+  }
+
+  def stfType(x0: state_field_decl_full): type_expr_full = x0 match {
+    case StateFieldDeclFull(x1, x2, x3) => x2
+  }
+
+  def trnField(x0: transition_decl_full): String = x0 match {
+    case TransitionDeclFull(x1, x2, x3, x4, x5) => x3
+  }
+
+  def trnRules(x0: transition_decl_full): List[transition_rule_full] = x0 match {
+    case TransitionDeclFull(x1, x2, x3, x4, x5) => x4
+  }
+
+  def trlGuard(x0: transition_rule_full): Option[expr_full] = x0 match {
+    case TransitionRuleFull(x1, x2, x3, x4, x5) => x4
   }
 
   def matchesIdentityShape(x0: expr_full, name: String): Option[String] =
@@ -14032,6 +14320,42 @@ object SpecRestGenerated {
       case (uu, IdentifierF(v, va))     => Nil
     }
 
+  def cvrTarget(x0: convention_rule_full): String = x0 match {
+    case ConventionRuleFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def cvdRules(x0: conventions_decl_full): List[convention_rule_full] = x0 match {
+    case ConventionsDeclFull(x1, x2) => x1
+  }
+
+  def entInvariants(x0: entity_decl_full): List[expr_full] = x0 match {
+    case EntityDeclFull(x1, x2, x3, x4, x5) => x4
+  }
+
+  def operInputs(x0: operation_decl_full): List[param_decl_full] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x2
+  }
+
+  def qbdVar(x0: quantifier_binding_full): String = x0 match {
+    case QuantifierBindingFull(x1, x2, x3, x4) => x1
+  }
+
+  def svcConventions(x0: service_ir_full): Option[conventions_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x14
+  }
+
+  def svcTransitions(x0: service_ir_full): List[transition_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x8
+  }
+
+  def svcTypeAliases(x0: service_ir_full): List[type_alias_decl_full] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x5
+  }
+
+  def trnEntity(x0: transition_decl_full): String = x0 match {
+    case TransitionDeclFull(x1, x2, x3, x4, x5) => x2
+  }
+
   def fieldNameIfStateIndex(e: expr_full, inputName: String, stateName: String): Option[String] =
     e match {
       case BinaryOpF(_, _, _, _)                                     => None
@@ -14420,6 +14744,22 @@ object SpecRestGenerated {
         case false => " BIGINT NOT NULL AUTO_INCREMENT"
       })
 
+  def operEnsures(x0: operation_decl_full): List[expr_full] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x5
+  }
+
+  def operOutputs(x0: operation_decl_full): List[param_decl_full] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x3
+  }
+
+  def qbdKind(x0: quantifier_binding_full): binding_kind_full = x0 match {
+    case QuantifierBindingFull(x1, x2, x3, x4) => x3
+  }
+
+  def qbdSpan(x0: quantifier_binding_full): Option[span_t] = x0 match {
+    case QuantifierBindingFull(x1, x2, x3, x4) => x4
+  }
+
   def collectFieldAccessNames(e: expr_full): List[String] =
     remdups[String](maps[expr_full, String](
       (a: expr_full) => fieldAccessNameSelect(a),
@@ -14756,6 +15096,14 @@ object SpecRestGenerated {
   def sqliteSerialColumnDef(name: String, uu: canonical_type): String =
     name + " INTEGER PRIMARY KEY AUTOINCREMENT"
 
+  def cvrProperty(x0: convention_rule_full): String = x0 match {
+    case ConventionRuleFull(x1, x2, x3, x4, x5) => x2
+  }
+
+  def operRequires(x0: operation_decl_full): List[expr_full] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x4
+  }
+
   def structuralIneligibility(
       e: expr_full,
       outputs: List[String],
@@ -14930,6 +15278,10 @@ object SpecRestGenerated {
     case OperationClassification(n, uu, uv, uw, ux, uy, uz) => n
   }
 
+  def cvrQualifier(x0: convention_rule_full): Option[String] = x0 match {
+    case ConventionRuleFull(x1, x2, x3, x4, x5) => x3
+  }
+
   def collectPreservedRelations(es: List[expr_full], stateFields: List[String]): List[String] =
     remdups[String](maps[expr_full, String](
       (a: expr_full) =>
@@ -15037,6 +15389,10 @@ object SpecRestGenerated {
         case true  => " SERIAL NOT NULL"
         case false => " BIGSERIAL NOT NULL"
       })
+
+  def talConstraint(x0: type_alias_decl_full): Option[expr_full] = x0 match {
+    case TypeAliasDeclFull(x1, x2, x3, x4) => x3
+  }
 
   def detectAggregateInvariant(invExpr: expr_full): Option[detected_aggregate] =
     invExpr match {
@@ -15230,6 +15586,10 @@ object SpecRestGenerated {
 
   def classifyGlobalVerifier(ir: service_ir_full): verifier_tool =
     foldVerifier(invariantBodies(ir))
+
+  def qbdCollection(x0: quantifier_binding_full): expr_full = x0 match {
+    case QuantifierBindingFull(x1, x2, x3, x4) => x2
+  }
 
   def collectionElementEntityName(ty: type_expr_full): Option[String] =
     ty match {
