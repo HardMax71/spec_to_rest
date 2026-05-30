@@ -2,7 +2,7 @@ package specrest.cli
 
 import cats.effect.IO
 import munit.CatsEffectSuite
-import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.ir.generated.SpecRestGenerated.classificationOperationName
 import specrest.ir.generated.SpecRestGenerated.classificationStrategy

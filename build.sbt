@@ -130,9 +130,23 @@ lazy val convention = (project in file("modules/convention"))
     libraryDependencies ++= commonMainDeps ++ commonTestDeps
   )
 
+// Dafny codegen is its own module (not under `convention`) so `synth`/`cli` use it
+// without depending on the REST/SQL convention engine; shared utilities `Naming`/
+// `Builtins` likewise live in `ir` (the foundation), not `convention`. `Schema`/
+// `Classify` deliberately stay in `convention` — moving them would create a
+// `profile`/`codegen` dependency cycle. Main deps are `ir` only; the golden tests
+// reuse convention's `SpecFixtures` in test scope.
+lazy val dafny = (project in file("modules/dafny"))
+  .settings(noTestWarts *)
+  .dependsOn(ir, convention % "test->test")
+  .settings(
+    name := "spec-dafny",
+    libraryDependencies ++= commonMainDeps ++ commonTestDeps
+  )
+
 lazy val lint = (project in file("modules/lint"))
   .settings(noTestWarts *)
-  .dependsOn(ir, convention, parser % Test)
+  .dependsOn(ir, parser % Test)
   .settings(
     name := "spec-lint",
     libraryDependencies ++= commonMainDeps ++ commonTestDeps
@@ -179,7 +193,7 @@ lazy val codegen = (project in file("modules/codegen"))
 
 lazy val synth = (project in file("modules/synth"))
   .settings(noTestWarts *)
-  .dependsOn(ir, convention, parser % Test)
+  .dependsOn(ir, dafny, convention % Test, parser % Test)
   .settings(
     name := "spec-synth",
     libraryDependencies ++= Seq(
@@ -216,7 +230,7 @@ lazy val bench = (project in file("modules/bench"))
 
 lazy val cli = (project in file("modules/cli"))
   .settings(noTestWarts *)
-  .dependsOn(ir, parser, convention, profile, verify, codegen, testgen, lint, synth)
+  .dependsOn(ir, parser, convention, dafny, profile, verify, codegen, testgen, lint, synth)
   .enablePlugins(NativeImagePlugin)
   .settings(
     name                := "spec-to-rest",
@@ -252,7 +266,20 @@ lazy val cli = (project in file("modules/cli"))
   )
 
 lazy val root = (project in file("."))
-  .aggregate(ir, parser, convention, profile, verify, codegen, testgen, lint, synth, cli, bench)
+  .aggregate(
+    ir,
+    parser,
+    convention,
+    dafny,
+    profile,
+    verify,
+    codegen,
+    testgen,
+    lint,
+    synth,
+    cli,
+    bench
+  )
   .settings(
     name           := "spec-to-rest-root",
     publish / skip := true

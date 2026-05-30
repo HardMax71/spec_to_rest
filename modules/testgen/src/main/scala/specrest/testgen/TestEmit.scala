@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.EmittedFile
-import specrest.convention.Naming
+import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.svcName
 import specrest.profile.ProfiledService
 

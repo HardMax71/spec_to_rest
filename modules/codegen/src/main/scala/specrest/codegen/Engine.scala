@@ -6,7 +6,7 @@ import com.github.jknack.handlebars.Helper
 import com.github.jknack.handlebars.Options
 import com.github.jknack.handlebars.Template
 import com.github.jknack.handlebars.helper.StringHelpers
-import specrest.convention.Naming
+import specrest.ir.Naming
 
 import scala.jdk.CollectionConverters.*
 

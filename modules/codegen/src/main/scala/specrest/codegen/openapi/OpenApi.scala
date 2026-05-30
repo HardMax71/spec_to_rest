@@ -1,8 +1,8 @@
 package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
-import specrest.convention.Naming
 import specrest.convention.ParamSpec
+import specrest.ir.Naming
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.ir.idx

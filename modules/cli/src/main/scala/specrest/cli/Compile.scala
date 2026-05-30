@@ -11,7 +11,7 @@ import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
-import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
@@ -280,7 +280,7 @@ object Compile:
   private def loadVerifiedBodies(
       specFile: String,
       synthOps: List[operation_classification],
-      methods: List[specrest.convention.dafny.DafnyMethodHeader],
+      methods: List[specrest.dafny.DafnyMethodHeader],
       verifiedRoot: Path,
       opts: CompileOptions,
       log: Logger
@@ -323,7 +323,7 @@ object Compile:
   private def foldVerifiedAndSkeleton(
       specFile: String,
       synthOps: List[operation_classification],
-      methods: List[specrest.convention.dafny.DafnyMethodHeader],
+      methods: List[specrest.dafny.DafnyMethodHeader],
       verifiedCache: Option[Cache],
       skeletonCache: Option[Cache],
       opts: CompileOptions,

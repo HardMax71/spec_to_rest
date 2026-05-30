@@ -1,6 +1,6 @@
 package specrest.synth
 
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 
 import scala.annotation.tailrec
 

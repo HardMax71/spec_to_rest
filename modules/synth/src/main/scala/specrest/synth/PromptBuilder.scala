@@ -1,6 +1,6 @@
 package specrest.synth
 
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 import specrest.ir.generated.SpecRestGenerated.classificationKind
 import specrest.ir.generated.SpecRestGenerated.classificationMatchedRule
 import specrest.ir.generated.SpecRestGenerated.classificationMethod

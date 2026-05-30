@@ -2,7 +2,6 @@ package specrest.profile
 
 import specrest.convention.Classify
 import specrest.convention.EndpointSpec
-import specrest.convention.Naming
 import specrest.convention.Path
 import specrest.convention.Schema
 import specrest.ir.*

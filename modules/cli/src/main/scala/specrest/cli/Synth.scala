@@ -5,8 +5,8 @@ import cats.effect.IO
 import cats.effect.kernel.Resource
 import specrest.cli.ExitCodes.given
 import specrest.convention.Classify
-import specrest.convention.dafny.DafnyMethodHeader
-import specrest.convention.dafny.Generator as DafnyGenerator
+import specrest.dafny.DafnyMethodHeader
+import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
@@ -439,7 +439,7 @@ object Synth:
   private def executeVerifyAll(
       specFile: String,
       classifications: List[operation_classification],
-      dafny: specrest.convention.dafny.DafnyOutput,
+      dafny: specrest.dafny.DafnyOutput,
       opts: SynthVerifyAllOptions,
       binary: String,
       log: Logger,
@@ -492,7 +492,7 @@ object Synth:
   private def runOrchestrationLoop(
       specFile: String,
       classifications: List[operation_classification],
-      dafny: specrest.convention.dafny.DafnyOutput,
+      dafny: specrest.dafny.DafnyOutput,
       orch: FallbackOrchestrator,
       opts: SynthVerifyAllOptions,
       err: PrintStream,

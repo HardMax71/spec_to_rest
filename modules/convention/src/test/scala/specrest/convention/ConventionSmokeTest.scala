@@ -1,7 +1,7 @@
 package specrest.convention
-
 import munit.CatsEffectSuite
 import specrest.convention.testutil.SpecFixtures
+import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
 import java.nio.file.Files

@@ -7,7 +7,7 @@ import io.circe.generic.semiauto.deriveDecoder
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.parser
 import io.circe.syntax.EncoderOps
-import specrest.convention.dafny.DafnyMethodHeader
+import specrest.dafny.DafnyMethodHeader
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
