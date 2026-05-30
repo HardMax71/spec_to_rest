@@ -95,42 +95,6 @@ record enum_decl =
   enm_members :: "String.literal list"
   enm_span    :: "option_span"
 
-record state_scalar =
-  ss_name :: "String.literal"
-  ss_ty   :: "type_expr"
-  ss_span :: "option_span"
-
-record state_relation =
-  sr_name  :: "String.literal"
-  sr_key   :: "type_expr"
-  sr_value :: "type_expr"
-  sr_span  :: "option_span"
-
-record state_decl =
-  st_scalars   :: "state_scalar list"
-  st_relations :: "state_relation list"
-  st_span      :: "option_span"
-
-record invariant_decl =
-  inv_name :: "String.literal"
-  inv_body :: "expr"
-  inv_span :: "option_span"
-
-record operation_decl =
-  op_name     :: "String.literal"
-  op_requires :: "expr list"
-  op_ensures  :: "expr list"
-  op_span     :: "option_span"
-
-record service_ir =
-  svc_name       :: "String.literal"
-  svc_enums      :: "enum_decl list"
-  svc_entities   :: "entity_decl list"
-  svc_state      :: "state_decl"
-  svc_invariants :: "invariant_decl list"
-  svc_operations :: "operation_decl list"
-  svc_span       :: "option_span"
-
 text \<open>Issue #202: full input-language IR (canonical for Scala consumers).
   Coexists with the verified-subset above. The verified-subset stays as records
   (proof-internal); the full-language IR uses datatypes — Code_Target_Scala
