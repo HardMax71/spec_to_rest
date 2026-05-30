@@ -94,6 +94,9 @@ lazy val commonTestDeps = Seq(
   "org.typelevel" %% "munit-cats-effect" % munitCEVersion % Test
 )
 
+// The `dependsOn` graph below is the module architecture; it is asserted explicitly by
+// modules/arch/ArchitectureTest (`sbt arch/test`). Adding a module or changing a `dependsOn`
+// requires updating that test's layeredArchitecture rule. See CONTRIBUTING.md.
 lazy val ir = (project in file("modules/ir"))
   .settings(noTestWarts *)
   .settings(skipGeneratedScalafix *)

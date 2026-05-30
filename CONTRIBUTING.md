@@ -1,5 +1,26 @@
 # Contributing
 
+## Architecture enforcement
+
+The module dependency graph in `build.sbt` (`dependsOn`) _is_ the architecture — an illegal
+cross-module import simply won't compile. On top of that, [`modules/arch`](modules/arch) is a
+test-only module whose [ArchUnit](https://www.archunit.org/) test (`ArchitectureTest`) turns the
+architecture into an **explicit, executable spec** and catches what the build graph alone can't.
+
+`sbt arch/test` asserts, against every module's compiled bytecode:
+
+- **module layering** — a `layeredArchitecture` mirroring the `dependsOn` graph (each module may
+  only be accessed by its declared dependents);
+- **package-level cycle freedom** (sbt only forbids _module_ cycles);
+- **`verify`** (the trusted soundness core) depends on no downstream layer;
+- **`convention`** does not reach into downstream layers (so it can't re-accrete into a grab-bag).
+
+**When you add a module or change a `dependsOn`, update the `layeredArchitecture` rule in
+`ArchitectureTest.scala`** (the `.layer(...)` definitions and the `.mayOnlyBeAccessedByLayers(...)`
+lists), or `arch/test` will fail. Those lists are **production** dependents only: the test analyzes
+main bytecode (`DO_NOT_INCLUDE_TESTS`), so a test-scope dependency (e.g. `convention % Test`) is
+_not_ an accessor and must not be listed.
+
 ## Dependency updates
 
 Two bots own the update PR stream, split by ecosystem:
