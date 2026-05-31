@@ -3,7 +3,6 @@
 (set-option :timeout 30000)
 ;; sorts
 (declare-sort BaseURL 0)
-(declare-sort DateTime 0)
 (declare-sort LongURL 0)
 (declare-sort ShortCode 0)
 (declare-sort UrlMapping 0)
@@ -20,7 +19,7 @@
 (declare-fun store_map (ShortCode) LongURL)
 (declare-fun UrlMapping_click_count (UrlMapping) Int)
 (declare-fun UrlMapping_code (UrlMapping) ShortCode)
-(declare-fun UrlMapping_created_at (UrlMapping) DateTime)
+(declare-fun UrlMapping_created_at (UrlMapping) Int)
 (declare-fun UrlMapping_url (UrlMapping) LongURL)
 ;; assertions
 (assert (forall ((self_ShortCode ShortCode)) (and (and (>= (len_ShortCode self_ShortCode) 6) (<= (len_ShortCode self_ShortCode) 10)) (matches_0_ShortCode self_ShortCode))))

@@ -39,5 +39,5 @@ object IrValueDecoder:
               if parts.length == 2 then Some(VEnum(parts(0), parts(1))) else None
             else None
           case None => None
-      case Z3Sort.SetOf(_) =>
+      case Z3Sort.Real | Z3Sort.SetOf(_) =>
         None

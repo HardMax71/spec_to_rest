@@ -124,6 +124,7 @@ object Z3CounterExample:
   private def sortToTy(sort: Z3Sort, ctx: tyctx_ext[Unit]): Option[ty] = sort match
     case Z3Sort.Bool => Some(TBool())
     case Z3Sort.Int  => Some(TInt())
+    case Z3Sort.Real => None
     case Z3Sort.Uninterp(name) =>
       if tc_enums(ctx).contains(name) then Some(TEnum(name))
       else if tc_entities(ctx)

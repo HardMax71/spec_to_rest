@@ -4,6 +4,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 enum Z3Sort derives CanEqual:
   case Int
+  case Real
   case Bool
   case Uninterp(name: String)
   case SetOf(elem: Z3Sort)
@@ -12,9 +13,14 @@ object Z3Sort:
   val IntS: Z3Sort  = Int
   val BoolS: Z3Sort = Bool
 
+  val numeric: Set[Z3Sort] = Set(Int, Real)
+
+  def isNumeric(s: Z3Sort): Boolean = numeric.contains(s)
+
   def key(s: Z3Sort): String = s match
     case Uninterp(n) => s"U:$n"
     case Int         => "Int"
+    case Real        => "Real"
     case Bool        => "Bool"
     case SetOf(e)    => s"Set(${key(e)})"
 

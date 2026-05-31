@@ -25,6 +25,7 @@ object SmtLib:
 
   private def renderSort(s: Z3Sort): String = s match
     case Z3Sort.Int         => "Int"
+    case Z3Sort.Real        => "Real"
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"

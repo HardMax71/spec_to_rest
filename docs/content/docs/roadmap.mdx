@@ -132,6 +132,7 @@ Per-feature ledger for the verifier. For the prose explanation of each entry, se
 | SMT-LIB artifact export (`--dump-smt`)                              | shipped |
 | Invariant consistency checking (per-op `requires`, dead ops)        | shipped |
 | Primitive-type alias refinement (`type Positive = Int where ...`)     | shipped |
+| Scalar type sorts (`Int`/`Bool`; temporal `DateTime`/`Date` as epoch `Int`; fractional `Float`/`Decimal`/`Money` as `Real`) | shipped (Z3; ordering and arithmetic over these verify, with `Int`/`Real` coercion; non-numeric primitives stay uninterpreted, so ordering/arithmetic on them is skipped as outside the encodable subset, not crashed) |
 | Cardinality on state relations (`#store`, uninterpreted >= 0)        | shipped |
 | Invariant preservation checking (operation pre/post => invariant)    | shipped |
 | `Prime` (`X'`), `Pre(X)`, `With` record update, inline `y in {...}`   | shipped |

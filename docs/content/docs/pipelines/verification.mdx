@@ -555,6 +555,30 @@ the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend
 mid-call abort details) are documented in
 [Concurrency & Cancellation](/pipelines/concurrency).
 
+## Scalar types
+
+Each spec primitive maps to a Z3 theory sort. Integral and temporal types share `Int`
+(temporal values are epoch seconds, so ordering and arithmetic on `DateTime` / `Date`
+verify directly); fractional types use Z3 `Real`; everything else is an uninterpreted sort
+that supports equality only.
+
+| Spec type                         | Z3 sort                                    |
+| --------------------------------- | ------------------------------------------ |
+| `Int`, `DateTime`, `Date`         | `Int`                                      |
+| `Float`, `Decimal`, `Money`       | `Real`                                     |
+| `Bool` / `Boolean`                | `Bool`                                     |
+| `String`, `UUID`, entities, enums | uninterpreted                              |
+| `Set[T]`                          | `(Set T)` (see [Set theory](#set-theory))  |
+
+Ordering (`<`, `<=`, `>`, `>=`) and arithmetic (`+`, `-`, `*`, `/`) require numeric operands
+(`Int` or `Real`); Z3 coerces `Int` to `Real` when the two are mixed (e.g. a `Money` field
+compared to an integer literal). Applied to a non-numeric sort, the check is reported as
+skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on any sort.
+
+The integral-vs-fractional split is the one type-to-sort fact made in the Z3 translator
+rather than derived from the proof: the Isabelle `ty` has only `Int`/`Bool` (no fractional
+sort), so it cannot express it.
+
 ## Set theory
 
 `Set[T]` maps to Z3's built-in set theory (extensional `Array T Bool` under the hood). The
@@ -603,6 +627,12 @@ round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/spec
 or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
 via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
 when the snapshot legitimately changes.
+
+Adding a new **sort** (e.g. a future fixed-point or bit-vector type) is wider: add the case to
+`Z3Sort` in `Types.scala`, then let the compiler's exhaustiveness errors walk you through
+`resolveSort` (Backend), `renderSort` (SmtLib), `sortToTy` (CounterExample), `IrValueDecoder`,
+and `primitiveSortOf` (Translator). Keep ordering/arithmetic gated on `Z3Sort.isNumeric` so a
+non-numeric sort is skipped rather than handed to the solver ill-sorted.
 
 ## Verify-as-gate in `compile`
 
