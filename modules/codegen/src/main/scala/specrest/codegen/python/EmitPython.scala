@@ -84,7 +84,8 @@ final private case class EnrichedOperation(
     customRequestSchema: Option[CustomRequestSchema],
     dafnyMethod: Option[String],
     dafnyCallArgs: List[String],
-    kernelHandlerSignature: String
+    kernelHandlerSignature: String,
+    initFields: List[ModelInitFieldView]
 )
 
 final private case class EntityImports(
@@ -119,7 +120,6 @@ final private case class ModelCtx(
     table: Option[table_spec],
     entityOperations: List[EnrichedOperation],
     nonIdFields: List[ProfiledField],
-    initFields: List[ModelInitFieldView],
     sqlalchemyImports: List[String],
     postgresImports: List[String],
     stdlibImports: List[StdlibImport]
@@ -236,7 +236,6 @@ object EmitPython:
         nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val nonIdFieldViews      = nonIdFields.map(schemaInputField)
       val readFieldViews       = readFieldsRaw.map(schemaReadField)
-      val initFieldViews       = nonIdFields.map(modelInitField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
       val needsSecretStr =
@@ -254,7 +253,6 @@ object EmitPython:
         table = table,
         entityOperations = entityOps,
         nonIdFields = modelFields,
-        initFields = initFieldViews,
         sqlalchemyImports = imports.sqlalchemyImports,
         postgresImports = imports.postgresImports,
         stdlibImports = imports.stdlibImports
@@ -599,6 +597,10 @@ object EmitPython:
       case _: BatchMutation => "BatchMutation"
       case _: Transition    => "Transition"
 
+    val createInitFields = routeKind match
+      case _: RkCreate => entity.fields.filterNot(_.fieldName == "id").map(modelInitField)
+      case _           => List.empty[ModelInitFieldView]
+
     EnrichedOperation(
       operationName = op.operationName,
       handlerName = op.handlerName,
@@ -620,7 +622,8 @@ object EmitPython:
       customRequestSchema = customRequestSchema,
       dafnyMethod = op.dafnyMethod,
       dafnyCallArgs = dafnyArgs,
-      kernelHandlerSignature = kernelSig
+      kernelHandlerSignature = kernelSig,
+      initFields = createInitFields
     )
 
   private def kernelSignatureAndArgs(

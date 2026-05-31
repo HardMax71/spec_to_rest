@@ -34,7 +34,11 @@ class {{entity.entityName}}Service:
         return result  # type: ignore[no-any-return]
 {{else if (eq this.routeKind "create")}}
     async def {{this.handlerName}}(self, body: {{../entity.createSchemaName}}) -> {{../entity.readSchemaName}}:
-        row = {{../entity.modelClassName}}(body)
+        row = {{../entity.modelClassName}}(
+{{#each this.initFields}}
+            {{this.columnName}}={{this.bodyAccessor}},
+{{/each}}
+        )
         self._session.add(row)
         await self._session.flush()
         return {{../entity.readSchemaName}}.model_validate(row)
