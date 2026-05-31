@@ -8,7 +8,6 @@ from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-from app.schemas.url_mapping import UrlMappingCreate
 
 
 class UrlMapping(Base):
@@ -24,16 +23,3 @@ class UrlMapping(Base):
 
     click_count: Mapped[int] = mapped_column(Integer)
 
-
-    def __init__(self, body: UrlMappingCreate) -> None:
-        super().__init__(
-
-            code=body.code,
-
-            url=body.url,
-
-            created_at=body.created_at,
-
-            click_count=body.click_count,
-
-        )

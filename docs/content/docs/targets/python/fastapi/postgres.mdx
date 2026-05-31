@@ -121,6 +121,26 @@ Multi-entity specs (e.g. `fixtures/spec/ecommerce.spec`) produce one parallel
 
 Template sources: `modules/codegen/src/main/resources/templates/python/fastapi/`.
 
+## Code layering
+
+The four `app/` layers keep a strict one-way dependency that mirrors FastAPI's idiomatic split
+between the API boundary and persistence: routers depend on services, and services depend on
+models and schemas. Nothing flows the other way.
+
+- **`schemas/`** (Pydantic v2) is the API boundary. The read DTO sets
+  `model_config = ConfigDict(from_attributes=True)`, so an ORM row becomes its response shape
+  via `ReadSchema.model_validate(row)` rather than a hand-written mapper.
+- **`models/`** (SQLAlchemy 2.0) is pure persistence: `Mapped[...]` columns and `__tablename__`,
+  and nothing more. A model never imports a schema and defines no custom `__init__`; it is built
+  through SQLAlchemy's keyword constructor.
+- **`services/`** is the only layer aware of both shapes. A create handler constructs the model
+  with explicit keyword arguments (`Model(field=body.field, ...)`, unwrapping `SecretStr` inputs
+  via `get_secret_value()` where present) and reads it back with `model_validate`.
+
+The result is deliberately free of `*_to_*` converter functions, `**model_dump()` splats into the
+ORM constructor, and dynamic imports. The API-to-DB mapping lives only in the service, where
+cross-layer knowledge belongs.
+
 ## Naming conventions
 
 Derived names are locked in `modules/profile/src/main/scala/specrest/profile/Targets.scala` and the convention engine under

@@ -274,25 +274,17 @@ class EmitTest extends CatsEffectSuite:
         s"UserRead must not surface password_hash; got:\n$readBlock"
       )
 
-  test("model emits typed __init__ taking the Create schema"):
+  test("db model is pure persistence: no schema import, no custom __init__"):
     SpecFixtures.loadProfiled("auth_service").map: profiled =>
       val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val model = files("app/models/user.py")
       assert(
-        model.contains("from app.schemas.user import UserCreate"),
-        s"user model should import UserCreate; got:\n$model"
+        !model.contains("from app.schemas"),
+        s"db model must not import api schemas; got:\n$model"
       )
       assert(
-        model.contains("def __init__(self, body: UserCreate) -> None:"),
-        s"User.__init__ should take a typed UserCreate; got:\n$model"
-      )
-      assert(
-        model.contains("password_hash=body.password_hash.get_secret_value()"),
-        s"User.__init__ should unwrap password_hash via get_secret_value(); got:\n$model"
-      )
-      assert(
-        model.contains("email=body.email"),
-        s"User.__init__ should pass email through; got:\n$model"
+        !model.contains("def __init__"),
+        s"db model must not define a custom __init__; got:\n$model"
       )
 
   test("no service handler splats model_dump() into the ORM constructor"):
@@ -307,13 +299,17 @@ class EmitTest extends CatsEffectSuite:
             s"$name: services still call model_dump(): ${offenders.map(_.path)}"
           )
 
-  test("matching create-shape op renders typed row = Model(body) handler"):
+  test("create-shape op constructs the model with explicit fields in the service"):
     SpecFixtures.loadProfiled("secret_create").map: profiled =>
       val files   = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val service = files("app/services/account.py")
       assert(
-        service.contains("row = Account(body)"),
-        s"create handler should call Account(body); got:\n$service"
+        service.contains("row = Account("),
+        s"create handler should construct Account(...); got:\n$service"
+      )
+      assert(
+        !service.contains("Account(body)"),
+        s"create handler should not pass the schema to the constructor; got:\n$service"
       )
       assert(
         !service.contains("NotImplementedError"),
@@ -322,35 +318,40 @@ class EmitTest extends CatsEffectSuite:
 
   test("secret_create — schema, model, service line up across the boundary"):
     SpecFixtures.loadProfiled("secret_create").map: profiled =>
-      val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val schema = files("app/schemas/account.py")
-      val model  = files("app/models/account.py")
+      val files   = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val schema  = files("app/schemas/account.py")
+      val model   = files("app/models/account.py")
+      val service = files("app/services/account.py")
       assert(
         schema.contains("password_hash: SecretStr"),
         s"AccountCreate should use SecretStr; got:\n$schema"
       )
       assert(
-        model.contains("password_hash=body.password_hash.get_secret_value()"),
-        s"Account.__init__ should unwrap SecretStr; got:\n$model"
+        !model.contains("from app.schemas"),
+        s"Account model must stay pure persistence; got:\n$model"
       )
       assert(
-        model.contains("email=body.email") && model.contains("display_name=body.display_name"),
-        s"Account.__init__ should pass plain fields through; got:\n$model"
+        service.contains("password_hash=body.password_hash.get_secret_value()"),
+        s"create handler should unwrap SecretStr; got:\n$service"
+      )
+      assert(
+        service.contains("email=body.email") && service.contains("display_name=body.display_name"),
+        s"create handler should pass plain fields through; got:\n$service"
       )
 
   test("nullable sensitive field unwraps via guarded get_secret_value"):
     SpecFixtures.loadProfiled("secret_create").map: profiled =>
-      val files = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
-      val model = files("app/models/account.py")
+      val files   = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val service = files("app/services/account.py")
       assert(
-        model.contains(
+        service.contains(
           "reset_token=body.reset_token.get_secret_value() " +
             "if body.reset_token is not None else None"
         ),
-        s"nullable sensitive field should guard get_secret_value() against None; got:\n$model"
+        s"nullable sensitive field should guard get_secret_value() against None; got:\n$service"
       )
 
-  test("every entity model file emits a typed __init__ regardless of field count"):
+  test("every entity model file is pure persistence (no __init__, no schema import)"):
     val cases = List("secret_create", "auth_service", "url_shortener", "todo_list", "ecommerce")
     cases.foldLeft(IO.unit): (acc, name) =>
       acc.flatMap: _ =>
@@ -359,10 +360,10 @@ class EmitTest extends CatsEffectSuite:
             f.path.startsWith("app/models/") &&
               f.path.endsWith(".py") &&
               !f.path.endsWith("__init__.py") &&
-              !f.content.contains("def __init__(self, body:")
+              (f.content.contains("def __init__") || f.content.contains("from app.schemas"))
           assert(
             offenders.isEmpty,
-            s"$name: model files missing typed __init__: ${offenders.map(_.path)}"
+            s"$name: model files still coupled to schemas: ${offenders.map(_.path)}"
           )
 
   test("schema without sensitive fields does not import SecretStr"):
