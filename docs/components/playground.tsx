@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Highlighter } from "shiki";
 import { PLAYGROUND_EXAMPLES } from "@/lib/playground-examples.generated";
 
 type Target =
@@ -22,7 +23,7 @@ const TARGETS: { value: Target; label: string; description: string }[] = [
   { value: "synth", label: "Synth", description: "LLM CEGIS (BYO API key)" },
 ];
 
-// Pretty display labels are still hardcoded — there's no "human name for a
+// Pretty display labels are still hardcoded - there's no "human name for a
 // framework ID" anywhere in the Scala source. If a fourth framework arrives,
 // add a row here OR fall back to the bare ID via FRAMEWORK_LABEL_FALLBACK.
 const FRAMEWORK_DISPLAY: Record<string, string> = {
@@ -227,18 +228,96 @@ export function Playground() {
         <CompileOptsRow opts={compileOpts} onChange={setCompileOpts} targets={targets} />
       )}
       {showSynthOpts && <SynthOptsRow opts={synthOpts} onChange={setSynthOpts} />}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <SpecEditor spec={spec} onChange={setSpec} onSubmit={submit} />
-        <OutputPane
-          state={state}
-          tab={tab}
-          onTab={setTab}
-          hasFiles={!!hasFiles}
-          selectedFile={selectedFile}
-          onSelectFile={setSelectedFile}
-        />
-      </div>
+      <Split
+        left={<SpecEditor spec={spec} onChange={setSpec} onSubmit={submit} />}
+        right={
+          <OutputPane
+            state={state}
+            tab={tab}
+            onTab={setTab}
+            hasFiles={!!hasFiles}
+            selectedFile={selectedFile}
+            onSelectFile={setSelectedFile}
+          />
+        }
+      />
       <StatusLine state={state} target={target} />
+    </div>
+  );
+}
+
+let specHighlighter: Promise<Highlighter> | null = null;
+
+function getSpecHighlighter(): Promise<Highlighter> {
+  if (!specHighlighter) {
+    specHighlighter = (async () => {
+      const { createHighlighter, createJavaScriptRegexEngine } = await import("shiki");
+      const { specGrammar } = await import("@/lib/grammars");
+      return createHighlighter({
+        engine: createJavaScriptRegexEngine(),
+        langs: [specGrammar],
+        themes: ["github-light", "github-dark"],
+      });
+    })();
+  }
+  return specHighlighter;
+}
+
+async function highlightSpecHtml(code: string): Promise<string> {
+  const hl = await getSpecHighlighter();
+  return hl.codeToHtml(code, {
+    lang: "spec",
+    themes: { light: "github-light", dark: "github-dark" },
+    defaultColor: false,
+  });
+}
+
+function Split(props: { left: React.ReactNode; right: React.ReactNode }) {
+  const [pct, setPct] = useState(50);
+  const ref = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      if (!dragging.current || !ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const p = ((e.clientX - rect.left) / rect.width) * 100;
+      setPct(Math.min(75, Math.max(25, p)));
+    };
+    const up = () => {
+      dragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+  }, []);
+  return (
+    <div
+      ref={ref}
+      style={{ "--lp": `${pct}%` } as React.CSSProperties}
+      className="flex flex-col gap-3 md:h-[480px] md:flex-row md:gap-0"
+    >
+      <div className="h-[360px] min-h-0 min-w-0 md:h-full md:shrink-0 md:grow-0 md:basis-[var(--lp)]">
+        {props.left}
+      </div>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          dragging.current = true;
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+        }}
+        className="group hidden shrink-0 cursor-col-resize touch-none items-center justify-center px-1.5 md:flex"
+      >
+        <div className="h-12 w-1 rounded-full bg-fd-border transition group-hover:bg-fd-primary" />
+      </div>
+      <div className="h-[360px] min-h-0 min-w-0 md:h-full md:flex-1">{props.right}</div>
     </div>
   );
 }
@@ -407,25 +486,60 @@ function SpecEditor(props: {
   onChange: (s: string) => void;
   onSubmit: () => void;
 }) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [html, setHtml] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    highlightSpecHtml(props.spec)
+      .then((h) => {
+        if (!cancelled) setHtml(h);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [props.spec]);
+  const syncScroll = () => {
+    if (taRef.current && overlayRef.current) {
+      overlayRef.current.scrollTop = taRef.current.scrollTop;
+      overlayRef.current.scrollLeft = taRef.current.scrollLeft;
+    }
+  };
   return (
-    <div className="flex flex-col overflow-hidden rounded-md border border-fd-border bg-fd-card">
-      <div className="border-b border-fd-border bg-fd-secondary/30 px-3 py-1.5 text-xs font-medium text-fd-muted-foreground">
+    <div className="flex h-full flex-col overflow-hidden rounded-md border border-fd-border bg-fd-card">
+      <div className="flex h-9 items-center border-b border-fd-border bg-fd-secondary/30 px-3 text-xs font-medium text-fd-muted-foreground">
         spec
       </div>
-      <textarea
-        spellCheck={false}
-        autoCorrect="off"
-        autoCapitalize="off"
-        value={props.spec}
-        onChange={(e) => props.onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-            e.preventDefault();
-            props.onSubmit();
-          }
-        }}
-        className="block h-[460px] w-full resize-none bg-fd-background p-3 font-mono text-[13px] leading-relaxed text-fd-foreground focus:outline-none"
-      />
+      <div className="relative flex-1 overflow-hidden bg-fd-background">
+        <div
+          ref={overlayRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-[13px] leading-relaxed text-fd-foreground [&_code]:font-mono [&_pre]:m-0 [&_pre]:!bg-transparent [&_pre]:p-0"
+        >
+          {html ? (
+            <div dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <pre className="m-0 whitespace-pre p-0">{props.spec}</pre>
+          )}
+        </div>
+        <textarea
+          ref={taRef}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="none"
+          value={props.spec}
+          onChange={(e) => props.onChange(e.target.value)}
+          onScroll={syncScroll}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+              e.preventDefault();
+              props.onSubmit();
+            }
+          }}
+          className="absolute inset-0 m-0 block resize-none overflow-auto whitespace-pre bg-transparent p-3 font-mono text-[13px] leading-relaxed text-transparent caret-black focus:outline-none dark:caret-white"
+        />
+      </div>
     </div>
   );
 }
@@ -442,10 +556,10 @@ function OutputPane(props: {
   const fileEntry = files.find((f) => f.path === props.selectedFile);
   const showFilesTab = props.hasFiles;
   return (
-    <div className="flex flex-col overflow-hidden rounded-md border border-fd-border bg-fd-card">
+    <div className="flex h-full flex-col overflow-hidden rounded-md border border-fd-border bg-fd-card">
       <div
         role="tablist"
-        className="flex items-center gap-1 border-b border-fd-border bg-fd-secondary/30 px-2 py-1.5"
+        className="flex h-9 items-center gap-1 border-b border-fd-border bg-fd-secondary/30 px-2"
       >
         {showFilesTab && (
           <TabButton active={props.tab === "files"} onClick={() => props.onTab("files")}>
@@ -465,7 +579,7 @@ function OutputPane(props: {
         </TabButton>
       </div>
       {props.tab === "files" && showFilesTab ? (
-        <div className="flex h-[460px] flex-col">
+        <div className="flex flex-1 flex-col">
           <div className="flex items-center gap-2 border-b border-fd-border bg-fd-secondary/20 px-2 py-1.5 text-xs">
             <span className="text-fd-muted-foreground">file</span>
             <select
@@ -486,7 +600,7 @@ function OutputPane(props: {
           </pre>
         </div>
       ) : (
-        <pre className="m-0 h-[460px] overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
+        <pre className="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
           {props.tab === "stdout" ? stdoutText(props.state) : stderrText(props.state)}
         </pre>
       )}
@@ -551,7 +665,7 @@ function StatusLine({ state, target }: { state: RunState; target: Target }) {
     <p className="text-xs">
       <span className="text-red-600 dark:text-red-400">✗ error</span>{" "}
       <span className="text-fd-muted-foreground">
-        in {state.elapsedMs} ms — {state.message}
+        in {state.elapsedMs} ms - {state.message}
       </span>
     </p>
   );
@@ -583,7 +697,7 @@ function stdoutText(s: RunState): string {
     case "loading":
       return "// Running…";
     case "ok":
-      return s.stdout || "// (no stdout — the subcommand produced no output)";
+      return s.stdout || "// (no stdout - the subcommand produced no output)";
     case "error":
       return `// ERROR: ${s.message}`;
   }

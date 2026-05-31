@@ -22,6 +22,7 @@ export default async function Page(props: {
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
+  const isHome = !params.slug || params.slug.length === 0;
   const MDX = page.data.body;
   const repoRel = `docs/content/docs/${page.path}`;
   const lastModified = getGitLastModified(repoRel);
@@ -38,16 +39,20 @@ export default async function Page(props: {
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
-      <div className="flex items-start justify-between gap-4">
-        <DocsTitle>{page.data.title}</DocsTitle>
-        <EditOnGitHub href={editUrl} className="shrink-0 mt-1" />
-      </div>
-      <DocsDescription>{page.data.description}</DocsDescription>
-      {lastUpdatedLabel && (
-        <p className="-mt-2 text-xs text-fd-muted-foreground">
-          Last updated:{" "}
-          <time dateTime={lastModified?.toISOString()}>{lastUpdatedLabel}</time>
-        </p>
+      {!isHome && (
+        <>
+          <div className="flex items-start justify-between gap-4">
+            <DocsTitle>{page.data.title}</DocsTitle>
+            <EditOnGitHub href={editUrl} className="shrink-0 mt-1" />
+          </div>
+          <DocsDescription>{page.data.description}</DocsDescription>
+          {lastUpdatedLabel && (
+            <p className="-mt-2 text-xs text-fd-muted-foreground">
+              Last updated:{" "}
+              <time dateTime={lastModified?.toISOString()}>{lastUpdatedLabel}</time>
+            </p>
+          )}
+        </>
       )}
       <DocsBody>
         <MDX components={getMDXComponents()} />

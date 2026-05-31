@@ -6,25 +6,21 @@ description: A compiler that proves your REST service satisfies its specificatio
 import { Callout } from 'fumadocs-ui/components/callout';
 import { Check, Minus, CircleX } from 'lucide-react';
 
-# spec_to_rest
-
-A compiler that proves your REST service satisfies its specification before
-emitting code. The toolchain is Scala 3, Cats Effect 3, Z3, and Alloy;
-translator soundness is mechanically checked in Isabelle/HOL.
-
-You write the spec: entities, operations with pre/post-conditions, invariants.
-`spec-to-rest verify` discharges the proof obligations against Z3 and Alloy.
-`spec-to-rest compile` emits nothing when any check fails. When it passes, the
-emitter writes a complete service for any of three target stacks (Python/
-FastAPI, Go/chi, TypeScript/Express) across Postgres, SQLite, or MySQL.
-A conformance suite in that target's own language (pytest+Hypothesis,
-Vitest+fast-check, or `go test`+rapid) is emitted alongside the service
-**by default**, single-sourced from the same spec; pass `--no-tests` to opt
-out.
-
-Source is on [GitHub](https://github.com/HardMax71/spec_to_rest). The
-[spec language reference](/spec-language) covers syntax; the
-[verification pipeline](/pipelines/verification) page covers solver routing.
+<div className="not-prose mb-12 mt-2">
+  <h1 className="text-center text-4xl font-bold tracking-tight sm:text-5xl">spec_to_rest</h1>
+  <div className="mx-auto mt-4 max-w-2xl text-center text-base leading-relaxed text-fd-muted-foreground sm:text-lg">
+    A compiler that proves your REST service satisfies its specification - then
+    emits the service, or nothing at all. Scala 3 · Z3 · Alloy, with translator
+    soundness mechanically checked in Isabelle/HOL.
+  </div>
+  <div className="mt-5 text-center text-sm">
+    <a className="underline underline-offset-4 hover:text-fd-primary" href="https://github.com/HardMax71/spec_to_rest">GitHub</a>
+    <span className="mx-2 text-fd-muted-foreground">·</span>
+    <a className="underline underline-offset-4 hover:text-fd-primary" href="/spec-language">Spec language</a>
+    <span className="mx-2 text-fd-muted-foreground">·</span>
+    <a className="underline underline-offset-4 hover:text-fd-primary" href="/pipelines/verification">Verification</a>
+  </div>
+</div>
 
 ## Spec -> Verify -> Emit
 
@@ -33,12 +29,16 @@ and an excerpt of the FastAPI router emitted for the Python target (chi and
 Express render the same spec into their own stacks), all from one `compile`
 invocation:
 
-<div className="not-prose my-6 grid gap-4 lg:grid-cols-[1.1fr_0.9fr_1fr]">
-  <div className="rounded-md border bg-fd-card overflow-hidden">
+<div className="not-prose my-6 grid gap-4 lg:grid-cols-2">
+  <div className="flex flex-col overflow-hidden rounded-xl border bg-fd-card shadow-sm">
     <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
       url_shortener.spec
     </div>
-    <pre className="m-0 overflow-x-auto p-4 text-xs leading-relaxed"><code>{`service UrlShortener {
+
+<div className="flex-1 [&_figure]:m-0 [&_figure]:h-full [&_figure]:rounded-none [&_figure]:border-0 [&_figure]:shadow-none [&_pre]:h-full">
+
+```spec
+service UrlShortener {
   type ShortCode = String where
     len(value) >= 6 and len(value) <= 10
 
@@ -65,51 +65,125 @@ invocation:
 
   invariant metadataConsistent:
     dom(store) = dom(metadata)
-}`}</code></pre>
+}
+```
+
+</div>
   </div>
-  <div className="rounded-md border bg-fd-card overflow-hidden">
+  <div className="flex flex-col overflow-hidden rounded-xl border bg-fd-card shadow-sm">
     <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
-      verdict
+      verify
     </div>
-    <div className="space-y-2 p-4 font-mono text-xs leading-relaxed">
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] global (invariants jointly sat)</span>
+    <div className="flex flex-1 flex-col p-4 font-mono text-xs leading-relaxed">
+      <div className="text-fd-muted-foreground">$ spec-to-rest verify url_shortener.spec</div>
+      <div className="mt-2 space-y-0.5 text-fd-muted-foreground">
+        <div>Parsed in 3ms</div>
+        <div>Built IR in 2ms</div>
+        <div>Timeout: 5000ms</div>
+        <div>Alloy scope: 5</div>
+        <div>Max parallel: 8</div>
       </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Shorten.requires</span>
+      <div className="mt-3 space-y-1.5">
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> global <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Shorten.requires <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Shorten.enabled <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Shorten.preserves.<wbr/>allURLsValid <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Shorten.preserves.<wbr/>metadataConsistent <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Shorten.preserves.<wbr/>clickCountNonNegative <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Resolve.requires <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Resolve.enabled <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Resolve.preserves.<wbr/>allURLsValid <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Resolve.preserves.<wbr/>metadataConsistent <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Resolve.preserves.<wbr/>clickCountNonNegative <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Delete.requires <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Delete.enabled <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Delete.preserves.<wbr/>allURLsValid <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Delete.preserves.<wbr/>metadataConsistent <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> Delete.preserves.<wbr/>clickCountNonNegative <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> ListAll.requires <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> ListAll.enabled <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> ListAll.preserves.<wbr/>allURLsValid <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> ListAll.preserves.<wbr/>metadataConsistent <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
+        <div className="flex items-start gap-2">
+          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
+          <span><span className="text-fd-muted-foreground">[z3] [sound]</span> ListAll.preserves.<wbr/>clickCountNonNegative <span className="text-fd-muted-foreground">sat</span></span>
+        </div>
       </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Shorten.enabled</span>
-      </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Shorten.preserves.<wbr/>metadataConsistent</span>
-      </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Resolve.requires</span>
-      </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Resolve.preserves.<wbr/>metadataConsistent</span>
-      </div>
-      <div className="flex items-start gap-2">
-        <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>[z3] Delete.preserves.<wbr/>metadataConsistent</span>
-      </div>
-      <div className="border-t pt-2 text-fd-muted-foreground">
-        consistency checks passed (exit 0)
+      <div className="mt-auto border-t pt-3">
+        <div className="text-emerald-600 dark:text-emerald-400">✔ url_shortener.spec: 21/21 consistency checks passed (212ms)</div>
+        <div className="mt-1 text-fd-muted-foreground">exit 0</div>
       </div>
     </div>
   </div>
-  <div className="rounded-md border bg-fd-card overflow-hidden">
+  <div className="flex flex-col overflow-hidden rounded-xl border bg-fd-card shadow-sm lg:col-span-2">
     <div className="border-b bg-fd-muted/40 px-4 py-2 font-mono text-xs text-fd-muted-foreground">
       app/routers/url_mapping.py (emitted)
     </div>
-    <pre className="m-0 overflow-x-auto p-4 text-xs leading-relaxed"><code>{`from fastapi import APIRouter, Depends, HTTPException
+
+<div className="[&_figure]:m-0 [&_figure]:rounded-none [&_figure]:border-0 [&_figure]:shadow-none">
+
+```python
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
@@ -140,7 +214,10 @@ async def resolve(
     result = await svc.resolve(code)
     if result is None:
         raise HTTPException(status_code=404, detail="not found")
-    return result`}</code></pre>
+    return result
+```
+
+</div>
   </div>
 </div>
 
