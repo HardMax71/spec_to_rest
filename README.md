@@ -9,6 +9,13 @@
 
 <p align="center">Compile formal behavioral specs (<code>.spec</code> DSL) into verified REST services.</p>
 
+<p align="center">
+  <a href="https://github.com/HardMax71/spec_to_rest/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/HardMax71/spec_to_rest/ci.yml?branch=main&label=CI" alt="CI" /></a>
+  <a href="https://github.com/HardMax71/spec_to_rest/actions/workflows/isabelle-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/HardMax71/spec_to_rest/isabelle-build.yml?branch=main&label=Isabelle%2FHOL" alt="Isabelle/HOL soundness" /></a>
+  <a href="https://github.com/HardMax71/spec_to_rest/releases"><img src="https://img.shields.io/github/v/release/HardMax71/spec_to_rest?label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/HardMax71/spec_to_rest" alt="License" /></a>
+</p>
+
 Given a `.spec` file describing entities, operations, invariants, and preconditions, `spec-to-rest`
 runs a Z3-backed verification pass against the spec itself and — if verification passes — generates
 a complete, runnable service: models, schemas, routers, migrations, Docker / docker-compose /
