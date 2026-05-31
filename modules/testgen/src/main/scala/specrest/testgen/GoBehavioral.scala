@@ -187,11 +187,6 @@ object GoBehavioral:
   private def prettyOneLine(e: expr_full): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
-  private def goIdent(s: String): String =
-    val parts  = s.split("[^A-Za-z0-9]+").filter(_.nonEmpty).map(_.capitalize)
-    val joined = parts.mkString
-    if joined.isEmpty || !joined.head.isLetter then s"Svc$joined" else joined
-
   private def behavioralSkipPlaceholder(ir: ServiceIRFull): String =
     s"""|//go:build conformance
         |
@@ -205,7 +200,7 @@ object GoBehavioral:
         |
         |import "testing"
         |
-        |func Test${goIdent(svcName(ir))}BehavioralAllSkipped(t *testing.T) {
+        |func Test${GoIdent.sanitize(svcName(ir))}BehavioralAllSkipped(t *testing.T) {
         |\tt.Skip("no behavioral tests generated: every operation is a fail-loud " +
         |\t\t"stub or references untranslatable constructs " +
         |\t\t"(see tests/_testgen_skips.json)")

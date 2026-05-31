@@ -132,10 +132,7 @@ object Schema:
                 ) =>
               typeName(from).filter(entityNames.contains) match
                 case Some(fromName) =>
-                  val fkCol =
-                    Naming.toColumnName(
-                      fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
-                    ) + "_id"
+                  val fkCol      = Naming.toColumnName(fromName) + "_id"
                   val fkRefTable = Naming.toTableName(fromName)
                   val nullable = mult match
                     case _: MultLone => true
@@ -183,12 +180,8 @@ object Schema:
           val fromTable = Naming.toTableName(fromName)
           val toTable   = Naming.toTableName(toName)
           val tableName = s"${fromTable}_$toTable"
-          val fromCol = Naming.toColumnName(
-            fromName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
-          ) + "_id"
-          val toCol = Naming.toColumnName(
-            toName.replaceAll("([A-Z])", "_$1").toLowerCase.stripPrefix("_")
-          ) + "_id"
+          val fromCol   = Naming.toColumnName(fromName) + "_id"
+          val toCol     = Naming.toColumnName(toName) + "_id"
           TableSpec(
             tableName,
             s"${fromName}_$toName",

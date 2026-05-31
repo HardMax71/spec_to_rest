@@ -100,11 +100,6 @@ object GoStructural:
       sb.append("}\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
-  private def goIdent(s: String): String =
-    val parts  = s.split("[^A-Za-z0-9]+").filter(_.nonEmpty).map(_.capitalize)
-    val joined = parts.mkString
-    if joined.isEmpty || !joined.head.isLetter then s"Svc$joined" else joined
-
   private def structuralSkipPlaceholder(ir: ServiceIRFull): String =
     s"""|//go:build conformance
         |
@@ -118,7 +113,7 @@ object GoStructural:
         |
         |import "testing"
         |
-        |func Test${goIdent(svcName(ir))}StructuralAllSkipped(t *testing.T) {
+        |func Test${GoIdent.sanitize(svcName(ir))}StructuralAllSkipped(t *testing.T) {
         |\tt.Skip("no structural tests generated: every operation is a fail-loud " +
         |\t\t"stub or has untranslatable inputs (see tests/_testgen_skips.json)")
         |}
