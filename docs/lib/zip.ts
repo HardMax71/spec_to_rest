@@ -35,6 +35,9 @@ const u32 = (n: number): Uint8Array =>
 // "download generated files" button.
 export function makeZip(files: { path: string; content: string }[]): Blob {
   const encoder = new TextEncoder();
+  // General-purpose bit 11 (EFS): marks filenames as UTF-8 so non-ASCII paths
+  // decode correctly on extraction.
+  const utf8 = u16(0x800);
   const localParts: Uint8Array[] = [];
   const centralParts: Uint8Array[] = [];
   let offset = 0;
@@ -47,7 +50,7 @@ export function makeZip(files: { path: string; content: string }[]): Blob {
     const localHeader = concatBytes([
       u32(0x04034b50),
       u16(20),
-      u16(0),
+      utf8,
       u16(0),
       u16(0),
       u16(0),
@@ -65,7 +68,7 @@ export function makeZip(files: { path: string; content: string }[]): Blob {
         u32(0x02014b50),
         u16(20),
         u16(20),
-        u16(0),
+        utf8,
         u16(0),
         u16(0),
         u16(0),
