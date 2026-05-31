@@ -1,4 +1,4 @@
-name: Branch name check
+name: PR conventions
 
 on:
   pull_request:
@@ -11,16 +11,32 @@ jobs:
   check-branch-name:
     runs-on: ubuntu-latest
     steps:
-      - name: Check branch name
+      - name: Validate branch name and PR title (Conventional Commits)
         env:
           BRANCH_NAME: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           BRANCH="${BRANCH_NAME}"
-          PATTERN="^((feature|fix|docs|chore|refactor|dependabot)/.+|release-please--.+)$"
-          if [[ ! "$BRANCH" =~ $PATTERN ]]; then
-            echo "::error::Branch name '$BRANCH' does not match required pattern."
-            echo "Branch names must start with: feature/, fix/, docs/, chore/, refactor/, dependabot/, or release-please--"
-            echo "Example: feature/add-parser, fix/grammar-bug, docs/update-readme"
+          TITLE="${PR_TITLE}"
+
+          bot_re='^(release-please--.+|dependabot/.+)$'
+          branch_re='^(feat(ure)?|fix|docs|chore|refactor|perf|ci|build|test|style|revert)/.+'
+          title_re='^(feat|fix|docs|chore|refactor|perf|ci|build|test|style|revert)(\([^)]+\))?!?: .+'
+
+          # Bot branches carry their own title formats and need no changelog entry.
+          if [[ "$BRANCH" =~ $bot_re ]]; then
+            echo "Bot branch '$BRANCH'; skipping conventional checks."
+            exit 0
+          fi
+
+          if [[ ! "$BRANCH" =~ $branch_re ]]; then
+            echo "::error::Branch '$BRANCH' must be <type>/<slug>, type one of: feat (or feature), fix, docs, chore, refactor, perf, ci, build, test, style, revert. Example: refactor/decouple-model-schema"
             exit 1
           fi
-          echo "Branch name '$BRANCH' is valid."
+
+          if [[ ! "$TITLE" =~ $title_re ]]; then
+            echo "::error::PR title '$TITLE' must be a Conventional Commit, '<type>(optional-scope)!?: description'. Use 'feat:' (not 'feature:'). The PR title becomes the squash commit subject that release-please reads, so a non-conventional title is dropped from the CHANGELOG."
+            exit 1
+          fi
+
+          echo "OK: branch '$BRANCH' and PR title '$TITLE' are conventional."

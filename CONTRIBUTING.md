@@ -1,5 +1,22 @@
 # Contributing
 
+## Branch names and PR titles
+
+Both are gated by the required `check-branch-name` job (`.github/workflows/branch-name.yml`,
+token-free):
+
+- **Branch:** `<type>/<slug>`, e.g. `refactor/decouple-model-schema`.
+- **PR title:** a [Conventional Commit](https://www.conventionalcommits.org/), e.g.
+  `refactor: decouple model from schema`.
+
+`<type>` is one of `feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `ci`, `build`, `test`,
+`style`, `revert` (`feature/` is accepted as an alias of `feat`). The repo squash-merges with the
+**PR title as the commit subject**, and release-please builds `CHANGELOG.md` from those
+Conventional-Commit subjects, so a non-conventional title is silently dropped from the release
+notes. `feat` / `fix` / `refactor` / `perf` / `docs` are surfaced in the changelog; `chore` / `ci` /
+`build` / `test` / `style` go to hidden sections. Bot branches (`dependabot/...`,
+`release-please--...`) are exempt.
+
 ## Architecture enforcement
 
 The module dependency graph in `build.sbt` (`dependsOn`) _is_ the architecture — an illegal
