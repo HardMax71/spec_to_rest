@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Highlighter } from "shiki";
 import { PLAYGROUND_EXAMPLES } from "@/lib/playground-examples.generated";
+import { makeZip } from "@/lib/zip";
 
 type Target =
   | "check"
@@ -579,7 +580,7 @@ function OutputPane(props: {
         </TabButton>
       </div>
       {props.tab === "files" && showFilesTab ? (
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center gap-2 border-b border-fd-border bg-fd-secondary/20 px-2 py-1.5 text-xs">
             <span className="text-fd-muted-foreground">file</span>
             <select
@@ -594,18 +595,40 @@ function OutputPane(props: {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => downloadZip(files, props.state)}
+              className="shrink-0 rounded border border-fd-border bg-fd-background px-2 py-1 font-medium hover:bg-fd-accent"
+              title="Download all generated files as a .zip (large files are truncated as shown)"
+            >
+              Download .zip
+            </button>
           </div>
-          <pre className="m-0 flex-1 overflow-auto whitespace-pre bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
+          <pre className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
             {fileEntry?.content ?? "// no file selected"}
           </pre>
         </div>
       ) : (
-        <pre className="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
+        <pre className="m-0 min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-fd-background p-3 font-mono text-[12px] leading-relaxed text-fd-foreground">
           {props.tab === "stdout" ? stdoutText(props.state) : stderrText(props.state)}
         </pre>
       )}
     </div>
   );
+}
+
+function downloadZip(files: FileEntry[], state: RunState): void {
+  if (files.length === 0) return;
+  const target = state.kind === "ok" ? state.target : "output";
+  const blob = makeZip(files.map((f) => ({ path: f.path, content: f.content })));
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `spec-to-rest-${target}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function TabButton(props: {
