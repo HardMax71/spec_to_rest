@@ -1,5 +1,90 @@
 # Changelog
 
+## [2.2.0](https://github.com/HardMax71/spec_to_rest/compare/v2.1.0...v2.2.0) (2026-05-31)
+
+
+### Features
+
+* **cli:** default-on test emission + --no-tests opt-out ([#140](https://github.com/HardMax71/spec_to_rest/issues/140)) ([#305](https://github.com/HardMax71/spec_to_rest/issues/305)) ([6728e12](https://github.com/HardMax71/spec_to_rest/commit/6728e1280df7cac2727c3a476f7f596e801713e8))
+* **codegen:** extension files preserved across regeneration (closes [#62](https://github.com/HardMax71/spec_to_rest/issues/62)) ([#316](https://github.com/HardMax71/spec_to_rest/issues/316)) ([b29621d](https://github.com/HardMax71/spec_to_rest/commit/b29621de397ba1bbc033a72fb77a045a601d7ec9))
+* **codegen:** multi-env compose overlays + Scala-first builder ([#317](https://github.com/HardMax71/spec_to_rest/issues/317)) ([76a0230](https://github.com/HardMax71/spec_to_rest/commit/76a023076252766db59cc7f2f201a1a73e157c41))
+* **dafny:** kernel verifier-friendliness for auth_service ([#149](https://github.com/HardMax71/spec_to_rest/issues/149) phase 2) ([#309](https://github.com/HardMax71/spec_to_rest/issues/309)) ([3695d32](https://github.com/HardMax71/spec_to_rest/commit/3695d32c0d72ef6f83be012ee2822a7d9ae4ca17))
+* **ir:** extract Isabelle int as native BigInt ([#358](https://github.com/HardMax71/spec_to_rest/issues/358)) ([2bfdd4c](https://github.com/HardMax71/spec_to_rest/commit/2bfdd4c559529346bae5a41dfec14ce1348422f8))
+* **playground:** wire verify + compile + synth into the API and UI ([8265565](https://github.com/HardMax71/spec_to_rest/commit/8265565e0e2c5a69a44e733f6cf29d9e152abf55))
+* **proofs:** lift Alloy buildSigs (entity/enum/state/input sig builder) ([#357](https://github.com/HardMax71/spec_to_rest/issues/357)) ([9e54353](https://github.com/HardMax71/spec_to_rest/commit/9e54353b707ff3f0d9250010b3a55176f65c38d0))
+* **proofs:** lift Alloy translator type kernel + renderExpr classifiers ([#353](https://github.com/HardMax71/spec_to_rest/issues/353)) ([67968b6](https://github.com/HardMax71/spec_to_rest/commit/67968b6fccf63fa001702611c534658b0214d774))
+* **proofs:** lift applyPartialIndexConventions kernel ([#328](https://github.com/HardMax71/spec_to_rest/issues/328)) ([db16f1b](https://github.com/HardMax71/spec_to_rest/commit/db16f1bf13581f9dff8ebb7d5bd40af05bc39b3f))
+* **proofs:** lift asStableMap name-disambiguation + showNat primitive ([#327](https://github.com/HardMax71/spec_to_rest/issues/327)) ([3390aa1](https://github.com/HardMax71/spec_to_rest/commit/3390aa17214f38d0e327b6557a31ebd1aa83174d))
+* **proofs:** lift classifyColumnCheckAtom (column-refinement CHECK derivation) ([#351](https://github.com/HardMax71/spec_to_rest/issues/351)) ([2ff31e7](https://github.com/HardMax71/spec_to_rest/commit/2ff31e711401a05fb417293b54fb8b33d8b08779))
+* **proofs:** lift classifyColumnType (Schema.mapTypeToColumn kernel) ([#323](https://github.com/HardMax71/spec_to_rest/issues/323)) ([963bb80](https://github.com/HardMax71/spec_to_rest/commit/963bb803369dfd9dff1f58dfcd505b29f27cb95d))
+* **proofs:** lift classifyInvariantAtom (Schema.scala SQL CHECK derivation) ([#340](https://github.com/HardMax71/spec_to_rest/issues/340)) ([c1a0edc](https://github.com/HardMax71/spec_to_rest/commit/c1a0edc97a49b8118cc55f1921ac0064b1d0d0b9))
+* **proofs:** lift classifyOpenApiNamedType (OpenApi.namedTypeSchema kernel) ([#325](https://github.com/HardMax71/spec_to_rest/issues/325)) ([196cfea](https://github.com/HardMax71/spec_to_rest/commit/196cfea4bbdda8916dea9c676b706774d14797f6))
+* **proofs:** lift derivePathPattern + pathWithIdSuffix ([#331](https://github.com/HardMax71/spec_to_rest/issues/331)) ([b03a080](https://github.com/HardMax71/spec_to_rest/commit/b03a0808b5123971cf4aad27c7e0af3266b01987))
+* **proofs:** lift detectEntityFieldCollisions ([#335](https://github.com/HardMax71/spec_to_rest/issues/335)) ([34ad808](https://github.com/HardMax71/spec_to_rest/commit/34ad808c497449aefa83ea46f39cb9172ae83f64))
+* **proofs:** lift detectTriggerCandidate (Schema.detectAggregateTriggers kernel) ([#324](https://github.com/HardMax71/spec_to_rest/issues/324)) ([79530bb](https://github.com/HardMax71/spec_to_rest/commit/79530bbe49db4fac407fe5a49685317d662f3cbe))
+* **proofs:** lift dialect_caps (Dialect extras follow-up to [#349](https://github.com/HardMax71/spec_to_rest/issues/349)) ([#350](https://github.com/HardMax71/spec_to_rest/issues/350)) ([0671237](https://github.com/HardMax71/spec_to_rest/commit/06712370c9d403f4982ba2ab0412c3b4dc59aeb3))
+* **proofs:** lift enumValuesForType/Field + fieldNameIfStateIndex ([#345](https://github.com/HardMax71/spec_to_rest/issues/345)) ([cc0dce5](https://github.com/HardMax71/spec_to_rest/commit/cc0dce5ca473a6aa2fe1973c07696f8bf77774ee))
+* **proofs:** lift extractVerbBeforeKebab + literal slice helpers ([#333](https://github.com/HardMax71/spec_to_rest/issues/333)) ([046d997](https://github.com/HardMax71/spec_to_rest/commit/046d997ffb8cc58bc13c28b3b3e6ebd8f108851d))
+* **proofs:** lift findEnumValuesInType (OpenApi.Constraints type-walk) ([#322](https://github.com/HardMax71/spec_to_rest/issues/322)) ([5ba1f15](https://github.com/HardMax71/spec_to_rest/commit/5ba1f1534ab3d944893e906993383c508e0b897a))
+* **proofs:** lift findIdParam + literalEndsWith ([#332](https://github.com/HardMax71/spec_to_rest/issues/332)) ([d8dc6a4](https://github.com/HardMax71/spec_to_rest/commit/d8dc6a4b5a74dc9c1b06db8111e2ae048f27c14a))
+* **proofs:** lift HttpMethod + OperationKind enums into Isabelle ([#319](https://github.com/HardMax71/spec_to_rest/issues/319)) ([f668b4c](https://github.com/HardMax71/spec_to_rest/commit/f668b4c10c1c39d7873cddf28df49252dc55a039))
+* **proofs:** lift keyExistencePair + desiredSize, drop dup relationTargetsEntity ([#344](https://github.com/HardMax71/spec_to_rest/issues/344)) ([6e7a3e7](https://github.com/HardMax71/spec_to_rest/commit/6e7a3e7ac7f7107f22a1c4d3489e1fce69e3b58a))
+* **proofs:** lift MissingEnsures + open LintAnalysis.thy ([#339](https://github.com/HardMax71/spec_to_rest/issues/339)) ([7231032](https://github.com/HardMax71/spec_to_rest/commit/72310322e69826eaa25903968e0b2728ca18be71))
+* **proofs:** lift Narration helpers + matchesIdentityShape recognizer ([#343](https://github.com/HardMax71/spec_to_rest/issues/343)) ([f5bbf2c](https://github.com/HardMax71/spec_to_rest/commit/f5bbf2c2da55dfe3d27f8ef7415d12f8906e7fc7))
+* **proofs:** lift OpenAPI schema_object + typeExprToSchema recursive walker ([#352](https://github.com/HardMax71/spec_to_rest/issues/352)) ([4753005](https://github.com/HardMax71/spec_to_rest/commit/4753005d2637928f780a2b1dac26115c7b541ab4))
+* **proofs:** lift parsedValueToString + showInt/showBool helpers ([#338](https://github.com/HardMax71/spec_to_rest/issues/338)) ([972e294](https://github.com/HardMax71/spec_to_rest/commit/972e294cadc42b1190fdb3a8fd69c718fe17553b))
+* **proofs:** lift Path's HTTP-method/status decisions into Isabelle ([#321](https://github.com/HardMax71/spec_to_rest/issues/321)) ([9283f0e](https://github.com/HardMax71/spec_to_rest/commit/9283f0e20a71b1175c9d40992e91d2f5bcdae5e9))
+* **proofs:** lift SQL Dialect — sequential mega-lift ([#349](https://github.com/HardMax71/spec_to_rest/issues/349)) ([56360aa](https://github.com/HardMax71/spec_to_rest/commit/56360aa79cb8bf72b145ff79b0c9fc3c85a373dd))
+* **proofs:** lift synthConventionValue + round-trip proofs ([#337](https://github.com/HardMax71/spec_to_rest/issues/337)) ([b397351](https://github.com/HardMax71/spec_to_rest/commit/b397351f7e8799bad8bc64e02fe7b2ffe5dbabd5))
+* **proofs:** lift synthTemporalExpr + prove parseTemporalBody round-trip ([#336](https://github.com/HardMax71/spec_to_rest/issues/336)) ([105093d](https://github.com/HardMax71/spec_to_rest/commit/105093dd2d944d767ca5f7ef7989184204992fae))
+* **proofs:** lift topo_sort + schema ADTs + migration_op into Isabelle ([#318](https://github.com/HardMax71/spec_to_rest/issues/318)) ([4912334](https://github.com/HardMax71/spec_to_rest/commit/49123340404a4cf2af3e3e7b8247d38690b8e62d))
+* **proofs:** lift TypeMismatch (L01) per-node classifier ([#342](https://github.com/HardMax71/spec_to_rest/issues/342)) ([6d14953](https://github.com/HardMax71/spec_to_rest/commit/6d149531860901ed762b29f35f7c24108a592be1))
+* **proofs:** lift UnusedEntity + UndefinedRef walkers ([#341](https://github.com/HardMax71/spec_to_rest/issues/341)) ([5d1fe11](https://github.com/HardMax71/spec_to_rest/commit/5d1fe11e7a76a79242aaa5a436f5f429709118dc))
+* **proofs:** lift validateIrContext (Validate.scala) ([#334](https://github.com/HardMax71/spec_to_rest/issues/334)) ([9558dc6](https://github.com/HardMax71/spec_to_rest/commit/9558dc6351afbe8ede58574b73ea395d16135407))
+* **proofs:** lift verifier dispatch + trust classifier (Classifier + Trust) ([#354](https://github.com/HardMax71/spec_to_rest/issues/354)) ([5914284](https://github.com/HardMax71/spec_to_rest/commit/5914284cda76f2806e6d5d642142654d08f65152))
+* **proofs:** lift visitConstraintOpenApi (OpenApi.Constraints Int subset) ([#326](https://github.com/HardMax71/spec_to_rest/issues/326)) ([c89546c](https://github.com/HardMax71/spec_to_rest/commit/c89546c5fc115d650a82dddad756167caf6f03ad))
+* **site:** pivot docs to Fly.io container (Next.js + bundled CLI, auto-redeploy on release) ([#311](https://github.com/HardMax71/spec_to_rest/issues/311)) ([28d76a7](https://github.com/HardMax71/spec_to_rest/commit/28d76a70ee3abcd3c8c8245894c8e770be86b1a6))
+* **testgen:** close translation gap for auth_service ([#149](https://github.com/HardMax71/spec_to_rest/issues/149) phase 1) ([#307](https://github.com/HardMax71/spec_to_rest/issues/307)) ([29cbf52](https://github.com/HardMax71/spec_to_rest/commit/29cbf524e082926c29bdef638eee97f43c6c087f))
+
+
+### Bug Fixes
+
+* **ci:** add Cambridge mirror + force IPv4 + diagnose curl failures ([#303](https://github.com/HardMax71/spec_to_rest/issues/303)) ([d720ec2](https://github.com/HardMax71/spec_to_rest/commit/d720ec2e05b8fab5bcd03f025c9ace75c401fd5c))
+* **ci:** always run actionlint + zizmor so required checks stop stalling ([#315](https://github.com/HardMax71/spec_to_rest/issues/315)) ([8859516](https://github.com/HardMax71/spec_to_rest/commit/8859516a34f89c5edc0a621e54119506d8441688))
+* **deploy:** ship Alloy stdlib so verify on cardinality specs works ([#314](https://github.com/HardMax71/spec_to_rest/issues/314)) ([9049692](https://github.com/HardMax71/spec_to_rest/commit/9049692a5c1dd1bfc7abe6c0a7f36aa22379eba3))
+* **docs:** static search returned no results — basePath not prefixed onto api URL ([#295](https://github.com/HardMax71/spec_to_rest/issues/295)) ([1611004](https://github.com/HardMax71/spec_to_rest/commit/161100446136e60b51b8ad04d1f6bc6f8e02dc80))
+* **fly:** pin fly.toml to actual Fly app name (spec-to-rest-site) ([2b394ec](https://github.com/HardMax71/spec_to_rest/commit/2b394ec9a2f09f23898154d70d9f45e27d326ee1))
+* **migration:** reject AlterColumnType across auto-increment identity ([#249](https://github.com/HardMax71/spec_to_rest/issues/249)) ([#304](https://github.com/HardMax71/spec_to_rest/issues/304)) ([42361db](https://github.com/HardMax71/spec_to_rest/commit/42361dbdf86a9ece291c6a4a3a40c7a940fd9675))
+* **playground:** use bare CLI framework IDs (chi / express / fastapi) ([#313](https://github.com/HardMax71/spec_to_rest/issues/313)) ([a901d31](https://github.com/HardMax71/spec_to_rest/commit/a901d313c614b177f98b86384e06496e3b047113))
+
+
+### Code Refactoring
+
+* **ir:** parse-don't-validate for convention rules ([#329](https://github.com/HardMax71/spec_to_rest/issues/329)) ([b3cff3f](https://github.com/HardMax71/spec_to_rest/commit/b3cff3ff8e871c2cccc087f57778818e44f6d681))
+* **ir:** parse-don't-validate for temporal declarations ([#330](https://github.com/HardMax71/spec_to_rest/issues/330)) ([4ff3487](https://github.com/HardMax71/spec_to_rest/commit/4ff348779e3e657ba15c1b7c90f3ca445b43425f))
+* lift 8 more recognizers/predicates to Isabelle (Phase 9ε) ([#300](https://github.com/HardMax71/spec_to_rest/issues/300)) ([61c8d1f](https://github.com/HardMax71/spec_to_rest/commit/61c8d1f90864106d8324ff22fc2f2cdb1a0eaa90))
+* lift expression walkers + recognizers to Isabelle (Phase 9α/β/γ) ([#297](https://github.com/HardMax71/spec_to_rest/issues/297)) ([3a2fd79](https://github.com/HardMax71/spec_to_rest/commit/3a2fd798902e641ac99ed62bb33fbb092e3e0295))
+* lift isCardinalityRhs + isKeyExistsConj to Isabelle (Phase 9η) ([#301](https://github.com/HardMax71/spec_to_rest/issues/301)) ([5bc8ba7](https://github.com/HardMax71/spec_to_rest/commit/5bc8ba78afe979781ce570f24d8b113e2fc45d19))
+* lift second wave of pattern matches to Isabelle (Phase 9δ) ([#298](https://github.com/HardMax71/spec_to_rest/issues/298)) ([7f0eccb](https://github.com/HardMax71/spec_to_rest/commit/7f0eccbaaeb94db5c3060aae6c7d8442e7cdf378))
+* **proofs:** drop 6 vestigial verified-subset IR records ([#363](https://github.com/HardMax71/spec_to_rest/issues/363)) ([0bd8e83](https://github.com/HardMax71/spec_to_rest/commit/0bd8e8329216f57ccaab646b863809afb0d109e5))
+* **proofs:** Soundness cleanup — drop dead, inline step, fold dup lemmas ([#360](https://github.com/HardMax71/spec_to_rest/issues/360)) ([306aecf](https://github.com/HardMax71/spec_to_rest/commit/306aecf326d124db2dfab2b25920d984b28dc83e))
+* **proofs:** split Isabelle session for incremental builds ([#359](https://github.com/HardMax71/spec_to_rest/issues/359)) ([8ad58cb](https://github.com/HardMax71/spec_to_rest/commit/8ad58cb00e7d2bcf990027b0eb893e4b831309e1))
+* **proofs:** unify function/accessor names to camelCase ([#320](https://github.com/HardMax71/spec_to_rest/issues/320)) ([7d8e6ef](https://github.com/HardMax71/spec_to_rest/commit/7d8e6ef3078b21d06a1864d1504962de8b547681))
+* **scala:** drop SpecRestGenerated. qualifier noise + trivial wrappers ([#348](https://github.com/HardMax71/spec_to_rest/issues/348)) ([05987ef](https://github.com/HardMax71/spec_to_rest/commit/05987ef1df09910b7c78f77ab1d2f7325e88034d))
+* **testgen:** Builtins registry — single source of truth across Py/TS/Go backends + lint ([#308](https://github.com/HardMax71/spec_to_rest/issues/308)) ([96c9c55](https://github.com/HardMax71/spec_to_rest/commit/96c9c55b2547e05e033a3730466e8dcbc591e8ff))
+
+
+### Performance
+
+* **isabelle:** -74% wall-time via dead-code purge + file split + def-over-fun ([#299](https://github.com/HardMax71/spec_to_rest/issues/299)) ([0ff62f5](https://github.com/HardMax71/spec_to_rest/commit/0ff62f5a5f53a27d755a81ef3c33c54bc47abce6))
+
+
+### Documentation
+
+* add project logo, favicon, and social preview ([#368](https://github.com/HardMax71/spec_to_rest/issues/368)) ([f5a1bed](https://github.com/HardMax71/spec_to_rest/commit/f5a1bedfb3cb83e5f32df8a28a055ebb37d51552))
+* add status badges to the README ([#373](https://github.com/HardMax71/spec_to_rest/issues/373)) ([866d89f](https://github.com/HardMax71/spec_to_rest/commit/866d89f4bb29342545018ccdeba1bd78d952c99b))
+* redesign landing, playground, and roadmap ([#369](https://github.com/HardMax71/spec_to_rest/issues/369)) ([5884794](https://github.com/HardMax71/spec_to_rest/commit/58847947316fcf40442f3900fd5b2be1e968283b))
+
 ## [2.1.0](https://github.com/HardMax71/spec_to_rest/compare/v2.0.0...v2.1.0) (2026-05-21)
 
 
