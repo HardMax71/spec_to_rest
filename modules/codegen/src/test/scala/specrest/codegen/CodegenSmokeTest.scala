@@ -12,19 +12,17 @@ class CodegenSmokeTest extends munit.CatsEffectSuite:
     val out = engine.render("{{snake_case name}}", java.util.Map.of("name", "UrlMapping"))
     assertEquals(out, "url_mapping")
 
-  test("kebab_case / pascal_case / camel_case helpers"):
-    val ctx = java.util.Map.of("name", "UrlMapping")
-    assertEquals(engine.render("{{kebab_case name}}", ctx), "url-mapping")
-    assertEquals(engine.render("{{pascal_case name}}", ctx), "UrlMapping")
-    assertEquals(engine.render("{{camel_case name}}", ctx), "urlMapping")
+  test("pascal_case / pluralize helpers"):
+    assertEquals(
+      engine.render("{{pascal_case name}}", java.util.Map.of("name", "UrlMapping")),
+      "UrlMapping"
+    )
+    assertEquals(
+      engine.render("{{pluralize name}}", java.util.Map.of("name", "User")),
+      "Users"
+    )
 
-  test("upper / lower / pluralize helpers"):
-    val ctx = java.util.Map.of("name", "User")
-    assertEquals(engine.render("{{upper name}}", ctx), "USER")
-    assertEquals(engine.render("{{lower name}}", ctx), "user")
-    assertEquals(engine.render("{{pluralize name}}", ctx), "Users")
-
-  test("eq / ne / not helpers used in an #if block"):
+  test("eq helper used in an #if block"):
     val ctx = java.util.Map.of("x", "foo")
     val tpl = """{{#if (eq x "foo")}}yes{{else}}no{{/if}}"""
     assertEquals(engine.render(tpl, ctx), "yes")

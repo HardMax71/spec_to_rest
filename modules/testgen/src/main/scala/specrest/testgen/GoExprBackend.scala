@@ -89,6 +89,12 @@ object GoLit:
     sb.append('"')
     sb.toString
 
+object GoIdent:
+  def sanitize(s: String): String =
+    val parts  = s.split("[^A-Za-z0-9]+").filter(_.nonEmpty).map(_.capitalize)
+    val joined = parts.mkString
+    if joined.isEmpty || !joined.head.isLetter then s"Svc$joined" else joined
+
 // Translates the IR expression language to Go, paralleling ExprToPython /
 // TsExprBackend. Go is statically typed: `any < any`, `any + any` and inline
 // collection lambdas do not compile, so every numeric/comparison/logical/set

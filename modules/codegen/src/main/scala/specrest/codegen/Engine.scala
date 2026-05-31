@@ -65,54 +65,16 @@ final class TemplateEngine:
     )
 
   private def registerDefaultHelpers(hbs: Handlebars): Unit =
-    // String case transformations
     hbs.registerHelper("snake_case", stringHelper(Naming.toSnakeCase))
-    hbs.registerHelper("kebab_case", stringHelper(Naming.toKebabCase))
-    hbs.registerHelper("pascal_case", stringHelper(pascalCase))
-    hbs.registerHelper("camel_case", stringHelper(camelCase))
+    hbs.registerHelper("pascal_case", stringHelper(s => Naming.toPascalCase(s)))
     hbs.registerHelper("pluralize", stringHelper(Naming.pluralize))
-    hbs.registerHelper("upper", stringHelper(_.toUpperCase))
-    hbs.registerHelper("lower", stringHelper(_.toLowerCase))
 
-    // Boolean helpers — handlebars.java passes context and options separately
+    // handlebars.java passes the helper's context as `ctx` and the first argument as opts.param(0)
     hbs.registerHelper(
       "eq",
       new Helper[AnyRef]:
         override def apply(ctx: AnyRef, opts: Options): AnyRef =
           java.lang.Boolean.valueOf(java.util.Objects.equals(ctx, opts.param[AnyRef](0)))
-    )
-    hbs.registerHelper(
-      "ne",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          java.lang.Boolean.valueOf(!java.util.Objects.equals(ctx, opts.param[AnyRef](0)))
-    )
-    hbs.registerHelper(
-      "and",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          java.lang.Boolean.valueOf(truthy(ctx) && truthy(opts.param[AnyRef](0)))
-    )
-    hbs.registerHelper(
-      "or",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          java.lang.Boolean.valueOf(truthy(ctx) || truthy(opts.param[AnyRef](0)))
-    )
-    hbs.registerHelper(
-      "not",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          val _ = opts
-          java.lang.Boolean.valueOf(!truthy(ctx))
-    )
-
-    hbs.registerHelper(
-      "concat",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef, opts: Options): AnyRef =
-          val parts = (ctx +: opts.params.toList).collect { case s: String => s }
-          parts.mkString
     )
 
     hbs.registerHelper(
@@ -134,21 +96,6 @@ final class TemplateEngine:
             case Some(other)           => String.valueOf(other)
     )
 
-    hbs.registerHelper(
-      "indent",
-      new Helper[AnyRef]:
-        override def apply(ctx: AnyRef | Null, opts: Options): AnyRef =
-          val spaces = Option(ctx) match
-            case Some(n: Number) => n.intValue()
-            case Some(s: String) => s.toIntOption.getOrElse(0)
-            case _               => 0
-          val content = Option(opts.param[AnyRef](0)) match
-            case Some(s: String) => s
-            case Some(other)     => String.valueOf(other)
-            case _: None.type    => ""
-          indentString(content, spaces)
-    )
-
     val _ = StringHelpers.lower // force classload reference
 
   private def stringHelper(f: String => String): Helper[AnyRef] =
@@ -159,28 +106,3 @@ final class TemplateEngine:
           case Some(s: String) => f(s)
           case Some(other)     => f(String.valueOf(other))
           case _: None.type    => ""
-
-  private def truthy(v: Any): Boolean = Option(v) match
-    case _: None.type                     => false
-    case Some(b: java.lang.Boolean)       => b.booleanValue()
-    case Some(s: String)                  => s.nonEmpty
-    case Some(n: Number)                  => n.doubleValue() != 0.0
-    case Some(c: java.util.Collection[?]) => !c.isEmpty
-    case Some(_)                          => true
-
-  private def camelCase(value: String): String =
-    val parts = Naming.splitCamelCase(value).filter(_.nonEmpty)
-    parts.zipWithIndex.map: (w, i) =>
-      if i == 0 then w.toLowerCase
-      else w.head.toUpper +: w.tail.toLowerCase
-    .mkString
-
-  private def pascalCase(value: String): String =
-    val parts = Naming.splitCamelCase(value).filter(_.nonEmpty)
-    parts.map(w => w.head.toUpper +: w.tail.toLowerCase).mkString
-
-  private def indentString(content: String, spaces: Int): String =
-    val pad = " " * spaces
-    content.split("\n", -1).map: line =>
-      if line.trim.isEmpty then "" else pad + line
-    .mkString("\n")
