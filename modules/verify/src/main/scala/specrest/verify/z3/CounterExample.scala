@@ -3,6 +3,7 @@ package specrest.verify.z3
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
+import com.microsoft.z3.RatNum
 import com.microsoft.z3.Sort
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.DecodedConstant
@@ -124,6 +125,7 @@ object Z3CounterExample:
   private def sortToTy(sort: Z3Sort, ctx: tyctx_ext[Unit]): Option[ty] = sort match
     case Z3Sort.Bool => Some(TBool())
     case Z3Sort.Int  => Some(TInt())
+    case Z3Sort.Real => Some(TReal())
     case Z3Sort.Uninterp(name) =>
       if tc_enums(ctx).contains(name) then Some(TEnum(name))
       else if tc_entities(ctx)
@@ -231,20 +233,31 @@ object Z3CounterExample:
       case None => DecodedValue("<unknown>", None)
     DecodedConstant(entry.name, side, value)
 
+  // Z3 returns Real model values as RatNum; render them readably (n or n/d).
+  private def formatReal(expr: Z3AstExpr[?]): Option[String] = expr match
+    case r: RatNum =>
+      val num = r.getBigIntNumerator
+      val den = r.getBigIntDenominator
+      Some(if den.compareTo(java.math.BigInteger.ONE) == 0 then num.toString else s"$num/$den")
+    case _ => None
+
   private def decodeValue(
       expr: Z3AstExpr[?],
       rawToLabel: mutable.LinkedHashMap[String, String]
   ): DecodedValue =
-    val text = normalizeZ3Text(expr.toString)
-    rawToLabel.get(text) match
-      case Some(label) => DecodedValue(label, Some(label))
+    formatReal(expr) match
+      case Some(r) => DecodedValue(r, None)
       case None =>
-        if text == "true" || text == "false" then DecodedValue(text, None)
-        else if text.matches("-?\\d+") then DecodedValue(text, None)
-        else
-          matchStringLiteral(text) match
-            case Some(s) => DecodedValue(s"\"$s\"", None)
-            case None    => DecodedValue(prettyUninterp(text), None)
+        val text = normalizeZ3Text(expr.toString)
+        rawToLabel.get(text) match
+          case Some(label) => DecodedValue(label, Some(label))
+          case None =>
+            if text == "true" || text == "false" then DecodedValue(text, None)
+            else if text.matches("-?\\d+") then DecodedValue(text, None)
+            else
+              matchStringLiteral(text) match
+                case Some(s) => DecodedValue(s"\"$s\"", None)
+                case None    => DecodedValue(prettyUninterp(text), None)
 
   private val NegNum       = """^\(-\s+(\d+)\)$""".r
   private val StrLit       = """^str_(\d+)$""".r

@@ -103,14 +103,17 @@ text \<open>Emit \<open>int\<close> directly as Scala \<open>BigInt\<close> inst
   morphisms, and the imported \<open>Code_Target_Int\<close> already serializes \<open>integer\<close> to
   \<open>BigInt\<close>. Collapsing \<open>int\<close> onto the same \<open>BigInt\<close> and printing the bijection as
   identity removes both conversions everywhere — the verified \<open>plus_int\<close>/\<open>equal_int\<close>
-  code equations compose into native \<open>+\<close>/\<open>==\<close>. The \<open>ord\<close> instance for \<open>int\<close> is
-  dropped because it would otherwise be a second \<open>ord[BigInt]\<close> given alongside
-  \<open>integer\<close>'s; ordering resolves through the surviving \<open>ord_integer\<close>.\<close>
+  code equations compose into native \<open>+\<close>/\<open>==\<close>. The \<open>ord\<close> and \<open>equal\<close> instances for
+  \<open>int\<close> are dropped because each would otherwise be a second \<open>ord[BigInt]\<close>/\<open>equal[BigInt]\<close>
+  given alongside \<open>integer\<close>'s (the \<open>equal\<close> clash surfaced once \<open>rat\<close>, via the \<open>VReal\<close>/\<open>SReal\<close>
+  values, made \<open>equal\<close> on \<open>int\<close> reachable); resolution falls through to the surviving
+  \<open>ord_integer\<close>/\<open>equal_integer\<close>, which are the same native \<open><\<close>/\<open>==\<close> on \<open>BigInt\<close>.\<close>
 code_printing
   type_constructor Int.int \<rightharpoonup> (Scala) "BigInt"
 | constant Code_Numeral.int_of_integer \<rightharpoonup> (Scala) "(_)"
 | constant Code_Numeral.integer_of_int \<rightharpoonup> (Scala) "(_)"
 | class_instance Int.int :: ord \<rightharpoonup> (Scala) -
+| class_instance Int.int :: equal \<rightharpoonup> (Scala) -
 
 export_code
     translate

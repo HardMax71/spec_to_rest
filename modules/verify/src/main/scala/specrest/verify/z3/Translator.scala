@@ -316,24 +316,48 @@ object Translator:
         ctx.declareSort(sort)
         ctx.typeAliases(talName(t)) = TypeAliasInfo(sort)
 
+  // Z3 sort policy for the spec's built-in primitives. This is irreducibly
+  // verify-local: the proof's `ty` has only TInt/TBool (no fractional sort) and
+  // its numeric classifier lumps integral with fractional, so the Int-vs-Real
+  // split cannot be derived upstream. Integral and temporal types share Int
+  // (temporal values are epoch seconds); fractional types use Real. String and
+  // other opaque primitives are absent here and fall to uninterpreted in
+  // sortForNamedType (where String-refinement aliases get their own handling).
+  private def primitiveSortOf(name: String): Option[Z3Sort] = name match
+    case "Int" | "DateTime" | "Date"   => Some(Z3Sort.Int)
+    case "Float" | "Decimal" | "Money" => Some(Z3Sort.Real)
+    case "Bool" | "Boolean"            => Some(Z3Sort.Bool)
+    case _                             => None
+
   private def primitiveUnderlyingSort(t: type_alias_decl_full): Option[Z3Sort] =
     talType(t) match
-      case NamedTypeF("Int", _)  => Some(Z3Sort.Int)
-      case NamedTypeF("Bool", _) => Some(Z3Sort.Bool)
-      case _                     => None
+      case NamedTypeF(n, _) => primitiveSortOf(n)
+      case _                => None
 
   private def emitTypeAliasConstraint(ctx: TranslateCtx, t: type_alias_decl_full): Unit =
     talConstraint(t) match
       case None => ()
       case Some(constraint) =>
-        if ctx.primitiveAliases.contains(talName(t)) then ()
-        else
-          val sort    = ctx.typeAliases(talName(t)).sort
-          val varName = s"self_${talName(t)}"
-          val selfRef = Z3Expr.Var(varName, sort)
-          val env     = mutable.Map.empty[String, Z3Expr]
-          env("value") = selfRef
-          val body = translateExpr(ctx, constraint, env)
+        val name = talName(t)
+        val sort = ctx.primitiveAliases
+          .get(name)
+          .map(_.underlyingSort)
+          .orElse(ctx.typeAliases.get(name).map(_.sort))
+          .getOrElse(Z3Sort.Uninterp(name))
+        val varName = s"self_$name"
+        val env     = mutable.Map.empty[String, Z3Expr]
+        env("value") = Z3Expr.Var(varName, sort)
+        val body = translateExpr(ctx, constraint, env)
+        if !inferSortOfZ3Expr(ctx, body).contains(Z3Sort.Bool) then
+          fail(
+            ctx,
+            s"refinement on '$name' is not a boolean predicate the verifier can model " +
+              "(it calls an undeclared/strategy-backed predicate)"
+          )
+        // Primitive-alias refinements are applied at field-use sites
+        // (refinementConstraintFor); here we only validate they are boolean.
+        // Non-primitive aliases assert the refinement as a quantified fact.
+        if !ctx.primitiveAliases.contains(name) then
           ctx.assertions += Z3Expr.Quantifier(
             QKind.ForAll,
             List(Z3Binding(varName, sort)),
@@ -581,22 +605,23 @@ object Translator:
 
   private def sortNameOf(s: Z3Sort): String = s match
     case Z3Sort.Int         => "Int"
+    case Z3Sort.Real        => "Real"
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
 
-  private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort = name match
-    case "Int"    => Z3Sort.Int
-    case "Bool"   => Z3Sort.Bool
-    case "String" => Z3Sort.Uninterp(StringSortName)
-    case _ =>
-      ctx.entities.get(name).map(_.sort).orElse {
-        ctx.enums.get(name).map(_.sort)
-      }.orElse {
-        ctx.primitiveAliases.get(name).map(_.underlyingSort)
-      }.orElse {
-        ctx.typeAliases.get(name).map(_.sort)
-      }.getOrElse(Z3Sort.Uninterp(name))
+  private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
+    primitiveSortOf(name).getOrElse:
+      name match
+        case "String" => Z3Sort.Uninterp(StringSortName)
+        case _ =>
+          ctx.entities.get(name).map(_.sort).orElse {
+            ctx.enums.get(name).map(_.sort)
+          }.orElse {
+            ctx.primitiveAliases.get(name).map(_.underlyingSort)
+          }.orElse {
+            ctx.typeAliases.get(name).map(_.sort)
+          }.getOrElse(Z3Sort.Uninterp(name))
 
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
@@ -610,7 +635,13 @@ object Translator:
       expr: expr_full,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
-    case IntLitF(v, _)               => Z3Expr.IntLit(v)
+    case IntLitF(v, _) => Z3Expr.IntLit(v)
+    case FloatLitF(s, _) =>
+      decimalToRat(s) match
+        case Some(r) =>
+          val (num, den) = quotient_of(r)
+          Z3Expr.RealLit(num, den)
+        case None => fail(ctx, s"malformed float literal: '$s'")
     case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
     case StringLitF(v, _)            => stringLiteralConst(ctx, v)
     case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
@@ -679,32 +710,23 @@ object Translator:
       case BImplies() => Z3Expr.Implies(left, right)
       case BIff() =>
         Z3Expr.And(List(Z3Expr.Implies(left, right), Z3Expr.Implies(right, left)))
-      case BEq() | BNeq() | BLt() | BLe() | BGt() | BGe() =>
+      case BEq() | BNeq() =>
+        Z3Expr.Cmp(if isEq then CmpOp.Eq else CmpOp.Neq, left, right)
+      case BLt() | BLe() | BGt() | BGe() =>
+        requireNumericOperands(ctx, op, leftExpr, rightExpr, left, right, env)
         val cmp = op match
-          case BEq()  => CmpOp.Eq
-          case BNeq() => CmpOp.Neq
-          case BLt()  => CmpOp.Lt
-          case BLe()  => CmpOp.Le
-          case BGt()  => CmpOp.Gt
-          case BGe()  => CmpOp.Ge
-          case _      => CmpOp.Eq
+          case BLt() => CmpOp.Lt
+          case BLe() => CmpOp.Le
+          case BGt() => CmpOp.Gt
+          case _     => CmpOp.Ge
         Z3Expr.Cmp(cmp, left, right)
       case BAdd() | BSub() | BMul() | BDiv() =>
-        val leftSort  = inferSort(ctx, leftExpr, env, Some(left))
-        val rightSort = inferSort(ctx, rightExpr, env, Some(right))
-        val leftBad   = leftSort.exists(_ != Z3Sort.Int)
-        val rightBad  = rightSort.exists(_ != Z3Sort.Int)
-        if leftBad || rightBad then
-          fail(
-            ctx,
-            s"arithmetic operator '${binOpToTs(op)}' is only supported on integers (deferred for string/set arithmetic)"
-          )
+        requireNumericOperands(ctx, op, leftExpr, rightExpr, left, right, env)
         val aop = op match
           case BAdd() => ArithOp.Add
           case BSub() => ArithOp.Sub
           case BMul() => ArithOp.Mul
-          case BDiv() => ArithOp.Div
-          case _      => ArithOp.Add
+          case _      => ArithOp.Div
         Z3Expr.Arith(aop, List(left, right))
       case BSubset() | BUnion() | BIntersect() | BDiff() =>
         ensureSetBinOpSorts(ctx, leftExpr, rightExpr, left, right, op, env)
@@ -717,6 +739,21 @@ object Translator:
         Z3Expr.SetBinOp(sop, left, right)
       case _ =>
         fail(ctx, s"binary op '${binOpToTs(op)}' is not supported by the verifier")
+
+  private def requireNumericOperands(
+      ctx: TranslateCtx,
+      op: bin_op_full,
+      leftExpr: expr_full,
+      rightExpr: expr_full,
+      left: Z3Expr,
+      right: Z3Expr,
+      env: mutable.Map[String, Z3Expr]
+  ): Unit =
+    val leftSort = inferSort(ctx, leftExpr, env, Some(left)).orElse(inferSortOfZ3Expr(ctx, left))
+    val rightSort =
+      inferSort(ctx, rightExpr, env, Some(right)).orElse(inferSortOfZ3Expr(ctx, right))
+    if !leftSort.exists(Z3Sort.isNumeric) || !rightSort.exists(Z3Sort.isNumeric) then
+      fail(ctx, s"'${binOpToTs(op)}' requires numeric operands (Int or Real)")
 
   private def ensureSetBinOpSorts(
       ctx: TranslateCtx,
@@ -1058,9 +1095,9 @@ object Translator:
         fail(ctx, "higher-order call (non-identifier callee) is not supported by the verifier")
 
   private def callReturnSort(name: String, ctx: TranslateCtx): Z3Sort = name match
-    case "len"                               => Z3Sort.Int
-    case n if ctx.predicateNames.contains(n) => Z3Sort.Bool
-    case _                                   => Z3Sort.Uninterp("Any")
+    case "len" | "now" | "seconds" | "minutes" | "hours" | "days" => Z3Sort.Int
+    case n if ctx.predicateNames.contains(n)                      => Z3Sort.Bool
+    case _                                                        => Z3Sort.Uninterp("Any")
 
   private def argSortsMangled(sorts: List[Z3Sort]): String =
     if sorts.isEmpty then "0" else sorts.map(sortNameOf).mkString("_")
@@ -1240,6 +1277,7 @@ object Translator:
           ctx.entities.get(name).flatMap(_.fields.get(field).map(_._1))
         case _ => None
     case IntLitF(_, _)                     => Some(Z3Sort.Int)
+    case FloatLitF(_, _)                   => Some(Z3Sort.Real)
     case BoolLitF(_, _)                    => Some(Z3Sort.Bool)
     case StringLitF(_, _)                  => Some(Z3Sort.Uninterp(StringSortName))
     case CallF(IdentifierF(name, _), _, _) => Some(callReturnSort(name, ctx))
@@ -1250,11 +1288,23 @@ object Translator:
         case Some(Z3Expr.Var(_, sort, _)) => Some(sort)
         case _                            => None
 
+  // Total: every Z3Expr node determines its result sort, so callers never have to
+  // treat `None` as "optimistically numeric" (which is how an ill-sorted operand
+  // could otherwise slip past the numeric guards).
   private def inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Option[Z3Sort] = e match
-    case Z3Expr.Var(_, sort, _)    => Some(sort)
-    case Z3Expr.IntLit(_, _)       => Some(Z3Sort.Int)
-    case Z3Expr.BoolLit(_, _)      => Some(Z3Sort.Bool)
-    case Z3Expr.App(func, _, _)    => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.Var(_, sort, _)  => Some(sort)
+    case Z3Expr.IntLit(_, _)     => Some(Z3Sort.Int)
+    case Z3Expr.RealLit(_, _, _) => Some(Z3Sort.Real)
+    case Z3Expr.BoolLit(_, _)    => Some(Z3Sort.Bool)
+    case Z3Expr.App(func, _, _)  => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.And(_, _) | Z3Expr.Or(_, _) | Z3Expr.Not(_, _) | Z3Expr.Implies(_, _, _) |
+        Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
+      Some(Z3Sort.Bool)
+    case Z3Expr.Arith(_, args, _) =>
+      val argSorts = args.map(inferSortOfZ3Expr(ctx, _))
+      if argSorts.nonEmpty && argSorts.forall(_.exists(Z3Sort.isNumeric)) then
+        if argSorts.exists(_.contains(Z3Sort.Real)) then Some(Z3Sort.Real) else Some(Z3Sort.Int)
+      else None
     case Z3Expr.EmptySet(s, _)     => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetLit(s, _, _)    => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetMember(_, _, _) => Some(Z3Sort.Bool)
@@ -1262,7 +1312,6 @@ object Translator:
       op match
         case SetOpKind.Subset                                       => Some(Z3Sort.Bool)
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
-    case _ => None
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -1903,14 +1952,31 @@ object Translator:
       case _ =>
         subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
 
+  // Arithmetic/ordering are valid only on the verifier's numeric theory sorts
+  // (Int for integers and temporal-as-epoch, Real for Float/Decimal/Money). An
+  // operand of any other sort is outside the encodable subset, so the check is
+  // skipped rather than handed to the solver as an ill-sorted term.
+  private def encNumeric(
+      ctx: TranslateCtx,
+      term: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val z = encodeFromSmtTerm(ctx, term, env)
+    if !inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric) then
+      fail(ctx, "ordering/arithmetic requires a numeric type (Int or Real)")
+    z
+
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,
       term: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     term match
-      case BLit(b)    => Z3Expr.BoolLit(b)
-      case ILit(n)    => Z3Expr.IntLit(n)
+      case BLit(b) => Z3Expr.BoolLit(b)
+      case ILit(n) => Z3Expr.IntLit(n)
+      case RLit(r) =>
+        val (num, den) = quotient_of(r)
+        Z3Expr.RealLit(num, den)
       case TVar(name) => resolveIdentifier(ctx, name, env)
       case EnumElemConst(en, mem) =>
         val funcName = s"${en}_$mem"
@@ -1922,9 +1988,9 @@ object Translator:
       case TNot(TEq(l, r)) =>
         Z3Expr.Cmp(CmpOp.Neq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
       case TOr(TLt(a1, b1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
-        Z3Expr.Cmp(CmpOp.Le, encodeFromSmtTerm(ctx, a1, env), encodeFromSmtTerm(ctx, b1, env))
+        Z3Expr.Cmp(CmpOp.Le, encNumeric(ctx, a1, env), encNumeric(ctx, b1, env))
       case TOr(TLt(b1, a1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
-        Z3Expr.Cmp(CmpOp.Ge, encodeFromSmtTerm(ctx, a2, env), encodeFromSmtTerm(ctx, b2, env))
+        Z3Expr.Cmp(CmpOp.Ge, encNumeric(ctx, a2, env), encNumeric(ctx, b2, env))
 
       case TNot(t) => Z3Expr.Not(encodeFromSmtTerm(ctx, t, env))
       case TAnd(l, r) =>
@@ -1936,29 +2002,17 @@ object Translator:
       case TEq(l, r) =>
         Z3Expr.Cmp(CmpOp.Eq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
       case TLt(l, r) =>
-        Z3Expr.Cmp(CmpOp.Lt, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+        Z3Expr.Cmp(CmpOp.Lt, encNumeric(ctx, l, env), encNumeric(ctx, r, env))
       case TNeg(t) =>
-        Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), encodeFromSmtTerm(ctx, t, env)))
+        Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), encNumeric(ctx, t, env)))
       case TAdd(l, r) =>
-        Z3Expr.Arith(
-          ArithOp.Add,
-          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-        )
+        Z3Expr.Arith(ArithOp.Add, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
       case TSub(l, r) =>
-        Z3Expr.Arith(
-          ArithOp.Sub,
-          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-        )
+        Z3Expr.Arith(ArithOp.Sub, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
       case TMul(l, r) =>
-        Z3Expr.Arith(
-          ArithOp.Mul,
-          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-        )
+        Z3Expr.Arith(ArithOp.Mul, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
       case TDiv(l, r) =>
-        Z3Expr.Arith(
-          ArithOp.Div,
-          List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-        )
+        Z3Expr.Arith(ArithOp.Div, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
 
       case TInDom(rel, elem) =>
         val key = encodeFromSmtTerm(ctx, elem, env)

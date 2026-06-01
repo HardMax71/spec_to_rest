@@ -3,6 +3,7 @@ package specrest.verify.z3
 import cats.effect.IO
 import cats.effect.Resource
 import com.microsoft.z3.ArithExpr
+import com.microsoft.z3.ArithSort
 import com.microsoft.z3.ArrayExpr
 import com.microsoft.z3.ArraySort
 import com.microsoft.z3.BoolExpr
@@ -10,7 +11,6 @@ import com.microsoft.z3.BoolSort
 import com.microsoft.z3.Context
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
-import com.microsoft.z3.IntSort
 import com.microsoft.z3.Model
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
@@ -145,6 +145,7 @@ private def registerSort(ctx: Context, map: mutable.Map[String, Sort], s: Z3Sort
 private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3Sort): Sort =
   s match
     case Z3Sort.Int  => ctx.getIntSort
+    case Z3Sort.Real => ctx.getRealSort
     case Z3Sort.Bool => ctx.getBoolSort
     case Z3Sort.Uninterp(name) =>
       sortMap.getOrElseUpdate(Z3Sort.key(s), ctx.mkUninterpretedSort(name))
@@ -197,11 +198,12 @@ private object Backend:
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
             .apply(rendered.asInstanceOf[Array[Z3AstExpr[Sort]]]*)
-    case Z3Expr.IntLit(v, _)  => rctx.ctx.mkInt(v.toString)
-    case Z3Expr.BoolLit(v, _) => rctx.ctx.mkBool(v)
-    case Z3Expr.And(args, _)  => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Or(args, _)   => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Not(arg, _)   => rctx.ctx.mkNot(renderBool(rctx, arg))
+    case Z3Expr.IntLit(v, _)         => rctx.ctx.mkInt(v.toString)
+    case Z3Expr.RealLit(num, den, _) => rctx.ctx.mkReal(s"$num/$den")
+    case Z3Expr.BoolLit(v, _)        => rctx.ctx.mkBool(v)
+    case Z3Expr.And(args, _)         => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Or(args, _)          => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Not(arg, _)          => rctx.ctx.mkNot(renderBool(rctx, arg))
     case Z3Expr.Implies(l, r, _) =>
       rctx.ctx.mkImplies(renderBool(rctx, l), renderBool(rctx, r))
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
@@ -241,8 +243,8 @@ private object Backend:
   ): Z3AstExpr[ArraySort[Sort, BoolSort]] =
     renderExpr(rctx, e).asInstanceOf[Z3AstExpr[ArraySort[Sort, BoolSort]]]
 
-  private def renderArithExpr(rctx: RenderCtx, e: Z3Expr): ArithExpr[IntSort] =
-    renderExpr(rctx, e).asInstanceOf[ArithExpr[IntSort]]
+  private def renderArithExpr(rctx: RenderCtx, e: Z3Expr): ArithExpr[ArithSort] =
+    renderExpr(rctx, e).asInstanceOf[ArithExpr[ArithSort]]
 
   private def renderCmp(rctx: RenderCtx, op: CmpOp, lhs: Z3Expr, rhs: Z3Expr): BoolExpr =
     if op == CmpOp.Eq || op == CmpOp.Neq then
@@ -264,7 +266,7 @@ private object Backend:
       rctx: RenderCtx,
       op: ArithOp,
       args: List[Z3Expr]
-  ): ArithExpr[IntSort] =
+  ): ArithExpr[ArithSort] =
     if args.isEmpty then backendFail(rctx, "Arith with no args")
     val rendered = args.map(a => renderArithExpr(rctx, a))
     op match

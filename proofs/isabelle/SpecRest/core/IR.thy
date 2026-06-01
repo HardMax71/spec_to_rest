@@ -1,6 +1,28 @@
 theory IR
-  imports Main
+  imports Main "HOL.Rat"
 begin
+
+fun asciiToIntAcc :: "integer list \<Rightarrow> int \<Rightarrow> int option" where
+  "asciiToIntAcc [] acc = Some acc"
+| "asciiToIntAcc (c # cs) acc =
+     (if 48 \<le> c \<and> c \<le> 57
+        then asciiToIntAcc cs (acc * 10 + int_of_integer (c - 48))
+        else None)"
+
+definition decimalToRat :: "String.literal \<Rightarrow> rat option" where
+  "decimalToRat s =
+     (let cs = String.asciis_of_literal s;
+          (neg, body) =
+            (case cs of [] \<Rightarrow> (False, cs)
+                      | c # rest \<Rightarrow> if c = 45 then (True, rest) else (False, cs));
+          ipart = takeWhile (\<lambda>c. c \<noteq> 46) body;
+          fpart = (case dropWhile (\<lambda>c. c \<noteq> 46) body of [] \<Rightarrow> [] | _ # rest \<Rightarrow> rest)
+      in if ipart = [] \<and> fpart = [] then None
+         else case (asciiToIntAcc ipart 0, asciiToIntAcc fpart 0) of
+                (Some iv, Some fv) \<Rightarrow>
+                  Some ((if neg then - 1 else 1) *
+                        (of_int iv + of_int fv / of_int (10 ^ length fpart)))
+              | _ \<Rightarrow> None)"
 
 datatype (plugins only: code size) span_t = SpanT int int int int
 
@@ -43,6 +65,7 @@ datatype (plugins only: code size) state_mode = SmPre | SmPost
 datatype (plugins only: code size) expr =
     BoolLit bool "option_span"
   | IntLit int "option_span"
+  | RealLit rat "option_span"
   | Ident "String.literal" "option_span"
   | UnNot "expr" "option_span"
   | UnNeg "expr" "option_span"

@@ -25,6 +25,7 @@ object SmtLib:
 
   private def renderSort(s: Z3Sort): String = s match
     case Z3Sort.Int         => "Int"
+    case Z3Sort.Real        => "Real"
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
@@ -40,6 +41,9 @@ object SmtLib:
       else s"($func ${args.map(renderExpr).mkString(" ")})"
     case Z3Expr.IntLit(v, _) =>
       if v.signum < 0 then s"(- ${-v})" else v.toString
+    case Z3Expr.RealLit(num, den, _) =>
+      val n = if num.signum < 0 then s"(- ${-num}.0)" else s"${num}.0"
+      if den == BigInt(1) then n else s"(/ $n ${den}.0)"
     case Z3Expr.BoolLit(v, _) =>
       if v then "true" else "false"
     case Z3Expr.And(args, _) =>

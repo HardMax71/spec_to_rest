@@ -2,7 +2,6 @@ theory IR_Lower
   imports IR
 begin
 
-
 fun lower_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding_full
        \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
@@ -34,7 +33,7 @@ where
   "lower _ (BoolLitF b sp)     = Some (BoolLit b sp)"
 | "lower _ (IntLitF n sp)      = Some (IntLit n sp)"
 | "lower _ (IdentifierF x sp)  = Some (Ident x sp)"
-| "lower _ (FloatLitF _ _)     = None"
+| "lower _ (FloatLitF s sp)    = map_option (\<lambda>r. RealLit r sp) (decimalToRat s)"
 | "lower _ (StringLitF _ _)    = None"
 | "lower _ (NoneLitF _)        = None"
 | "lower _ (LambdaF _ _ _)     = None"

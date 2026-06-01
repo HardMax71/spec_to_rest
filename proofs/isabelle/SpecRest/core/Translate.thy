@@ -5,6 +5,7 @@ begin
 fun translate :: "expr \<Rightarrow> smt_term" where
   "translate (BoolLit b _) = BLit b"
 | "translate (IntLit n _)  = ILit n"
+| "translate (RealLit r _) = RLit r"
 | "translate (Ident x _)   = TVar x"
 | "translate (UnNot e _)   = TNot (translate e)"
 | "translate (UnNeg e _)   = TNeg (translate e)"
