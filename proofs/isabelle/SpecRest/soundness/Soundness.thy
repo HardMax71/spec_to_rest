@@ -567,6 +567,12 @@ lemma int_ge_iff_lt_or_eq: "(a::int) \<ge> b \<longleftrightarrow> b < a \<or> a
 lemma int_le_iff_lt_or_eq: "(a::int) \<le> b \<longleftrightarrow> a < b \<or> a = b"
   by linarith
 
+lemma rat_ge_iff_lt_or_eq: "(a::rat) \<ge> b \<longleftrightarrow> b < a \<or> a = b"
+  by (auto simp: order_le_less)
+
+lemma rat_le_iff_lt_or_eq: "(a::rat) \<le> b \<longleftrightarrow> a < b \<or> a = b"
+  by (auto simp: order_le_less)
+
 theorem soundness:
   "value_to_smt_opt (eval s st env e)
      = smtEval (correlate_model s st) (correlate_env env) (translate e)"
@@ -636,7 +642,8 @@ next
       case (Some b)
       thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
         by (cases op; cases a; cases b)
-           (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq)
+           (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq
+                       rat_le_iff_lt_or_eq rat_ge_iff_lt_or_eq ir_val_eq_def)
     qed
   qed
 next
@@ -663,7 +670,8 @@ next
       case (Some b)
       thus ?thesis using ihl' ihr' \<open>eval s st env l = Some a\<close>
         by (cases op; cases a; cases b)
-           (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq)
+           (auto simp: int_le_iff_lt_or_eq int_ge_iff_lt_or_eq
+                       rat_le_iff_lt_or_eq rat_ge_iff_lt_or_eq ir_val_eq_def)
     qed
   qed
 next
@@ -1599,13 +1607,13 @@ text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
 lemma well_typed_imp_wf_z3:
   "expr_has_ty \<Gamma> e t \<Longrightarrow> wf_z3 e"
 proof (induction rule: expr_has_ty.induct)
-  case (T_Arith \<Gamma> l t r op sp)
+  case (T_Arith \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
   case (T_Cmp_Eq \<Gamma> l t r op sp)
   thus ?case by (cases op) auto
 next
-  case (T_Cmp_Ord \<Gamma> l t r op sp)
+  case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
   case (T_Bool_Bin \<Gamma> l r op sp)
@@ -1855,9 +1863,10 @@ lemma h3_pres_Arith:
   assumes "op \<in> {BAdd, BSub, BMul, BDiv}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
-      and "\<And>l' a. lower enums l = Some l' \<Longrightarrow> eval sch st env l' = Some a \<Longrightarrow> value_has_ty \<Gamma> a t"
-      and "\<And>r' b. lower enums r = Some r' \<Longrightarrow> eval sch st env r' = Some b \<Longrightarrow> value_has_ty \<Gamma> b t"
-  shows "value_has_ty \<Gamma> v t"
+      and "numeric_ty t1" and "numeric_ty t2"
+      and "\<And>l' a. lower enums l = Some l' \<Longrightarrow> eval sch st env l' = Some a \<Longrightarrow> value_has_ty \<Gamma> a t1"
+      and "\<And>r' b. lower enums r = Some r' \<Longrightarrow> eval sch st env r' = Some b \<Longrightarrow> value_has_ty \<Gamma> b t2"
+  shows "value_has_ty \<Gamma> v (numeric_join t1 t2)"
 proof -
   from assms(1,2) obtain l' r' aop where
        l_low: "lower enums l = Some l'"
@@ -1867,13 +1876,13 @@ proof -
   from assms(3) e_eq
   have ev: "eval_arith aop (eval sch st env l') (eval sch st env r') = Some v"
     by simp
-  show "value_has_ty \<Gamma> v t"
-  proof (rule eval_arith_preservation[OF ev])
+  show "value_has_ty \<Gamma> v (numeric_join t1 t2)"
+  proof (rule eval_arith_preservation[OF ev _ _ assms(4) assms(5)])
     fix a assume "eval sch st env l' = Some a"
-    thus "value_has_ty \<Gamma> a t" using assms(4) l_low by blast
+    thus "value_has_ty \<Gamma> a t1" using assms(6) l_low by blast
   next
     fix b assume "eval sch st env r' = Some b"
-    thus "value_has_ty \<Gamma> b t" using assms(5) r_low by blast
+    thus "value_has_ty \<Gamma> b t2" using assms(7) r_low by blast
   qed
 qed
 
@@ -1938,22 +1947,23 @@ next
   case (T_Ident_State \<Gamma> x t sp)
   thus ?case using h3_pres_Ident_State by blast
 next
-  case (T_Arith \<Gamma> l t r op sp)
+  case (T_Arith \<Gamma> l t1 r t2 op sp)
   show ?case
-  proof (rule h3_pres_Arith[OF T_Arith.hyps(4) T_Arith.prems(2) T_Arith.prems(3)])
+  proof (rule h3_pres_Arith[OF T_Arith.hyps(5) T_Arith.prems(2) T_Arith.prems(3)
+                              T_Arith.hyps(3) T_Arith.hyps(4)])
     fix l' a assume "lower enums l = Some l'" and "eval sch st env l' = Some a"
-    thus "value_has_ty \<Gamma> a t"
+    thus "value_has_ty \<Gamma> a t1"
       using T_Arith.IH(1) T_Arith.prems(1) T_Arith.prems(4) by blast
   next
     fix r' b assume "lower enums r = Some r'" and "eval sch st env r' = Some b"
-    thus "value_has_ty \<Gamma> b t"
+    thus "value_has_ty \<Gamma> b t2"
       using T_Arith.IH(2) T_Arith.prems(1) T_Arith.prems(4) by blast
   qed
 next
   case (T_Cmp_Eq \<Gamma> l t r op sp)
   thus ?case using h3_pres_Cmp by blast
 next
-  case (T_Cmp_Ord \<Gamma> l t r op sp)
+  case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
   thus ?case using h3_pres_Cmp by blast
 next
   case (T_Bool_Bin \<Gamma> l r op sp)

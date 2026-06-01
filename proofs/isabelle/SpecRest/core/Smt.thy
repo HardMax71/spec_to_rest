@@ -203,12 +203,16 @@ where
       | _ \<Rightarrow> None)"
 | "smtEval m env (TEq l r) =
      (case (smtEval m env l, smtEval m env r) of
-        (Some a, Some b) \<Rightarrow> Some (SBool (a = b))
+        (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SBool (of_int a = b))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SBool (a = of_int b))
+      | (Some a, Some b) \<Rightarrow> Some (SBool (a = b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TLt l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SBool (a < b))
       | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SBool (a < b))
+      | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SBool (of_int a < b))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SBool (a < of_int b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TNeg t) =
      (case smtEval m env t of
@@ -219,16 +223,22 @@ where
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a + b))
       | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a + b))
+      | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SReal (of_int a + b))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SReal (a + of_int b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TSub l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a - b))
       | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a - b))
+      | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SReal (of_int a - b))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SReal (a - of_int b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TMul l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a * b))
       | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a * b))
+      | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SReal (of_int a * b))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SReal (a * of_int b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TDiv l r) =
      (case (smtEval m env l, smtEval m env r) of
@@ -236,6 +246,10 @@ where
           (if b = 0 then None else Some (SInt (a div b)))
       | (Some (SReal a), Some (SReal b)) \<Rightarrow>
           (if b = 0 then None else Some (SReal (a / b)))
+      | (Some (SInt a), Some (SReal b)) \<Rightarrow>
+          (if b = 0 then None else Some (SReal (of_int a / b)))
+      | (Some (SReal a), Some (SInt b)) \<Rightarrow>
+          (if b = 0 then None else Some (SReal (a / of_int b)))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TInDom rel_name arg) =
      (case smtEval m env arg of

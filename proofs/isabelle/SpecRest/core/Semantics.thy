@@ -100,11 +100,28 @@ fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value
 | "eval_arith MulOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a * b))"
 | "eval_arith DivOp (Some (VReal a)) (Some (VReal b)) =
      (if b = 0 then None else Some (VReal (a / b)))"
+| "eval_arith AddOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a + b))"
+| "eval_arith AddOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a + of_int b))"
+| "eval_arith SubOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a - b))"
+| "eval_arith SubOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a - of_int b))"
+| "eval_arith MulOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a * b))"
+| "eval_arith MulOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a * of_int b))"
+| "eval_arith DivOp (Some (VInt a)) (Some (VReal b)) =
+     (if b = 0 then None else Some (VReal (of_int a / b)))"
+| "eval_arith DivOp (Some (VReal a)) (Some (VInt b)) =
+     (if b = 0 then None else Some (VReal (a / of_int b)))"
 | "eval_arith _ _ _ = None"
 
+definition ir_val_eq :: "ir_value \<Rightarrow> ir_value \<Rightarrow> bool" where
+  "ir_val_eq x y =
+     (case (x, y) of
+        (VInt a, VReal b) \<Rightarrow> of_int a = b
+      | (VReal a, VInt b) \<Rightarrow> a = of_int b
+      | _ \<Rightarrow> x = y)"
+
 fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_cmp EqOp  (Some a) (Some b) = Some (VBool (a = b))"
-| "eval_cmp NeqOp (Some a) (Some b) = Some (VBool (a \<noteq> b))"
+  "eval_cmp EqOp  (Some a) (Some b) = Some (VBool (ir_val_eq a b))"
+| "eval_cmp NeqOp (Some a) (Some b) = Some (VBool (\<not> ir_val_eq a b))"
 | "eval_cmp LtOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a < b))"
 | "eval_cmp LeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<le> b))"
 | "eval_cmp GtOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a > b))"
@@ -113,6 +130,14 @@ fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value opt
 | "eval_cmp LeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<le> b))"
 | "eval_cmp GtOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a > b))"
 | "eval_cmp GeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<ge> b))"
+| "eval_cmp LtOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a < b))"
+| "eval_cmp LtOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a < of_int b))"
+| "eval_cmp LeOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a \<le> b))"
+| "eval_cmp LeOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a \<le> of_int b))"
+| "eval_cmp GtOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a > b))"
+| "eval_cmp GtOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a > of_int b))"
+| "eval_cmp GeOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a \<ge> b))"
+| "eval_cmp GeOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a \<ge> of_int b))"
 | "eval_cmp _ _ _ = None"
 
 text \<open>Category H — first proven bricks of the spec front-half (the
@@ -127,8 +152,8 @@ text \<open>Category H — first proven bricks of the spec front-half (the
 
 lemma eval_arith_some_imp_numeric:
   "eval_arith op x y = Some v \<Longrightarrow>
-     ((\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b)))
-     \<or> ((\<exists>a. x = Some (VReal a)) \<and> (\<exists>b. y = Some (VReal b)))"
+     ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
+     \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
   by (induction op x y rule: eval_arith.induct) (auto split: if_splits)
 
 lemma eval_arith_div_zero:
@@ -146,8 +171,8 @@ lemma eval_cmp_some_imp_defined:
 
 lemma eval_cmp_order_imp_numeric:
   "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
-     ((\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b)))
-     \<or> ((\<exists>a. x = Some (VReal a)) \<and> (\<exists>b. y = Some (VReal b)))"
+     ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
+     \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
   by (induction op x y rule: eval_cmp.induct) auto
 
 text \<open>Category H Phase H1 — value types and value typing.
@@ -167,6 +192,12 @@ datatype (plugins only: code size) ty =
   | TEnum "String.literal"
   | TEntity "String.literal"
   | TSet ty
+
+definition numeric_ty :: "ty \<Rightarrow> bool" where
+  "numeric_ty t \<longleftrightarrow> t = TInt \<or> t = TReal"
+
+definition numeric_join :: "ty \<Rightarrow> ty \<Rightarrow> ty" where
+  "numeric_join t1 t2 = (if t1 = TReal \<or> t2 = TReal then TReal else TInt)"
 
 text \<open>The typing context \<open>tyctx\<close> and its sub-records are declared
   here (before \<open>value_has_ty\<close>) because \<open>vt_entity_with\<close> needs to
@@ -399,12 +430,13 @@ fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
 
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
-      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a t"
-      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b t"
-  shows "value_has_ty \<Gamma> v t"
+      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a t1"
+      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b t2"
+      and "numeric_ty t1" and "numeric_ty t2"
+  shows "value_has_ty \<Gamma> v (numeric_join t1 t2)"
   using assms
   by (induction op x y rule: eval_arith.induct)
-     (auto split: if_splits intro: vt_int vt_real)
+     (auto split: if_splits simp: numeric_ty_def numeric_join_def intro: vt_int vt_real)
 
 lemma eval_cmp_preservation:
   assumes "eval_cmp op x y = Some v"
@@ -745,9 +777,6 @@ text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   \<open>env_agrees\<close> / \<open>state_agrees_scalars\<close> agreement halves so the
   H3 progress theorem dispatches per-arm to H1.\<close>
 
-definition numeric_ty :: "ty \<Rightarrow> bool" where
-  "numeric_ty t \<longleftrightarrow> t = TInt \<or> t = TReal"
-
 inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Rightarrow> bool" where
   T_BoolLit:
     "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
@@ -764,20 +793,22 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t
        \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
 | T_Arith:
-    "expr_has_ty \<Gamma> l t
-       \<Longrightarrow> expr_has_ty \<Gamma> r t
-       \<Longrightarrow> numeric_ty t
+    "expr_has_ty \<Gamma> l t1
+       \<Longrightarrow> expr_has_ty \<Gamma> r t2
+       \<Longrightarrow> numeric_ty t1
+       \<Longrightarrow> numeric_ty t2
        \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
-       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) t"
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) (numeric_join t1 t2)"
 | T_Cmp_Eq:
     "expr_has_ty \<Gamma> l t
        \<Longrightarrow> expr_has_ty \<Gamma> r t
        \<Longrightarrow> op \<in> {BEq, BNeq}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Cmp_Ord:
-    "expr_has_ty \<Gamma> l t
-       \<Longrightarrow> expr_has_ty \<Gamma> r t
-       \<Longrightarrow> numeric_ty t
+    "expr_has_ty \<Gamma> l t1
+       \<Longrightarrow> expr_has_ty \<Gamma> r t2
+       \<Longrightarrow> numeric_ty t1
+       \<Longrightarrow> numeric_ty t2
        \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Bool_Bin:
