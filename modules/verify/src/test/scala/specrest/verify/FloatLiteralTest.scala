@@ -2,7 +2,6 @@ package specrest.verify
 
 import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated.decimalToRat
-import specrest.ir.generated.SpecRestGenerated.floatLitRat
 import specrest.ir.generated.SpecRestGenerated.quotient_of
 
 class FloatLiteralTest extends CatsEffectSuite:
@@ -24,7 +23,3 @@ class FloatLiteralTest extends CatsEffectSuite:
   ).foreach: (input, expected) =>
     test(s"decimalToRat parses '$input'"):
       assertEquals(parse(input), expected)
-
-  test("floatLitRat defaults unparseable input to 0"):
-    assertEquals(quotient_of(floatLitRat("not-a-number")), (BigInt(0), BigInt(1)))
-    assertEquals(quotient_of(floatLitRat("9.5")), (BigInt(19), BigInt(2)))

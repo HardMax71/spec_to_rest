@@ -2290,11 +2290,6 @@ object SpecRestGenerated {
       }
   }
 
-  def tl[A](x0: List[A]): List[A] = x0 match {
-    case Nil        => Nil
-    case x21 :: x22 => x22
-  }
-
   def list_ex[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
     case (p, Nil)     => false
     case (p, x :: xs) => p(x) || list_ex[A](p, xs)
@@ -2567,98 +2562,6 @@ object SpecRestGenerated {
         }
     }
 
-  def power[A: power](a: A, n: nat): A =
-    equal_nat(n, zero_nat) match {
-      case true  => one[A]
-      case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
-    }
-
-  def asciiToIntAcc(x0: List[BigInt], acc: BigInt): Option[BigInt] = (x0, acc) match {
-    case (Nil, acc) => Some[BigInt](acc)
-    case (c :: cs, acc) =>
-      BigInt(48) <= c && c <= BigInt(57) match {
-        case true  => asciiToIntAcc(cs, plus_int(times_inta(acc, BigInt(10)), c - BigInt(48)))
-        case false => None
-      }
-  }
-
-  def takeWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
-    case (p, Nil) => Nil
-    case (p, x :: xs) =>
-      p(x) match {
-        case true  => x :: takeWhile[A](p, xs)
-        case false => Nil
-      }
-  }
-
-  def dropWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
-    case (p, Nil) => Nil
-    case (p, x :: xs) =>
-      p(x) match {
-        case true  => dropWhile[A](p, xs)
-        case false => x :: xs
-      }
-  }
-
-  def decimalToRat(s: String): Option[rat] = {
-    val cs = Str_Literal.asciisOfLiteral(s): List[BigInt];
-    cs match {
-      case Nil => None
-      case c0 :: _ =>
-        val neg = c0 == BigInt(45): Boolean
-        val body =
-          (neg match {
-            case true  => tl[BigInt](cs)
-            case false => cs
-          }): List[BigInt]
-        val ipart =
-          takeWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body): List[BigInt]
-        val dotrest =
-          dropWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body): List[BigInt];
-        nulla[BigInt](dotrest) match {
-          case true => nulla[BigInt](ipart) match {
-              case true => None
-              case false => asciiToIntAcc(ipart, zero_int) match {
-                  case None => None
-                  case Some(iv) =>
-                    Some[rat](of_int(neg match {
-                      case true  => uminus_int(iv)
-                      case false => iv
-                    }))
-                }
-            }
-          case false =>
-            val fpart = tl[BigInt](dotrest): List[BigInt];
-            nulla[BigInt](ipart) &&
-              nulla[BigInt](fpart) match {
-              case true => None
-              case false => (asciiToIntAcc(ipart, zero_int), asciiToIntAcc(fpart, zero_int)) match {
-                  case (None, _)       => None
-                  case (Some(_), None) => None
-                  case (Some(iv), Some(fv)) =>
-                    val mag =
-                      plus_rat(
-                        of_int(iv),
-                        divide_rat(
-                          of_int(fv),
-                          of_int(power[BigInt](BigInt(10), size_list[BigInt](fpart)))
-                        )
-                      ): rat;
-                    Some[rat](neg match {
-                      case true  => uminus_rat(mag)
-                      case false => mag
-                    })
-                }
-            }
-        }
-    }
-  }
-
-  def floatLitRat(s: String): rat = decimalToRat(s) match {
-    case None    => zero_rat
-    case Some(r) => r
-  }
-
   def peel_relation_ref(x0: expr): Option[String] = x0 match {
     case Ident(rel, uu)                        => Some[String](rel)
     case Pre(Ident(rel, uv), uw)               => Some[String](rel)
@@ -2732,6 +2635,79 @@ object SpecRestGenerated {
     case WithRec(v, va, vb, vc)                => None
   }
 
+  def one_rat: rat = Frct((one_inta, one_inta))
+
+  def power[A: power](a: A, n: nat): A =
+    equal_nat(n, zero_nat) match {
+      case true  => one[A]
+      case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
+    }
+
+  def asciiToIntAcc(x0: List[BigInt], acc: BigInt): Option[BigInt] = (x0, acc) match {
+    case (Nil, acc) => Some[BigInt](acc)
+    case (c :: cs, acc) =>
+      BigInt(48) <= c && c <= BigInt(57) match {
+        case true  => asciiToIntAcc(cs, plus_int(times_inta(acc, BigInt(10)), c - BigInt(48)))
+        case false => None
+      }
+  }
+
+  def takeWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
+    case (p, Nil) => Nil
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => x :: takeWhile[A](p, xs)
+        case false => Nil
+      }
+  }
+
+  def dropWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
+    case (p, Nil) => Nil
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => dropWhile[A](p, xs)
+        case false => x :: xs
+      }
+  }
+
+  def decimalToRat(s: String): Option[rat] = {
+    val cs = Str_Literal.asciisOfLiteral(s): List[BigInt]
+    val (neg, body) =
+      (cs match {
+        case Nil => (false, cs)
+        case c :: rest =>
+          c == BigInt(45) match {
+            case true  => (true, rest)
+            case false => (false, cs)
+          }
+      }): ((Boolean, List[BigInt]))
+    val ipart =
+      takeWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body): List[BigInt]
+    val fpart =
+      (dropWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body) match {
+        case Nil       => Nil
+        case _ :: rest => rest
+      }): List[BigInt];
+    nulla[BigInt](ipart) && nulla[BigInt](fpart) match {
+      case true => None
+      case false => (asciiToIntAcc(ipart, zero_int), asciiToIntAcc(fpart, zero_int)) match {
+          case (None, _)       => None
+          case (Some(_), None) => None
+          case (Some(iv), Some(fv)) =>
+            Some[rat](times_rat(
+              neg match {
+                case true  => uminus_rat(one_rat)
+                case false => one_rat
+              },
+              plus_rat(
+                of_int(iv),
+                divide_rat(of_int(fv), of_int(power[BigInt](BigInt(10), size_list[BigInt](fpart))))
+              )
+            ))
+        }
+    }
+  }
+
   def lower_with_assigns(
       wt: List[String],
       x1: List[field_assign_full],
@@ -2760,10 +2736,11 @@ object SpecRestGenerated {
     }
 
   def lower(uu: List[String], x1: expr_full): Option[expr] = (uu, x1) match {
-    case (uu, BoolLitF(b, sp))                   => Some[expr](BoolLit(b, sp))
-    case (uv, IntLitF(n, sp))                    => Some[expr](IntLit(n, sp))
-    case (uw, IdentifierF(x, sp))                => Some[expr](Ident(x, sp))
-    case (ux, FloatLitF(s, sp))                  => Some[expr](RealLit(floatLitRat(s), sp))
+    case (uu, BoolLitF(b, sp))    => Some[expr](BoolLit(b, sp))
+    case (uv, IntLitF(n, sp))     => Some[expr](IntLit(n, sp))
+    case (uw, IdentifierF(x, sp)) => Some[expr](Ident(x, sp))
+    case (ux, FloatLitF(s, sp)) =>
+      map_option[rat, expr]((r: rat) => RealLit(r, sp), decimalToRat(s))
     case (uy, StringLitF(uz, va))                => None
     case (vb, NoneLitF(vc))                      => None
     case (vd, LambdaF(ve, vf, vg))               => None

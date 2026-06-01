@@ -637,8 +637,11 @@ object Translator:
   ): Z3Expr = expr match
     case IntLitF(v, _) => Z3Expr.IntLit(v)
     case FloatLitF(s, _) =>
-      val (num, den) = quotient_of(floatLitRat(s))
-      Z3Expr.RealLit(num, den)
+      decimalToRat(s) match
+        case Some(r) =>
+          val (num, den) = quotient_of(r)
+          Z3Expr.RealLit(num, den)
+        case None => fail(ctx, s"malformed float literal: '$s'")
     case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
     case StringLitF(v, _)            => stringLiteralConst(ctx, v)
     case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
@@ -1297,7 +1300,9 @@ object Translator:
     case Z3Expr.And(_, _) | Z3Expr.Or(_, _) | Z3Expr.Not(_, _) | Z3Expr.Implies(_, _, _) |
         Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
       Some(Z3Sort.Bool)
-    case Z3Expr.Arith(_, args, _)  => args.headOption.flatMap(inferSortOfZ3Expr(ctx, _))
+    case Z3Expr.Arith(_, args, _) =>
+      val argSorts = args.flatMap(inferSortOfZ3Expr(ctx, _))
+      if argSorts.contains(Z3Sort.Real) then Some(Z3Sort.Real) else argSorts.headOption
     case Z3Expr.EmptySet(s, _)     => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetLit(s, _, _)    => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetMember(_, _, _) => Some(Z3Sort.Bool)

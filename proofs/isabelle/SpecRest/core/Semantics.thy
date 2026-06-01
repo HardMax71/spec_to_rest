@@ -751,7 +751,8 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
 | T_IntLit:
     "expr_has_ty \<Gamma> (IntLitF n sp) TInt"
 | T_FloatLit:
-    "expr_has_ty \<Gamma> (FloatLitF s sp) TReal"
+    "decimalToRat s \<noteq> None
+       \<Longrightarrow> expr_has_ty \<Gamma> (FloatLitF s sp) TReal"
 | T_Ident_Lex:
     "tyenv_lookup (tc_env \<Gamma>) x = Some t
        \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"

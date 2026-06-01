@@ -1176,7 +1176,7 @@ where
 | "wf_z3 (WithF base ups _)        = (wf_z3 base \<and> wf_z3_fields ups)"
 | "wf_z3 (SetLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (QuantifierF _ bs body _) = (wf_z3_bindings bs \<and> wf_z3 body)"
-| "wf_z3 (FloatLitF _ _)           = True"
+| "wf_z3 (FloatLitF s _)           = (decimalToRat s \<noteq> None)"
 | "wf_z3 (StringLitF _ _)          = False"
 | "wf_z3 (NoneLitF _)              = False"
 | "wf_z3 (LambdaF _ _ _)           = False"
@@ -1754,7 +1754,8 @@ lemma h3_pres_FloatLit:
       and "eval sch st env e' = Some v"
   shows "value_has_ty \<Gamma> v TReal"
 proof -
-  from assms(1) have "e' = RealLit (floatLitRat s) sp" by simp
+  from assms(1) obtain r where "e' = RealLit r sp"
+    by (cases "decimalToRat s") auto
   with assms(2) show ?thesis by auto
 qed
 
