@@ -1,15 +1,17 @@
 theory Smt
-  imports IR
+  imports IR "HOL.Rat"
 begin
 
 datatype (plugins only: code size) smt_sort =
     SortBool
   | SortInt
+  | SortReal
   | SortUninterp "String.literal"
 
 datatype (plugins only: code size) smt_val =
     SBool bool
   | SInt int
+  | SReal rat
   | SEnumElem "String.literal" "String.literal"
   | SEntityElem "String.literal" "String.literal"
   | SSet "smt_val list"
@@ -204,27 +206,34 @@ where
 | "smtEval m env (TLt l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SBool (a < b))
+      | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SBool (a < b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TNeg t) =
      (case smtEval m env t of
         Some (SInt n) \<Rightarrow> Some (SInt (- n))
+      | Some (SReal n) \<Rightarrow> Some (SReal (- n))
       | _             \<Rightarrow> None)"
 | "smtEval m env (TAdd l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a + b))
+      | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a + b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TSub l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a - b))
+      | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a - b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TMul l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow> Some (SInt (a * b))
+      | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SReal (a * b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TDiv l r) =
      (case (smtEval m env l, smtEval m env r) of
         (Some (SInt a), Some (SInt b)) \<Rightarrow>
           (if b = 0 then None else Some (SInt (a div b)))
+      | (Some (SReal a), Some (SReal b)) \<Rightarrow>
+          (if b = 0 then None else Some (SReal (a / b)))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TInDom rel_name arg) =
      (case smtEval m env arg of

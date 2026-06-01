@@ -338,20 +338,26 @@ object Translator:
     talConstraint(t) match
       case None => ()
       case Some(constraint) =>
-        if ctx.primitiveAliases.contains(talName(t)) then ()
-        else
-          val sort    = ctx.typeAliases(talName(t)).sort
-          val varName = s"self_${talName(t)}"
-          val selfRef = Z3Expr.Var(varName, sort)
-          val env     = mutable.Map.empty[String, Z3Expr]
-          env("value") = selfRef
-          val body = translateExpr(ctx, constraint, env)
-          if inferSortOfZ3Expr(ctx, body).exists(_ != Z3Sort.Bool) then
-            fail(
-              ctx,
-              s"refinement on '${talName(t)}' is not a boolean predicate the verifier can model " +
-                "(it calls an undeclared/strategy-backed predicate)"
-            )
+        val name = talName(t)
+        val sort = ctx.primitiveAliases
+          .get(name)
+          .map(_.underlyingSort)
+          .orElse(ctx.typeAliases.get(name).map(_.sort))
+          .getOrElse(Z3Sort.Uninterp(name))
+        val varName = s"self_$name"
+        val env     = mutable.Map.empty[String, Z3Expr]
+        env("value") = Z3Expr.Var(varName, sort)
+        val body = translateExpr(ctx, constraint, env)
+        if !inferSortOfZ3Expr(ctx, body).contains(Z3Sort.Bool) then
+          fail(
+            ctx,
+            s"refinement on '$name' is not a boolean predicate the verifier can model " +
+              "(it calls an undeclared/strategy-backed predicate)"
+          )
+        // Primitive-alias refinements are applied at field-use sites
+        // (refinementConstraintFor); here we only validate they are boolean.
+        // Non-primitive aliases assert the refinement as a quantified fact.
+        if !ctx.primitiveAliases.contains(name) then
           ctx.assertions += Z3Expr.Quantifier(
             QKind.ForAll,
             List(Z3Binding(varName, sort)),
@@ -737,10 +743,10 @@ object Translator:
       right: Z3Expr,
       env: mutable.Map[String, Z3Expr]
   ): Unit =
-    val leftSort  = inferSort(ctx, leftExpr, env, Some(left))
-    val rightSort = inferSort(ctx, rightExpr, env, Some(right))
-    if leftSort.exists(s => !Z3Sort.isNumeric(s)) || rightSort.exists(s => !Z3Sort.isNumeric(s))
-    then
+    val leftSort = inferSort(ctx, leftExpr, env, Some(left)).orElse(inferSortOfZ3Expr(ctx, left))
+    val rightSort =
+      inferSort(ctx, rightExpr, env, Some(right)).orElse(inferSortOfZ3Expr(ctx, right))
+    if !leftSort.exists(Z3Sort.isNumeric) || !rightSort.exists(Z3Sort.isNumeric) then
       fail(ctx, s"'${binOpToTs(op)}' requires numeric operands (Int or Real)")
 
   private def ensureSetBinOpSorts(
@@ -1275,11 +1281,18 @@ object Translator:
         case Some(Z3Expr.Var(_, sort, _)) => Some(sort)
         case _                            => None
 
+  // Total: every Z3Expr node determines its result sort, so callers never have to
+  // treat `None` as "optimistically numeric" (which is how an ill-sorted operand
+  // could otherwise slip past the numeric guards).
   private def inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Option[Z3Sort] = e match
-    case Z3Expr.Var(_, sort, _)    => Some(sort)
-    case Z3Expr.IntLit(_, _)       => Some(Z3Sort.Int)
-    case Z3Expr.BoolLit(_, _)      => Some(Z3Sort.Bool)
-    case Z3Expr.App(func, _, _)    => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.Var(_, sort, _) => Some(sort)
+    case Z3Expr.IntLit(_, _)    => Some(Z3Sort.Int)
+    case Z3Expr.BoolLit(_, _)   => Some(Z3Sort.Bool)
+    case Z3Expr.App(func, _, _) => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.And(_, _) | Z3Expr.Or(_, _) | Z3Expr.Not(_, _) | Z3Expr.Implies(_, _, _) |
+        Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
+      Some(Z3Sort.Bool)
+    case Z3Expr.Arith(_, args, _)  => args.headOption.flatMap(inferSortOfZ3Expr(ctx, _))
     case Z3Expr.EmptySet(s, _)     => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetLit(s, _, _)    => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetMember(_, _, _) => Some(Z3Sort.Bool)
@@ -1287,7 +1300,6 @@ object Translator:
       op match
         case SetOpKind.Subset                                       => Some(Z3Sort.Bool)
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
-    case _ => None
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -1938,7 +1950,7 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     val z = encodeFromSmtTerm(ctx, term, env)
-    if inferSortOfZ3Expr(ctx, z).exists(s => !Z3Sort.isNumeric(s)) then
+    if !inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric) then
       fail(ctx, "ordering/arithmetic requires a numeric type (Int or Real)")
     z
 

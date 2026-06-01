@@ -1,6 +1,7 @@
 package specrest.verify
 
 import com.microsoft.z3.Expr as Z3AstExpr
+import com.microsoft.z3.RatNum
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.z3.Z3Sort
 
@@ -39,5 +40,10 @@ object IrValueDecoder:
               if parts.length == 2 then Some(VEnum(parts(0), parts(1))) else None
             else None
           case None => None
-      case Z3Sort.Real | Z3Sort.SetOf(_) =>
+      case Z3Sort.Real =>
+        expr match
+          case r: RatNum =>
+            Some(VReal(Frct((BigInt(r.getBigIntNumerator), BigInt(r.getBigIntDenominator)))))
+          case _ => None
+      case Z3Sort.SetOf(_) =>
         None

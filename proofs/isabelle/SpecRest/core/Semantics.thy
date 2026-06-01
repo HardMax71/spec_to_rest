@@ -1,10 +1,11 @@
 theory Semantics
-  imports IR IR_Helpers IR_Analysis
+  imports IR IR_Helpers IR_Analysis "HOL.Rat"
 begin
 
 datatype (plugins only: code size) ir_value =
     VBool bool
   | VInt int
+  | VReal rat
   | VEnum "String.literal" "String.literal"
   | VEntity "String.literal" "String.literal"
   | VSet "ir_value list"
@@ -94,6 +95,11 @@ fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value
 | "eval_arith MulOp (Some (VInt a)) (Some (VInt b)) = Some (VInt (a * b))"
 | "eval_arith DivOp (Some (VInt a)) (Some (VInt b)) =
      (if b = 0 then None else Some (VInt (a div b)))"
+| "eval_arith AddOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a + b))"
+| "eval_arith SubOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a - b))"
+| "eval_arith MulOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a * b))"
+| "eval_arith DivOp (Some (VReal a)) (Some (VReal b)) =
+     (if b = 0 then None else Some (VReal (a / b)))"
 | "eval_arith _ _ _ = None"
 
 fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
@@ -103,6 +109,10 @@ fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value opt
 | "eval_cmp LeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<le> b))"
 | "eval_cmp GtOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a > b))"
 | "eval_cmp GeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<ge> b))"
+| "eval_cmp LtOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a < b))"
+| "eval_cmp LeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<le> b))"
+| "eval_cmp GtOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a > b))"
+| "eval_cmp GeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<ge> b))"
 | "eval_cmp _ _ _ = None"
 
 text \<open>Category H — first proven bricks of the spec front-half (the
@@ -115,8 +125,10 @@ text \<open>Category H — first proven bricks of the spec front-half (the
   it is *false* here because \<open>eval\<close>'s \<open>Ident\<close> arm legitimately resolves
   from \<open>state\<close>, not only \<open>env\<close>.\<close>
 
-lemma eval_arith_some_imp_int:
-  "eval_arith op x y = Some v \<Longrightarrow> (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+lemma eval_arith_some_imp_numeric:
+  "eval_arith op x y = Some v \<Longrightarrow>
+     ((\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b)))
+     \<or> ((\<exists>a. x = Some (VReal a)) \<and> (\<exists>b. y = Some (VReal b)))"
   by (induction op x y rule: eval_arith.induct) (auto split: if_splits)
 
 lemma eval_arith_div_zero:
@@ -132,9 +144,10 @@ lemma eval_cmp_some_imp_defined:
   "eval_cmp op x y = Some v \<Longrightarrow> (\<exists>a. x = Some a) \<and> (\<exists>b. y = Some b)"
   by (induction op x y rule: eval_cmp.induct) auto
 
-lemma eval_cmp_order_imp_int:
+lemma eval_cmp_order_imp_numeric:
   "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
-     (\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b))"
+     ((\<exists>a. x = Some (VInt a)) \<and> (\<exists>b. y = Some (VInt b)))
+     \<or> ((\<exists>a. x = Some (VReal a)) \<and> (\<exists>b. y = Some (VReal b)))"
   by (induction op x y rule: eval_cmp.induct) auto
 
 text \<open>Category H Phase H1 — value types and value typing.
@@ -150,6 +163,7 @@ text \<open>Category H Phase H1 — value types and value typing.
 datatype (plugins only: code size) ty =
     TBool
   | TInt
+  | TReal
   | TEnum "String.literal"
   | TEntity "String.literal"
   | TSet ty
@@ -179,6 +193,8 @@ fun typeExprFullToTy ::
   "typeExprFullToTy enums entities (NamedTypeF n _) =
      (if n = STR ''Bool'' then Some TBool
       else if n = STR ''Int'' then Some TInt
+      else if n = STR ''Float'' \<or> n = STR ''Double''
+              \<or> n = STR ''Decimal'' \<or> n = STR ''Money'' then Some TReal
       else if n \<in> set enums then Some (TEnum n)
       else if n \<in> set entities then Some (TEntity n)
       else None)"
@@ -220,6 +236,7 @@ text \<open>\<open>value_has_ty\<close> is parameterised by the typing context
 inductive value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Rightarrow> bool" where
   vt_bool:        "value_has_ty \<Gamma> (VBool b) TBool"
 | vt_int:         "value_has_ty \<Gamma> (VInt n) TInt"
+| vt_real:        "value_has_ty \<Gamma> (VReal r) TReal"
 | vt_enum:        "value_has_ty \<Gamma> (VEnum ename ev) (TEnum ename)"
 | vt_entity:      "value_has_ty \<Gamma> (VEntity ename eid) (TEntity ename)"
 | vt_set:         "(\<forall>v \<in> set vs. value_has_ty \<Gamma> v t)
@@ -232,6 +249,7 @@ inductive value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Right
 
 inductive_cases value_has_ty_bool_cases [elim!]: "value_has_ty \<Gamma> (VBool b) t"
 inductive_cases value_has_ty_int_cases [elim!]: "value_has_ty \<Gamma> (VInt n) t"
+inductive_cases value_has_ty_real_cases [elim!]: "value_has_ty \<Gamma> (VReal r) t"
 inductive_cases value_has_ty_enum_cases [elim!]:
   "value_has_ty \<Gamma> (VEnum ename ev) t"
 inductive_cases value_has_ty_entity_cases [elim!]:
@@ -247,6 +265,10 @@ lemma value_has_ty_VBool_iff [simp]:
 lemma value_has_ty_VInt_iff [simp]:
   "value_has_ty \<Gamma> (VInt n) t \<longleftrightarrow> t = TInt"
   by (auto intro: vt_int)
+
+lemma value_has_ty_VReal_iff [simp]:
+  "value_has_ty \<Gamma> (VReal r) t \<longleftrightarrow> t = TReal"
+  by (auto intro: vt_real)
 
 lemma value_has_ty_VEnum_iff [simp]:
   "value_has_ty \<Gamma> (VEnum ename ev) t \<longleftrightarrow> t = TEnum ename"
@@ -296,11 +318,13 @@ and check_value_has_ty_list ::
 where
   "check_value_has_ty \<Gamma> (VBool _) t = (t = TBool)"
 | "check_value_has_ty \<Gamma> (VInt _) t = (t = TInt)"
+| "check_value_has_ty \<Gamma> (VReal _) t = (t = TReal)"
 | "check_value_has_ty \<Gamma> (VEnum ename _) t = (t = TEnum ename)"
 | "check_value_has_ty \<Gamma> (VEntity ename _) t = (t = TEntity ename)"
 | "check_value_has_ty \<Gamma> (VSet vs) (TSet t) = check_value_has_ty_list \<Gamma> vs t"
 | "check_value_has_ty \<Gamma> (VSet _) TBool = False"
 | "check_value_has_ty \<Gamma> (VSet _) TInt = False"
+| "check_value_has_ty \<Gamma> (VSet _) TReal = False"
 | "check_value_has_ty \<Gamma> (VSet _) (TEnum _) = False"
 | "check_value_has_ty \<Gamma> (VSet _) (TEntity _) = False"
 | "check_value_has_ty \<Gamma> (VEntityWith base fld override) (TEntity ename) =
@@ -310,6 +334,7 @@ where
        | Some ft \<Rightarrow> check_value_has_ty \<Gamma> override ft))"
 | "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TBool = False"
 | "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TInt = False"
+| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TReal = False"
 | "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TEnum _) = False"
 | "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TSet _) = False"
 | "check_value_has_ty_list _ [] _ = True"
@@ -374,12 +399,12 @@ fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
 
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
-      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a TInt"
-      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b TInt"
-  shows "value_has_ty \<Gamma> v TInt"
-  using assms eval_arith_some_imp_int[OF assms(1)]
+      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a t"
+      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b t"
+  shows "value_has_ty \<Gamma> v t"
+  using assms
   by (induction op x y rule: eval_arith.induct)
-     (auto split: if_splits intro: vt_int)
+     (auto split: if_splits intro: vt_int vt_real)
 
 lemma eval_cmp_preservation:
   assumes "eval_cmp op x y = Some v"
@@ -1076,6 +1101,7 @@ where
 | "eval s st env (UnNeg e _) =
      (case eval s st env e of
         Some (VInt n) \<Rightarrow> Some (VInt (- n))
+      | Some (VReal r) \<Rightarrow> Some (VReal (- r))
       | _             \<Rightarrow> None)"
 | "eval s st env (BoolBin op l r _) =
      (case (eval s st env l, eval s st env r) of
