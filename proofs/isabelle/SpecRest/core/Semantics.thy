@@ -750,6 +750,8 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
 | T_IntLit:
     "expr_has_ty \<Gamma> (IntLitF n sp) TInt"
+| T_FloatLit:
+    "expr_has_ty \<Gamma> (FloatLitF s sp) TReal"
 | T_Ident_Lex:
     "tyenv_lookup (tc_env \<Gamma>) x = Some t
        \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
@@ -991,7 +993,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
                 body sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
-  T_BoolLit T_IntLit T_Ident_Lex T_Ident_State
+  T_BoolLit T_IntLit T_FloatLit T_Ident_Lex T_Ident_State
   T_Arith T_Cmp_Eq T_Cmp_Ord T_Bool_Bin T_Not T_Neg T_Let
   T_Prime T_Pre T_EnumAccess T_Card T_BIn_Rel T_BNotIn_Rel
   T_SetLit_Empty T_SetLit_Cons T_BUnion T_BIntersect T_BDiff
@@ -1090,6 +1092,7 @@ and eval_forall_rel ::
 where
   "eval s st env (BoolLit b _) = Some (VBool b)"
 | "eval s st env (IntLit n _) = Some (VInt n)"
+| "eval s st env (RealLit r _) = Some (VReal r)"
 | "eval s st env (Ident x _) =
      (case env_lookup env x of
         Some v \<Rightarrow> Some v

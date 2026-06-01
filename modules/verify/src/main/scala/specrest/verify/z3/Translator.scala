@@ -635,7 +635,10 @@ object Translator:
       expr: expr_full,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
-    case IntLitF(v, _)               => Z3Expr.IntLit(v)
+    case IntLitF(v, _) => Z3Expr.IntLit(v)
+    case FloatLitF(s, _) =>
+      val (num, den) = quotient_of(floatLitRat(s))
+      Z3Expr.RealLit(num, den)
     case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
     case StringLitF(v, _)            => stringLiteralConst(ctx, v)
     case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
@@ -1271,6 +1274,7 @@ object Translator:
           ctx.entities.get(name).flatMap(_.fields.get(field).map(_._1))
         case _ => None
     case IntLitF(_, _)                     => Some(Z3Sort.Int)
+    case FloatLitF(_, _)                   => Some(Z3Sort.Real)
     case BoolLitF(_, _)                    => Some(Z3Sort.Bool)
     case StringLitF(_, _)                  => Some(Z3Sort.Uninterp(StringSortName))
     case CallF(IdentifierF(name, _), _, _) => Some(callReturnSort(name, ctx))
@@ -1285,10 +1289,11 @@ object Translator:
   // treat `None` as "optimistically numeric" (which is how an ill-sorted operand
   // could otherwise slip past the numeric guards).
   private def inferSortOfZ3Expr(ctx: TranslateCtx, e: Z3Expr): Option[Z3Sort] = e match
-    case Z3Expr.Var(_, sort, _) => Some(sort)
-    case Z3Expr.IntLit(_, _)    => Some(Z3Sort.Int)
-    case Z3Expr.BoolLit(_, _)   => Some(Z3Sort.Bool)
-    case Z3Expr.App(func, _, _) => ctx.funcs.get(func).map(_.resultSort)
+    case Z3Expr.Var(_, sort, _)  => Some(sort)
+    case Z3Expr.IntLit(_, _)     => Some(Z3Sort.Int)
+    case Z3Expr.RealLit(_, _, _) => Some(Z3Sort.Real)
+    case Z3Expr.BoolLit(_, _)    => Some(Z3Sort.Bool)
+    case Z3Expr.App(func, _, _)  => ctx.funcs.get(func).map(_.resultSort)
     case Z3Expr.And(_, _) | Z3Expr.Or(_, _) | Z3Expr.Not(_, _) | Z3Expr.Implies(_, _, _) |
         Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
       Some(Z3Sort.Bool)
@@ -1960,8 +1965,11 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     term match
-      case BLit(b)    => Z3Expr.BoolLit(b)
-      case ILit(n)    => Z3Expr.IntLit(n)
+      case BLit(b) => Z3Expr.BoolLit(b)
+      case ILit(n) => Z3Expr.IntLit(n)
+      case RLit(r) =>
+        val (num, den) = quotient_of(r)
+        Z3Expr.RealLit(num, den)
       case TVar(name) => resolveIdentifier(ctx, name, env)
       case EnumElemConst(en, mem) =>
         val funcName = s"${en}_$mem"

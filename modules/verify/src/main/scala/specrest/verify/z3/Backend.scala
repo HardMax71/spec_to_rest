@@ -198,11 +198,12 @@ private object Backend:
           val rendered = args.map(a => renderExpr(rctx, a)).toArray
           decl.asInstanceOf[FuncDecl[Sort]]
             .apply(rendered.asInstanceOf[Array[Z3AstExpr[Sort]]]*)
-    case Z3Expr.IntLit(v, _)  => rctx.ctx.mkInt(v.toString)
-    case Z3Expr.BoolLit(v, _) => rctx.ctx.mkBool(v)
-    case Z3Expr.And(args, _)  => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Or(args, _)   => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
-    case Z3Expr.Not(arg, _)   => rctx.ctx.mkNot(renderBool(rctx, arg))
+    case Z3Expr.IntLit(v, _)         => rctx.ctx.mkInt(v.toString)
+    case Z3Expr.RealLit(num, den, _) => rctx.ctx.mkReal(s"$num/$den")
+    case Z3Expr.BoolLit(v, _)        => rctx.ctx.mkBool(v)
+    case Z3Expr.And(args, _)         => rctx.ctx.mkAnd(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Or(args, _)          => rctx.ctx.mkOr(args.map(a => renderBool(rctx, a))*)
+    case Z3Expr.Not(arg, _)          => rctx.ctx.mkNot(renderBool(rctx, arg))
     case Z3Expr.Implies(l, r, _) =>
       rctx.ctx.mkImplies(renderBool(rctx, l), renderBool(rctx, r))
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)

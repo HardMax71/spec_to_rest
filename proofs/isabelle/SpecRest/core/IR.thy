@@ -1,5 +1,5 @@
 theory IR
-  imports Main
+  imports Main "HOL.Rat"
 begin
 
 datatype (plugins only: code size) span_t = SpanT int int int int
@@ -43,6 +43,7 @@ datatype (plugins only: code size) state_mode = SmPre | SmPost
 datatype (plugins only: code size) expr =
     BoolLit bool "option_span"
   | IntLit int "option_span"
+  | RealLit rat "option_span"
   | Ident "String.literal" "option_span"
   | UnNot "expr" "option_span"
   | UnNeg "expr" "option_span"

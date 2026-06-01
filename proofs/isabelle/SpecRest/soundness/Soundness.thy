@@ -575,6 +575,8 @@ proof (induction e arbitrary: env)
 next
   case (IntLit n sp) show ?case by simp
 next
+  case (RealLit r sp) show ?case by simp
+next
   case (Ident x sp) show ?case by (simp split: option.splits)
 next
   case (UnNot e sp)
@@ -1174,7 +1176,7 @@ where
 | "wf_z3 (WithF base ups _)        = (wf_z3 base \<and> wf_z3_fields ups)"
 | "wf_z3 (SetLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (QuantifierF _ bs body _) = (wf_z3_bindings bs \<and> wf_z3 body)"
-| "wf_z3 (FloatLitF _ _)           = False"
+| "wf_z3 (FloatLitF _ _)           = True"
 | "wf_z3 (StringLitF _ _)          = False"
 | "wf_z3 (NoneLitF _)              = False"
 | "wf_z3 (LambdaF _ _ _)           = False"
@@ -1747,6 +1749,15 @@ proof -
   with assms(2) show ?thesis by auto
 qed
 
+lemma h3_pres_FloatLit:
+  assumes "lower enums (FloatLitF s sp) = Some e'"
+      and "eval sch st env e' = Some v"
+  shows "value_has_ty \<Gamma> v TReal"
+proof -
+  from assms(1) have "e' = RealLit (floatLitRat s) sp" by simp
+  with assms(2) show ?thesis by auto
+qed
+
 lemma h3_pres_Ident_Lex:
   assumes "agrees_strict env st \<Gamma>"
       and "tyenv_lookup (tc_env \<Gamma>) x = Some t"
@@ -1904,6 +1915,9 @@ proof (induction arbitrary: e' v env rule: expr_has_ty.induct)
 next
   case (T_IntLit \<Gamma> n sp)
   thus ?case using h3_pres_IntLit by blast
+next
+  case (T_FloatLit \<Gamma> s sp)
+  thus ?case using h3_pres_FloatLit by blast
 next
   case (T_Ident_Lex \<Gamma> x t sp)
   thus ?case using h3_pres_Ident_Lex by blast

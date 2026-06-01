@@ -20,6 +20,7 @@ datatype (plugins only: code size) smt_val =
 datatype (plugins only: code size) smt_term =
     BLit bool
   | ILit int
+  | RLit rat
   | TVar "String.literal"
   | EnumElemConst "String.literal" "String.literal"
   | TNot "smt_term"
@@ -172,6 +173,7 @@ and smtEval_forall_rel ::
 where
   "smtEval m env (BLit b) = Some (SBool b)"
 | "smtEval m env (ILit n) = Some (SInt n)"
+| "smtEval m env (RLit r) = Some (SReal r)"
 | "smtEval m env (TVar x) =
      (case smt_env_lookup env x of
         Some v \<Rightarrow> Some v

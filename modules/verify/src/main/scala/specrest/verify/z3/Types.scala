@@ -73,6 +73,7 @@ enum Z3Expr derives CanEqual:
   case Var(name: String, sort: Z3Sort, span: Option[span_t] = None)
   case App(func: String, args: List[Z3Expr], span: Option[span_t] = None)
   case IntLit(value: BigInt, span: Option[span_t] = None)
+  case RealLit(num: BigInt, den: BigInt, span: Option[span_t] = None)
   case BoolLit(value: Boolean, span: Option[span_t] = None)
   case And(args: List[Z3Expr], span: Option[span_t] = None)
   case Or(args: List[Z3Expr], span: Option[span_t] = None)
@@ -95,6 +96,7 @@ enum Z3Expr derives CanEqual:
     case e: Var        => e.span
     case e: App        => e.span
     case e: IntLit     => e.span
+    case e: RealLit    => e.span
     case e: BoolLit    => e.span
     case e: And        => e.span
     case e: Or         => e.span
@@ -115,6 +117,7 @@ enum Z3Expr derives CanEqual:
         case e: Var        => e.copy(span = s)
         case e: App        => e.copy(span = s)
         case e: IntLit     => e.copy(span = s)
+        case e: RealLit    => e.copy(span = s)
         case e: BoolLit    => e.copy(span = s)
         case e: And        => e.copy(span = s)
         case e: Or         => e.copy(span = s)

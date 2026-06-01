@@ -2,6 +2,40 @@ theory IR_Lower
   imports IR
 begin
 
+fun asciiToIntAcc :: "integer list \<Rightarrow> int \<Rightarrow> int option" where
+  "asciiToIntAcc [] acc = Some acc"
+| "asciiToIntAcc (c # cs) acc =
+     (if 48 \<le> c \<and> c \<le> 57
+        then asciiToIntAcc cs (acc * 10 + int_of_integer (c - 48))
+        else None)"
+
+definition decimalToRat :: "String.literal \<Rightarrow> rat option" where
+  "decimalToRat s =
+     (let cs = String.asciis_of_literal s
+      in case cs of
+           [] \<Rightarrow> None
+         | c0 # _ \<Rightarrow>
+             (let neg = (c0 = 45);
+                  body = (if neg then tl cs else cs);
+                  ipart = takeWhile (\<lambda>c. c \<noteq> 46) body;
+                  dotrest = dropWhile (\<lambda>c. c \<noteq> 46) body
+              in (if dotrest = [] then
+                    (if ipart = [] then None
+                     else case asciiToIntAcc ipart 0 of
+                            None \<Rightarrow> None
+                          | Some iv \<Rightarrow> Some (of_int (if neg then - iv else iv)))
+                  else
+                    (let fpart = tl dotrest
+                     in (if ipart = [] \<and> fpart = [] then None
+                         else case (asciiToIntAcc ipart 0, asciiToIntAcc fpart 0) of
+                                (Some iv, Some fv) \<Rightarrow>
+                                   (let mag = of_int iv
+                                              + of_int fv / of_int (10 ^ length fpart)
+                                    in Some (if neg then - mag else mag))
+                              | _ \<Rightarrow> None)))))"
+
+definition floatLitRat :: "String.literal \<Rightarrow> rat" where
+  "floatLitRat s = (case decimalToRat s of None \<Rightarrow> 0 | Some r \<Rightarrow> r)"
 
 fun lower_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding_full
@@ -34,7 +68,7 @@ where
   "lower _ (BoolLitF b sp)     = Some (BoolLit b sp)"
 | "lower _ (IntLitF n sp)      = Some (IntLit n sp)"
 | "lower _ (IdentifierF x sp)  = Some (Ident x sp)"
-| "lower _ (FloatLitF _ _)     = None"
+| "lower _ (FloatLitF s sp)    = Some (RealLit (floatLitRat s) sp)"
 | "lower _ (StringLitF _ _)    = None"
 | "lower _ (NoneLitF _)        = None"
 | "lower _ (LambdaF _ _ _)     = None"

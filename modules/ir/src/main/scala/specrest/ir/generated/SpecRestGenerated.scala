@@ -397,6 +397,7 @@ object SpecRestGenerated {
   sealed abstract class expr
   final case class BoolLit(a: Boolean, b: Option[span_t]) extends expr
   final case class IntLit(a: BigInt, b: Option[span_t])   extends expr
+  final case class RealLit(a: rat, b: Option[span_t])     extends expr
   final case class Ident(a: String, b: Option[span_t])    extends expr
   final case class UnNot(a: expr, b: Option[span_t])      extends expr
   final case class UnNeg(a: expr, b: Option[span_t])      extends expr
@@ -552,6 +553,7 @@ object SpecRestGenerated {
   sealed abstract class smt_term
   final case class BLit(a: Boolean)                               extends smt_term
   final case class ILit(a: BigInt)                                extends smt_term
+  final case class RLit(a: rat)                                   extends smt_term
   final case class TVar(a: String)                                extends smt_term
   final case class EnumElemConst(a: String, b: String)            extends smt_term
   final case class TNot(a: smt_term)                              extends smt_term
@@ -1326,6 +1328,8 @@ object SpecRestGenerated {
       }
   }
 
+  def of_int(a: BigInt): rat = Frct((a, one_inta))
+
   def membera[A: equal](x0: List[A], y: A): Boolean = (x0, y) match {
     case (Nil, y)     => false
     case (x :: xs, y) => eq[A](x, y) || membera[A](xs, y)
@@ -1687,6 +1691,7 @@ object SpecRestGenerated {
     case TPrime(TVar(rel))               => Some[String](rel)
     case BLit(v)                         => None
     case ILit(v)                         => None
+    case RLit(v)                         => None
     case EnumElemConst(v, va)            => None
     case TNot(v)                         => None
     case TAnd(v, va)                     => None
@@ -1714,6 +1719,7 @@ object SpecRestGenerated {
     case TSetDiff(v, va)                 => None
     case TPrime(BLit(va))                => None
     case TPrime(ILit(va))                => None
+    case TPrime(RLit(va))                => None
     case TPrime(EnumElemConst(va, vb))   => None
     case TPrime(TNot(va))                => None
     case TPrime(TAnd(va, vb))            => None
@@ -1744,6 +1750,7 @@ object SpecRestGenerated {
     case TPrime(TWithRec(va, vb, vc))    => None
     case TPre(BLit(va))                  => None
     case TPre(ILit(va))                  => None
+    case TPre(RLit(va))                  => None
     case TPre(EnumElemConst(va, vb))     => None
     case TPre(TNot(va))                  => None
     case TPre(TAnd(va, vb))              => None
@@ -1850,6 +1857,7 @@ object SpecRestGenerated {
     (m, env, x2) match {
       case (m, env, BLit(b)) => Some[smt_val](SBool(b))
       case (m, env, ILit(n)) => Some[smt_val](SInt(n))
+      case (m, env, RLit(r)) => Some[smt_val](SReal(r))
       case (m, env, TVar(x)) => smt_env_lookup(env, x) match {
           case None    => smt_model_lookup_const(m, x)
           case Some(a) => Some[smt_val](a)
@@ -2282,6 +2290,11 @@ object SpecRestGenerated {
       }
   }
 
+  def tl[A](x0: List[A]): List[A] = x0 match {
+    case Nil        => Nil
+    case x21 :: x22 => x22
+  }
+
   def list_ex[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
     case (p, Nil)     => false
     case (p, x :: xs) => p(x) || list_ex[A](p, xs)
@@ -2554,12 +2567,105 @@ object SpecRestGenerated {
         }
     }
 
+  def power[A: power](a: A, n: nat): A =
+    equal_nat(n, zero_nat) match {
+      case true  => one[A]
+      case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
+    }
+
+  def asciiToIntAcc(x0: List[BigInt], acc: BigInt): Option[BigInt] = (x0, acc) match {
+    case (Nil, acc) => Some[BigInt](acc)
+    case (c :: cs, acc) =>
+      BigInt(48) <= c && c <= BigInt(57) match {
+        case true  => asciiToIntAcc(cs, plus_int(times_inta(acc, BigInt(10)), c - BigInt(48)))
+        case false => None
+      }
+  }
+
+  def takeWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
+    case (p, Nil) => Nil
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => x :: takeWhile[A](p, xs)
+        case false => Nil
+      }
+  }
+
+  def dropWhile[A](p: A => Boolean, x1: List[A]): List[A] = (p, x1) match {
+    case (p, Nil) => Nil
+    case (p, x :: xs) =>
+      p(x) match {
+        case true  => dropWhile[A](p, xs)
+        case false => x :: xs
+      }
+  }
+
+  def decimalToRat(s: String): Option[rat] = {
+    val cs = Str_Literal.asciisOfLiteral(s): List[BigInt];
+    cs match {
+      case Nil => None
+      case c0 :: _ =>
+        val neg = c0 == BigInt(45): Boolean
+        val body =
+          (neg match {
+            case true  => tl[BigInt](cs)
+            case false => cs
+          }): List[BigInt]
+        val ipart =
+          takeWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body): List[BigInt]
+        val dotrest =
+          dropWhile[BigInt]((c: BigInt) => !(c == BigInt(46)), body): List[BigInt];
+        nulla[BigInt](dotrest) match {
+          case true => nulla[BigInt](ipart) match {
+              case true => None
+              case false => asciiToIntAcc(ipart, zero_int) match {
+                  case None => None
+                  case Some(iv) =>
+                    Some[rat](of_int(neg match {
+                      case true  => uminus_int(iv)
+                      case false => iv
+                    }))
+                }
+            }
+          case false =>
+            val fpart = tl[BigInt](dotrest): List[BigInt];
+            nulla[BigInt](ipart) &&
+              nulla[BigInt](fpart) match {
+              case true => None
+              case false => (asciiToIntAcc(ipart, zero_int), asciiToIntAcc(fpart, zero_int)) match {
+                  case (None, _)       => None
+                  case (Some(_), None) => None
+                  case (Some(iv), Some(fv)) =>
+                    val mag =
+                      plus_rat(
+                        of_int(iv),
+                        divide_rat(
+                          of_int(fv),
+                          of_int(power[BigInt](BigInt(10), size_list[BigInt](fpart)))
+                        )
+                      ): rat;
+                    Some[rat](neg match {
+                      case true  => uminus_rat(mag)
+                      case false => mag
+                    })
+                }
+            }
+        }
+    }
+  }
+
+  def floatLitRat(s: String): rat = decimalToRat(s) match {
+    case None    => zero_rat
+    case Some(r) => r
+  }
+
   def peel_relation_ref(x0: expr): Option[String] = x0 match {
     case Ident(rel, uu)                        => Some[String](rel)
     case Pre(Ident(rel, uv), uw)               => Some[String](rel)
     case Prime(Ident(rel, ux), uy)             => Some[String](rel)
     case BoolLit(v, va)                        => None
     case IntLit(v, va)                         => None
+    case RealLit(v, va)                        => None
     case UnNot(v, va)                          => None
     case UnNeg(v, va)                          => None
     case BoolBin(v, va, vb, vc)                => None
@@ -2572,6 +2678,7 @@ object SpecRestGenerated {
     case ForallRel(v, va, vb, vc)              => None
     case Prime(BoolLit(vb, vc), va)            => None
     case Prime(IntLit(vb, vc), va)             => None
+    case Prime(RealLit(vb, vc), va)            => None
     case Prime(UnNot(vb, vc), va)              => None
     case Prime(UnNeg(vb, vc), va)              => None
     case Prime(BoolBin(vb, vc, vd, ve), va)    => None
@@ -2594,6 +2701,7 @@ object SpecRestGenerated {
     case Prime(WithRec(vb, vc, vd, ve), va)    => None
     case Pre(BoolLit(vb, vc), va)              => None
     case Pre(IntLit(vb, vc), va)               => None
+    case Pre(RealLit(vb, vc), va)              => None
     case Pre(UnNot(vb, vc), va)                => None
     case Pre(UnNeg(vb, vc), va)                => None
     case Pre(BoolBin(vb, vc, vd, ve), va)      => None
@@ -2625,14 +2733,14 @@ object SpecRestGenerated {
   }
 
   def lower_with_assigns(
-      wv: List[String],
+      wt: List[String],
       x1: List[field_assign_full],
       base: expr,
-      ww: Option[span_t]
+      wu: Option[span_t]
   ): Option[expr] =
-    (wv, x1, base, ww) match {
-      case (wv, Nil, base, ww) => Some[expr](base)
-      case (enums, FieldAssignFull(fld, v, wx) :: rest, base, sp) =>
+    (wt, x1, base, wu) match {
+      case (wt, Nil, base, wu) => Some[expr](base)
+      case (enums, FieldAssignFull(fld, v, wv) :: rest, base, sp) =>
         lower(enums, v) match {
           case None => None
           case Some(va) =>
@@ -2640,9 +2748,9 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSetList(wu: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (wu, x1, sp) match {
-      case (wu, Nil, sp) => Some[expr](SetEmpty(sp))
+  def lowerSetList(ws: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (ws, x1, sp) match {
+      case (ws, Nil, sp) => Some[expr](SetEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSetList(enums, rest, sp)) match {
           case (None, _)           => None
@@ -2655,19 +2763,19 @@ object SpecRestGenerated {
     case (uu, BoolLitF(b, sp))                   => Some[expr](BoolLit(b, sp))
     case (uv, IntLitF(n, sp))                    => Some[expr](IntLit(n, sp))
     case (uw, IdentifierF(x, sp))                => Some[expr](Ident(x, sp))
-    case (ux, FloatLitF(uy, uz))                 => None
-    case (va, StringLitF(vb, vc))                => None
-    case (vd, NoneLitF(ve))                      => None
-    case (vf, LambdaF(vg, vh, vi))               => None
-    case (vj, CallF(vk, vl, vm))                 => None
-    case (vn, ConstructorF(vo, vp, vq))          => None
-    case (vr, MapLiteralF(vs, vt))               => None
-    case (vu, SeqLiteralF(vv, vw))               => None
-    case (vx, SetComprehensionF(vy, vz, wa, wb)) => None
-    case (wc, SomeWrapF(wd, we))                 => None
-    case (wf, TheF(wg, wh, wi, wj))              => None
-    case (wk, MatchesF(wl, wm, wn))              => None
-    case (wo, IfF(wp, wq, wr, ws))               => None
+    case (ux, FloatLitF(s, sp))                  => Some[expr](RealLit(floatLitRat(s), sp))
+    case (uy, StringLitF(uz, va))                => None
+    case (vb, NoneLitF(vc))                      => None
+    case (vd, LambdaF(ve, vf, vg))               => None
+    case (vh, CallF(vi, vj, vk))                 => None
+    case (vl, ConstructorF(vm, vn, vo))          => None
+    case (vp, MapLiteralF(vq, vr))               => None
+    case (vs, SeqLiteralF(vt, vu))               => None
+    case (vv, SetComprehensionF(vw, vx, vy, vz)) => None
+    case (wa, SomeWrapF(wb, wc))                 => None
+    case (wd, TheF(we, wf, wg, wh))              => None
+    case (wi, MatchesF(wj, wk, wl))              => None
+    case (wm, IfF(wn, wo, wp, wq))               => None
     case (enums, QuantifierF(k, bs, body, sp)) =>
       lower(enums, body) match {
         case None => None
@@ -3191,7 +3299,7 @@ object SpecRestGenerated {
         case (Some(_), None)     => None
         case (Some(va), Some(b)) => Some[expr](LetIn(x, va, b, sp))
       }
-    case (wt, EnumAccessF(base, mem, sp)) =>
+    case (wr, EnumAccessF(base, mem, sp)) =>
       base match {
         case BinaryOpF(_, _, _, _)         => None
         case UnaryOpF(_, _, _)             => None
@@ -3719,11 +3827,12 @@ object SpecRestGenerated {
     (s, st, env, x3) match {
       case (s, st, env, BoolLit(b, uu)) => Some[ir_value](VBool(b))
       case (s, st, env, IntLit(n, uv))  => Some[ir_value](VInt(n))
-      case (s, st, env, Ident(x, uw)) => env_lookup(env, x) match {
+      case (s, st, env, RealLit(r, uw)) => Some[ir_value](VReal(r))
+      case (s, st, env, Ident(x, ux)) => env_lookup(env, x) match {
           case None    => state_lookup_scalar(st, x)
           case Some(a) => Some[ir_value](a)
         }
-      case (s, st, env, UnNot(e, ux)) =>
+      case (s, st, env, UnNot(e, uy)) =>
         eval(s, st, env, e) match {
           case None                       => None
           case Some(VBool(b))             => Some[ir_value](VBool(!b))
@@ -3734,7 +3843,7 @@ object SpecRestGenerated {
           case Some(VSet(_))              => None
           case Some(VEntityWith(_, _, _)) => None
         }
-      case (s, st, env, UnNeg(e, uy)) =>
+      case (s, st, env, UnNeg(e, uz)) =>
         eval(s, st, env, e) match {
           case None                       => None
           case Some(VBool(_))             => None
@@ -3745,7 +3854,7 @@ object SpecRestGenerated {
           case Some(VSet(_))              => None
           case Some(VEntityWith(_, _, _)) => None
         }
-      case (s, st, env, BoolBin(op, l, r, uz)) =>
+      case (s, st, env, BoolBin(op, l, r, va)) =>
         (eval(s, st, env, l), eval(s, st, env, r)) match {
           case (None, _)              => None
           case (Some(VBool(_)), None) => None
@@ -3764,16 +3873,16 @@ object SpecRestGenerated {
           case (Some(VSet(_)), _)                           => None
           case (Some(VEntityWith(_, _, _)), _)              => None
         }
-      case (s, st, env, Arith(op, l, r, va)) =>
+      case (s, st, env, Arith(op, l, r, vb)) =>
         eval_arith(op, eval(s, st, env, l), eval(s, st, env, r))
-      case (s, st, env, Cmp(op, l, r, vb)) =>
+      case (s, st, env, Cmp(op, l, r, vc)) =>
         eval_cmp(op, eval(s, st, env, l), eval(s, st, env, r))
-      case (s, st, env, LetIn(x, v, body, vc)) =>
+      case (s, st, env, LetIn(x, v, body, vd)) =>
         eval(s, st, env, v) match {
           case None     => None
           case Some(va) => eval(s, st, (x, va) :: env, body)
         }
-      case (s, st, env, EnumAccess(en, mem, vd)) =>
+      case (s, st, env, EnumAccess(en, mem, ve)) =>
         schema_lookup_enum(s, en) match {
           case None => None
           case Some(d) =>
@@ -3782,7 +3891,7 @@ object SpecRestGenerated {
               case false => None
             }
         }
-      case (s, st, env, Member(elem, rel_name, ve)) =>
+      case (s, st, env, Member(elem, rel_name, vf)) =>
         eval(s, st, env, elem) match {
           case None => None
           case Some(v) =>
@@ -3792,38 +3901,38 @@ object SpecRestGenerated {
                 Some[ir_value](VBool(contains_value(rel_dom, v)))
             }
         }
-      case (s, st, env, ForallEnum(vara, en, body, vf)) =>
+      case (s, st, env, ForallEnum(vara, en, body, vg)) =>
         schema_lookup_enum(s, en) match {
           case None => None
           case Some(d) =>
             eval_forall_enum(s, st, env, vara, en, enm_members[Unit](d), body)
         }
-      case (s, st, env, ForallRel(vara, rel_name, body, vg)) =>
+      case (s, st, env, ForallRel(vara, rel_name, body, vh)) =>
         state_relation_domain(st, rel_name) match {
           case None          => None
           case Some(rel_dom) => eval_forall_rel(s, st, env, vara, rel_dom, body)
         }
-      case (s, st, env, Prime(e, vh)) => eval(s, st, env, e)
-      case (s, st, env, Pre(e, vi))   => eval(s, st, env, e)
-      case (s, st, env, CardRel(rel_name, vj)) =>
+      case (s, st, env, Prime(e, vi)) => eval(s, st, env, e)
+      case (s, st, env, Pre(e, vj))   => eval(s, st, env, e)
+      case (s, st, env, CardRel(rel_name, vk)) =>
         state_relation_domain(st, rel_name) match {
           case None => None
           case Some(rel_dom) =>
             Some[ir_value](VInt(int_of_nat(size_list[ir_value](rel_dom))))
         }
-      case (s, st, env, IndexRel(base, key, vk)) =>
+      case (s, st, env, IndexRel(base, key, vl)) =>
         (peel_relation_ref(base), eval(s, st, env, key)) match {
           case (None, _)            => None
           case (Some(_), None)      => None
           case (Some(rel), Some(a)) => state_lookup_key(st, rel, a)
         }
-      case (s, st, env, FieldAccess(base, fname, vl)) =>
+      case (s, st, env, FieldAccess(base, fname, vm)) =>
         eval(s, st, env, base) match {
           case None    => None
           case Some(v) => value_field_lookup(st, v, fname)
         }
-      case (s, st, env, SetEmpty(vm)) => Some[ir_value](VSet(Nil))
-      case (s, st, env, SetInsert(elem, set_e, vn)) =>
+      case (s, st, env, SetEmpty(vn)) => Some[ir_value](VSet(Nil))
+      case (s, st, env, SetInsert(elem, set_e, vo)) =>
         (eval(s, st, env, elem), eval(s, st, env, set_e)) match {
           case (None, _)                      => None
           case (Some(_), None)                => None
@@ -3836,7 +3945,7 @@ object SpecRestGenerated {
             Some[ir_value](VSet(dedupe_values(v :: members)))
           case (Some(_), Some(VEntityWith(_, _, _))) => None
         }
-      case (s, st, env, SetMember(elem, set_e, vo)) =>
+      case (s, st, env, SetMember(elem, set_e, vp)) =>
         (eval(s, st, env, elem), eval(s, st, env, set_e)) match {
           case (None, _)                      => None
           case (Some(_), None)                => None
@@ -3849,9 +3958,9 @@ object SpecRestGenerated {
             Some[ir_value](VBool(contains_value(members, v)))
           case (Some(_), Some(VEntityWith(_, _, _))) => None
         }
-      case (s, st, env, SetBin(op, l, r, vp)) =>
+      case (s, st, env, SetBin(op, l, r, vq)) =>
         eval_set_bin(op, eval(s, st, env, l), eval(s, st, env, r))
-      case (s, st, env, WithRec(base, fld, value_e, vq)) =>
+      case (s, st, env, WithRec(base, fld, value_e, vr)) =>
         (eval(s, st, env, base), eval(s, st, env, value_e)) match {
           case (None, _)           => None
           case (Some(_), None)     => None
@@ -4967,47 +5076,48 @@ object SpecRestGenerated {
   def translate(x0: expr): smt_term = x0 match {
     case BoolLit(b, uu)                 => BLit(b)
     case IntLit(n, uv)                  => ILit(n)
-    case Ident(x, uw)                   => TVar(x)
-    case UnNot(e, ux)                   => TNot(translate(e))
-    case UnNeg(e, uy)                   => TNeg(translate(e))
-    case BoolBin(AndOp(), l, r, uz)     => TAnd(translate(l), translate(r))
-    case BoolBin(OrOp(), l, r, va)      => TOr(translate(l), translate(r))
-    case BoolBin(ImpliesOp(), l, r, vb) => TImplies(translate(l), translate(r))
-    case BoolBin(IffOp(), l, r, vc) =>
+    case RealLit(r, uw)                 => RLit(r)
+    case Ident(x, ux)                   => TVar(x)
+    case UnNot(e, uy)                   => TNot(translate(e))
+    case UnNeg(e, uz)                   => TNeg(translate(e))
+    case BoolBin(AndOp(), l, r, va)     => TAnd(translate(l), translate(r))
+    case BoolBin(OrOp(), l, r, vb)      => TOr(translate(l), translate(r))
+    case BoolBin(ImpliesOp(), l, r, vc) => TImplies(translate(l), translate(r))
+    case BoolBin(IffOp(), l, r, vd) =>
       TAnd(TImplies(translate(l), translate(r)), TImplies(translate(r), translate(l)))
-    case Arith(AddOp(), l, r, vd) => TAdd(translate(l), translate(r))
-    case Arith(SubOp(), l, r, ve) => TSub(translate(l), translate(r))
-    case Arith(MulOp(), l, r, vf) => TMul(translate(l), translate(r))
-    case Arith(DivOp(), l, r, vg) => TDiv(translate(l), translate(r))
-    case Cmp(EqOp(), l, r, vh)    => TEq(translate(l), translate(r))
-    case Cmp(NeqOp(), l, r, vi)   => TNot(TEq(translate(l), translate(r)))
-    case Cmp(LtOp(), l, r, vj)    => TLt(translate(l), translate(r))
-    case Cmp(LeOp(), l, r, vk) =>
+    case Arith(AddOp(), l, r, ve) => TAdd(translate(l), translate(r))
+    case Arith(SubOp(), l, r, vf) => TSub(translate(l), translate(r))
+    case Arith(MulOp(), l, r, vg) => TMul(translate(l), translate(r))
+    case Arith(DivOp(), l, r, vh) => TDiv(translate(l), translate(r))
+    case Cmp(EqOp(), l, r, vi)    => TEq(translate(l), translate(r))
+    case Cmp(NeqOp(), l, r, vj)   => TNot(TEq(translate(l), translate(r)))
+    case Cmp(LtOp(), l, r, vk)    => TLt(translate(l), translate(r))
+    case Cmp(LeOp(), l, r, vl) =>
       TOr(TLt(translate(l), translate(r)), TEq(translate(l), translate(r)))
-    case Cmp(GtOp(), l, r, vl) => TLt(translate(r), translate(l))
-    case Cmp(GeOp(), l, r, vm) =>
+    case Cmp(GtOp(), l, r, vm) => TLt(translate(r), translate(l))
+    case Cmp(GeOp(), l, r, vn) =>
       TOr(TLt(translate(r), translate(l)), TEq(translate(l), translate(r)))
-    case LetIn(x, v, body, vn)          => TLetIn(x, translate(v), translate(body))
-    case EnumAccess(en, mem, vo)        => EnumElemConst(en, mem)
-    case Member(elem, rel_name, vp)     => TInDom(rel_name, translate(elem))
-    case ForallEnum(vara, en, body, vq) => TForallEnum(vara, en, translate(body))
-    case ForallRel(vara, rel_n, body, vr) =>
+    case LetIn(x, v, body, vo)          => TLetIn(x, translate(v), translate(body))
+    case EnumAccess(en, mem, vp)        => EnumElemConst(en, mem)
+    case Member(elem, rel_name, vq)     => TInDom(rel_name, translate(elem))
+    case ForallEnum(vara, en, body, vr) => TForallEnum(vara, en, translate(body))
+    case ForallRel(vara, rel_n, body, vs) =>
       TForallRel(vara, rel_n, translate(body))
-    case Prime(e, vs)                 => TPrime(translate(e))
-    case Pre(e, vt)                   => TPre(translate(e))
-    case CardRel(rel_name, vu)        => TCardRel(rel_name)
-    case IndexRel(base, key, vv)      => TIndexRel(translate(base), translate(key))
-    case FieldAccess(base, fname, vw) => TFieldAccess(translate(base), fname)
-    case SetEmpty(vx)                 => TSetEmpty()
-    case SetInsert(elem, set_e, vy) =>
+    case Prime(e, vt)                 => TPrime(translate(e))
+    case Pre(e, vu)                   => TPre(translate(e))
+    case CardRel(rel_name, vv)        => TCardRel(rel_name)
+    case IndexRel(base, key, vw)      => TIndexRel(translate(base), translate(key))
+    case FieldAccess(base, fname, vx) => TFieldAccess(translate(base), fname)
+    case SetEmpty(vy)                 => TSetEmpty()
+    case SetInsert(elem, set_e, vz) =>
       TSetInsert(translate(elem), translate(set_e))
-    case SetMember(elem, set_e, vz) =>
+    case SetMember(elem, set_e, wa) =>
       TSetMember(translate(elem), translate(set_e))
-    case SetBin(UnionOp(), l, r, wa) => TSetUnion(translate(l), translate(r))
-    case SetBin(IntersectOp(), l, r, wb) =>
+    case SetBin(UnionOp(), l, r, wb) => TSetUnion(translate(l), translate(r))
+    case SetBin(IntersectOp(), l, r, wc) =>
       TSetIntersect(translate(l), translate(r))
-    case SetBin(DiffOp(), l, r, wc) => TSetDiff(translate(l), translate(r))
-    case WithRec(base, fld, val_e, wd) =>
+    case SetBin(DiffOp(), l, r, wd) => TSetDiff(translate(l), translate(r))
+    case WithRec(base, fld, val_e, we) =>
       TWithRec(translate(base), fld, translate(val_e))
   }
 
@@ -6591,12 +6701,6 @@ object SpecRestGenerated {
 
   def literalLength(s: String): nat =
     size_list[BigInt](Str_Literal.asciisOfLiteral(s))
-
-  def power[A: power](a: A, n: nat): A =
-    equal_nat(n, zero_nat) match {
-      case true  => one[A]
-      case false => times[A](a, power[A](a, minus_nat(n, one_nat)))
-    }
 
   def typeWalkFuel(aliases: List[type_alias_decl_full]): nat =
     plus_nat(size_list[type_alias_decl_full](aliases), nat_of_integer(BigInt(100)))
