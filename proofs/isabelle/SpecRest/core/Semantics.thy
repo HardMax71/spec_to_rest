@@ -800,8 +800,9 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) (numeric_join t1 t2)"
 | T_Cmp_Eq:
-    "expr_has_ty \<Gamma> l t
-       \<Longrightarrow> expr_has_ty \<Gamma> r t
+    "expr_has_ty \<Gamma> l t1
+       \<Longrightarrow> expr_has_ty \<Gamma> r t2
+       \<Longrightarrow> t1 = t2 \<or> numeric_ty t1 \<and> numeric_ty t2
        \<Longrightarrow> op \<in> {BEq, BNeq}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Cmp_Ord:

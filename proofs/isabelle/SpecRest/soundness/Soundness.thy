@@ -1610,7 +1610,7 @@ proof (induction rule: expr_has_ty.induct)
   case (T_Arith \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
-  case (T_Cmp_Eq \<Gamma> l t r op sp)
+  case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
   case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
@@ -1960,7 +1960,7 @@ next
       using T_Arith.IH(2) T_Arith.prems(1) T_Arith.prems(4) by blast
   qed
 next
-  case (T_Cmp_Eq \<Gamma> l t r op sp)
+  case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
   thus ?case using h3_pres_Cmp by blast
 next
   case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)

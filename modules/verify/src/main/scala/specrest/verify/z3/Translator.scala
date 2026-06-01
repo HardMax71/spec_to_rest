@@ -1301,8 +1301,10 @@ object Translator:
         Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
       Some(Z3Sort.Bool)
     case Z3Expr.Arith(_, args, _) =>
-      val argSorts = args.flatMap(inferSortOfZ3Expr(ctx, _))
-      if argSorts.contains(Z3Sort.Real) then Some(Z3Sort.Real) else argSorts.headOption
+      val argSorts = args.map(inferSortOfZ3Expr(ctx, _))
+      if argSorts.nonEmpty && argSorts.forall(_.exists(Z3Sort.isNumeric)) then
+        if argSorts.exists(_.contains(Z3Sort.Real)) then Some(Z3Sort.Real) else Some(Z3Sort.Int)
+      else None
     case Z3Expr.EmptySet(s, _)     => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetLit(s, _, _)    => Some(Z3Sort.SetOf(s))
     case Z3Expr.SetMember(_, _, _) => Some(Z3Sort.Bool)
