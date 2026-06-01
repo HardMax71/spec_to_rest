@@ -745,6 +745,9 @@ text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   \<open>env_agrees\<close> / \<open>state_agrees_scalars\<close> agreement halves so the
   H3 progress theorem dispatches per-arm to H1.\<close>
 
+definition numeric_ty :: "ty \<Rightarrow> bool" where
+  "numeric_ty t \<longleftrightarrow> t = TInt \<or> t = TReal"
+
 inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Rightarrow> bool" where
   T_BoolLit:
     "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
@@ -761,18 +764,20 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> map_of (ss_scalars (tc_schema \<Gamma>)) x = Some t
        \<Longrightarrow> expr_has_ty \<Gamma> (IdentifierF x sp) t"
 | T_Arith:
-    "expr_has_ty \<Gamma> l TInt
-       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r t
+       \<Longrightarrow> numeric_ty t
        \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
-       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TInt"
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) t"
 | T_Cmp_Eq:
     "expr_has_ty \<Gamma> l t
        \<Longrightarrow> expr_has_ty \<Gamma> r t
        \<Longrightarrow> op \<in> {BEq, BNeq}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Cmp_Ord:
-    "expr_has_ty \<Gamma> l TInt
-       \<Longrightarrow> expr_has_ty \<Gamma> r TInt
+    "expr_has_ty \<Gamma> l t
+       \<Longrightarrow> expr_has_ty \<Gamma> r t
+       \<Longrightarrow> numeric_ty t
        \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Bool_Bin:
@@ -784,8 +789,9 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
     "expr_has_ty \<Gamma> e TBool
        \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNot e sp) TBool"
 | T_Neg:
-    "expr_has_ty \<Gamma> e TInt
-       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNegate e sp) TInt"
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> numeric_ty t
+       \<Longrightarrow> expr_has_ty \<Gamma> (UnaryOpF UNegate e sp) t"
 | T_Let:
     "expr_has_ty \<Gamma> v t1
        \<Longrightarrow> expr_has_ty (\<Gamma>\<lparr>tc_env := (x, t1) # tc_env \<Gamma>\<rparr>) body t2

@@ -1599,13 +1599,13 @@ text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
 lemma well_typed_imp_wf_z3:
   "expr_has_ty \<Gamma> e t \<Longrightarrow> wf_z3 e"
 proof (induction rule: expr_has_ty.induct)
-  case (T_Arith \<Gamma> l r op sp)
+  case (T_Arith \<Gamma> l t r op sp)
   thus ?case by (cases op) auto
 next
   case (T_Cmp_Eq \<Gamma> l t r op sp)
   thus ?case by (cases op) auto
 next
-  case (T_Cmp_Ord \<Gamma> l r op sp)
+  case (T_Cmp_Ord \<Gamma> l t r op sp)
   thus ?case by (cases op) auto
 next
   case (T_Bool_Bin \<Gamma> l r op sp)
@@ -1821,8 +1821,9 @@ qed
 lemma h3_pres_Neg:
   assumes "lower enums (UnaryOpF UNegate e sp) = Some e'"
       and "eval sch st env e' = Some v"
-      and "\<And>e_sub a. lower enums e = Some e_sub \<Longrightarrow> eval sch st env e_sub = Some a \<Longrightarrow> value_has_ty \<Gamma> a TInt"
-  shows "value_has_ty \<Gamma> v TInt"
+      and "numeric_ty t"
+      and "\<And>e_sub a. lower enums e = Some e_sub \<Longrightarrow> eval sch st env e_sub = Some a \<Longrightarrow> value_has_ty \<Gamma> a t"
+  shows "value_has_ty \<Gamma> v t"
 proof -
   from assms(1) obtain e_sub where
        sub_low: "lower enums e = Some e_sub"
@@ -1832,20 +1833,31 @@ proof -
     by simp
   then obtain a where ea: "eval sch st env e_sub = Some a"
     by (cases "eval sch st env e_sub") auto
-  have "value_has_ty \<Gamma> a TInt" using assms(3)[OF sub_low ea] .
-  hence "\<exists>n. a = VInt n" by (cases a) (auto elim: value_has_ty.cases)
-  then obtain n where "a = VInt n" ..
-  with ea ev have "v = VInt (- n)" by simp
-  thus "value_has_ty \<Gamma> v TInt" by simp
+  have at: "value_has_ty \<Gamma> a t" using assms(4)[OF sub_low ea] .
+  from assms(3) have "t = TInt \<or> t = TReal" by (simp add: numeric_ty_def)
+  then show "value_has_ty \<Gamma> v t"
+  proof
+    assume t: "t = TInt"
+    with at have "value_has_ty \<Gamma> a TInt" by simp
+    then obtain n where "a = VInt n" by (cases a) auto
+    with ea ev have "v = VInt (- n)" by simp
+    with t show ?thesis by simp
+  next
+    assume t: "t = TReal"
+    with at have "value_has_ty \<Gamma> a TReal" by simp
+    then obtain r where "a = VReal r" by (cases a) auto
+    with ea ev have "v = VReal (- r)" by simp
+    with t show ?thesis by simp
+  qed
 qed
 
 lemma h3_pres_Arith:
   assumes "op \<in> {BAdd, BSub, BMul, BDiv}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
-      and "\<And>l' a. lower enums l = Some l' \<Longrightarrow> eval sch st env l' = Some a \<Longrightarrow> value_has_ty \<Gamma> a TInt"
-      and "\<And>r' b. lower enums r = Some r' \<Longrightarrow> eval sch st env r' = Some b \<Longrightarrow> value_has_ty \<Gamma> b TInt"
-  shows "value_has_ty \<Gamma> v TInt"
+      and "\<And>l' a. lower enums l = Some l' \<Longrightarrow> eval sch st env l' = Some a \<Longrightarrow> value_has_ty \<Gamma> a t"
+      and "\<And>r' b. lower enums r = Some r' \<Longrightarrow> eval sch st env r' = Some b \<Longrightarrow> value_has_ty \<Gamma> b t"
+  shows "value_has_ty \<Gamma> v t"
 proof -
   from assms(1,2) obtain l' r' aop where
        l_low: "lower enums l = Some l'"
@@ -1855,13 +1867,13 @@ proof -
   from assms(3) e_eq
   have ev: "eval_arith aop (eval sch st env l') (eval sch st env r') = Some v"
     by simp
-  show "value_has_ty \<Gamma> v TInt"
+  show "value_has_ty \<Gamma> v t"
   proof (rule eval_arith_preservation[OF ev])
     fix a assume "eval sch st env l' = Some a"
-    thus "value_has_ty \<Gamma> a TInt" using assms(4) l_low by blast
+    thus "value_has_ty \<Gamma> a t" using assms(4) l_low by blast
   next
     fix b assume "eval sch st env r' = Some b"
-    thus "value_has_ty \<Gamma> b TInt" using assms(5) r_low by blast
+    thus "value_has_ty \<Gamma> b t" using assms(5) r_low by blast
   qed
 qed
 
@@ -1926,22 +1938,22 @@ next
   case (T_Ident_State \<Gamma> x t sp)
   thus ?case using h3_pres_Ident_State by blast
 next
-  case (T_Arith \<Gamma> l r op sp)
+  case (T_Arith \<Gamma> l t r op sp)
   show ?case
-  proof (rule h3_pres_Arith[OF T_Arith.hyps(3) T_Arith.prems(2) T_Arith.prems(3)])
+  proof (rule h3_pres_Arith[OF T_Arith.hyps(4) T_Arith.prems(2) T_Arith.prems(3)])
     fix l' a assume "lower enums l = Some l'" and "eval sch st env l' = Some a"
-    thus "value_has_ty \<Gamma> a TInt"
+    thus "value_has_ty \<Gamma> a t"
       using T_Arith.IH(1) T_Arith.prems(1) T_Arith.prems(4) by blast
   next
     fix r' b assume "lower enums r = Some r'" and "eval sch st env r' = Some b"
-    thus "value_has_ty \<Gamma> b TInt"
+    thus "value_has_ty \<Gamma> b t"
       using T_Arith.IH(2) T_Arith.prems(1) T_Arith.prems(4) by blast
   qed
 next
   case (T_Cmp_Eq \<Gamma> l t r op sp)
   thus ?case using h3_pres_Cmp by blast
 next
-  case (T_Cmp_Ord \<Gamma> l r op sp)
+  case (T_Cmp_Ord \<Gamma> l t r op sp)
   thus ?case using h3_pres_Cmp by blast
 next
   case (T_Bool_Bin \<Gamma> l r op sp)
@@ -1950,11 +1962,11 @@ next
   case (T_Not \<Gamma> e sp)
   thus ?case using h3_pres_Not by blast
 next
-  case (T_Neg \<Gamma> e sp)
+  case (T_Neg \<Gamma> e t sp)
   show ?case
-  proof (rule h3_pres_Neg[OF T_Neg.prems(2) T_Neg.prems(3)])
+  proof (rule h3_pres_Neg[OF T_Neg.prems(2) T_Neg.prems(3) T_Neg.hyps(2)])
     fix e_sub a assume "lower enums e = Some e_sub" and "eval sch st env e_sub = Some a"
-    thus "value_has_ty \<Gamma> a TInt"
+    thus "value_has_ty \<Gamma> a t"
       using T_Neg.IH T_Neg.prems(1) T_Neg.prems(4) by blast
   qed
 next
