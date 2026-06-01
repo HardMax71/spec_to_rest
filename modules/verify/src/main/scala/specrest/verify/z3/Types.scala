@@ -91,6 +91,7 @@ enum Z3Expr derives CanEqual:
   case SetLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[span_t] = None)
   case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[span_t] = None)
   case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
+  case Ite(cond: Z3Expr, thenE: Z3Expr, elseE: Z3Expr, span: Option[span_t] = None)
 
   def spanOpt: Option[span_t] = this match
     case e: Var        => e.span
@@ -109,6 +110,7 @@ enum Z3Expr derives CanEqual:
     case e: SetLit     => e.span
     case e: SetMember  => e.span
     case e: SetBinOp   => e.span
+    case e: Ite        => e.span
 
   def withSpan(s: Option[span_t]): Z3Expr =
     if s.isEmpty then this
@@ -130,6 +132,7 @@ enum Z3Expr derives CanEqual:
         case e: SetLit     => e.copy(span = s)
         case e: SetMember  => e.copy(span = s)
         case e: SetBinOp   => e.copy(span = s)
+        case e: Ite        => e.copy(span = s)
 
 final case class ArtifactEntityField(name: String, sort: Z3Sort, funcName: String)
 final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[ArtifactEntityField])

@@ -66,7 +66,7 @@ where
 | "wf_z3 (SomeWrapF _ _)           = False"
 | "wf_z3 (TheF _ _ _ _)            = False"
 | "wf_z3 (MatchesF _ _ _)          = False"
-| "wf_z3 (IfF _ _ _ _)             = False"
+| "wf_z3 (IfF c a b _)             = (wf_z3 c \<and> wf_z3 a \<and> wf_z3 b)"
 | "wf_z3_list []                   = True"
 | "wf_z3_list (e # rest)           = (wf_z3 e \<and> wf_z3_list rest)"
 | "wf_z3_fields []                 = True"
@@ -323,6 +323,16 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s \<noteq> None"
       by (rule lowerSetList_wf_some[OF pe wl])
     thus ?thesis unfolding SetLiteralF by simp
+  next
+    case (IfF c a b s)
+    have hc: "wf_z3 c \<Longrightarrow> lower enums c \<noteq> None"
+      using sub[of c] IfF by simp
+    have ha: "wf_z3 a \<Longrightarrow> lower enums a \<noteq> None"
+      using sub[of a] IfF by simp
+    have hb: "wf_z3 b \<Longrightarrow> lower enums b \<noteq> None"
+      using sub[of b] IfF by simp
+    show ?thesis unfolding IfF using hc ha hb less.prems[unfolded IfF]
+      by (auto split: option.splits)
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

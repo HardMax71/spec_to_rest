@@ -74,6 +74,8 @@ object SmtLib:
       s"(select ${renderExpr(set)} ${renderExpr(elem)})"
     case Z3Expr.SetBinOp(op, l, r, _) =>
       s"(${SetOpKind.token(op)} ${renderExpr(l)} ${renderExpr(r)})"
+    case Z3Expr.Ite(c, t, e, _) =>
+      s"(ite ${renderExpr(c)} ${renderExpr(t)} ${renderExpr(e)})"
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"

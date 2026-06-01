@@ -50,6 +50,7 @@ datatype (plugins only: code size) smt_term =
   | TPrime "smt_term"
   | TPre "smt_term"
   | TWithRec "smt_term" "String.literal" "smt_term"
+  | TIte "smt_term" "smt_term" "smt_term"
 
 record smt_model =
   sm_sort_members :: "(String.literal \<times> String.literal list) list"
@@ -308,6 +309,11 @@ where
 | "smtEval m env (TWithRec base fld value_t) =
      (case (smtEval m env base, smtEval m env value_t) of
         (Some bv, Some v) \<Rightarrow> Some (SEntityWith bv fld v)
+      | _ \<Rightarrow> None)"
+| "smtEval m env (TIte c a b) =
+     (case smtEval m env c of
+        Some (SBool True)  \<Rightarrow> smtEval m env a
+      | Some (SBool False) \<Rightarrow> smtEval m env b
       | _ \<Rightarrow> None)"
 
 | "smtEval_forall_enum m env var sort_name [] body = Some (SBool True)"

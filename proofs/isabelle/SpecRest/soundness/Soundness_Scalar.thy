@@ -152,4 +152,25 @@ next
   thus ?thesis using ihv' Some by simp
 qed
 
+lemma soundness_Ite:
+  assumes ihc: "value_to_smt_opt (eval s st env c)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate c)"
+      and iha: "value_to_smt_opt (eval s st env a)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate a)"
+      and ihb: "value_to_smt_opt (eval s st env b)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate b)"
+  shows "value_to_smt_opt (eval s st env (Ite c a b sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Ite c a b sp))"
+proof -
+  have ihc': "smtEval (correlate_model s st) (correlate_env env) (translate c)
+                = value_to_smt_opt (eval s st env c)" using ihc by simp
+  show ?thesis
+  proof (cases "eval s st env c")
+    case None thus ?thesis using ihc' by simp
+  next
+    case (Some cv)
+    thus ?thesis using ihc' iha ihb by (cases cv) (auto split: bool.splits)
+  qed
+qed
+
 end

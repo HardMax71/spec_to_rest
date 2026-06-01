@@ -1205,6 +1205,11 @@ where
      (case (eval s st env base, eval s st env value_e) of
         (Some bv, Some v) \<Rightarrow> Some (VEntityWith bv fld v)
       | _ \<Rightarrow> None)"
+| "eval s st env (Ite c a b _) =
+     (case eval s st env c of
+        Some (VBool True)  \<Rightarrow> eval s st env a
+      | Some (VBool False) \<Rightarrow> eval s st env b
+      | _ \<Rightarrow> None)"
 
 | "eval_forall_enum s st env var en [] body = Some (VBool True)"
 | "eval_forall_enum s st env var en (mem # rest) body =

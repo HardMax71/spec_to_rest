@@ -905,6 +905,13 @@ object Translator:
         substituteVar(r, varName, replacement),
         sp
       )
+    case Z3Expr.Ite(c, t, e, sp) =>
+      Z3Expr.Ite(
+        substituteVar(c, varName, replacement),
+        substituteVar(t, varName, replacement),
+        substituteVar(e, varName, replacement),
+        sp
+      )
     case other => other
 
   private def resolveStateRelationReference(
@@ -1312,6 +1319,8 @@ object Translator:
       op match
         case SetOpKind.Subset                                       => Some(Z3Sort.Bool)
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
+    case Z3Expr.Ite(_, t, e, _) =>
+      inferSortOfZ3Expr(ctx, t).orElse(inferSortOfZ3Expr(ctx, e))
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -2155,6 +2164,13 @@ object Translator:
                     )
                 skolemRef
           case _ => fail(ctx, s"'with' on field '$fld' requires an entity-sorted base")
+
+      case TIte(c, a, b) =>
+        Z3Expr.Ite(
+          encodeFromSmtTerm(ctx, c, env),
+          encodeFromSmtTerm(ctx, a, env),
+          encodeFromSmtTerm(ctx, b, env)
+        )
 
   private def collectSetLiteralMembersTerms(term: smt_term): List[smt_term] = term match
     case TSetEmpty()           => Nil

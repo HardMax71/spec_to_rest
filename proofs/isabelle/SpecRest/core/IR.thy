@@ -87,6 +87,7 @@ datatype (plugins only: code size) expr =
   | SetMember "expr" "expr" "option_span"
   | SetBin "set_op" "expr" "expr" "option_span"
   | WithRec "expr" "String.literal" "expr" "option_span"
+  | Ite "expr" "expr" "expr" "option_span"
 
 text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
   relation name to an arbitrary \<open>expr\<close>, so the operation-side

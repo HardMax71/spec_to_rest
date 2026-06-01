@@ -45,7 +45,6 @@ where
 | "lower _ (SomeWrapF _ _)     = None"
 | "lower _ (TheF _ _ _ _)      = None"
 | "lower _ (MatchesF _ _ _)    = None"
-| "lower _ (IfF _ _ _ _)       = None"
 
 | "lower enums (QuantifierF k bs body sp) =
      (case lower enums body of
@@ -183,6 +182,10 @@ where
         None \<Rightarrow> None
       | Some base' \<Rightarrow> lower_with_assigns enums updates base' sp)"
 | "lower enums (SetLiteralF elems sp) = lowerSetList enums elems sp"
+| "lower enums (IfF c a b sp) =
+     (case (lower enums c, lower enums a, lower enums b) of
+        (Some c', Some a', Some b') \<Rightarrow> Some (Ite c' a' b' sp)
+      | _ \<Rightarrow> None)"
 
 | "lowerSetList _ [] sp = Some (SetEmpty sp)"
 | "lowerSetList enums (e # rest) sp =

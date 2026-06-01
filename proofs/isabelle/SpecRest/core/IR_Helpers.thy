@@ -558,11 +558,11 @@ text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full
 
   Coverage v2 (Issue #202 close-out): \<open>QuantifierF\<close> over all four kinds
   (\<open>QAll\<close>/\<open>QNo\<close>/\<open>QSome\<close>/\<open>QExists\<close>, multi-binding right-folded), and
-  multi-field \<open>WithF\<close> (folded into nested \<open>WithRec\<close>s). Still punted:
+  multi-field \<open>WithF\<close> (folded into nested \<open>WithRec\<close>s). \<open>IfF\<close> lowers to the
+  \<open>Ite\<close> verified-subset ctor (translated to \<open>TIte\<close>). Still punted:
   \<open>CallF\<close> (predicate inlining requires definition lookup beyond enum names),
-  \<open>IfF\<close> (no \<open>If\<close> ctor in the verified subset), \<open>BSubset\<close> (the \<open>\<forall> x \<in> r1.
-  Member x r2\<close> desugar requires fresh-variable generation that this v2 does
-  not thread).
+  \<open>BSubset\<close> (the \<open>\<forall> x \<in> r1. Member x r2\<close> desugar requires fresh-variable
+  generation that this v2 does not thread).
 
   \<open>lower_soundness\<close> in \<open>Soundness.thy\<close> remains a thin corollary of
   \<open>soundness\<close>: every \<open>e :: expr\<close> produced by \<open>lower\<close> falls under the
