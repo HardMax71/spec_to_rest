@@ -595,9 +595,19 @@ text \<open>Phase 9\<iota> (\<open>keyExistencePair\<close>): extractor variant 
 
 fun keyExistencePair ::
   "expr_full \<Rightarrow> (String.literal \<times> String.literal) option" where
-  "keyExistencePair (BinaryOpF BIn (IdentifierF inName _) (IdentifierF stName _) _) =
-     Some (inName, stName)"
-| "keyExistencePair _ = None"
+  "keyExistencePair e =
+     (case e of
+        BinaryOpF op lhs rhs _ \<Rightarrow>
+          (case op of
+             BIn \<Rightarrow>
+               (case lhs of
+                  IdentifierF inName _ \<Rightarrow>
+                    (case rhs of
+                       IdentifierF stName _ \<Rightarrow> Some (inName, stName)
+                     | _ \<Rightarrow> None)
+                | _ \<Rightarrow> None)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
 
 text \<open>\<open>fieldNameIfStateIndex\<close>: recognises an expression of shape
   \<open>state[input].field\<close> for given \<open>state\<close> and \<open>input\<close> names and

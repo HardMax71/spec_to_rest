@@ -93,28 +93,32 @@ fun eval_bool_bin :: "bool_bin_op \<Rightarrow> bool \<Rightarrow> bool \<Righta
 | "eval_bool_bin ImpliesOp a b = ((\<not> a) \<or> b)"
 | "eval_bool_bin IffOp a b = (a = b)"
 
+fun int_arith :: "arith_op \<Rightarrow> int \<Rightarrow> int \<Rightarrow> ir_value option" where
+  "int_arith AddOp a b = Some (VInt (a + b))"
+| "int_arith SubOp a b = Some (VInt (a - b))"
+| "int_arith MulOp a b = Some (VInt (a * b))"
+| "int_arith DivOp a b = (if b = 0 then None else Some (VInt (a div b)))"
+
+fun real_arith :: "arith_op \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> ir_value option" where
+  "real_arith AddOp a b = Some (VReal (a + b))"
+| "real_arith SubOp a b = Some (VReal (a - b))"
+| "real_arith MulOp a b = Some (VReal (a * b))"
+| "real_arith DivOp a b = (if b = 0 then None else Some (VReal (a / b)))"
+
 fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_arith AddOp (Some (VInt a)) (Some (VInt b)) = Some (VInt (a + b))"
-| "eval_arith SubOp (Some (VInt a)) (Some (VInt b)) = Some (VInt (a - b))"
-| "eval_arith MulOp (Some (VInt a)) (Some (VInt b)) = Some (VInt (a * b))"
-| "eval_arith DivOp (Some (VInt a)) (Some (VInt b)) =
-     (if b = 0 then None else Some (VInt (a div b)))"
-| "eval_arith AddOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a + b))"
-| "eval_arith SubOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a - b))"
-| "eval_arith MulOp (Some (VReal a)) (Some (VReal b)) = Some (VReal (a * b))"
-| "eval_arith DivOp (Some (VReal a)) (Some (VReal b)) =
-     (if b = 0 then None else Some (VReal (a / b)))"
-| "eval_arith AddOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a + b))"
-| "eval_arith AddOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a + of_int b))"
-| "eval_arith SubOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a - b))"
-| "eval_arith SubOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a - of_int b))"
-| "eval_arith MulOp (Some (VInt a)) (Some (VReal b)) = Some (VReal (of_int a * b))"
-| "eval_arith MulOp (Some (VReal a)) (Some (VInt b)) = Some (VReal (a * of_int b))"
-| "eval_arith DivOp (Some (VInt a)) (Some (VReal b)) =
-     (if b = 0 then None else Some (VReal (of_int a / b)))"
-| "eval_arith DivOp (Some (VReal a)) (Some (VInt b)) =
-     (if b = 0 then None else Some (VReal (a / of_int b)))"
-| "eval_arith _ _ _ = None"
+  "eval_arith op x y =
+     (case x of
+        Some (VInt a) \<Rightarrow>
+          (case y of
+             Some (VInt b)  \<Rightarrow> int_arith op a b
+           | Some (VReal b) \<Rightarrow> real_arith op (of_int a) b
+           | _              \<Rightarrow> None)
+      | Some (VReal a) \<Rightarrow>
+          (case y of
+             Some (VInt b)  \<Rightarrow> real_arith op a (of_int b)
+           | Some (VReal b) \<Rightarrow> real_arith op a b
+           | _              \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
 
 definition ir_val_eq :: "ir_value \<Rightarrow> ir_value \<Rightarrow> bool" where
   "ir_val_eq x y =
@@ -123,26 +127,44 @@ definition ir_val_eq :: "ir_value \<Rightarrow> ir_value \<Rightarrow> bool" whe
       | (VReal a, VInt b) \<Rightarrow> a = of_int b
       | _ \<Rightarrow> x = y)"
 
+fun int_cmp :: "cmp_op \<Rightarrow> int \<Rightarrow> int \<Rightarrow> ir_value option" where
+  "int_cmp LtOp a b = Some (VBool (a < b))"
+| "int_cmp LeOp a b = Some (VBool (a \<le> b))"
+| "int_cmp GtOp a b = Some (VBool (a > b))"
+| "int_cmp GeOp a b = Some (VBool (a \<ge> b))"
+| "int_cmp _ _ _ = None"
+
+fun real_cmp :: "cmp_op \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> ir_value option" where
+  "real_cmp LtOp a b = Some (VBool (a < b))"
+| "real_cmp LeOp a b = Some (VBool (a \<le> b))"
+| "real_cmp GtOp a b = Some (VBool (a > b))"
+| "real_cmp GeOp a b = Some (VBool (a \<ge> b))"
+| "real_cmp _ _ _ = None"
+
 fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_cmp EqOp  (Some a) (Some b) = Some (VBool (ir_val_eq a b))"
-| "eval_cmp NeqOp (Some a) (Some b) = Some (VBool (\<not> ir_val_eq a b))"
-| "eval_cmp LtOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a < b))"
-| "eval_cmp LeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<le> b))"
-| "eval_cmp GtOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a > b))"
-| "eval_cmp GeOp  (Some (VInt a)) (Some (VInt b)) = Some (VBool (a \<ge> b))"
-| "eval_cmp LtOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a < b))"
-| "eval_cmp LeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<le> b))"
-| "eval_cmp GtOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a > b))"
-| "eval_cmp GeOp  (Some (VReal a)) (Some (VReal b)) = Some (VBool (a \<ge> b))"
-| "eval_cmp LtOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a < b))"
-| "eval_cmp LtOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a < of_int b))"
-| "eval_cmp LeOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a \<le> b))"
-| "eval_cmp LeOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a \<le> of_int b))"
-| "eval_cmp GtOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a > b))"
-| "eval_cmp GtOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a > of_int b))"
-| "eval_cmp GeOp  (Some (VInt a)) (Some (VReal b)) = Some (VBool (of_int a \<ge> b))"
-| "eval_cmp GeOp  (Some (VReal a)) (Some (VInt b)) = Some (VBool (a \<ge> of_int b))"
-| "eval_cmp _ _ _ = None"
+  "eval_cmp op x y =
+     (case x of
+        Some a \<Rightarrow>
+          (case y of
+             Some b \<Rightarrow>
+               (case op of
+                  EqOp  \<Rightarrow> Some (VBool (ir_val_eq a b))
+                | NeqOp \<Rightarrow> Some (VBool (\<not> ir_val_eq a b))
+                | _ \<Rightarrow>
+                    (case a of
+                       VInt ai \<Rightarrow>
+                         (case b of
+                            VInt bi  \<Rightarrow> int_cmp op ai bi
+                          | VReal br \<Rightarrow> real_cmp op (of_int ai) br
+                          | _        \<Rightarrow> None)
+                     | VReal ar \<Rightarrow>
+                         (case b of
+                            VInt bi  \<Rightarrow> real_cmp op ar (of_int bi)
+                          | VReal br \<Rightarrow> real_cmp op ar br
+                          | _        \<Rightarrow> None)
+                     | _ \<Rightarrow> None))
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
 
 text \<open>Category H — first proven bricks of the spec front-half (the
   precondition the universal soundness theorem assumes via \<open>eval e = Some\<close>).
@@ -158,7 +180,7 @@ lemma eval_arith_some_imp_numeric:
   "eval_arith op x y = Some v \<Longrightarrow>
      ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
      \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
-  by (induction op x y rule: eval_arith.induct) (auto split: if_splits)
+  by (auto split: option.splits ir_value.splits if_splits)
 
 lemma eval_arith_div_zero:
   "eval_arith DivOp (Some (VInt a)) (Some (VInt 0)) = None"
@@ -167,17 +189,17 @@ lemma eval_arith_div_zero:
 lemma eval_arith_int_total:
   "op \<noteq> DivOp \<or> b \<noteq> 0 \<Longrightarrow>
      \<exists>r. eval_arith op (Some (VInt a)) (Some (VInt b)) = Some (VInt r)"
-  by (cases op) auto
+  by (cases op) (auto split: if_splits)
 
 lemma eval_cmp_some_imp_defined:
   "eval_cmp op x y = Some v \<Longrightarrow> (\<exists>a. x = Some a) \<and> (\<exists>b. y = Some b)"
-  by (induction op x y rule: eval_cmp.induct) auto
+  by (auto split: option.splits ir_value.splits cmp_op.splits)
 
 lemma eval_cmp_order_imp_numeric:
   "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
      ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
      \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
-  by (induction op x y rule: eval_cmp.induct) auto
+  by (auto split: option.splits ir_value.splits cmp_op.splits if_splits)
 
 text \<open>Category H Phase H1 — value types and value typing.
   The first concrete brick of the missing soundness front-half:
@@ -447,13 +469,16 @@ lemma eval_arith_preservation:
       and "numeric_ty t1" and "numeric_ty t2"
   shows "value_has_ty \<Gamma> v (numeric_join t1 t2)"
   using assms
-  by (induction op x y rule: eval_arith.induct)
-     (auto split: if_splits simp: numeric_ty_def numeric_join_def intro: vt_int vt_real)
+  by (cases op;
+      auto split: option.splits ir_value.splits if_splits
+           simp: numeric_ty_def numeric_join_def intro: vt_int vt_real)
 
 lemma eval_cmp_preservation:
   assumes "eval_cmp op x y = Some v"
   shows "value_has_ty \<Gamma> v TBool"
-  using assms by (induction op x y rule: eval_cmp.induct) (auto intro: vt_bool)
+  using assms
+  by (cases op;
+      auto split: option.splits ir_value.splits if_splits intro: vt_bool)
 
 text \<open>Phase H2 (start) - typing context and environment agreement.
   The H2 phase introduces a typing context \<open>tyenv\<close> for lexical

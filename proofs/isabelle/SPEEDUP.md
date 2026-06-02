@@ -333,6 +333,51 @@ Files touched:
 - `proofs/isabelle/SpecRest/Codegen.thy` — added `Semantics` to imports (it exports `eval` to
   Scala).
 
+### Tier 2.7 - Shallow `case` bodies for widening-triggered `fun` blowups (2026-06-02)
+
+The Z3-subset lift series (`If`/`Option`/`String`/`Seq`) widened `ir_value` from 7 to 11
+constructors. That re-detonated Tier 2.6 in two _pre-existing_ helper `fun`s that were cheap at 7
+constructors: `eval_arith` and `eval_cmp` (`Semantics.thy`). Both match a two-operand cross-product
+of nested patterns (`eval_arith AddOp (Some (VInt a)) (Some (VInt b)) = ...`); the `fun` package
+compiles that into a decision tree whose `pat_completeness` obligation is combinatorial in the
+datatype width. The session-DB trace fingered them:
+
+```text
+439.82s  fun  Semantics.thy  eval_arith
+206.35s  fun  Semantics.thy  eval_cmp
+```
+
+That is 646 s, 82 % of the 783 s Core build, on two non-recursive funs. Profiling note: the
+session-DB `command_timings` offsets are in Isabelle _symbols_ (`\<Rightarrow>` is one symbol but 11
+bytes), so a byte-slicing line mapper under-reports the line number by ~15. Count symbols (`\<...>`
+as one) to land on the right command.
+
+**Fix:** single-equation `fun` with a nested single-scrutinee `case` body, and the operator dispatch
+pulled into four tiny shallow helpers (`int_arith`/`real_arith`/`int_cmp`/`real_cmp`). The fun's own
+`pat_completeness` becomes trivial (one variable pattern); the `case` translation does the value
+dispatch cheaply, the same mechanism as the `fieldNameIfStateIndex` style already used elsewhere.
+The seven dependent lemmas move off the now-trivial `eval_arith.induct`/`eval_cmp.induct` to
+`split: option.splits ir_value.splits ...` (plus `cases op` where a helper-result shape is needed).
+Two pre-existing funs with the identical disease got the same flattening: `keyExistencePair`
+(`IR_Analysis.thy`) and `resolveWithBase` (`IR_Helpers.thy`).
+
+| Command                 | Before  | After  |
+| ----------------------- | ------- | ------ |
+| `eval_arith`            | 439.8 s | <0.1 s |
+| `eval_cmp`              | 206.4 s | <0.1 s |
+| `keyExistencePair`      | 37.6 s  | <0.1 s |
+| `resolveWithBase`       | 27.0 s  | <0.1 s |
+| Core (wall)             | 13:03   | 1:31   |
+| Full build (cached HOL) | ~14:40  | 2:45   |
+
+The four helpers are new top-level functions and the four rewritten bodies are restructured, so
+`SpecRestGenerated.scala` was regenerated. Verified behaviour-preserving: zero `sorry`,
+`sbt ir/compile` clean, 106 testgen behavioural / stateful / structural tests green.
+
+**Generalises Tier 2.6:** widening a datatype can silently re-detonate any _existing_ `fun` that
+matches its constructors more than one or two levels deep, especially a two-operand cross-product.
+After adding constructors, re-profile and move the match into a `case` body.
+
 ## Failed
 
 ### Tier 3.1 (partial) — Delete `peel_smt_translate_*` `[simp]` lemmas
