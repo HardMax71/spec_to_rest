@@ -596,7 +596,7 @@ object Translator:
     case NamedTypeF(n, _)      => sortForNamedType(ctx, n)
     case OptionTypeF(inner, _) => Z3Sort.OptionOf(sortForType(ctx, inner))
     case SetTypeF(e, _)        => Z3Sort.SetOf(sortForType(ctx, e))
-    case SeqTypeF(e, _)        => Z3Sort.Uninterp(s"Seq_${sortNameOf(sortForType(ctx, e))}")
+    case SeqTypeF(e, _)        => Z3Sort.SeqOf(sortForType(ctx, e))
     case MapTypeF(k, v, _) =>
       Z3Sort.Uninterp(s"Map_${sortNameOf(sortForType(ctx, k))}_${sortNameOf(sortForType(ctx, v))}")
     case RelationTypeF(f, _, t, _) =>
@@ -609,6 +609,7 @@ object Translator:
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
     case Z3Sort.OptionOf(e) => s"Option_${sortNameOf(e)}"
+    case Z3Sort.SeqOf(e)    => s"Seq_${sortNameOf(e)}"
     case Z3Sort.Str         => "String"
 
   private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
@@ -915,6 +916,8 @@ object Translator:
       )
     case Z3Expr.OptSome(value, sp) =>
       Z3Expr.OptSome(substituteVar(value, varName, replacement), sp)
+    case Z3Expr.SeqLit(elemSort, members, sp) =>
+      Z3Expr.SeqLit(elemSort, members.map(m => substituteVar(m, varName, replacement)), sp)
     case other => other
 
   private def resolveStateRelationReference(
@@ -1318,9 +1321,10 @@ object Translator:
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
     case Z3Expr.Ite(_, t, e, _) =>
       inferSortOfZ3Expr(ctx, t).orElse(inferSortOfZ3Expr(ctx, e))
-    case Z3Expr.OptNone(elemSort, _) => Some(Z3Sort.OptionOf(elemSort))
-    case Z3Expr.OptSome(value, _)    => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
-    case Z3Expr.StrLit(_, _)         => Some(Z3Sort.Str)
+    case Z3Expr.OptNone(elemSort, _)   => Some(Z3Sort.OptionOf(elemSort))
+    case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
+    case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
+    case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -2184,6 +2188,17 @@ object Translator:
         Z3Expr.OptSome(encodeFromSmtTerm(ctx, t, env))
       case TStrLit(s) =>
         Z3Expr.StrLit(s)
+      case TSeqEmpty() =>
+        fail(ctx, "empty sequence literal requires context to infer its element sort")
+      case cons @ TSeqCons(_, _) =>
+        val members = collectSeqMembersTerms(cons).map(t => encodeFromSmtTerm(ctx, t, env))
+        members match
+          case head :: _ =>
+            inferSortOfZ3Expr(ctx, head) match
+              case Some(es) => Z3Expr.SeqLit(es, members)
+              case None     => fail(ctx, "cannot infer sequence element sort")
+          case Nil =>
+            fail(ctx, "empty sequence literal requires context to infer its element sort")
 
   private def encodeNoneEq(
       ctx: TranslateCtx,
@@ -2200,6 +2215,10 @@ object Translator:
     case TSetEmpty()           => Nil
     case TSetInsert(elem, set) => elem :: collectSetLiteralMembersTerms(set)
     case _                     => Nil
+
+  private def collectSeqMembersTerms(term: smt_term): List[smt_term] = term match
+    case TSeqCons(elem, rest) => elem :: collectSeqMembersTerms(rest)
+    case _                    => Nil
 
   private def encodeSetBinOp(
       ctx: TranslateCtx,

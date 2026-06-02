@@ -212,3 +212,10 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
     ).map: out =>
       assert(out.contains("\"active\""), s"expected native string literal; got:\n$out")
       assert(!out.contains("declare-sort String"), s"String should be native; got:\n$out")
+
+  test("sequence literals lower via the native Seq theory"):
+    smtOf(
+      specWithInvariant("items: Seq[Int]", "items = [1, 2, 3]")
+    ).map: out =>
+      assert(out.contains("(seq.unit "), s"expected (seq.unit ...); got:\n$out")
+      assert(out.contains("(Seq "), s"expected a (Seq ...) sort; got:\n$out")

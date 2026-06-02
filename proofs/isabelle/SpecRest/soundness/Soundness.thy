@@ -81,6 +81,10 @@ next
   case (SomeE e sp) show ?case using soundness_SomeE[OF SomeE.IH] .
 next
   case (StrLit v sp) show ?case by (rule soundness_StrLit)
+next
+  case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
+next
+  case (SeqCons e rest sp) show ?case using soundness_SeqCons[OF SeqCons.IH(1) SeqCons.IH(2)] .
 qed
 
 section \<open>Issue #202 Phase 3 — lower-soundness corollary\<close>
@@ -260,6 +264,16 @@ proof (induction xs)
   show ?case using Cons by (auto split: option.splits)
 qed simp
 
+lemma lowerSeqList_ra_none:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
+      and "requiresAlloy_list xs"
+  shows "lowerSeqList enums xs sp = None"
+  using assms
+proof (induction xs)
+  case (Cons a xs)
+  show ?case using Cons by (auto split: option.splits)
+qed simp
+
 lemma lower_with_assigns_ra_none:
   assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
              \<Longrightarrow> requiresAlloy v \<Longrightarrow> lower enums v = None"
@@ -360,6 +374,22 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s = None"
       by (rule lowerSetList_ra_none[OF pe rl])
     thus ?thesis unfolding SetLiteralF by simp
+  next
+    case (SeqLiteralF elems s)
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
+    proof -
+      fix x assume m: "x \<in> set elems" and rx: "requiresAlloy x"
+      have "size x \<le> size_list size elems"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using SeqLiteralF by simp
+      finally have "size x < size e" .
+      thus "lower enums x = None" using sub rx by blast
+    qed
+    have rl: "requiresAlloy_list elems"
+      using less.prems SeqLiteralF by simp
+    have "lowerSeqList enums elems s = None"
+      by (rule lowerSeqList_ra_none[OF pe rl])
+    thus ?thesis unfolding SeqLiteralF by simp
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

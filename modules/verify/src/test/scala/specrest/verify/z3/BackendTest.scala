@@ -291,3 +291,33 @@ class BackendTest extends CatsEffectSuite:
         artifact = emptyArtifact
       )
       runScript(script).map(r => assertEquals(r.status, expected))
+
+  private def seqLit(xs: Int*): Z3Expr =
+    Z3Expr.SeqLit(Z3Sort.Int, xs.toList.map(i => Z3Expr.IntLit(BigInt(i))))
+
+  List(
+    (
+      "x = [1,2] and x = [1,2] is sat",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), seqLit(1, 2)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), seqLit(1, 2))
+      ),
+      CheckStatus.Sat
+    ),
+    (
+      "x = [1] and x = [2] is unsat (distinct sequences)",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), seqLit(1)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), seqLit(2))
+      ),
+      CheckStatus.Unsat
+    )
+  ).foreach: (name, assertions, expected) =>
+    test(s"seq theory renders and solves: $name"):
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.SeqOf(Z3Sort.Int))),
+        assertions = assertions,
+        artifact = emptyArtifact
+      )
+      runScript(script).map(r => assertEquals(r.status, expected))

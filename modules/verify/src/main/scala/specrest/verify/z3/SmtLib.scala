@@ -33,6 +33,7 @@ object SmtLib:
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
     case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
+    case Z3Sort.SeqOf(e)    => s"(Seq ${renderSort(e)})"
     case Z3Sort.Str         => "String"
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
@@ -96,6 +97,10 @@ object SmtLib:
       s"(some ${renderExpr(value)})"
     case Z3Expr.StrLit(s, _) =>
       "\"" + s.replace("\"", "\"\"") + "\""
+    case Z3Expr.SeqLit(elemSort, members, _) =>
+      members.foldLeft(s"(as seq.empty (Seq ${renderSort(elemSort)}))")((acc, m) =>
+        s"(seq.++ $acc (seq.unit ${renderExpr(m)}))"
+      )
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"

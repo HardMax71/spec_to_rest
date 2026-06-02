@@ -22,6 +22,7 @@ fun value_to_smt :: "ir_value \<Rightarrow> smt_val" where
 | "value_to_smt VNone            = SNone"
 | "value_to_smt (VSome v)        = SSome (value_to_smt v)"
 | "value_to_smt (VStr s)         = SStr s"
+| "value_to_smt (VSeq vs)        = SSeq (map value_to_smt vs)"
 
 abbreviation value_to_smt_opt :: "ir_value option \<Rightarrow> smt_val option" where
   "value_to_smt_opt \<equiv> map_option value_to_smt"
@@ -142,6 +143,18 @@ next
 next
   case (VStr s)
   show ?case by (cases v2) auto
+next
+  case (VSeq xs)
+  show ?case
+  proof (cases v2)
+    case (VSeq ys)
+    have "(map value_to_smt xs = map value_to_smt ys) = (xs = ys)"
+    proof (rule map_value_to_smt_inj)
+      fix x assume "x \<in> set xs"
+      thus "\<forall>y. value_to_smt x = value_to_smt y \<longrightarrow> x = y" using VSeq.IH by blast
+    qed
+    thus ?thesis using \<open>v2 = VSeq ys\<close> by simp
+  qed auto
 qed
 
 lemma map_value_to_smt_inj_simp [simp]:
@@ -311,6 +324,11 @@ lemma contains_smt_val_map_SSome [simp]:
 lemma contains_smt_val_map_SStr [simp]:
   "contains_smt_val (map value_to_smt vs) (SStr s) = contains_value vs (VStr s)"
   using contains_value_map_value_to_smt[of vs "VStr s"] by simp
+
+lemma contains_smt_val_map_SSeq [simp]:
+  "contains_smt_val (map value_to_smt vs) (SSeq (map value_to_smt xs))
+     = contains_value vs (VSeq xs)"
+  using contains_value_map_value_to_smt[of vs "VSeq xs"] by simp
 
 
 lemma set_union_values_map_value_to_smt:

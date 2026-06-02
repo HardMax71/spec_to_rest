@@ -29,6 +29,8 @@ and lowerSetList ::
 and lower_with_assigns ::
     "String.literal list \<Rightarrow> field_assign_full list
        \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr option"
+and lowerSeqList ::
+    "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
 where
   "lower _ (BoolLitF b sp)     = Some (BoolLit b sp)"
 | "lower _ (IntLitF n sp)      = Some (IntLit n sp)"
@@ -40,7 +42,6 @@ where
 | "lower _ (CallF _ _ _)       = None"
 | "lower _ (ConstructorF _ _ _)     = None"
 | "lower _ (MapLiteralF _ _)        = None"
-| "lower _ (SeqLiteralF _ _)        = None"
 | "lower _ (SetComprehensionF _ _ _ _) = None"
 | "lower _ (TheF _ _ _ _)      = None"
 | "lower _ (MatchesF _ _ _)    = None"
@@ -181,6 +182,7 @@ where
         None \<Rightarrow> None
       | Some base' \<Rightarrow> lower_with_assigns enums updates base' sp)"
 | "lower enums (SetLiteralF elems sp) = lowerSetList enums elems sp"
+| "lower enums (SeqLiteralF elems sp) = lowerSeqList enums elems sp"
 | "lower enums (IfF c a b sp) =
      (case (lower enums c, lower enums a, lower enums b) of
         (Some c', Some a', Some b') \<Rightarrow> Some (Ite c' a' b' sp)
@@ -198,18 +200,26 @@ where
      (case lower enums v of
         None \<Rightarrow> None
       | Some v' \<Rightarrow> lower_with_assigns enums rest (WithRec base fld v' sp) sp)"
+
+| "lowerSeqList _ [] sp = Some (SeqEmpty sp)"
+| "lowerSeqList enums (e # rest) sp =
+     (case (lower enums e, lowerSeqList enums rest sp) of
+        (Some e', Some s') \<Rightarrow> Some (SeqCons e' s' sp)
+      | _ \<Rightarrow> None)"
   by pat_completeness auto
 
 termination
   by (relation "measures [
         (\<lambda>p. case p of
-               Inl (_, e) \<Rightarrow> size e
-             | Inr (Inl (_, elems, _)) \<Rightarrow> size_list size elems
-             | Inr (Inr (_, updates, _, _)) \<Rightarrow> size_list size updates),
+               Inl (Inl (_, e)) \<Rightarrow> size e
+             | Inl (Inr (_, elems, _)) \<Rightarrow> size_list size elems
+             | Inr (Inl (_, updates, _, _)) \<Rightarrow> size_list size updates
+             | Inr (Inr (_, elems, _)) \<Rightarrow> size_list size elems),
         (\<lambda>p. case p of
-               Inl _ \<Rightarrow> 0
-             | Inr (Inl (_, elems, _)) \<Rightarrow> Suc (length elems)
-             | Inr (Inr (_, updates, _, _)) \<Rightarrow> Suc (length updates))
+               Inl (Inl _) \<Rightarrow> 0
+             | Inl (Inr (_, elems, _)) \<Rightarrow> Suc (length elems)
+             | Inr (Inl (_, updates, _, _)) \<Rightarrow> Suc (length updates)
+             | Inr (Inr (_, elems, _)) \<Rightarrow> Suc (length elems))
        ]")
      auto
 

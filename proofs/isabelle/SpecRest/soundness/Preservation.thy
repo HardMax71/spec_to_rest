@@ -61,7 +61,7 @@ where
 | "wf_z3 (CallF _ _ _)             = False"
 | "wf_z3 (ConstructorF _ _ _)      = False"
 | "wf_z3 (MapLiteralF _ _)         = False"
-| "wf_z3 (SeqLiteralF _ _)         = False"
+| "wf_z3 (SeqLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (SetComprehensionF _ _ _ _) = False"
 | "wf_z3 (SomeWrapF e _)           = wf_z3 e"
 | "wf_z3 (TheF _ _ _ _)            = False"
@@ -218,6 +218,16 @@ proof (induction xs)
   show ?case using Cons by (auto split: option.splits)
 qed simp
 
+lemma lowerSeqList_wf_some:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
+      and "wf_z3_list xs"
+  shows "lowerSeqList enums xs sp \<noteq> None"
+  using assms
+proof (induction xs)
+  case (Cons a xs)
+  show ?case using Cons by (auto split: option.splits)
+qed simp
+
 lemma lower_with_assigns_wf_some:
   assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
              \<Longrightarrow> wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
@@ -323,6 +333,22 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s \<noteq> None"
       by (rule lowerSetList_wf_some[OF pe wl])
     thus ?thesis unfolding SetLiteralF by simp
+  next
+    case (SeqLiteralF elems s)
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> wf_z3 x \<Longrightarrow> lower enums x \<noteq> None"
+    proof -
+      fix x assume m: "x \<in> set elems" and rx: "wf_z3 x"
+      have "size x \<le> size_list size elems"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using SeqLiteralF by simp
+      finally have "size x < size e" .
+      thus "lower enums x \<noteq> None" using sub rx by blast
+    qed
+    have wl: "wf_z3_list elems"
+      using less.prems SeqLiteralF by simp
+    have "lowerSeqList enums elems s \<noteq> None"
+      by (rule lowerSeqList_wf_some[OF pe wl])
+    thus ?thesis unfolding SeqLiteralF by simp
   next
     case (IfF c a b s)
     have hc: "wf_z3 c \<Longrightarrow> lower enums c \<noteq> None"

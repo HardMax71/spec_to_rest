@@ -157,4 +157,36 @@ proof -
     by (cases "eval s st env base"; cases "eval s st env value_e") simp_all
 qed
 
+lemma soundness_SeqEmpty:
+  "value_to_smt_opt (eval s st env (SeqEmpty sp))
+     = smtEval (correlate_model s st) (correlate_env env) (translate (SeqEmpty sp))"
+  by simp
+
+lemma soundness_SeqCons:
+  assumes ihe: "value_to_smt_opt (eval s st env e)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+      and ihs: "value_to_smt_opt (eval s st env rest)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate rest)"
+  shows "value_to_smt_opt (eval s st env (SeqCons e rest sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SeqCons e rest sp))"
+proof -
+  have ihe': "smtEval (correlate_model s st) (correlate_env env) (translate e)
+                = value_to_smt_opt (eval s st env e)" using ihe by simp
+  have ihs': "smtEval (correlate_model s st) (correlate_env env) (translate rest)
+                = value_to_smt_opt (eval s st env rest)" using ihs by simp
+  show ?thesis
+  proof (cases "eval s st env e")
+    case None thus ?thesis using ihe' by simp
+  next
+    case (Some v)
+    show ?thesis
+    proof (cases "eval s st env rest")
+      case None thus ?thesis using ihe' ihs' \<open>eval s st env e = Some v\<close> by simp
+    next
+      case (Some vs)
+      thus ?thesis using ihe' ihs' \<open>eval s st env e = Some v\<close> by (cases vs) simp_all
+    qed
+  qed
+qed
+
 end

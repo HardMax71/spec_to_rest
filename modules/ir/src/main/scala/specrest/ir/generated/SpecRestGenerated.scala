@@ -159,20 +159,31 @@ object SpecRestGenerated {
   final case class SNone()                                        extends smt_val
   final case class SSome(a: smt_val)                              extends smt_val
   final case class SStr(a: String)                                extends smt_val
+  final case class SSeq(a: List[smt_val])                         extends smt_val
 
   def equal_smt_vala(x0: smt_val, x1: smt_val): Boolean = (x0, x1) match {
+    case (SStr(x10), SSeq(x11))                              => false
+    case (SSeq(x11), SStr(x10))                              => false
+    case (SSome(x9), SSeq(x11))                              => false
+    case (SSeq(x11), SSome(x9))                              => false
     case (SSome(x9), SStr(x10))                              => false
     case (SStr(x10), SSome(x9))                              => false
+    case (SNone(), SSeq(x11))                                => false
+    case (SSeq(x11), SNone())                                => false
     case (SNone(), SStr(x10))                                => false
     case (SStr(x10), SNone())                                => false
     case (SNone(), SSome(x9))                                => false
     case (SSome(x9), SNone())                                => false
+    case (SEntityWith(x71, x72, x73), SSeq(x11))             => false
+    case (SSeq(x11), SEntityWith(x71, x72, x73))             => false
     case (SEntityWith(x71, x72, x73), SStr(x10))             => false
     case (SStr(x10), SEntityWith(x71, x72, x73))             => false
     case (SEntityWith(x71, x72, x73), SSome(x9))             => false
     case (SSome(x9), SEntityWith(x71, x72, x73))             => false
     case (SEntityWith(x71, x72, x73), SNone())               => false
     case (SNone(), SEntityWith(x71, x72, x73))               => false
+    case (SSet(x6), SSeq(x11))                               => false
+    case (SSeq(x11), SSet(x6))                               => false
     case (SSet(x6), SStr(x10))                               => false
     case (SStr(x10), SSet(x6))                               => false
     case (SSet(x6), SSome(x9))                               => false
@@ -181,6 +192,8 @@ object SpecRestGenerated {
     case (SNone(), SSet(x6))                                 => false
     case (SSet(x6), SEntityWith(x71, x72, x73))              => false
     case (SEntityWith(x71, x72, x73), SSet(x6))              => false
+    case (SEntityElem(x51, x52), SSeq(x11))                  => false
+    case (SSeq(x11), SEntityElem(x51, x52))                  => false
     case (SEntityElem(x51, x52), SStr(x10))                  => false
     case (SStr(x10), SEntityElem(x51, x52))                  => false
     case (SEntityElem(x51, x52), SSome(x9))                  => false
@@ -191,6 +204,8 @@ object SpecRestGenerated {
     case (SEntityWith(x71, x72, x73), SEntityElem(x51, x52)) => false
     case (SEntityElem(x51, x52), SSet(x6))                   => false
     case (SSet(x6), SEntityElem(x51, x52))                   => false
+    case (SEnumElem(x41, x42), SSeq(x11))                    => false
+    case (SSeq(x11), SEnumElem(x41, x42))                    => false
     case (SEnumElem(x41, x42), SStr(x10))                    => false
     case (SStr(x10), SEnumElem(x41, x42))                    => false
     case (SEnumElem(x41, x42), SSome(x9))                    => false
@@ -203,6 +218,8 @@ object SpecRestGenerated {
     case (SSet(x6), SEnumElem(x41, x42))                     => false
     case (SEnumElem(x41, x42), SEntityElem(x51, x52))        => false
     case (SEntityElem(x51, x52), SEnumElem(x41, x42))        => false
+    case (SReal(x3), SSeq(x11))                              => false
+    case (SSeq(x11), SReal(x3))                              => false
     case (SReal(x3), SStr(x10))                              => false
     case (SStr(x10), SReal(x3))                              => false
     case (SReal(x3), SSome(x9))                              => false
@@ -217,6 +234,8 @@ object SpecRestGenerated {
     case (SEntityElem(x51, x52), SReal(x3))                  => false
     case (SReal(x3), SEnumElem(x41, x42))                    => false
     case (SEnumElem(x41, x42), SReal(x3))                    => false
+    case (SInt(x2), SSeq(x11))                               => false
+    case (SSeq(x11), SInt(x2))                               => false
     case (SInt(x2), SStr(x10))                               => false
     case (SStr(x10), SInt(x2))                               => false
     case (SInt(x2), SSome(x9))                               => false
@@ -233,6 +252,8 @@ object SpecRestGenerated {
     case (SEnumElem(x41, x42), SInt(x2))                     => false
     case (SInt(x2), SReal(x3))                               => false
     case (SReal(x3), SInt(x2))                               => false
+    case (SBool(x1), SSeq(x11))                              => false
+    case (SSeq(x11), SBool(x1))                              => false
     case (SBool(x1), SStr(x10))                              => false
     case (SStr(x10), SBool(x1))                              => false
     case (SBool(x1), SSome(x9))                              => false
@@ -251,6 +272,7 @@ object SpecRestGenerated {
     case (SReal(x3), SBool(x1))                              => false
     case (SBool(x1), SInt(x2))                               => false
     case (SInt(x2), SBool(x1))                               => false
+    case (SSeq(x11), SSeq(y11))                              => equal_list[smt_val](x11, y11)
     case (SStr(x10), SStr(y10))                              => x10 == y10
     case (SSome(x9), SSome(y9))                              => equal_smt_vala(x9, y9)
     case (SEntityWith(x71, x72, x73), SEntityWith(y71, y72, y73)) =>
@@ -294,20 +316,31 @@ object SpecRestGenerated {
   final case class VNone()                                          extends ir_value
   final case class VSome(a: ir_value)                               extends ir_value
   final case class VStr(a: String)                                  extends ir_value
+  final case class VSeq(a: List[ir_value])                          extends ir_value
 
   def equal_ir_valuea(x0: ir_value, x1: ir_value): Boolean = (x0, x1) match {
+    case (VStr(x10), VSeq(x11))                          => false
+    case (VSeq(x11), VStr(x10))                          => false
+    case (VSome(x9), VSeq(x11))                          => false
+    case (VSeq(x11), VSome(x9))                          => false
     case (VSome(x9), VStr(x10))                          => false
     case (VStr(x10), VSome(x9))                          => false
+    case (VNone(), VSeq(x11))                            => false
+    case (VSeq(x11), VNone())                            => false
     case (VNone(), VStr(x10))                            => false
     case (VStr(x10), VNone())                            => false
     case (VNone(), VSome(x9))                            => false
     case (VSome(x9), VNone())                            => false
+    case (VEntityWith(x71, x72, x73), VSeq(x11))         => false
+    case (VSeq(x11), VEntityWith(x71, x72, x73))         => false
     case (VEntityWith(x71, x72, x73), VStr(x10))         => false
     case (VStr(x10), VEntityWith(x71, x72, x73))         => false
     case (VEntityWith(x71, x72, x73), VSome(x9))         => false
     case (VSome(x9), VEntityWith(x71, x72, x73))         => false
     case (VEntityWith(x71, x72, x73), VNone())           => false
     case (VNone(), VEntityWith(x71, x72, x73))           => false
+    case (VSet(x6), VSeq(x11))                           => false
+    case (VSeq(x11), VSet(x6))                           => false
     case (VSet(x6), VStr(x10))                           => false
     case (VStr(x10), VSet(x6))                           => false
     case (VSet(x6), VSome(x9))                           => false
@@ -316,6 +349,8 @@ object SpecRestGenerated {
     case (VNone(), VSet(x6))                             => false
     case (VSet(x6), VEntityWith(x71, x72, x73))          => false
     case (VEntityWith(x71, x72, x73), VSet(x6))          => false
+    case (VEntity(x51, x52), VSeq(x11))                  => false
+    case (VSeq(x11), VEntity(x51, x52))                  => false
     case (VEntity(x51, x52), VStr(x10))                  => false
     case (VStr(x10), VEntity(x51, x52))                  => false
     case (VEntity(x51, x52), VSome(x9))                  => false
@@ -326,6 +361,8 @@ object SpecRestGenerated {
     case (VEntityWith(x71, x72, x73), VEntity(x51, x52)) => false
     case (VEntity(x51, x52), VSet(x6))                   => false
     case (VSet(x6), VEntity(x51, x52))                   => false
+    case (VEnum(x41, x42), VSeq(x11))                    => false
+    case (VSeq(x11), VEnum(x41, x42))                    => false
     case (VEnum(x41, x42), VStr(x10))                    => false
     case (VStr(x10), VEnum(x41, x42))                    => false
     case (VEnum(x41, x42), VSome(x9))                    => false
@@ -338,6 +375,8 @@ object SpecRestGenerated {
     case (VSet(x6), VEnum(x41, x42))                     => false
     case (VEnum(x41, x42), VEntity(x51, x52))            => false
     case (VEntity(x51, x52), VEnum(x41, x42))            => false
+    case (VReal(x3), VSeq(x11))                          => false
+    case (VSeq(x11), VReal(x3))                          => false
     case (VReal(x3), VStr(x10))                          => false
     case (VStr(x10), VReal(x3))                          => false
     case (VReal(x3), VSome(x9))                          => false
@@ -352,6 +391,8 @@ object SpecRestGenerated {
     case (VEntity(x51, x52), VReal(x3))                  => false
     case (VReal(x3), VEnum(x41, x42))                    => false
     case (VEnum(x41, x42), VReal(x3))                    => false
+    case (VInt(x2), VSeq(x11))                           => false
+    case (VSeq(x11), VInt(x2))                           => false
     case (VInt(x2), VStr(x10))                           => false
     case (VStr(x10), VInt(x2))                           => false
     case (VInt(x2), VSome(x9))                           => false
@@ -368,6 +409,8 @@ object SpecRestGenerated {
     case (VEnum(x41, x42), VInt(x2))                     => false
     case (VInt(x2), VReal(x3))                           => false
     case (VReal(x3), VInt(x2))                           => false
+    case (VBool(x1), VSeq(x11))                          => false
+    case (VSeq(x11), VBool(x1))                          => false
     case (VBool(x1), VStr(x10))                          => false
     case (VStr(x10), VBool(x1))                          => false
     case (VBool(x1), VSome(x9))                          => false
@@ -386,6 +429,7 @@ object SpecRestGenerated {
     case (VReal(x3), VBool(x1))                          => false
     case (VBool(x1), VInt(x2))                           => false
     case (VInt(x2), VBool(x1))                           => false
+    case (VSeq(x11), VSeq(y11))                          => equal_list[ir_value](x11, y11)
     case (VStr(x10), VStr(y10))                          => x10 == y10
     case (VSome(x9), VSome(y9))                          => equal_ir_valuea(x9, y9)
     case (VEntityWith(x71, x72, x73), VEntityWith(y71, y72, y73)) =>
@@ -538,6 +582,8 @@ object SpecRestGenerated {
   final case class NoneE(a: Option[span_t])                          extends expr
   final case class SomeE(a: expr, b: Option[span_t])                 extends expr
   final case class StrLit(a: String, b: Option[span_t])              extends expr
+  final case class SeqEmpty(a: Option[span_t])                       extends expr
+  final case class SeqCons(a: expr, b: expr, c: Option[span_t])      extends expr
 
   sealed abstract class nat
   final case class Nata(a: BigInt) extends nat
@@ -699,6 +745,8 @@ object SpecRestGenerated {
   final case class TNone()                                        extends smt_term
   final case class TSome(a: smt_term)                             extends smt_term
   final case class TStrLit(a: String)                             extends smt_term
+  final case class TSeqEmpty()                                    extends smt_term
+  final case class TSeqCons(a: smt_term, b: smt_term)             extends smt_term
 
   sealed abstract class multiplicity
   final case class MultOne()  extends multiplicity
@@ -1748,6 +1796,7 @@ object SpecRestGenerated {
       case (uv, SNone(), ux)          => None
       case (uv, SSome(v), ux)         => None
       case (uv, SStr(v), ux)          => None
+      case (uv, SSeq(v), ux)          => None
     }
 
   def sm_pred_domain[A](x0: smt_model_ext[A]): List[(String, List[smt_val])] =
@@ -1871,6 +1920,8 @@ object SpecRestGenerated {
     case TPrime(TNone())                 => None
     case TPrime(TSome(va))               => None
     case TPrime(TStrLit(va))             => None
+    case TPrime(TSeqEmpty())             => None
+    case TPrime(TSeqCons(va, vb))        => None
     case TPre(BLit(va))                  => None
     case TPre(ILit(va))                  => None
     case TPre(RLit(va))                  => None
@@ -1906,11 +1957,15 @@ object SpecRestGenerated {
     case TPre(TNone())                   => None
     case TPre(TSome(va))                 => None
     case TPre(TStrLit(va))               => None
+    case TPre(TSeqEmpty())               => None
+    case TPre(TSeqCons(va, vb))          => None
     case TWithRec(v, va, vb)             => None
     case TIte(v, va, vb)                 => None
     case TNone()                         => None
     case TSome(v)                        => None
     case TStrLit(v)                      => None
+    case TSeqEmpty()                     => None
+    case TSeqCons(v, va)                 => None
   }
 
   def set_diff_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
@@ -1945,6 +2000,7 @@ object SpecRestGenerated {
               case Some(SNone())              => None
               case Some(SSome(_))             => None
               case Some(SStr(_))              => None
+              case Some(SSeq(_))              => None
             }
           case Some(SInt(_))              => None
           case Some(SReal(_))             => None
@@ -1955,6 +2011,7 @@ object SpecRestGenerated {
           case Some(SNone())              => None
           case Some(SSome(_))             => None
           case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
         }
     }
 
@@ -1983,6 +2040,7 @@ object SpecRestGenerated {
               case Some(SNone())              => None
               case Some(SSome(_))             => None
               case Some(SStr(_))              => None
+              case Some(SSeq(_))              => None
             }
           case Some(SInt(_))              => None
           case Some(SReal(_))             => None
@@ -1993,6 +2051,7 @@ object SpecRestGenerated {
           case Some(SNone())              => None
           case Some(SSome(_))             => None
           case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
         }
     }
 
@@ -2026,6 +2085,7 @@ object SpecRestGenerated {
           case Some(SNone())              => None
           case Some(SSome(_))             => None
           case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
         }
       case (m, env, TAnd(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2041,6 +2101,7 @@ object SpecRestGenerated {
           case (Some(SBool(_)), Some(SNone()))              => None
           case (Some(SBool(_)), Some(SSome(_)))             => None
           case (Some(SBool(_)), Some(SStr(_)))              => None
+          case (Some(SBool(_)), Some(SSeq(_)))              => None
           case (Some(SInt(_)), _)                           => None
           case (Some(SReal(_)), _)                          => None
           case (Some(SEnumElem(_, _)), _)                   => None
@@ -2050,6 +2111,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TOr(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2065,6 +2127,7 @@ object SpecRestGenerated {
           case (Some(SBool(_)), Some(SNone()))              => None
           case (Some(SBool(_)), Some(SSome(_)))             => None
           case (Some(SBool(_)), Some(SStr(_)))              => None
+          case (Some(SBool(_)), Some(SSeq(_)))              => None
           case (Some(SInt(_)), _)                           => None
           case (Some(SReal(_)), _)                          => None
           case (Some(SEnumElem(_, _)), _)                   => None
@@ -2074,6 +2137,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TImplies(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2089,6 +2153,7 @@ object SpecRestGenerated {
           case (Some(SBool(_)), Some(SNone()))              => None
           case (Some(SBool(_)), Some(SSome(_)))             => None
           case (Some(SBool(_)), Some(SStr(_)))              => None
+          case (Some(SBool(_)), Some(SSeq(_)))              => None
           case (Some(SInt(_)), _)                           => None
           case (Some(SReal(_)), _)                          => None
           case (Some(SEnumElem(_, _)), _)                   => None
@@ -2098,6 +2163,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TEq(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2126,6 +2192,8 @@ object SpecRestGenerated {
             Some[smt_val](SBool(equal_smt_vala(SInt(a), SSome(smt_val))))
           case (Some(SInt(a)), Some(SStr(literal))) =>
             Some[smt_val](SBool(equal_smt_vala(SInt(a), SStr(literal))))
+          case (Some(SInt(a)), Some(SSeq(list))) =>
+            Some[smt_val](SBool(equal_smt_vala(SInt(a), SSeq(list))))
           case (Some(SReal(_)), None) => None
           case (Some(SReal(a)), Some(SBool(bool))) =>
             Some[smt_val](SBool(equal_smt_vala(SReal(a), SBool(bool))))
@@ -2147,6 +2215,8 @@ object SpecRestGenerated {
             Some[smt_val](SBool(equal_smt_vala(SReal(a), SSome(smt_val))))
           case (Some(SReal(a)), Some(SStr(literal))) =>
             Some[smt_val](SBool(equal_smt_vala(SReal(a), SStr(literal))))
+          case (Some(SReal(a)), Some(SSeq(list))) =>
+            Some[smt_val](SBool(equal_smt_vala(SReal(a), SSeq(list))))
           case (Some(SEnumElem(_, _)), None) => None
           case (Some(SEnumElem(literal1, literal2)), Some(b)) =>
             Some[smt_val](SBool(equal_smt_vala(SEnumElem(literal1, literal2), b)))
@@ -2168,6 +2238,9 @@ object SpecRestGenerated {
           case (Some(SStr(_)), None) => None
           case (Some(SStr(literal)), Some(b)) =>
             Some[smt_val](SBool(equal_smt_vala(SStr(literal), b)))
+          case (Some(SSeq(_)), None) => None
+          case (Some(SSeq(list)), Some(b)) =>
+            Some[smt_val](SBool(equal_smt_vala(SSeq(list), b)))
         }
       case (m, env, TLt(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2186,6 +2259,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), Some(SNone()))              => None
           case (Some(SInt(_)), Some(SSome(_)))             => None
           case (Some(SInt(_)), Some(SStr(_)))              => None
+          case (Some(SInt(_)), Some(SSeq(_)))              => None
           case (Some(SReal(_)), None)                      => None
           case (Some(SReal(_)), Some(SBool(_)))            => None
           case (Some(SReal(a)), Some(SInt(b))) =>
@@ -2199,6 +2273,7 @@ object SpecRestGenerated {
           case (Some(SReal(_)), Some(SNone()))              => None
           case (Some(SReal(_)), Some(SSome(_)))             => None
           case (Some(SReal(_)), Some(SStr(_)))              => None
+          case (Some(SReal(_)), Some(SSeq(_)))              => None
           case (Some(SEnumElem(_, _)), _)                   => None
           case (Some(SEntityElem(_, _)), _)                 => None
           case (Some(SSet(_)), _)                           => None
@@ -2206,6 +2281,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TNeg(t)) =>
         smtEval(m, env, t) match {
@@ -2220,6 +2296,7 @@ object SpecRestGenerated {
           case Some(SNone())              => None
           case Some(SSome(_))             => None
           case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
         }
       case (m, env, TAdd(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2238,6 +2315,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), Some(SNone()))              => None
           case (Some(SInt(_)), Some(SSome(_)))             => None
           case (Some(SInt(_)), Some(SStr(_)))              => None
+          case (Some(SInt(_)), Some(SSeq(_)))              => None
           case (Some(SReal(_)), None)                      => None
           case (Some(SReal(_)), Some(SBool(_)))            => None
           case (Some(SReal(a)), Some(SInt(b))) =>
@@ -2251,6 +2329,7 @@ object SpecRestGenerated {
           case (Some(SReal(_)), Some(SNone()))              => None
           case (Some(SReal(_)), Some(SSome(_)))             => None
           case (Some(SReal(_)), Some(SStr(_)))              => None
+          case (Some(SReal(_)), Some(SSeq(_)))              => None
           case (Some(SEnumElem(_, _)), _)                   => None
           case (Some(SEntityElem(_, _)), _)                 => None
           case (Some(SSet(_)), _)                           => None
@@ -2258,6 +2337,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TSub(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2276,6 +2356,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), Some(SNone()))              => None
           case (Some(SInt(_)), Some(SSome(_)))             => None
           case (Some(SInt(_)), Some(SStr(_)))              => None
+          case (Some(SInt(_)), Some(SSeq(_)))              => None
           case (Some(SReal(_)), None)                      => None
           case (Some(SReal(_)), Some(SBool(_)))            => None
           case (Some(SReal(a)), Some(SInt(b))) =>
@@ -2289,6 +2370,7 @@ object SpecRestGenerated {
           case (Some(SReal(_)), Some(SNone()))              => None
           case (Some(SReal(_)), Some(SSome(_)))             => None
           case (Some(SReal(_)), Some(SStr(_)))              => None
+          case (Some(SReal(_)), Some(SSeq(_)))              => None
           case (Some(SEnumElem(_, _)), _)                   => None
           case (Some(SEntityElem(_, _)), _)                 => None
           case (Some(SSet(_)), _)                           => None
@@ -2296,6 +2378,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TMul(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2314,6 +2397,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), Some(SNone()))              => None
           case (Some(SInt(_)), Some(SSome(_)))             => None
           case (Some(SInt(_)), Some(SStr(_)))              => None
+          case (Some(SInt(_)), Some(SSeq(_)))              => None
           case (Some(SReal(_)), None)                      => None
           case (Some(SReal(_)), Some(SBool(_)))            => None
           case (Some(SReal(a)), Some(SInt(b))) =>
@@ -2327,6 +2411,7 @@ object SpecRestGenerated {
           case (Some(SReal(_)), Some(SNone()))              => None
           case (Some(SReal(_)), Some(SSome(_)))             => None
           case (Some(SReal(_)), Some(SStr(_)))              => None
+          case (Some(SReal(_)), Some(SSeq(_)))              => None
           case (Some(SEnumElem(_, _)), _)                   => None
           case (Some(SEntityElem(_, _)), _)                 => None
           case (Some(SSet(_)), _)                           => None
@@ -2334,6 +2419,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TDiv(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2358,6 +2444,7 @@ object SpecRestGenerated {
           case (Some(SInt(_)), Some(SNone()))              => None
           case (Some(SInt(_)), Some(SSome(_)))             => None
           case (Some(SInt(_)), Some(SStr(_)))              => None
+          case (Some(SInt(_)), Some(SSeq(_)))              => None
           case (Some(SReal(_)), None)                      => None
           case (Some(SReal(_)), Some(SBool(_)))            => None
           case (Some(SReal(a)), Some(SInt(b))) =>
@@ -2377,6 +2464,7 @@ object SpecRestGenerated {
           case (Some(SReal(_)), Some(SNone()))              => None
           case (Some(SReal(_)), Some(SSome(_)))             => None
           case (Some(SReal(_)), Some(SStr(_)))              => None
+          case (Some(SReal(_)), Some(SSeq(_)))              => None
           case (Some(SEnumElem(_, _)), _)                   => None
           case (Some(SEntityElem(_, _)), _)                 => None
           case (Some(SSet(_)), _)                           => None
@@ -2384,6 +2472,7 @@ object SpecRestGenerated {
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
           case (Some(SStr(_)), _)                           => None
+          case (Some(SSeq(_)), _)                           => None
         }
       case (m, env, TInDom(rel_name, arg)) =>
         smtEval(m, env, arg) match {
@@ -2442,6 +2531,7 @@ object SpecRestGenerated {
           case (Some(_), Some(SNone()))              => None
           case (Some(_), Some(SSome(_)))             => None
           case (Some(_), Some(SStr(_)))              => None
+          case (Some(_), Some(SSeq(_)))              => None
         }
       case (m, env, TSetMember(elem, set_t)) =>
         (smtEval(m, env, elem), smtEval(m, env, set_t)) match {
@@ -2458,6 +2548,7 @@ object SpecRestGenerated {
           case (Some(_), Some(SNone()))              => None
           case (Some(_), Some(SSome(_)))             => None
           case (Some(_), Some(SStr(_)))              => None
+          case (Some(_), Some(SSeq(_)))              => None
         }
       case (m, env, TSetUnion(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2479,10 +2570,12 @@ object SpecRestGenerated {
           case (Some(SSet(_)), Some(SNone()))              => None
           case (Some(SSet(_)), Some(SSome(_)))             => None
           case (Some(SSet(_)), Some(SStr(_)))              => None
+          case (Some(SSet(_)), Some(SSeq(_)))              => None
           case (Some(SEntityWith(_, _, _)), _)             => None
           case (Some(SNone()), _)                          => None
           case (Some(SSome(_)), _)                         => None
           case (Some(SStr(_)), _)                          => None
+          case (Some(SSeq(_)), _)                          => None
         }
       case (m, env, TSetIntersect(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2504,10 +2597,12 @@ object SpecRestGenerated {
           case (Some(SSet(_)), Some(SNone()))              => None
           case (Some(SSet(_)), Some(SSome(_)))             => None
           case (Some(SSet(_)), Some(SStr(_)))              => None
+          case (Some(SSet(_)), Some(SSeq(_)))              => None
           case (Some(SEntityWith(_, _, _)), _)             => None
           case (Some(SNone()), _)                          => None
           case (Some(SSome(_)), _)                         => None
           case (Some(SStr(_)), _)                          => None
+          case (Some(SSeq(_)), _)                          => None
         }
       case (m, env, TSetDiff(l, r)) =>
         (smtEval(m, env, l), smtEval(m, env, r)) match {
@@ -2529,10 +2624,12 @@ object SpecRestGenerated {
           case (Some(SSet(_)), Some(SNone()))              => None
           case (Some(SSet(_)), Some(SSome(_)))             => None
           case (Some(SSet(_)), Some(SStr(_)))              => None
+          case (Some(SSet(_)), Some(SSeq(_)))              => None
           case (Some(SEntityWith(_, _, _)), _)             => None
           case (Some(SNone()), _)                          => None
           case (Some(SSome(_)), _)                         => None
           case (Some(SStr(_)), _)                          => None
+          case (Some(SSeq(_)), _)                          => None
         }
       case (m, env, TPrime(t)) => smtEval(m, env, t)
       case (m, env, TPre(t))   => smtEval(m, env, t)
@@ -2556,11 +2653,29 @@ object SpecRestGenerated {
           case Some(SNone())              => None
           case Some(SSome(_))             => None
           case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
         }
       case (m, env, TNone()) => Some[smt_val](SNone())
       case (m, env, TSome(t)) =>
         map_option[smt_val, smt_val]((a: smt_val) => SSome(a), smtEval(m, env, t))
-      case (m, env, TStrLit(v)) => Some[smt_val](SStr(v))
+      case (m, env, TStrLit(v))  => Some[smt_val](SStr(v))
+      case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
+      case (m, env, TSeqCons(e, rest)) =>
+        (smtEval(m, env, e), smtEval(m, env, rest)) match {
+          case (None, _)                             => None
+          case (Some(_), None)                       => None
+          case (Some(_), Some(SBool(_)))             => None
+          case (Some(_), Some(SInt(_)))              => None
+          case (Some(_), Some(SReal(_)))             => None
+          case (Some(_), Some(SEnumElem(_, _)))      => None
+          case (Some(_), Some(SEntityElem(_, _)))    => None
+          case (Some(_), Some(SSet(_)))              => None
+          case (Some(_), Some(SEntityWith(_, _, _))) => None
+          case (Some(_), Some(SNone()))              => None
+          case (Some(_), Some(SSome(_)))             => None
+          case (Some(_), Some(SStr(_)))              => None
+          case (Some(v), Some(SSeq(vs)))             => Some[smt_val](SSeq(v :: vs))
+        }
     }
 
   def binOpToTs(x0: bin_op_full): String = x0 match {
@@ -2941,6 +3056,8 @@ object SpecRestGenerated {
     case Prime(NoneE(vb), va)                  => None
     case Prime(SomeE(vb, vc), va)              => None
     case Prime(StrLit(vb, vc), va)             => None
+    case Prime(SeqEmpty(vb), va)               => None
+    case Prime(SeqCons(vb, vc, vd), va)        => None
     case Pre(BoolLit(vb, vc), va)              => None
     case Pre(IntLit(vb, vc), va)               => None
     case Pre(RealLit(vb, vc), va)              => None
@@ -2968,6 +3085,8 @@ object SpecRestGenerated {
     case Pre(NoneE(vb), va)                    => None
     case Pre(SomeE(vb, vc), va)                => None
     case Pre(StrLit(vb, vc), va)               => None
+    case Pre(SeqEmpty(vb), va)                 => None
+    case Pre(SeqCons(vb, vc, vd), va)          => None
     case CardRel(v, va)                        => None
     case IndexRel(v, va, vb)                   => None
     case FieldAccess(v, va, vb)                => None
@@ -2980,6 +3099,8 @@ object SpecRestGenerated {
     case NoneE(v)                              => None
     case SomeE(v, va)                          => None
     case StrLit(v, va)                         => None
+    case SeqEmpty(v)                           => None
+    case SeqCons(v, va, vb)                    => None
   }
 
   def one_rat: rat = Frct((one_inta, one_inta))
@@ -3056,14 +3177,14 @@ object SpecRestGenerated {
   }
 
   def lower_with_assigns(
-      wi: List[String],
+      wf: List[String],
       x1: List[field_assign_full],
       base: expr,
-      wj: Option[span_t]
+      wg: Option[span_t]
   ): Option[expr] =
-    (wi, x1, base, wj) match {
-      case (wi, Nil, base, wj) => Some[expr](base)
-      case (enums, FieldAssignFull(fld, v, wk) :: rest, base, sp) =>
+    (wf, x1, base, wg) match {
+      case (wf, Nil, base, wg) => Some[expr](base)
+      case (enums, FieldAssignFull(fld, v, wh) :: rest, base, sp) =>
         lower(enums, v) match {
           case None => None
           case Some(va) =>
@@ -3071,14 +3192,25 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSetList(wh: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (wh, x1, sp) match {
-      case (wh, Nil, sp) => Some[expr](SetEmpty(sp))
+  def lowerSetList(we: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (we, x1, sp) match {
+      case (we, Nil, sp) => Some[expr](SetEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSetList(enums, rest, sp)) match {
           case (None, _)           => None
           case (Some(_), None)     => None
           case (Some(ea), Some(s)) => Some[expr](SetInsert(ea, s, sp))
+        }
+    }
+
+  def lowerSeqList(wi: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (wi, x1, sp) match {
+      case (wi, Nil, sp) => Some[expr](SeqEmpty(sp))
+      case (enums, e :: rest, sp) =>
+        (lower(enums, e), lowerSeqList(enums, rest, sp)) match {
+          case (None, _)           => None
+          case (Some(_), None)     => None
+          case (Some(ea), Some(s)) => Some[expr](SeqCons(ea, s, sp))
         }
     }
 
@@ -3094,10 +3226,9 @@ object SpecRestGenerated {
     case (ve, CallF(vf, vg, vh))                 => None
     case (vi, ConstructorF(vj, vk, vl))          => None
     case (vm, MapLiteralF(vn, vo))               => None
-    case (vp, SeqLiteralF(vq, vr))               => None
-    case (vs, SetComprehensionF(vt, vu, vv, vw)) => None
-    case (vx, TheF(vy, vz, wa, wb))              => None
-    case (wc, MatchesF(wd, we, wf))              => None
+    case (vp, SetComprehensionF(vq, vr, vs, vt)) => None
+    case (vu, TheF(vv, vw, vx, vy))              => None
+    case (vz, MatchesF(wa, wb, wc))              => None
     case (enums, QuantifierF(k, bs, body, sp)) =>
       lower(enums, body) match {
         case None => None
@@ -3621,7 +3752,7 @@ object SpecRestGenerated {
         case (Some(_), None)     => None
         case (Some(va), Some(b)) => Some[expr](LetIn(x, va, b, sp))
       }
-    case (wg, EnumAccessF(base, mem, sp)) =>
+    case (wd, EnumAccessF(base, mem, sp)) =>
       base match {
         case BinaryOpF(_, _, _, _)         => None
         case UnaryOpF(_, _, _)             => None
@@ -3673,6 +3804,7 @@ object SpecRestGenerated {
         case Some(basea) => lower_with_assigns(enums, updates, basea, sp)
       }
     case (enums, SetLiteralF(elems, sp)) => lowerSetList(enums, elems, sp)
+    case (enums, SeqLiteralF(elems, sp)) => lowerSeqList(enums, elems, sp)
     case (enums, IfF(c, a, b, sp)) =>
       (lower(enums, c), (lower(enums, a), lower(enums, b))) match {
         case (None, _)                        => None
@@ -3735,6 +3867,7 @@ object SpecRestGenerated {
       case (uv, VNone(), ux)      => None
       case (uv, VSome(v), ux)     => None
       case (uv, VStr(v), ux)      => None
+      case (uv, VSeq(v), ux)      => None
     }
 
   def sch_enums[A](x0: schema_ext[A]): List[enum_decl_ext[Unit]] = x0 match {
@@ -3826,6 +3959,7 @@ object SpecRestGenerated {
       case (IntersectOp(), Some(VNone()), uw)                 => None
       case (IntersectOp(), Some(VSome(va)), uw)               => None
       case (IntersectOp(), Some(VStr(va)), uw)                => None
+      case (IntersectOp(), Some(VSeq(va)), uw)                => None
       case (IntersectOp(), uv, None)                          => None
       case (IntersectOp(), uv, Some(VBool(va)))               => None
       case (IntersectOp(), uv, Some(VInt(va)))                => None
@@ -3836,6 +3970,7 @@ object SpecRestGenerated {
       case (IntersectOp(), uv, Some(VNone()))                 => None
       case (IntersectOp(), uv, Some(VSome(va)))               => None
       case (IntersectOp(), uv, Some(VStr(va)))                => None
+      case (IntersectOp(), uv, Some(VSeq(va)))                => None
       case (DiffOp(), None, uw)                               => None
       case (DiffOp(), Some(VBool(va)), uw)                    => None
       case (DiffOp(), Some(VInt(va)), uw)                     => None
@@ -3846,6 +3981,7 @@ object SpecRestGenerated {
       case (DiffOp(), Some(VNone()), uw)                      => None
       case (DiffOp(), Some(VSome(va)), uw)                    => None
       case (DiffOp(), Some(VStr(va)), uw)                     => None
+      case (DiffOp(), Some(VSeq(va)), uw)                     => None
       case (DiffOp(), uv, None)                               => None
       case (DiffOp(), uv, Some(VBool(va)))                    => None
       case (DiffOp(), uv, Some(VInt(va)))                     => None
@@ -3856,6 +3992,7 @@ object SpecRestGenerated {
       case (DiffOp(), uv, Some(VNone()))                      => None
       case (DiffOp(), uv, Some(VSome(va)))                    => None
       case (DiffOp(), uv, Some(VStr(va)))                     => None
+      case (DiffOp(), uv, Some(VSeq(va)))                     => None
       case (uu, None, uw)                                     => None
       case (uu, Some(VBool(va)), uw)                          => None
       case (uu, Some(VInt(va)), uw)                           => None
@@ -3866,6 +4003,7 @@ object SpecRestGenerated {
       case (uu, Some(VNone()), uw)                            => None
       case (uu, Some(VSome(va)), uw)                          => None
       case (uu, Some(VStr(va)), uw)                           => None
+      case (uu, Some(VSeq(va)), uw)                           => None
       case (uu, uv, None)                                     => None
       case (uu, uv, Some(VBool(va)))                          => None
       case (uu, uv, Some(VInt(va)))                           => None
@@ -3876,6 +4014,7 @@ object SpecRestGenerated {
       case (uu, uv, Some(VNone()))                            => None
       case (uu, uv, Some(VSome(va)))                          => None
       case (uu, uv, Some(VStr(va)))                           => None
+      case (uu, uv, Some(VSeq(va)))                           => None
     }
 
   def eval_arith(uu: arith_op, uv: Option[ir_value], uw: Option[ir_value]): Option[ir_value] =
@@ -3935,6 +4074,7 @@ object SpecRestGenerated {
       case (SubOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (SubOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (SubOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (SubOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (SubOp(), Some(VEnum(va, vb)), uw)                        => None
       case (SubOp(), Some(VEntity(va, vb)), uw)                      => None
       case (SubOp(), Some(VSet(va)), uw)                             => None
@@ -3942,6 +4082,7 @@ object SpecRestGenerated {
       case (SubOp(), Some(VNone()), uw)                              => None
       case (SubOp(), Some(VSome(va)), uw)                            => None
       case (SubOp(), Some(VStr(va)), uw)                             => None
+      case (SubOp(), Some(VSeq(va)), uw)                             => None
       case (SubOp(), uv, None)                                       => None
       case (SubOp(), uv, Some(VBool(va)))                            => None
       case (SubOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -3951,6 +4092,7 @@ object SpecRestGenerated {
       case (SubOp(), uv, Some(VNone()))                              => None
       case (SubOp(), uv, Some(VSome(va)))                            => None
       case (SubOp(), uv, Some(VStr(va)))                             => None
+      case (SubOp(), uv, Some(VSeq(va)))                             => None
       case (MulOp(), None, uw)                                       => None
       case (MulOp(), Some(VBool(va)), uw)                            => None
       case (MulOp(), Some(VReal(va)), None)                          => None
@@ -3962,6 +4104,7 @@ object SpecRestGenerated {
       case (MulOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (MulOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (MulOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (MulOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (MulOp(), Some(VEnum(va, vb)), uw)                        => None
       case (MulOp(), Some(VEntity(va, vb)), uw)                      => None
       case (MulOp(), Some(VSet(va)), uw)                             => None
@@ -3969,6 +4112,7 @@ object SpecRestGenerated {
       case (MulOp(), Some(VNone()), uw)                              => None
       case (MulOp(), Some(VSome(va)), uw)                            => None
       case (MulOp(), Some(VStr(va)), uw)                             => None
+      case (MulOp(), Some(VSeq(va)), uw)                             => None
       case (MulOp(), uv, None)                                       => None
       case (MulOp(), uv, Some(VBool(va)))                            => None
       case (MulOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -3978,6 +4122,7 @@ object SpecRestGenerated {
       case (MulOp(), uv, Some(VNone()))                              => None
       case (MulOp(), uv, Some(VSome(va)))                            => None
       case (MulOp(), uv, Some(VStr(va)))                             => None
+      case (MulOp(), uv, Some(VSeq(va)))                             => None
       case (DivOp(), None, uw)                                       => None
       case (DivOp(), Some(VBool(va)), uw)                            => None
       case (DivOp(), Some(VReal(va)), None)                          => None
@@ -3989,6 +4134,7 @@ object SpecRestGenerated {
       case (DivOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (DivOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (DivOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (DivOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (DivOp(), Some(VEnum(va, vb)), uw)                        => None
       case (DivOp(), Some(VEntity(va, vb)), uw)                      => None
       case (DivOp(), Some(VSet(va)), uw)                             => None
@@ -3996,6 +4142,7 @@ object SpecRestGenerated {
       case (DivOp(), Some(VNone()), uw)                              => None
       case (DivOp(), Some(VSome(va)), uw)                            => None
       case (DivOp(), Some(VStr(va)), uw)                             => None
+      case (DivOp(), Some(VSeq(va)), uw)                             => None
       case (DivOp(), uv, None)                                       => None
       case (DivOp(), uv, Some(VBool(va)))                            => None
       case (DivOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -4005,6 +4152,7 @@ object SpecRestGenerated {
       case (DivOp(), uv, Some(VNone()))                              => None
       case (DivOp(), uv, Some(VSome(va)))                            => None
       case (DivOp(), uv, Some(VStr(va)))                             => None
+      case (DivOp(), uv, Some(VSeq(va)))                             => None
       case (uu, None, uw)                                            => None
       case (uu, Some(VBool(va)), uw)                                 => None
       case (uu, Some(VReal(va)), None)                               => None
@@ -4016,6 +4164,7 @@ object SpecRestGenerated {
       case (uu, Some(VReal(va)), Some(VNone()))                      => None
       case (uu, Some(VReal(va)), Some(VSome(vb)))                    => None
       case (uu, Some(VReal(va)), Some(VStr(vb)))                     => None
+      case (uu, Some(VReal(va)), Some(VSeq(vb)))                     => None
       case (uu, Some(VEnum(va, vb)), uw)                             => None
       case (uu, Some(VEntity(va, vb)), uw)                           => None
       case (uu, Some(VSet(va)), uw)                                  => None
@@ -4023,6 +4172,7 @@ object SpecRestGenerated {
       case (uu, Some(VNone()), uw)                                   => None
       case (uu, Some(VSome(va)), uw)                                 => None
       case (uu, Some(VStr(va)), uw)                                  => None
+      case (uu, Some(VSeq(va)), uw)                                  => None
       case (uu, uv, None)                                            => None
       case (uu, uv, Some(VBool(va)))                                 => None
       case (uu, uv, Some(VEnum(va, vb)))                             => None
@@ -4032,6 +4182,7 @@ object SpecRestGenerated {
       case (uu, uv, Some(VNone()))                                   => None
       case (uu, uv, Some(VSome(va)))                                 => None
       case (uu, uv, Some(VStr(va)))                                  => None
+      case (uu, uv, Some(VSeq(va)))                                  => None
     }
 
   def env_lookup(env: List[(String, ir_value)], name: String): Option[ir_value] =
@@ -4058,6 +4209,7 @@ object SpecRestGenerated {
       case (VInt(_), VNone())               => equal_ir_valuea(x, y)
       case (VInt(_), VSome(_))              => equal_ir_valuea(x, y)
       case (VInt(_), VStr(_))               => equal_ir_valuea(x, y)
+      case (VInt(_), VSeq(_))               => equal_ir_valuea(x, y)
       case (VReal(_), VBool(_))             => equal_ir_valuea(x, y)
       case (VReal(a), VInt(b))              => equal_rat(a, of_int(b))
       case (VReal(_), VReal(_))             => equal_ir_valuea(x, y)
@@ -4068,6 +4220,7 @@ object SpecRestGenerated {
       case (VReal(_), VNone())              => equal_ir_valuea(x, y)
       case (VReal(_), VSome(_))             => equal_ir_valuea(x, y)
       case (VReal(_), VStr(_))              => equal_ir_valuea(x, y)
+      case (VReal(_), VSeq(_))              => equal_ir_valuea(x, y)
       case (VEnum(_, _), _)                 => equal_ir_valuea(x, y)
       case (VEntity(_, _), _)               => equal_ir_valuea(x, y)
       case (VSet(_), _)                     => equal_ir_valuea(x, y)
@@ -4075,6 +4228,7 @@ object SpecRestGenerated {
       case (VNone(), _)                     => equal_ir_valuea(x, y)
       case (VSome(_), _)                    => equal_ir_valuea(x, y)
       case (VStr(_), _)                     => equal_ir_valuea(x, y)
+      case (VSeq(_), _)                     => equal_ir_valuea(x, y)
     }
 
   def eval_cmp(uu: cmp_op, uv: Option[ir_value], uw: Option[ir_value]): Option[ir_value] =
@@ -4126,6 +4280,7 @@ object SpecRestGenerated {
       case (LtOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (LtOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (LtOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (LtOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (LtOp(), Some(VEnum(va, vb)), uw)                        => None
       case (LtOp(), Some(VEntity(va, vb)), uw)                      => None
       case (LtOp(), Some(VSet(va)), uw)                             => None
@@ -4133,6 +4288,7 @@ object SpecRestGenerated {
       case (LtOp(), Some(VNone()), uw)                              => None
       case (LtOp(), Some(VSome(va)), uw)                            => None
       case (LtOp(), Some(VStr(va)), uw)                             => None
+      case (LtOp(), Some(VSeq(va)), uw)                             => None
       case (LtOp(), uv, None)                                       => None
       case (LtOp(), uv, Some(VBool(va)))                            => None
       case (LtOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -4142,6 +4298,7 @@ object SpecRestGenerated {
       case (LtOp(), uv, Some(VNone()))                              => None
       case (LtOp(), uv, Some(VSome(va)))                            => None
       case (LtOp(), uv, Some(VStr(va)))                             => None
+      case (LtOp(), uv, Some(VSeq(va)))                             => None
       case (LeOp(), None, uw)                                       => None
       case (LeOp(), Some(VBool(va)), uw)                            => None
       case (LeOp(), Some(VReal(va)), None)                          => None
@@ -4153,6 +4310,7 @@ object SpecRestGenerated {
       case (LeOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (LeOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (LeOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (LeOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (LeOp(), Some(VEnum(va, vb)), uw)                        => None
       case (LeOp(), Some(VEntity(va, vb)), uw)                      => None
       case (LeOp(), Some(VSet(va)), uw)                             => None
@@ -4160,6 +4318,7 @@ object SpecRestGenerated {
       case (LeOp(), Some(VNone()), uw)                              => None
       case (LeOp(), Some(VSome(va)), uw)                            => None
       case (LeOp(), Some(VStr(va)), uw)                             => None
+      case (LeOp(), Some(VSeq(va)), uw)                             => None
       case (LeOp(), uv, None)                                       => None
       case (LeOp(), uv, Some(VBool(va)))                            => None
       case (LeOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -4169,6 +4328,7 @@ object SpecRestGenerated {
       case (LeOp(), uv, Some(VNone()))                              => None
       case (LeOp(), uv, Some(VSome(va)))                            => None
       case (LeOp(), uv, Some(VStr(va)))                             => None
+      case (LeOp(), uv, Some(VSeq(va)))                             => None
       case (GtOp(), None, uw)                                       => None
       case (GtOp(), Some(VBool(va)), uw)                            => None
       case (GtOp(), Some(VReal(va)), None)                          => None
@@ -4180,6 +4340,7 @@ object SpecRestGenerated {
       case (GtOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (GtOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (GtOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (GtOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (GtOp(), Some(VEnum(va, vb)), uw)                        => None
       case (GtOp(), Some(VEntity(va, vb)), uw)                      => None
       case (GtOp(), Some(VSet(va)), uw)                             => None
@@ -4187,6 +4348,7 @@ object SpecRestGenerated {
       case (GtOp(), Some(VNone()), uw)                              => None
       case (GtOp(), Some(VSome(va)), uw)                            => None
       case (GtOp(), Some(VStr(va)), uw)                             => None
+      case (GtOp(), Some(VSeq(va)), uw)                             => None
       case (GtOp(), uv, None)                                       => None
       case (GtOp(), uv, Some(VBool(va)))                            => None
       case (GtOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -4196,6 +4358,7 @@ object SpecRestGenerated {
       case (GtOp(), uv, Some(VNone()))                              => None
       case (GtOp(), uv, Some(VSome(va)))                            => None
       case (GtOp(), uv, Some(VStr(va)))                             => None
+      case (GtOp(), uv, Some(VSeq(va)))                             => None
       case (GeOp(), None, uw)                                       => None
       case (GeOp(), Some(VBool(va)), uw)                            => None
       case (GeOp(), Some(VReal(va)), None)                          => None
@@ -4207,6 +4370,7 @@ object SpecRestGenerated {
       case (GeOp(), Some(VReal(va)), Some(VNone()))                 => None
       case (GeOp(), Some(VReal(va)), Some(VSome(vb)))               => None
       case (GeOp(), Some(VReal(va)), Some(VStr(vb)))                => None
+      case (GeOp(), Some(VReal(va)), Some(VSeq(vb)))                => None
       case (GeOp(), Some(VEnum(va, vb)), uw)                        => None
       case (GeOp(), Some(VEntity(va, vb)), uw)                      => None
       case (GeOp(), Some(VSet(va)), uw)                             => None
@@ -4214,6 +4378,7 @@ object SpecRestGenerated {
       case (GeOp(), Some(VNone()), uw)                              => None
       case (GeOp(), Some(VSome(va)), uw)                            => None
       case (GeOp(), Some(VStr(va)), uw)                             => None
+      case (GeOp(), Some(VSeq(va)), uw)                             => None
       case (GeOp(), uv, None)                                       => None
       case (GeOp(), uv, Some(VBool(va)))                            => None
       case (GeOp(), uv, Some(VEnum(va, vb)))                        => None
@@ -4223,6 +4388,7 @@ object SpecRestGenerated {
       case (GeOp(), uv, Some(VNone()))                              => None
       case (GeOp(), uv, Some(VSome(va)))                            => None
       case (GeOp(), uv, Some(VStr(va)))                             => None
+      case (GeOp(), uv, Some(VSeq(va)))                             => None
       case (uu, None, uw)                                           => None
       case (uu, uv, None)                                           => None
     }
@@ -4254,6 +4420,7 @@ object SpecRestGenerated {
               case Some(VNone())              => None
               case Some(VSome(_))             => None
               case Some(VStr(_))              => None
+              case Some(VSeq(_))              => None
             }
           case Some(VInt(_))              => None
           case Some(VReal(_))             => None
@@ -4264,6 +4431,7 @@ object SpecRestGenerated {
           case Some(VNone())              => None
           case Some(VSome(_))             => None
           case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
         }
     }
 
@@ -4293,6 +4461,7 @@ object SpecRestGenerated {
               case Some(VNone())              => None
               case Some(VSome(_))             => None
               case Some(VStr(_))              => None
+              case Some(VSeq(_))              => None
             }
           case Some(VInt(_))              => None
           case Some(VReal(_))             => None
@@ -4303,6 +4472,7 @@ object SpecRestGenerated {
           case Some(VNone())              => None
           case Some(VSome(_))             => None
           case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
         }
     }
 
@@ -4333,6 +4503,7 @@ object SpecRestGenerated {
           case Some(VNone())              => None
           case Some(VSome(_))             => None
           case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
         }
       case (s, st, env, UnNeg(e, uz)) =>
         eval(s, st, env, e) match {
@@ -4347,6 +4518,7 @@ object SpecRestGenerated {
           case Some(VNone())              => None
           case Some(VSome(_))             => None
           case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
         }
       case (s, st, env, BoolBin(op, l, r, va)) =>
         (eval(s, st, env, l), eval(s, st, env, r)) match {
@@ -4363,6 +4535,7 @@ object SpecRestGenerated {
           case (Some(VBool(_)), Some(VNone()))              => None
           case (Some(VBool(_)), Some(VSome(_)))             => None
           case (Some(VBool(_)), Some(VStr(_)))              => None
+          case (Some(VBool(_)), Some(VSeq(_)))              => None
           case (Some(VInt(_)), _)                           => None
           case (Some(VReal(_)), _)                          => None
           case (Some(VEnum(_, _)), _)                       => None
@@ -4372,6 +4545,7 @@ object SpecRestGenerated {
           case (Some(VNone()), _)                           => None
           case (Some(VSome(_)), _)                          => None
           case (Some(VStr(_)), _)                           => None
+          case (Some(VSeq(_)), _)                           => None
         }
       case (s, st, env, Arith(op, l, r, vb)) =>
         eval_arith(op, eval(s, st, env, l), eval(s, st, env, r))
@@ -4447,6 +4621,7 @@ object SpecRestGenerated {
           case (Some(_), Some(VNone()))              => None
           case (Some(_), Some(VSome(_)))             => None
           case (Some(_), Some(VStr(_)))              => None
+          case (Some(_), Some(VSeq(_)))              => None
         }
       case (s, st, env, SetMember(elem, set_e, vp)) =>
         (eval(s, st, env, elem), eval(s, st, env, set_e)) match {
@@ -4463,6 +4638,7 @@ object SpecRestGenerated {
           case (Some(_), Some(VNone()))              => None
           case (Some(_), Some(VSome(_)))             => None
           case (Some(_), Some(VStr(_)))              => None
+          case (Some(_), Some(VSeq(_)))              => None
         }
       case (s, st, env, SetBin(op, l, r, vq)) =>
         eval_set_bin(op, eval(s, st, env, l), eval(s, st, env, r))
@@ -4486,11 +4662,29 @@ object SpecRestGenerated {
           case Some(VNone())              => None
           case Some(VSome(_))             => None
           case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
         }
       case (s, st, env, NoneE(vt)) => Some[ir_value](VNone())
       case (s, st, env, SomeE(e, vu)) =>
         map_option[ir_value, ir_value]((a: ir_value) => VSome(a), eval(s, st, env, e))
       case (s, st, env, StrLit(v, vv)) => Some[ir_value](VStr(v))
+      case (s, st, env, SeqEmpty(vw))  => Some[ir_value](VSeq(Nil))
+      case (s, st, env, SeqCons(e, rest, vx)) =>
+        (eval(s, st, env, e), eval(s, st, env, rest)) match {
+          case (None, _)                             => None
+          case (Some(_), None)                       => None
+          case (Some(_), Some(VBool(_)))             => None
+          case (Some(_), Some(VInt(_)))              => None
+          case (Some(_), Some(VReal(_)))             => None
+          case (Some(_), Some(VEnum(_, _)))          => None
+          case (Some(_), Some(VEntity(_, _)))        => None
+          case (Some(_), Some(VSet(_)))              => None
+          case (Some(_), Some(VEntityWith(_, _, _))) => None
+          case (Some(_), Some(VNone()))              => None
+          case (Some(_), Some(VSome(_)))             => None
+          case (Some(_), Some(VStr(_)))              => None
+          case (Some(v), Some(VSeq(vs)))             => Some[ir_value](VSeq(v :: vs))
+        }
     }
 
   def map_filter[A, B](f: A => Option[B], x1: List[A]): List[B] = (f, x1) match {
@@ -5644,10 +5838,12 @@ object SpecRestGenerated {
     case SetBin(DiffOp(), l, r, wd) => TSetDiff(translate(l), translate(r))
     case WithRec(base, fld, val_e, we) =>
       TWithRec(translate(base), fld, translate(val_e))
-    case Ite(c, a, b, wf) => TIte(translate(c), translate(a), translate(b))
-    case NoneE(wg)        => TNone()
-    case SomeE(e, wh)     => TSome(translate(e))
-    case StrLit(v, wi)    => TStrLit(v)
+    case Ite(c, a, b, wf)     => TIte(translate(c), translate(a), translate(b))
+    case NoneE(wg)            => TNone()
+    case SomeE(e, wh)         => TSome(translate(e))
+    case StrLit(v, wi)        => TStrLit(v)
+    case SeqEmpty(wj)         => TSeqEmpty()
+    case SeqCons(e, rest, wk) => TSeqCons(translate(e), translate(rest))
   }
 
   def litClass(x0: expr_full): Option[lit_class] = x0 match {
@@ -12726,9 +12922,9 @@ object SpecRestGenerated {
     case (TBool(), TBool())         => true
   }
 
-  def check_value_has_ty_list(wd: tyctx_ext[Unit], x1: List[ir_value], we: ty): Boolean =
-    (wd, x1, we) match {
-      case (wd, Nil, we) => true
+  def check_value_has_ty_list(wf: tyctx_ext[Unit], x1: List[ir_value], wg: ty): Boolean =
+    (wf, x1, wg) match {
+      case (wf, Nil, wg) => true
       case (gamma, v :: vs, t) =>
         check_value_has_ty(gamma, v, t) && check_value_has_ty_list(gamma, vs, t)
     }
@@ -12760,6 +12956,7 @@ object SpecRestGenerated {
       case (gamma, VNone(), vy)                        => false
       case (gamma, VSome(vz), wa)                      => false
       case (gamma, VStr(wb), wc)                       => false
+      case (gamma, VSeq(wd), we)                       => false
     }
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl_full] = x0 match {

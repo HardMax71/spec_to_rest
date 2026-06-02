@@ -13,6 +13,7 @@ datatype (plugins only: code size) ir_value =
   | VNone
   | VSome "ir_value"
   | VStr "String.literal"
+  | VSeq "ir_value list"
 
 type_synonym env = "(String.literal \<times> ir_value) list"
 
@@ -294,6 +295,7 @@ inductive_cases value_has_ty_entity_with_cases [elim!]:
 inductive_cases value_has_ty_none_cases [elim!]: "value_has_ty \<Gamma> VNone t"
 inductive_cases value_has_ty_some_cases [elim!]: "value_has_ty \<Gamma> (VSome v) t"
 inductive_cases value_has_ty_str_cases [elim!]: "value_has_ty \<Gamma> (VStr s) t"
+inductive_cases value_has_ty_seq_cases [elim!]: "value_has_ty \<Gamma> (VSeq vs) t"
 
 lemma value_has_ty_VBool_iff [simp]:
   "value_has_ty \<Gamma> (VBool b) t \<longleftrightarrow> t = TBool"
@@ -377,6 +379,7 @@ where
 | "check_value_has_ty \<Gamma> VNone _ = False"
 | "check_value_has_ty \<Gamma> (VSome _) _ = False"
 | "check_value_has_ty \<Gamma> (VStr _) _ = False"
+| "check_value_has_ty \<Gamma> (VSeq _) _ = False"
 | "check_value_has_ty_list _ [] _ = True"
 | "check_value_has_ty_list \<Gamma> (v # vs) t =
      (check_value_has_ty \<Gamma> v t \<and> check_value_has_ty_list \<Gamma> vs t)"
@@ -1222,6 +1225,11 @@ where
 | "eval s st env (NoneE _)   = Some VNone"
 | "eval s st env (SomeE e _) = map_option VSome (eval s st env e)"
 | "eval s st env (StrLit v _) = Some (VStr v)"
+| "eval s st env (SeqEmpty _) = Some (VSeq [])"
+| "eval s st env (SeqCons e rest _) =
+     (case (eval s st env e, eval s st env rest) of
+        (Some v, Some (VSeq vs)) \<Rightarrow> Some (VSeq (v # vs))
+      | _ \<Rightarrow> None)"
 
 | "eval_forall_enum s st env var en [] body = Some (VBool True)"
 | "eval_forall_enum s st env var en (mem # rest) body =
