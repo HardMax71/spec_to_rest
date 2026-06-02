@@ -21,6 +21,7 @@ fun value_to_smt :: "ir_value \<Rightarrow> smt_val" where
      SEntityWith (value_to_smt base) fld (value_to_smt v)"
 | "value_to_smt VNone            = SNone"
 | "value_to_smt (VSome v)        = SSome (value_to_smt v)"
+| "value_to_smt (VStr s)         = SStr s"
 
 abbreviation value_to_smt_opt :: "ir_value option \<Rightarrow> smt_val option" where
   "value_to_smt_opt \<equiv> map_option value_to_smt"
@@ -138,6 +139,9 @@ next
     case (VSome v')
     thus ?thesis using VSome.IH[of v'] by simp
   qed auto
+next
+  case (VStr s)
+  show ?case by (cases v2) auto
 qed
 
 lemma map_value_to_smt_inj_simp [simp]:
@@ -303,6 +307,10 @@ lemma contains_smt_val_map_SNone [simp]:
 lemma contains_smt_val_map_SSome [simp]:
   "contains_smt_val (map value_to_smt vs) (SSome (value_to_smt v)) = contains_value vs (VSome v)"
   using contains_value_map_value_to_smt[of vs "VSome v"] by simp
+
+lemma contains_smt_val_map_SStr [simp]:
+  "contains_smt_val (map value_to_smt vs) (SStr s) = contains_value vs (VStr s)"
+  using contains_value_map_value_to_smt[of vs "VStr s"] by simp
 
 
 lemma set_union_values_map_value_to_smt:

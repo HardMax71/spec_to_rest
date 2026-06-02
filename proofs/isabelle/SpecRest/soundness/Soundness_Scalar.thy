@@ -189,4 +189,9 @@ proof -
   show ?thesis using ih' by (cases "eval s st env e") simp_all
 qed
 
+lemma soundness_StrLit:
+  "value_to_smt_opt (eval s st env (StrLit v sp))
+     = smtEval (correlate_model s st) (correlate_env env) (translate (StrLit v sp))"
+  by simp
+
 end

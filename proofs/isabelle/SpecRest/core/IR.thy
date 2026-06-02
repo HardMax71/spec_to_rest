@@ -90,6 +90,7 @@ datatype (plugins only: code size) expr =
   | Ite "expr" "expr" "expr" "option_span"
   | NoneE "option_span"
   | SomeE "expr" "option_span"
+  | StrLit "String.literal" "option_span"
 
 text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
   relation name to an arbitrary \<open>expr\<close>, so the operation-side

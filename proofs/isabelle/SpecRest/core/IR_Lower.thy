@@ -34,7 +34,7 @@ where
 | "lower _ (IntLitF n sp)      = Some (IntLit n sp)"
 | "lower _ (IdentifierF x sp)  = Some (Ident x sp)"
 | "lower _ (FloatLitF s sp)    = map_option (\<lambda>r. RealLit r sp) (decimalToRat s)"
-| "lower _ (StringLitF _ _)    = None"
+| "lower _ (StringLitF v sp)   = Some (StrLit v sp)"
 | "lower _ (NoneLitF sp)       = Some (NoneE sp)"
 | "lower _ (LambdaF _ _ _)     = None"
 | "lower _ (CallF _ _ _)       = None"

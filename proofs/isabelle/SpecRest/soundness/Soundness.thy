@@ -79,6 +79,8 @@ next
   case (NoneE sp) show ?case by (rule soundness_NoneE)
 next
   case (SomeE e sp) show ?case using soundness_SomeE[OF SomeE.IH] .
+next
+  case (StrLit v sp) show ?case by (rule soundness_StrLit)
 qed
 
 section \<open>Issue #202 Phase 3 — lower-soundness corollary\<close>

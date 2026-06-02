@@ -18,6 +18,7 @@ datatype (plugins only: code size) smt_val =
   | SEntityWith "smt_val" "String.literal" "smt_val"
   | SNone
   | SSome "smt_val"
+  | SStr "String.literal"
 
 datatype (plugins only: code size) smt_term =
     BLit bool
@@ -55,6 +56,7 @@ datatype (plugins only: code size) smt_term =
   | TIte "smt_term" "smt_term" "smt_term"
   | TNone
   | TSome "smt_term"
+  | TStrLit "String.literal"
 
 record smt_model =
   sm_sort_members :: "(String.literal \<times> String.literal list) list"
@@ -321,6 +323,7 @@ where
       | _ \<Rightarrow> None)"
 | "smtEval m env TNone     = Some SNone"
 | "smtEval m env (TSome t) = map_option SSome (smtEval m env t)"
+| "smtEval m env (TStrLit v) = Some (SStr v)"
 
 | "smtEval_forall_enum m env var sort_name [] body = Some (SBool True)"
 | "smtEval_forall_enum m env var sort_name (mem # rest) body =

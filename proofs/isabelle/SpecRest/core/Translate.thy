@@ -49,5 +49,6 @@ fun translate :: "expr \<Rightarrow> smt_term" where
 | "translate (Ite c a b _)                 = TIte (translate c) (translate a) (translate b)"
 | "translate (NoneE _)                     = TNone"
 | "translate (SomeE e _)                   = TSome (translate e)"
+| "translate (StrLit v _)                  = TStrLit v"
 
 end

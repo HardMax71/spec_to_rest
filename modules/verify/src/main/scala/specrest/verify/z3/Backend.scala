@@ -164,6 +164,7 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
         Z3Sort.key(s),
         optionSortFor(ctx, sortMap, resolveSort(ctx, sortMap, elem))
       )
+    case Z3Sort.Str => ctx.getStringSort
 
 @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 private def optionSortFor(
@@ -284,6 +285,8 @@ private object Backend:
     case Z3Expr.OptSome(value, _) =>
       val v = renderExpr(rctx, value)
       optionSortFor(rctx.ctx, rctx.sortMap, v.getSort).getConstructors()(1).apply(v)
+    case Z3Expr.StrLit(s, _) =>
+      rctx.ctx.mkString(s)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]

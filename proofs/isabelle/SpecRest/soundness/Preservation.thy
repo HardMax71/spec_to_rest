@@ -55,7 +55,7 @@ where
 | "wf_z3 (SetLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (QuantifierF _ bs body _) = (wf_z3_bindings bs \<and> wf_z3 body)"
 | "wf_z3 (FloatLitF s _)           = (decimalToRat s \<noteq> None)"
-| "wf_z3 (StringLitF _ _)          = False"
+| "wf_z3 (StringLitF _ _)          = True"
 | "wf_z3 (NoneLitF _)              = True"
 | "wf_z3 (LambdaF _ _ _)           = False"
 | "wf_z3 (CallF _ _ _)             = False"

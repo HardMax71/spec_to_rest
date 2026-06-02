@@ -20,8 +20,6 @@ private def fail(ctx: TranslateCtx, msg: String): Nothing =
 extension (e: expr_full)
   private def spanOpt: Option[span_t] = spanOf(e)
 
-private val StringSortName = "String"
-
 private enum StateMode derives CanEqual:
   case Pre, Post
 
@@ -611,11 +609,12 @@ object Translator:
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
     case Z3Sort.OptionOf(e) => s"Option_${sortNameOf(e)}"
+    case Z3Sort.Str         => "String"
 
   private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
     primitiveSortOf(name).getOrElse:
       name match
-        case "String" => Z3Sort.Uninterp(StringSortName)
+        case "String" => Z3Sort.Str
         case _ =>
           ctx.entities.get(name).map(_.sort).orElse {
             ctx.enums.get(name).map(_.sort)
@@ -645,7 +644,7 @@ object Translator:
           Z3Expr.RealLit(num, den)
         case None => fail(ctx, s"malformed float literal: '$s'")
     case BoolLitF(v, _)              => Z3Expr.BoolLit(v)
-    case StringLitF(v, _)            => stringLiteralConst(ctx, v)
+    case StringLitF(v, _)            => Z3Expr.StrLit(v)
     case IdentifierF(name, _)        => resolveIdentifier(ctx, name, env)
     case BinaryOpF(op, l, r, _)      => translateBinaryOp(ctx, op, l, r, env)
     case u @ UnaryOpF(_, _, _)       => translateUnaryOp(ctx, u, env)
@@ -1120,7 +1119,7 @@ object Translator:
   ): Z3Expr =
     val arg = translateExpr(ctx, expr.a, env)
     val argSort =
-      inferSort(ctx, expr.a, env, Some(arg)).getOrElse(Z3Sort.Uninterp(StringSortName))
+      inferSort(ctx, expr.a, env, Some(arg)).getOrElse(Z3Sort.Str)
     val baseName = ctx.matchesNameFor(expr.b)
     val funcName = s"${baseName}_${sortNameOf(argSort)}"
     if !ctx.funcs.contains(funcName) then
@@ -1222,12 +1221,6 @@ object Translator:
       case _ =>
         fail(ctx, "enum access base must be an identifier")
 
-  private def stringLiteralConst(ctx: TranslateCtx, value: String): Z3Expr =
-    val name = ctx.stringLitNameFor(value)
-    if !ctx.funcs.contains(name) then
-      ctx.declareFunc(Z3FunctionDecl(name, Nil, Z3Sort.Uninterp(StringSortName)))
-    Z3Expr.App(name, Nil)
-
   private def resolveIdentifier(
       ctx: TranslateCtx,
       name: String,
@@ -1290,7 +1283,7 @@ object Translator:
     case IntLitF(_, _)                     => Some(Z3Sort.Int)
     case FloatLitF(_, _)                   => Some(Z3Sort.Real)
     case BoolLitF(_, _)                    => Some(Z3Sort.Bool)
-    case StringLitF(_, _)                  => Some(Z3Sort.Uninterp(StringSortName))
+    case StringLitF(_, _)                  => Some(Z3Sort.Str)
     case CallF(IdentifierF(name, _), _, _) => Some(callReturnSort(name, ctx))
     case SetLiteralF(elements, _) =>
       elements.iterator.flatMap(e => inferSort(ctx, e, env, None)).nextOption().map(Z3Sort.SetOf(_))
@@ -1327,6 +1320,7 @@ object Translator:
       inferSortOfZ3Expr(ctx, t).orElse(inferSortOfZ3Expr(ctx, e))
     case Z3Expr.OptNone(elemSort, _) => Some(Z3Sort.OptionOf(elemSort))
     case Z3Expr.OptSome(value, _)    => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
+    case Z3Expr.StrLit(_, _)         => Some(Z3Sort.Str)
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -2188,6 +2182,8 @@ object Translator:
         )
       case TSome(t) =>
         Z3Expr.OptSome(encodeFromSmtTerm(ctx, t, env))
+      case TStrLit(s) =>
+        Z3Expr.StrLit(s)
 
   private def encodeNoneEq(
       ctx: TranslateCtx,
