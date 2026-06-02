@@ -14,6 +14,7 @@
   <a href="https://github.com/HardMax71/spec_to_rest/actions/workflows/isabelle-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/HardMax71/spec_to_rest/isabelle-build.yml?branch=main&label=Isabelle%2FHOL" alt="Isabelle/HOL soundness" /></a>
   <a href="https://github.com/HardMax71/spec_to_rest/releases"><img src="https://img.shields.io/github/v/release/HardMax71/spec_to_rest?label=release" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/HardMax71/spec_to_rest" alt="License" /></a>
+  <a href="https://deepwiki.com/HardMax71/spec_to_rest"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" /></a>
 </p>
 
 Given a `.spec` file describing entities, operations, invariants, and preconditions, `spec-to-rest`
