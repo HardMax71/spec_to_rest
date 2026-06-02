@@ -79,8 +79,9 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
     case Z3Sort.Uninterp(_) =>
       val k = Z3Sort.key(sort)
       if !sorts.contains(k) then sorts(k) = sort
-    case Z3Sort.SetOf(elem) => declareSort(elem)
-    case _                  => ()
+    case Z3Sort.SetOf(elem)    => declareSort(elem)
+    case Z3Sort.OptionOf(elem) => declareSort(elem)
+    case _                     => ()
 
   def declareFunc(decl: Z3FunctionDecl): Unit =
     if !funcs.contains(decl.name) then
@@ -595,7 +596,7 @@ object Translator:
 
   private def sortForType(ctx: TranslateCtx, te: type_expr_full): Z3Sort = te match
     case NamedTypeF(n, _)      => sortForNamedType(ctx, n)
-    case OptionTypeF(inner, _) => sortForType(ctx, inner)
+    case OptionTypeF(inner, _) => Z3Sort.OptionOf(sortForType(ctx, inner))
     case SetTypeF(e, _)        => Z3Sort.SetOf(sortForType(ctx, e))
     case SeqTypeF(e, _)        => Z3Sort.Uninterp(s"Seq_${sortNameOf(sortForType(ctx, e))}")
     case MapTypeF(k, v, _) =>
@@ -609,6 +610,7 @@ object Translator:
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
+    case Z3Sort.OptionOf(e) => s"Option_${sortNameOf(e)}"
 
   private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
     primitiveSortOf(name).getOrElse:
@@ -912,6 +914,8 @@ object Translator:
         substituteVar(e, varName, replacement),
         sp
       )
+    case Z3Expr.OptSome(value, sp) =>
+      Z3Expr.OptSome(substituteVar(value, varName, replacement), sp)
     case other => other
 
   private def resolveStateRelationReference(
@@ -1321,6 +1325,8 @@ object Translator:
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
     case Z3Expr.Ite(_, t, e, _) =>
       inferSortOfZ3Expr(ctx, t).orElse(inferSortOfZ3Expr(ctx, e))
+    case Z3Expr.OptNone(elemSort, _) => Some(Z3Sort.OptionOf(elemSort))
+    case Z3Expr.OptSome(value, _)    => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -1981,8 +1987,12 @@ object Translator:
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     term match
-      case BLit(b) => Z3Expr.BoolLit(b)
-      case ILit(n) => Z3Expr.IntLit(n)
+      case TEq(l, TNone())       => encodeNoneEq(ctx, l, env)
+      case TEq(TNone(), r)       => encodeNoneEq(ctx, r, env)
+      case TNot(TEq(l, TNone())) => Z3Expr.Not(encodeNoneEq(ctx, l, env))
+      case TNot(TEq(TNone(), r)) => Z3Expr.Not(encodeNoneEq(ctx, r, env))
+      case BLit(b)               => Z3Expr.BoolLit(b)
+      case ILit(n)               => Z3Expr.IntLit(n)
       case RLit(r) =>
         val (num, den) = quotient_of(r)
         Z3Expr.RealLit(num, den)
@@ -2171,6 +2181,24 @@ object Translator:
           encodeFromSmtTerm(ctx, a, env),
           encodeFromSmtTerm(ctx, b, env)
         )
+      case TNone() =>
+        fail(
+          ctx,
+          "'none' literal requires an optional-typed context (e.g. a comparison against an optional value)"
+        )
+      case TSome(t) =>
+        Z3Expr.OptSome(encodeFromSmtTerm(ctx, t, env))
+
+  private def encodeNoneEq(
+      ctx: TranslateCtx,
+      operand: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val oz = encodeFromSmtTerm(ctx, operand, env)
+    inferSortOfZ3Expr(ctx, oz) match
+      case Some(Z3Sort.OptionOf(elem)) => Z3Expr.Cmp(CmpOp.Eq, oz, Z3Expr.OptNone(elem))
+      case other =>
+        fail(ctx, s"'none' requires an optional-typed operand; got sort $other")
 
   private def collectSetLiteralMembersTerms(term: smt_term): List[smt_term] = term match
     case TSetEmpty()           => Nil

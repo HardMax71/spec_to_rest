@@ -47,3 +47,5 @@ object IrValueDecoder:
           case _ => None
       case Z3Sort.SetOf(_) =>
         None
+      case Z3Sort.OptionOf(_) =>
+        None

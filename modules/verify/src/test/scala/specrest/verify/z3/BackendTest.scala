@@ -235,3 +235,32 @@ class BackendTest extends CatsEffectSuite:
         artifact = emptyArtifact
       )
       runScript(script).map(r => assertEquals(r.status, expected))
+
+  private def optInt: Z3Sort = Z3Sort.OptionOf(Z3Sort.Int)
+
+  List(
+    (
+      "some(5) is distinct from none (sat)",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.OptSome(Z3Expr.IntLit(BigInt(5)))),
+        Z3Expr.Not(Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.OptNone(Z3Sort.Int)))
+      ),
+      CheckStatus.Sat
+    ),
+    (
+      "x = none and x = some(5) is unsat",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.OptNone(Z3Sort.Int)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.OptSome(Z3Expr.IntLit(BigInt(5))))
+      ),
+      CheckStatus.Unsat
+    )
+  ).foreach: (name, assertions, expected) =>
+    test(s"option datatype renders and solves: $name"):
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, optInt)),
+        assertions = assertions,
+        artifact = emptyArtifact
+      )
+      runScript(script).map(r => assertEquals(r.status, expected))
