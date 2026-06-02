@@ -189,4 +189,50 @@ proof -
   qed
 qed
 
+lemma soundness_MapEmpty:
+  "value_to_smt_opt (eval s st env (MapEmpty sp))
+     = smtEval (correlate_model s st) (correlate_env env) (translate (MapEmpty sp))"
+  by simp
+
+lemma soundness_MapCons:
+  assumes ihk: "value_to_smt_opt (eval s st env k)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate k)"
+      and ihv: "value_to_smt_opt (eval s st env v)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate v)"
+      and ihr: "value_to_smt_opt (eval s st env rest)
+                  = smtEval (correlate_model s st) (correlate_env env) (translate rest)"
+  shows "value_to_smt_opt (eval s st env (MapCons k v rest sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (MapCons k v rest sp))"
+proof -
+  have ihk': "smtEval (correlate_model s st) (correlate_env env) (translate k)
+                = value_to_smt_opt (eval s st env k)" using ihk by simp
+  have ihv': "smtEval (correlate_model s st) (correlate_env env) (translate v)
+                = value_to_smt_opt (eval s st env v)" using ihv by simp
+  have ihr': "smtEval (correlate_model s st) (correlate_env env) (translate rest)
+                = value_to_smt_opt (eval s st env rest)" using ihr by simp
+  show ?thesis
+  proof (cases "eval s st env k")
+    case None thus ?thesis using ihk' by simp
+  next
+    case (Some kv)
+    show ?thesis
+    proof (cases "eval s st env v")
+      case None thus ?thesis using ihk' ihv' \<open>eval s st env k = Some kv\<close> by simp
+    next
+      case (Some vv)
+      show ?thesis
+      proof (cases "eval s st env rest")
+        case None
+        thus ?thesis using ihk' ihv' ihr'
+            \<open>eval s st env k = Some kv\<close> \<open>eval s st env v = Some vv\<close> by simp
+      next
+        case (Some mv)
+        thus ?thesis using ihk' ihv' ihr'
+            \<open>eval s st env k = Some kv\<close> \<open>eval s st env v = Some vv\<close>
+          by (cases mv) simp_all
+      qed
+    qed
+  qed
+qed
+
 end

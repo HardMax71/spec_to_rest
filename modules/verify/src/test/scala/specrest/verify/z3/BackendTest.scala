@@ -321,3 +321,37 @@ class BackendTest extends CatsEffectSuite:
         artifact = emptyArtifact
       )
       runScript(script).map(r => assertEquals(r.status, expected))
+
+  private def mapLit(kvs: (Int, Int)*): Z3Expr =
+    Z3Expr.MapLit(
+      Z3Sort.Int,
+      Z3Sort.Int,
+      kvs.toList.map { case (k, v) => (Z3Expr.IntLit(BigInt(k)), Z3Expr.IntLit(BigInt(v))) }
+    )
+
+  List(
+    (
+      "m = {1->10,2->20} twice is sat",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("m", Nil), mapLit(1 -> 10, 2 -> 20)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("m", Nil), mapLit(1 -> 10, 2 -> 20))
+      ),
+      CheckStatus.Sat
+    ),
+    (
+      "m = {1->10} and m = {2->20} is unsat (distinct maps)",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("m", Nil), mapLit(1 -> 10)),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("m", Nil), mapLit(2 -> 20))
+      ),
+      CheckStatus.Unsat
+    )
+  ).foreach: (name, assertions, expected) =>
+    test(s"map theory renders and solves: $name"):
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("m", Nil, Z3Sort.MapOf(Z3Sort.Int, Z3Sort.Int))),
+        assertions = assertions,
+        artifact = emptyArtifact
+      )
+      runScript(script).map(r => assertEquals(r.status, expected))

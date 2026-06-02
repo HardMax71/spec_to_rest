@@ -32,6 +32,7 @@ fun rel_ref_shape :: "expr_full \<Rightarrow> bool" where
 fun wf_z3 :: "expr_full \<Rightarrow> bool"
 and wf_z3_list :: "expr_full list \<Rightarrow> bool"
 and wf_z3_fields :: "field_assign_full list \<Rightarrow> bool"
+and wf_z3_entries :: "map_entry_full list \<Rightarrow> bool"
 where
   "wf_z3 (BoolLitF _ _)            = True"
 | "wf_z3 (IntLitF _ _)             = True"
@@ -60,7 +61,7 @@ where
 | "wf_z3 (LambdaF _ _ _)           = False"
 | "wf_z3 (CallF _ _ _)             = False"
 | "wf_z3 (ConstructorF _ _ _)      = False"
-| "wf_z3 (MapLiteralF _ _)         = False"
+| "wf_z3 (MapLiteralF entries _)   = wf_z3_entries entries"
 | "wf_z3 (SeqLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (SetComprehensionF _ _ _ _) = False"
 | "wf_z3 (SomeWrapF e _)           = wf_z3 e"
@@ -71,6 +72,8 @@ where
 | "wf_z3_list (e # rest)           = (wf_z3 e \<and> wf_z3_list rest)"
 | "wf_z3_fields []                 = True"
 | "wf_z3_fields (FieldAssignFull _ v _ # rest) = (wf_z3 v \<and> wf_z3_fields rest)"
+| "wf_z3_entries []                = True"
+| "wf_z3_entries (MapEntryFull k v _ # rest) = (wf_z3 k \<and> wf_z3 v \<and> wf_z3_entries rest)"
 
 lemma wf_z3_fields_iff:
   "wf_z3_fields updates
@@ -228,6 +231,30 @@ proof (induction xs)
   show ?case using Cons by (auto split: option.splits)
 qed simp
 
+lemma lowerMapEntries_wf_some:
+  assumes "\<And>k v esp. MapEntryFull k v esp \<in> set entries
+             \<Longrightarrow> (wf_z3 k \<longrightarrow> lower enums k \<noteq> None) \<and> (wf_z3 v \<longrightarrow> lower enums v \<noteq> None)"
+      and "wf_z3_entries entries"
+  shows "lowerMapEntries enums entries sp \<noteq> None"
+  using assms
+proof (induction entries)
+  case (Cons e es)
+  obtain k v esp where e_eq: "e = MapEntryFull k v esp" by (cases e)
+  have hk: "wf_z3 k \<longrightarrow> lower enums k \<noteq> None"
+   and hv: "wf_z3 v \<longrightarrow> lower enums v \<noteq> None"
+    using Cons.prems(1)[of k v esp] e_eq by simp_all
+  have tl: "\<And>k v esp. MapEntryFull k v esp \<in> set es \<Longrightarrow>
+              (wf_z3 k \<longrightarrow> lower enums k \<noteq> None) \<and> (wf_z3 v \<longrightarrow> lower enums v \<noteq> None)"
+  proof -
+    fix k v esp assume "MapEntryFull k v esp \<in> set es"
+    hence "MapEntryFull k v esp \<in> set (e # es)" by simp
+    thus "(wf_z3 k \<longrightarrow> lower enums k \<noteq> None) \<and> (wf_z3 v \<longrightarrow> lower enums v \<noteq> None)"
+      using Cons.prems(1) by blast
+  qed
+  from Cons.IH[OF tl] have ih: "wf_z3_entries es \<Longrightarrow> lowerMapEntries enums es sp \<noteq> None" .
+  show ?case using e_eq hk hv ih Cons.prems(2) by (auto split: option.splits)
+qed simp
+
 lemma lower_with_assigns_wf_some:
   assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
              \<Longrightarrow> wf_z3 v \<Longrightarrow> lower enums v \<noteq> None"
@@ -349,6 +376,25 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSeqList enums elems s \<noteq> None"
       by (rule lowerSeqList_wf_some[OF pe wl])
     thus ?thesis unfolding SeqLiteralF by simp
+  next
+    case (MapLiteralF entries s)
+    have pe: "\<And>k v esp. MapEntryFull k v esp \<in> set entries
+                \<Longrightarrow> (wf_z3 k \<longrightarrow> lower enums k \<noteq> None) \<and> (wf_z3 v \<longrightarrow> lower enums v \<noteq> None)"
+    proof -
+      fix k v esp assume m: "MapEntryFull k v esp \<in> set entries"
+      have "size (MapEntryFull k v esp) \<le> size_list size entries"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using MapLiteralF by simp
+      finally have lt: "size (MapEntryFull k v esp) < size e" .
+      have "size k < size e" and "size v < size e" using lt by simp_all
+      thus "(wf_z3 k \<longrightarrow> lower enums k \<noteq> None) \<and> (wf_z3 v \<longrightarrow> lower enums v \<noteq> None)"
+        using sub by blast
+    qed
+    have wl: "wf_z3_entries entries"
+      using less.prems MapLiteralF by simp
+    have "lowerMapEntries enums entries s \<noteq> None"
+      by (rule lowerMapEntries_wf_some[OF pe wl])
+    thus ?thesis unfolding MapLiteralF by simp
   next
     case (IfF c a b s)
     have hc: "wf_z3 c \<Longrightarrow> lower enums c \<noteq> None"

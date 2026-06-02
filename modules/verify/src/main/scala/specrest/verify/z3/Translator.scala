@@ -598,7 +598,7 @@ object Translator:
     case SetTypeF(e, _)        => Z3Sort.SetOf(sortForType(ctx, e))
     case SeqTypeF(e, _)        => Z3Sort.SeqOf(sortForType(ctx, e))
     case MapTypeF(k, v, _) =>
-      Z3Sort.Uninterp(s"Map_${sortNameOf(sortForType(ctx, k))}_${sortNameOf(sortForType(ctx, v))}")
+      Z3Sort.MapOf(sortForType(ctx, k), sortForType(ctx, v))
     case RelationTypeF(f, _, t, _) =>
       Z3Sort.Uninterp(s"Rel_${sortNameOf(sortForType(ctx, f))}_${sortNameOf(sortForType(ctx, t))}")
 
@@ -610,6 +610,7 @@ object Translator:
     case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
     case Z3Sort.OptionOf(e) => s"Option_${sortNameOf(e)}"
     case Z3Sort.SeqOf(e)    => s"Seq_${sortNameOf(e)}"
+    case Z3Sort.MapOf(k, v) => s"Map_${sortNameOf(k)}_${sortNameOf(v)}"
     case Z3Sort.Str         => "String"
 
   private def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
@@ -918,6 +919,15 @@ object Translator:
       Z3Expr.OptSome(substituteVar(value, varName, replacement), sp)
     case Z3Expr.SeqLit(elemSort, members, sp) =>
       Z3Expr.SeqLit(elemSort, members.map(m => substituteVar(m, varName, replacement)), sp)
+    case Z3Expr.MapLit(keySort, valueSort, entries, sp) =>
+      Z3Expr.MapLit(
+        keySort,
+        valueSort,
+        entries.map { case (k, v) =>
+          (substituteVar(k, varName, replacement), substituteVar(v, varName, replacement))
+        },
+        sp
+      )
     case other => other
 
   private def resolveStateRelationReference(
@@ -1325,6 +1335,8 @@ object Translator:
     case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
     case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
+    case Z3Expr.MapLit(keySort, valueSort, _, _) =>
+      Some(Z3Sort.MapOf(keySort, valueSort))
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
@@ -2199,6 +2211,19 @@ object Translator:
               case None     => fail(ctx, "cannot infer sequence element sort")
           case Nil =>
             fail(ctx, "empty sequence literal requires context to infer its element sort")
+      case TMapEmpty() =>
+        fail(ctx, "empty map literal requires context to infer its key/value sorts")
+      case cons @ TMapCons(_, _, _) =>
+        val entries = collectMapEntriesTerms(cons).map { case (k, v) =>
+          (encodeFromSmtTerm(ctx, k, env), encodeFromSmtTerm(ctx, v, env))
+        }
+        entries match
+          case (hk, hv) :: _ =>
+            (inferSortOfZ3Expr(ctx, hk), inferSortOfZ3Expr(ctx, hv)) match
+              case (Some(ks), Some(vs)) => Z3Expr.MapLit(ks, vs, entries)
+              case _                    => fail(ctx, "cannot infer map key/value sorts")
+          case Nil =>
+            fail(ctx, "empty map literal requires context to infer its key/value sorts")
 
   private def encodeNoneEq(
       ctx: TranslateCtx,
@@ -2218,6 +2243,10 @@ object Translator:
 
   private def collectSeqMembersTerms(term: smt_term): List[smt_term] = term match
     case TSeqCons(elem, rest) => elem :: collectSeqMembersTerms(rest)
+    case _                    => Nil
+
+  private def collectMapEntriesTerms(term: smt_term): List[(smt_term, smt_term)] = term match
+    case TMapCons(k, v, rest) => (k, v) :: collectMapEntriesTerms(rest)
     case _                    => Nil
 
   private def encodeSetBinOp(

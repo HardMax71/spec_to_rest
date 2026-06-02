@@ -34,6 +34,7 @@ object SmtLib:
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
     case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
     case Z3Sort.SeqOf(e)    => s"(Seq ${renderSort(e)})"
+    case Z3Sort.MapOf(k, v) => s"(Seq (Pair ${renderSort(k)} ${renderSort(v)}))"
     case Z3Sort.Str         => "String"
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
@@ -101,6 +102,11 @@ object SmtLib:
       members.foldLeft(s"(as seq.empty (Seq ${renderSort(elemSort)}))")((acc, m) =>
         s"(seq.++ $acc (seq.unit ${renderExpr(m)}))"
       )
+    case Z3Expr.MapLit(keySort, valueSort, entries, _) =>
+      val empty = s"(as seq.empty (Seq (Pair ${renderSort(keySort)} ${renderSort(valueSort)})))"
+      entries.foldLeft(empty) { case (acc, (k, v)) =>
+        s"(seq.++ $acc (seq.unit (mkPair ${renderExpr(k)} ${renderExpr(v)})))"
+      }
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"

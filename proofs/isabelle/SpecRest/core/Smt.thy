@@ -20,6 +20,7 @@ datatype (plugins only: code size) smt_val =
   | SSome "smt_val"
   | SStr "String.literal"
   | SSeq "smt_val list"
+  | SMap "(smt_val \<times> smt_val) list"
 
 datatype (plugins only: code size) smt_term =
     BLit bool
@@ -60,6 +61,8 @@ datatype (plugins only: code size) smt_term =
   | TStrLit "String.literal"
   | TSeqEmpty
   | TSeqCons "smt_term" "smt_term"
+  | TMapEmpty
+  | TMapCons "smt_term" "smt_term" "smt_term"
 
 record smt_model =
   sm_sort_members :: "(String.literal \<times> String.literal list) list"
@@ -331,6 +334,11 @@ where
 | "smtEval m env (TSeqCons e rest) =
      (case (smtEval m env e, smtEval m env rest) of
         (Some v, Some (SSeq vs)) \<Rightarrow> Some (SSeq (v # vs))
+      | _ \<Rightarrow> None)"
+| "smtEval m env TMapEmpty = Some (SMap [])"
+| "smtEval m env (TMapCons k v rest) =
+     (case (smtEval m env k, smtEval m env v, smtEval m env rest) of
+        (Some kv, Some vv, Some (SMap ps)) \<Rightarrow> Some (SMap ((kv, vv) # ps))
       | _ \<Rightarrow> None)"
 
 | "smtEval_forall_enum m env var sort_name [] body = Some (SBool True)"

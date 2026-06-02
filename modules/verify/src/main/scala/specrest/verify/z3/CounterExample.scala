@@ -136,6 +136,7 @@ object Z3CounterExample:
     case Z3Sort.SetOf(elem) => sortToTy(elem, ctx).map(TSet.apply)
     case Z3Sort.OptionOf(_) => None
     case Z3Sort.SeqOf(_)    => None
+    case Z3Sort.MapOf(_, _) => None
     case Z3Sort.Str         => None
 
   private def validateType(

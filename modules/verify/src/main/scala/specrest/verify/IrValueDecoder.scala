@@ -51,6 +51,8 @@ object IrValueDecoder:
         None
       case Z3Sort.SeqOf(_) =>
         None
+      case Z3Sort.MapOf(_, _) =>
+        None
       case Z3Sort.Str =>
         if raw.length >= 2 && raw.startsWith("\"") && raw.endsWith("\"") then
           Some(VStr(raw.substring(1, raw.length - 1)))
