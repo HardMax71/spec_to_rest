@@ -105,11 +105,15 @@ text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from
   in both \<open>eval\<close> and \<open>smtEval\<close>, preserving symmetry for the soundness
   theorem.\<close>
 
+fun identName :: "expr \<Rightarrow> String.literal option" where
+  "identName (Ident rel _) = Some rel"
+| "identName _ = None"
+
 fun peel_relation_ref :: "expr \<Rightarrow> String.literal option" where
-  "peel_relation_ref (Ident rel _)             = Some rel"
-| "peel_relation_ref (Pre (Ident rel _) _)     = Some rel"
-| "peel_relation_ref (Prime (Ident rel _) _)   = Some rel"
-| "peel_relation_ref _                          = None"
+  "peel_relation_ref (Ident rel _) = Some rel"
+| "peel_relation_ref (Pre b _)     = identName b"
+| "peel_relation_ref (Prime b _)   = identName b"
+| "peel_relation_ref _             = None"
 
 record field_decl =
   fd_name :: "String.literal"

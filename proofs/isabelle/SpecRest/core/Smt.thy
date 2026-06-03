@@ -135,11 +135,15 @@ text \<open>Issue #210 (M_L.4.l): mirrors \<open>peel_relation_ref\<close> on th
   TVar\<close>) lets \<open>smtEval\<close> dispatch lookups to the correct relation name.
   Other shapes return \<open>None\<close>, mirroring \<open>eval\<close>'s gating.\<close>
 
+fun relRefVarName :: "smt_term \<Rightarrow> String.literal option" where
+  "relRefVarName (TVar rel) = Some rel"
+| "relRefVarName _ = None"
+
 fun peelSmtRelationRef :: "smt_term \<Rightarrow> String.literal option" where
-  "peelSmtRelationRef (TVar rel)            = Some rel"
-| "peelSmtRelationRef (TPre (TVar rel))     = Some rel"
-| "peelSmtRelationRef (TPrime (TVar rel))   = Some rel"
-| "peelSmtRelationRef _                      = None"
+  "peelSmtRelationRef (TVar rel)   = Some rel"
+| "peelSmtRelationRef (TPre t)     = relRefVarName t"
+| "peelSmtRelationRef (TPrime t)   = relRefVarName t"
+| "peelSmtRelationRef _            = None"
 
 type_synonym smt_env = "(String.literal \<times> smt_val) list"
 
