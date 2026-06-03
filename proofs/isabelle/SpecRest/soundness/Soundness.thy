@@ -234,9 +234,6 @@ proof -
   next
     case BNotIn
     thus ?thesis by (rule inout[OF disjI2])
-  next
-    case BSubset
-    thus ?thesis by simp
   qed (use l r d in \<open>auto split: option.splits\<close>)
 qed
 

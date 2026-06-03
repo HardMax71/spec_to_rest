@@ -3783,7 +3783,13 @@ object SpecRestGenerated {
             case IdentifierF(rel, _) =>
               map_option[expr, expr]((la: expr) => UnNot(Member(la, rel, sp), sp), lower(enums, l))
           }
-        case BSubset() => None
+        case BSubset() =>
+          (lower(enums, l), lower(enums, r)) match {
+            case (None, _)       => None
+            case (Some(_), None) => None
+            case (Some(la), Some(ra)) =>
+              Some[expr](Cmp(EqOp(), SetBin(DiffOp(), la, ra, sp), SetEmpty(sp), sp))
+          }
         case BUnion() =>
           (lower(enums, l), lower(enums, r)) match {
             case (None, _)       => None

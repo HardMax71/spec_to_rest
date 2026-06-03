@@ -157,7 +157,11 @@ where
                (case (lower enums l, lower enums r) of
                   (Some l', Some r') \<Rightarrow> Some (UnNot (SetMember l' r' sp) sp)
                 | _ \<Rightarrow> None))
-      | BSubset \<Rightarrow> None)"
+      | BSubset \<Rightarrow>
+          (case (lower enums l, lower enums r) of
+             (Some l', Some r') \<Rightarrow>
+               Some (Cmp EqOp (SetBin DiffOp l' r' sp) (SetEmpty sp) sp)
+           | _ \<Rightarrow> None))"
 
 | "lower enums (LetF x v body sp) =
      (case (lower enums v, lower enums body) of
