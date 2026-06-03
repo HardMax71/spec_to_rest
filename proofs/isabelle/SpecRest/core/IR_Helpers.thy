@@ -81,11 +81,18 @@ definition detectKeyExistsInRequires ::
        (map (keyExistsInRequiresOf stateFields) (flattenEnsures requires)))"
 
 fun resolveWithBase :: "expr_full \<Rightarrow> String.literal option" where
-  "resolveWithBase (IdentifierF _ _) = None"
-| "resolveWithBase (IndexF (PreF (IdentifierF n _) _) _ _) = Some n"
-| "resolveWithBase (IndexF (IdentifierF n _) _ _)          = Some n"
-| "resolveWithBase (IndexF base _ _)                       = rootIdentifier base"
-| "resolveWithBase other                                   = rootIdentifier other"
+  "resolveWithBase e =
+     (case e of
+        IdentifierF _ _ \<Rightarrow> None
+      | IndexF base _ _ \<Rightarrow>
+          (case base of
+             PreF inner _ \<Rightarrow>
+               (case inner of
+                  IdentifierF n _ \<Rightarrow> Some n
+                | _ \<Rightarrow> rootIdentifier base)
+           | IdentifierF n _ \<Rightarrow> Some n
+           | _ \<Rightarrow> rootIdentifier base)
+      | _ \<Rightarrow> rootIdentifier e)"
 
 fun fieldAssignName :: "field_assign_full \<Rightarrow> String.literal" where
   "fieldAssignName (FieldAssignFull n _ _) = n"

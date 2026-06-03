@@ -10,7 +10,8 @@ begin
 
 section \<open>Value \<leftrightarrow> SmtVal correlation\<close>
 
-fun value_to_smt :: "ir_value \<Rightarrow> smt_val" where
+function (sequential) value_to_smt :: "ir_value \<Rightarrow> smt_val"
+and value_to_smt_entries :: "(ir_value \<times> ir_value) list \<Rightarrow> (smt_val \<times> smt_val) list" where
   "value_to_smt (VBool b)        = SBool b"
 | "value_to_smt (VInt n)         = SInt n"
 | "value_to_smt (VReal r)        = SReal r"
@@ -22,6 +23,16 @@ fun value_to_smt :: "ir_value \<Rightarrow> smt_val" where
 | "value_to_smt VNone            = SNone"
 | "value_to_smt (VSome v)        = SSome (value_to_smt v)"
 | "value_to_smt (VStr s)         = SStr s"
+| "value_to_smt (VSeq vs)        = SSeq (map value_to_smt vs)"
+| "value_to_smt (VMap ps)        = SMap (value_to_smt_entries ps)"
+| "value_to_smt_entries []            = []"
+| "value_to_smt_entries ((k, v) # ps) = (value_to_smt k, value_to_smt v) # value_to_smt_entries ps"
+  by pat_completeness auto
+termination
+  by (relation "measure (\<lambda>x. case x of
+        Inl v \<Rightarrow> size v
+      | Inr ps \<Rightarrow> size_list (size_prod size size) ps)")
+     (auto dest: size_list_estimation'[OF _ order_refl, where f = size])
 
 abbreviation value_to_smt_opt :: "ir_value option \<Rightarrow> smt_val option" where
   "value_to_smt_opt \<equiv> map_option value_to_smt"
@@ -86,6 +97,53 @@ lemma SReal_eq_value_to_smt [simp]:
   "(SReal r = value_to_smt v) = (v = VReal r)"
   by (cases v) auto
 
+lemma value_to_smt_entries_inj:
+  assumes "\<And>k v. (k, v) \<in> set xs \<Longrightarrow>
+             (\<forall>k'. value_to_smt k = value_to_smt k' \<longrightarrow> k = k')
+             \<and> (\<forall>v'. value_to_smt v = value_to_smt v' \<longrightarrow> v = v')"
+  shows "(value_to_smt_entries xs = value_to_smt_entries ys) = (xs = ys)"
+  using assms
+proof (induction xs arbitrary: ys)
+  case Nil
+  show ?case
+  proof (cases ys)
+    case Nil thus ?thesis by simp
+  next
+    case (Cons q ys')
+    obtain a b where "q = (a, b)" by (cases q)
+    thus ?thesis using \<open>ys = q # ys'\<close> by simp
+  qed
+next
+  case (Cons p xs)
+  obtain k v where p: "p = (k, v)" by (cases p)
+  have inj_kv: "(\<forall>k'. value_to_smt k = value_to_smt k' \<longrightarrow> k = k')
+                \<and> (\<forall>v'. value_to_smt v = value_to_smt v' \<longrightarrow> v = v')"
+    using Cons.prems[of k v] p by simp
+  have tail: "\<And>k' v'. (k', v') \<in> set xs \<Longrightarrow>
+                (\<forall>k''. value_to_smt k' = value_to_smt k'' \<longrightarrow> k' = k'')
+                \<and> (\<forall>v''. value_to_smt v' = value_to_smt v'' \<longrightarrow> v' = v'')"
+  proof -
+    fix k' v' assume "(k', v') \<in> set xs"
+    hence "(k', v') \<in> set (p # xs)" by simp
+    thus "(\<forall>k''. value_to_smt k' = value_to_smt k'' \<longrightarrow> k' = k'')
+          \<and> (\<forall>v''. value_to_smt v' = value_to_smt v'' \<longrightarrow> v' = v'')"
+      using Cons.prems by blast
+  qed
+  show ?case
+  proof (cases ys)
+    case Nil
+    thus ?thesis using p by simp
+  next
+    case (Cons q ys')
+    obtain a b where q: "q = (a, b)" by (cases q)
+    have ih: "(value_to_smt_entries xs = value_to_smt_entries ys') = (xs = ys')"
+      using Cons.IH[OF tail] .
+    from inj_kv have ka: "(value_to_smt k = value_to_smt a) = (k = a)"
+                 and vb: "(value_to_smt v = value_to_smt b) = (v = b)" by blast+
+    show ?thesis using p q \<open>ys = q # ys'\<close> ka vb ih by simp
+  qed
+qed
+
 lemma map_value_to_smt_inj:
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> (\<forall>y. value_to_smt x = value_to_smt y \<longrightarrow> x = y)"
   shows "(map value_to_smt xs = map value_to_smt ys) = (xs = ys)"
@@ -142,6 +200,35 @@ next
 next
   case (VStr s)
   show ?case by (cases v2) auto
+next
+  case (VSeq xs)
+  show ?case
+  proof (cases v2)
+    case (VSeq ys)
+    have "(map value_to_smt xs = map value_to_smt ys) = (xs = ys)"
+    proof (rule map_value_to_smt_inj)
+      fix x assume "x \<in> set xs"
+      thus "\<forall>y. value_to_smt x = value_to_smt y \<longrightarrow> x = y" using VSeq.IH by blast
+    qed
+    thus ?thesis using \<open>v2 = VSeq ys\<close> by simp
+  qed auto
+next
+  case (VMap xs)
+  show ?case
+  proof (cases v2)
+    case (VMap ys)
+    have "(value_to_smt_entries xs = value_to_smt_entries ys) = (xs = ys)"
+    proof (rule value_to_smt_entries_inj)
+      fix k v assume m: "(k, v) \<in> set xs"
+      have "(\<forall>v2. (value_to_smt k = value_to_smt v2) = (k = v2))
+            \<and> (\<forall>v2. (value_to_smt v = value_to_smt v2) = (v = v2))"
+        using VMap.IH[OF m] by simp
+      thus "(\<forall>k'. value_to_smt k = value_to_smt k' \<longrightarrow> k = k')
+            \<and> (\<forall>v'. value_to_smt v = value_to_smt v' \<longrightarrow> v = v')"
+        by blast
+    qed
+    thus ?thesis using \<open>v2 = VMap ys\<close> by simp
+  qed auto
 qed
 
 lemma map_value_to_smt_inj_simp [simp]:
@@ -151,6 +238,32 @@ proof (induction xs arbitrary: ys)
 next
   case (Cons x xs')
   show ?case by (cases ys) (auto simp: Cons.IH)
+qed
+
+lemma value_to_smt_entries_inj_simp [simp]:
+  "(value_to_smt_entries xs = value_to_smt_entries ys) = (xs = ys)"
+proof (induction xs arbitrary: ys)
+  case Nil
+  show ?case
+  proof (cases ys)
+    case Nil thus ?thesis by simp
+  next
+    case (Cons q ys')
+    obtain a b where "q = (a, b)" by (cases q)
+    thus ?thesis using \<open>ys = q # ys'\<close> by simp
+  qed
+next
+  case (Cons p xs')
+  obtain k v where p: "p = (k, v)" by (cases p)
+  show ?case
+  proof (cases ys)
+    case Nil
+    thus ?thesis using p by simp
+  next
+    case (Cons q ys')
+    obtain a b where q: "q = (a, b)" by (cases q)
+    show ?thesis using p q \<open>ys = q # ys'\<close> Cons.IH by simp
+  qed
 qed
 
 section \<open>Correlation lemmas\<close>
@@ -311,6 +424,16 @@ lemma contains_smt_val_map_SSome [simp]:
 lemma contains_smt_val_map_SStr [simp]:
   "contains_smt_val (map value_to_smt vs) (SStr s) = contains_value vs (VStr s)"
   using contains_value_map_value_to_smt[of vs "VStr s"] by simp
+
+lemma contains_smt_val_map_SSeq [simp]:
+  "contains_smt_val (map value_to_smt vs) (SSeq (map value_to_smt xs))
+     = contains_value vs (VSeq xs)"
+  using contains_value_map_value_to_smt[of vs "VSeq xs"] by simp
+
+lemma contains_smt_val_map_SMap [simp]:
+  "contains_smt_val (map value_to_smt vs) (SMap (value_to_smt_entries ps))
+     = contains_value vs (VMap ps)"
+  using contains_value_map_value_to_smt[of vs "VMap ps"] by simp
 
 
 lemma set_union_values_map_value_to_smt:

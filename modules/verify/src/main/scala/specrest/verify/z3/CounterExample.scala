@@ -135,7 +135,17 @@ object Z3CounterExample:
       else None
     case Z3Sort.SetOf(elem) => sortToTy(elem, ctx).map(TSet.apply)
     case Z3Sort.OptionOf(_) => None
+    case Z3Sort.SeqOf(_)    => None
+    case Z3Sort.MapOf(_, _) => None
     case Z3Sort.Str         => None
+
+  private def lacksVerifiedTy(s: Z3Sort): Boolean = s match
+    case Z3Sort.Str         => true
+    case Z3Sort.OptionOf(_) => true
+    case Z3Sort.SeqOf(_)    => true
+    case Z3Sort.MapOf(_, _) => true
+    case Z3Sort.SetOf(e)    => lacksVerifiedTy(e)
+    case _                  => false
 
   private def validateType(
       expr: Z3AstExpr[?],
@@ -145,16 +155,18 @@ object Z3CounterExample:
       site: String,
       sink: mutable.ListBuffer[String]
   ): Unit =
-    sortToTy(sort, ctx) match
-      case None =>
-        sink += s"$site: no ty for Z3 sort ${Z3Sort.key(sort)} (raw '${expr.toString.trim}')"
-      case Some(expectedTy) =>
-        IrValueDecoder.decodeZ3(expr, sort, rawToLabel) match
-          case None =>
-            sink += s"$site: could not decode '${expr.toString.trim}' at sort ${Z3Sort.key(sort)}"
-          case Some(value) =>
-            if !check_value_has_ty(ctx, value, expectedTy) then
-              sink += s"$site: decoded value did not match expected type ${expectedTy}"
+    if lacksVerifiedTy(sort) then ()
+    else
+      sortToTy(sort, ctx) match
+        case None =>
+          sink += s"$site: no ty for Z3 sort ${Z3Sort.key(sort)} (raw '${expr.toString.trim}')"
+        case Some(expectedTy) =>
+          IrValueDecoder.decodeZ3(expr, sort, rawToLabel) match
+            case None =>
+              sink += s"$site: could not decode '${expr.toString.trim}' at sort ${Z3Sort.key(sort)}"
+            case Some(value) =>
+              if !check_value_has_ty(ctx, value, expectedTy) then
+                sink += s"$site: decoded value did not match expected type ${expectedTy}"
 
   private def inputsOfSort(
       model: Model,

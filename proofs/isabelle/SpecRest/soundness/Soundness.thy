@@ -81,6 +81,14 @@ next
   case (SomeE e sp) show ?case using soundness_SomeE[OF SomeE.IH] .
 next
   case (StrLit v sp) show ?case by (rule soundness_StrLit)
+next
+  case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
+next
+  case (SeqCons e rest sp) show ?case using soundness_SeqCons[OF SeqCons.IH(1) SeqCons.IH(2)] .
+next
+  case (MapEmpty sp) show ?case by (rule soundness_MapEmpty)
+next
+  case (MapCons k v rest sp) show ?case using soundness_MapCons[OF MapCons.IH(1) MapCons.IH(2) MapCons.IH(3)] .
 qed
 
 section \<open>Issue #202 Phase 3 — lower-soundness corollary\<close>
@@ -260,6 +268,40 @@ proof (induction xs)
   show ?case using Cons by (auto split: option.splits)
 qed simp
 
+lemma lowerSeqList_ra_none:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
+      and "requiresAlloy_list xs"
+  shows "lowerSeqList enums xs sp = None"
+  using assms
+proof (induction xs)
+  case (Cons a xs)
+  show ?case using Cons by (auto split: option.splits)
+qed simp
+
+lemma lowerMapEntries_ra_none:
+  assumes "\<And>k v esp. MapEntryFull k v esp \<in> set entries
+             \<Longrightarrow> (requiresAlloy k \<longrightarrow> lower enums k = None) \<and> (requiresAlloy v \<longrightarrow> lower enums v = None)"
+      and "requiresAlloy_entries entries"
+  shows "lowerMapEntries enums entries sp = None"
+  using assms
+proof (induction entries)
+  case (Cons e es)
+  obtain k v esp where e_eq: "e = MapEntryFull k v esp" by (cases e)
+  have hk: "requiresAlloy k \<longrightarrow> lower enums k = None"
+   and hv: "requiresAlloy v \<longrightarrow> lower enums v = None"
+    using Cons.prems(1)[of k v esp] e_eq by simp_all
+  have tl: "\<And>k v esp. MapEntryFull k v esp \<in> set es \<Longrightarrow>
+              (requiresAlloy k \<longrightarrow> lower enums k = None) \<and> (requiresAlloy v \<longrightarrow> lower enums v = None)"
+  proof -
+    fix k v esp assume "MapEntryFull k v esp \<in> set es"
+    hence "MapEntryFull k v esp \<in> set (e # es)" by simp
+    thus "(requiresAlloy k \<longrightarrow> lower enums k = None) \<and> (requiresAlloy v \<longrightarrow> lower enums v = None)"
+      using Cons.prems(1) by blast
+  qed
+  from Cons.IH[OF tl] have ih: "requiresAlloy_entries es \<Longrightarrow> lowerMapEntries enums es sp = None" .
+  show ?case using e_eq hk hv ih Cons.prems(2) by (auto split: option.splits)
+qed simp
+
 lemma lower_with_assigns_ra_none:
   assumes "\<And>fld v fsp. FieldAssignFull fld v fsp \<in> set fs
              \<Longrightarrow> requiresAlloy v \<Longrightarrow> lower enums v = None"
@@ -360,6 +402,41 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerSetList enums elems s = None"
       by (rule lowerSetList_ra_none[OF pe rl])
     thus ?thesis unfolding SetLiteralF by simp
+  next
+    case (SeqLiteralF elems s)
+    have pe: "\<And>x. x \<in> set elems \<Longrightarrow> requiresAlloy x \<Longrightarrow> lower enums x = None"
+    proof -
+      fix x assume m: "x \<in> set elems" and rx: "requiresAlloy x"
+      have "size x \<le> size_list size elems"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using SeqLiteralF by simp
+      finally have "size x < size e" .
+      thus "lower enums x = None" using sub rx by blast
+    qed
+    have rl: "requiresAlloy_list elems"
+      using less.prems SeqLiteralF by simp
+    have "lowerSeqList enums elems s = None"
+      by (rule lowerSeqList_ra_none[OF pe rl])
+    thus ?thesis unfolding SeqLiteralF by simp
+  next
+    case (MapLiteralF entries s)
+    have pe: "\<And>k v esp. MapEntryFull k v esp \<in> set entries
+                \<Longrightarrow> (requiresAlloy k \<longrightarrow> lower enums k = None) \<and> (requiresAlloy v \<longrightarrow> lower enums v = None)"
+    proof -
+      fix k v esp assume m: "MapEntryFull k v esp \<in> set entries"
+      have "size (MapEntryFull k v esp) \<le> size_list size entries"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using MapLiteralF by simp
+      finally have lt: "size (MapEntryFull k v esp) < size e" .
+      have "size k < size e" and "size v < size e" using lt by simp_all
+      thus "(requiresAlloy k \<longrightarrow> lower enums k = None) \<and> (requiresAlloy v \<longrightarrow> lower enums v = None)"
+        using sub by blast
+    qed
+    have rl: "requiresAlloy_entries entries"
+      using less.prems MapLiteralF by simp
+    have "lowerMapEntries enums entries s = None"
+      by (rule lowerMapEntries_ra_none[OF pe rl])
+    thus ?thesis unfolding MapLiteralF by simp
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

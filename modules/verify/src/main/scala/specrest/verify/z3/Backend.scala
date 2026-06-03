@@ -13,8 +13,11 @@ import com.microsoft.z3.DatatypeSort
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
+import com.microsoft.z3.SeqExpr
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
+import com.microsoft.z3.Symbol
+import com.microsoft.z3.TupleSort
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.CheckStatus
@@ -143,6 +146,11 @@ private def registerSort(ctx: Context, map: mutable.Map[String, Sort], s: Z3Sort
       registerSort(ctx, map, elem)
     case Z3Sort.OptionOf(elem) =>
       registerSort(ctx, map, elem)
+    case Z3Sort.SeqOf(elem) =>
+      registerSort(ctx, map, elem)
+    case Z3Sort.MapOf(kk, vv) =>
+      registerSort(ctx, map, kk)
+      registerSort(ctx, map, vv)
     case _ => ()
 
 private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3Sort): Sort =
@@ -163,6 +171,21 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
       sortMap.getOrElseUpdate(
         Z3Sort.key(s),
         optionSortFor(ctx, sortMap, resolveSort(ctx, sortMap, elem))
+      )
+    case Z3Sort.SeqOf(elem) =>
+      sortMap.getOrElseUpdate(Z3Sort.key(s), ctx.mkSeqSort(resolveSort(ctx, sortMap, elem)))
+    case Z3Sort.MapOf(kk, vv) =>
+      sortMap.getOrElseUpdate(
+        Z3Sort.key(s), {
+          val entry =
+            mapEntrySortFor(
+              ctx,
+              sortMap,
+              resolveSort(ctx, sortMap, kk),
+              resolveSort(ctx, sortMap, vv)
+            )
+          ctx.mkSeqSort(entry)
+        }
       )
     case Z3Sort.Str => ctx.getStringSort
 
@@ -196,6 +219,23 @@ private def optionSortFor(
       }
     )
     .asInstanceOf[DatatypeSort[?]]
+
+private def mapEntrySortFor(
+    ctx: Context,
+    sortMap: mutable.Map[String, Sort],
+    kElem: Sort,
+    vElem: Sort
+): Sort =
+  val kks = kElem.toString.replaceAll("[^A-Za-z0-9]", "_")
+  val vks = vElem.toString.replaceAll("[^A-Za-z0-9]", "_")
+  sortMap.getOrElseUpdate(
+    s"MapEntry:${kElem.toString}:${vElem.toString}",
+    ctx.mkTupleSort(
+      ctx.mkSymbol(s"MapEntry_${kks}_$vks"),
+      Array[Symbol](ctx.mkSymbol(s"key_${kks}_$vks"), ctx.mkSymbol(s"val_${kks}_$vks")),
+      Array[Sort](kElem, vElem)
+    )
+  )
 
 private def declareFuncs(
     ctx: Context,
@@ -287,6 +327,27 @@ private object Backend:
       optionSortFor(rctx.ctx, rctx.sortMap, v.getSort).getConstructors()(1).apply(v)
     case Z3Expr.StrLit(s, _) =>
       rctx.ctx.mkString(s)
+    case Z3Expr.SeqLit(elemSort, members, _) =>
+      val elemZ   = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
+      val seqSort = rctx.ctx.mkSeqSort(elemZ)
+      val empty   = rctx.ctx.mkEmptySeq(seqSort).asInstanceOf[SeqExpr[Sort]]
+      members.foldLeft[SeqExpr[Sort]](empty): (acc, m) =>
+        val unit =
+          rctx.ctx.mkUnit(renderExpr(rctx, m).asInstanceOf[Z3AstExpr[Sort]]).asInstanceOf[SeqExpr[
+            Sort
+          ]]
+        rctx.ctx.mkConcat(acc, unit)
+    case Z3Expr.MapLit(keySort, valueSort, entries, _) =>
+      val kZ      = resolveSort(rctx.ctx, rctx.sortMap, keySort)
+      val vZ      = resolveSort(rctx.ctx, rctx.sortMap, valueSort)
+      val tup     = mapEntrySortFor(rctx.ctx, rctx.sortMap, kZ, vZ).asInstanceOf[TupleSort]
+      val seqSort = rctx.ctx.mkSeqSort(tup)
+      val empty   = rctx.ctx.mkEmptySeq(seqSort).asInstanceOf[SeqExpr[Sort]]
+      entries.foldLeft[SeqExpr[Sort]](empty): (acc, kv) =>
+        val tupVal = tup.mkDecl().apply(renderExpr(rctx, kv._1), renderExpr(rctx, kv._2))
+        val unit =
+          rctx.ctx.mkUnit(tupVal.asInstanceOf[Z3AstExpr[Sort]]).asInstanceOf[SeqExpr[Sort]]
+        rctx.ctx.mkConcat(acc, unit)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]

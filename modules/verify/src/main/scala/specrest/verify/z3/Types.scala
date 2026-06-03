@@ -9,6 +9,8 @@ enum Z3Sort derives CanEqual:
   case Uninterp(name: String)
   case SetOf(elem: Z3Sort)
   case OptionOf(elem: Z3Sort)
+  case SeqOf(elem: Z3Sort)
+  case MapOf(key: Z3Sort, value: Z3Sort)
   case Str
 
 object Z3Sort:
@@ -26,6 +28,8 @@ object Z3Sort:
     case Bool        => "Bool"
     case SetOf(e)    => s"Set(${key(e)})"
     case OptionOf(e) => s"Option(${key(e)})"
+    case SeqOf(e)    => s"Seq(${key(e)})"
+    case MapOf(k, v) => s"Map(${key(k)},${key(v)})"
     case Str         => "Str"
 
   def eq(a: Z3Sort, b: Z3Sort): Boolean = key(a) == key(b)
@@ -99,6 +103,13 @@ enum Z3Expr derives CanEqual:
   case OptNone(elemSort: Z3Sort, span: Option[span_t] = None)
   case OptSome(value: Z3Expr, span: Option[span_t] = None)
   case StrLit(value: String, span: Option[span_t] = None)
+  case SeqLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[span_t] = None)
+  case MapLit(
+      keySort: Z3Sort,
+      valueSort: Z3Sort,
+      entries: List[(Z3Expr, Z3Expr)],
+      span: Option[span_t] = None
+  )
 
   def spanOpt: Option[span_t] = this match
     case e: Var        => e.span
@@ -121,6 +132,8 @@ enum Z3Expr derives CanEqual:
     case e: OptNone    => e.span
     case e: OptSome    => e.span
     case e: StrLit     => e.span
+    case e: SeqLit     => e.span
+    case e: MapLit     => e.span
 
   def withSpan(s: Option[span_t]): Z3Expr =
     if s.isEmpty then this
@@ -146,6 +159,8 @@ enum Z3Expr derives CanEqual:
         case e: OptNone    => e.copy(span = s)
         case e: OptSome    => e.copy(span = s)
         case e: StrLit     => e.copy(span = s)
+        case e: SeqLit     => e.copy(span = s)
+        case e: MapLit     => e.copy(span = s)
 
 final case class ArtifactEntityField(name: String, sort: Z3Sort, funcName: String)
 final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[ArtifactEntityField])

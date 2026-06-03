@@ -17,6 +17,9 @@ object SmtLib:
     if usesOption(script) then
       lines += "(declare-datatype Option (par (T) ((none) (some (valOf T)))))"
 
+    if usesMap(script) then
+      lines += "(declare-datatype Pair (par (K V) ((mkPair (mapKey K) (mapVal V)))))"
+
     if script.funcs.nonEmpty then lines += ";; funcs"
     for f <- script.funcs do lines += renderFuncDecl(f)
 
@@ -33,6 +36,8 @@ object SmtLib:
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
     case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
+    case Z3Sort.SeqOf(e)    => s"(Seq ${renderSort(e)})"
+    case Z3Sort.MapOf(k, v) => s"(Seq (Pair ${renderSort(k)} ${renderSort(v)}))"
     case Z3Sort.Str         => "String"
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
@@ -42,11 +47,24 @@ object SmtLib:
   private def containsOption(s: Z3Sort): Boolean = s match
     case Z3Sort.OptionOf(_) => true
     case Z3Sort.SetOf(e)    => containsOption(e)
+    case Z3Sort.SeqOf(e)    => containsOption(e)
+    case Z3Sort.MapOf(k, v) => containsOption(k) || containsOption(v)
     case _                  => false
 
   private def usesOption(script: Z3Script): Boolean =
     script.sorts.exists(containsOption) ||
       script.funcs.exists(f => f.argSorts.exists(containsOption) || containsOption(f.resultSort))
+
+  private def containsMap(s: Z3Sort): Boolean = s match
+    case Z3Sort.MapOf(_, _) => true
+    case Z3Sort.SetOf(e)    => containsMap(e)
+    case Z3Sort.SeqOf(e)    => containsMap(e)
+    case Z3Sort.OptionOf(e) => containsMap(e)
+    case _                  => false
+
+  private def usesMap(script: Z3Script): Boolean =
+    script.sorts.exists(containsMap) ||
+      script.funcs.exists(f => f.argSorts.exists(containsMap) || containsMap(f.resultSort))
 
   def renderExpr(e: Z3Expr): String = e match
     case Z3Expr.Var(name, _, _) => name
@@ -96,6 +114,15 @@ object SmtLib:
       s"(some ${renderExpr(value)})"
     case Z3Expr.StrLit(s, _) =>
       "\"" + s.replace("\"", "\"\"") + "\""
+    case Z3Expr.SeqLit(elemSort, members, _) =>
+      members.foldLeft(s"(as seq.empty (Seq ${renderSort(elemSort)}))")((acc, m) =>
+        s"(seq.++ $acc (seq.unit ${renderExpr(m)}))"
+      )
+    case Z3Expr.MapLit(keySort, valueSort, entries, _) =>
+      val empty = s"(as seq.empty (Seq (Pair ${renderSort(keySort)} ${renderSort(valueSort)})))"
+      entries.foldLeft(empty) { case (acc, (k, v)) =>
+        s"(seq.++ $acc (seq.unit (mkPair ${renderExpr(k)} ${renderExpr(v)})))"
+      }
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"

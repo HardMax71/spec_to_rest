@@ -91,6 +91,10 @@ datatype (plugins only: code size) expr =
   | NoneE "option_span"
   | SomeE "expr" "option_span"
   | StrLit "String.literal" "option_span"
+  | SeqEmpty "option_span"
+  | SeqCons "expr" "expr" "option_span"
+  | MapEmpty "option_span"
+  | MapCons "expr" "expr" "expr" "option_span"
 
 text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
   relation name to an arbitrary \<open>expr\<close>, so the operation-side

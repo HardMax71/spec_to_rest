@@ -50,5 +50,9 @@ fun translate :: "expr \<Rightarrow> smt_term" where
 | "translate (NoneE _)                     = TNone"
 | "translate (SomeE e _)                   = TSome (translate e)"
 | "translate (StrLit v _)                  = TStrLit v"
+| "translate (SeqEmpty _)                  = TSeqEmpty"
+| "translate (SeqCons e rest _)            = TSeqCons (translate e) (translate rest)"
+| "translate (MapEmpty _)                  = TMapEmpty"
+| "translate (MapCons k v rest _)          = TMapCons (translate k) (translate v) (translate rest)"
 
 end
