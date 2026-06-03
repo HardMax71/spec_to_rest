@@ -160,7 +160,10 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
         }
       )
     case Z3Sort.OptionOf(elem) =>
-      optionSortFor(ctx, sortMap, resolveSort(ctx, sortMap, elem))
+      sortMap.getOrElseUpdate(
+        Z3Sort.key(s),
+        optionSortFor(ctx, sortMap, resolveSort(ctx, sortMap, elem))
+      )
 
 @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 private def optionSortFor(
