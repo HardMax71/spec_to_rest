@@ -264,3 +264,30 @@ class BackendTest extends CatsEffectSuite:
         artifact = emptyArtifact
       )
       runScript(script).map(r => assertEquals(r.status, expected))
+
+  List(
+    (
+      "x = \"a\" and x = \"b\" is unsat (distinct literals)",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.StrLit("a")),
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.StrLit("b"))
+      ),
+      CheckStatus.Unsat
+    ),
+    (
+      "x = \"a\" and x != \"b\" is sat",
+      List(
+        Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.StrLit("a")),
+        Z3Expr.Not(Z3Expr.Cmp(CmpOp.Eq, Z3Expr.App("x", Nil), Z3Expr.StrLit("b")))
+      ),
+      CheckStatus.Sat
+    )
+  ).foreach: (name, assertions, expected) =>
+    test(s"string theory renders and solves: $name"):
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = List(Z3FunctionDecl("x", Nil, Z3Sort.Str)),
+        assertions = assertions,
+        artifact = emptyArtifact
+      )
+      runScript(script).map(r => assertEquals(r.status, expected))

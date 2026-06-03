@@ -205,3 +205,10 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
       assert(out.contains("declare-datatype Option"), s"expected Option datatype decl; got:\n$out")
       assert(out.contains("none"), s"expected 'none'; got:\n$out")
       assert(out.contains("(some "), s"expected '(some ...)'; got:\n$out")
+
+  test("string literals use the native String theory (no uninterpreted sort)"):
+    smtOf(
+      specWithInvariant("name: String", "name = \"active\"")
+    ).map: out =>
+      assert(out.contains("\"active\""), s"expected native string literal; got:\n$out")
+      assert(!out.contains("declare-sort String"), s"String should be native; got:\n$out")

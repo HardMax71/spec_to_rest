@@ -3,7 +3,6 @@
 (set-option :timeout 30000)
 ;; sorts
 (declare-sort Status 0)
-(declare-sort String 0)
 (declare-sort Widget 0)
 ;; funcs
 (declare-fun Status_ACTIVE () Status)

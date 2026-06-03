@@ -33,6 +33,7 @@ object SmtLib:
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
     case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
+    case Z3Sort.Str         => "String"
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
     val args = f.argSorts.map(renderSort).mkString(" ")
@@ -93,6 +94,8 @@ object SmtLib:
       s"(as none (Option ${renderSort(elemSort)}))"
     case Z3Expr.OptSome(value, _) =>
       s"(some ${renderExpr(value)})"
+    case Z3Expr.StrLit(s, _) =>
+      "\"" + s.replace("\"", "\"\"") + "\""
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"
