@@ -233,6 +233,12 @@ private object Backend:
         case SetOpKind.Intersect => rctx.ctx.mkSetIntersection(lhs, rhs)
         case SetOpKind.Diff      => rctx.ctx.mkSetDifference(lhs, rhs)
         case SetOpKind.Subset    => rctx.ctx.mkSetSubset(lhs, rhs)
+    case Z3Expr.Ite(c, t, e, _) =>
+      rctx.ctx.mkITE(
+        renderBool(rctx, c),
+        renderExpr(rctx, t).asInstanceOf[Z3AstExpr[Sort]],
+        renderExpr(rctx, e).asInstanceOf[Z3AstExpr[Sort]]
+      )
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]

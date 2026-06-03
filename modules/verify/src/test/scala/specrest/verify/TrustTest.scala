@@ -74,9 +74,9 @@ class TrustTest extends CatsEffectSuite:
       TrustLevel.BestEffort
     ),
     (
-      "BestEffort: IfF (no If ctor in subset)",
+      "Sound: IfF lowers to the Ite verified-subset ctor",
       IfF(lit(true), i(1), i(2), None),
-      TrustLevel.BestEffort
+      TrustLevel.Sound
     )
   )
 

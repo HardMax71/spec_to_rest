@@ -191,3 +191,9 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
         err.message.contains("powerset"),
         s"expected powerset error; got: ${err.message}"
       )
+
+  test("`if c then a else b` lowers to an SMT (ite ...)"):
+    smtOf(
+      specWithInvariant("x: Int", "(if x > 0 then x else 1) > 0")
+    ).map: out =>
+      assert(out.contains("(ite "), s"expected an (ite ...) in SMT; got:\n$out")

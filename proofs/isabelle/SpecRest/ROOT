@@ -14,7 +14,11 @@ session SpecRest_Core in core = HOL +
 session SpecRest_Soundness in soundness = SpecRest_Core +
   options [document = false, threads = 0]
   theories
+    Soundness_Framework
+    Soundness_Scalar
+    Soundness_Collection
     Soundness
+    Preservation
 
 session SpecRest_Codegen in codegen = SpecRest_Core +
   options [document = false, threads = 0]

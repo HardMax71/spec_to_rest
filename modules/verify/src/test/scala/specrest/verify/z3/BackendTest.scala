@@ -220,3 +220,18 @@ class BackendTest extends CatsEffectSuite:
 
   test("set_ops fixture invariants are sat at the IR level"):
     runIR("set_ops").map(r => assertEquals(r.status, CheckStatus.Sat))
+
+  List(
+    ("true guard selects then-branch", Z3Expr.BoolLit(true), BigInt(5), CheckStatus.Sat),
+    ("false guard selects else-branch", Z3Expr.BoolLit(false), BigInt(3), CheckStatus.Sat),
+    ("true guard does not select else-branch", Z3Expr.BoolLit(true), BigInt(3), CheckStatus.Unsat)
+  ).foreach: (name, guard, equalsTo, expected) =>
+    test(s"ite renders and solves: $name"):
+      val ite = Z3Expr.Ite(guard, Z3Expr.IntLit(BigInt(5)), Z3Expr.IntLit(BigInt(3)))
+      val script = Z3Script(
+        sorts = Nil,
+        funcs = Nil,
+        assertions = List(Z3Expr.Cmp(CmpOp.Eq, ite, Z3Expr.IntLit(equalsTo))),
+        artifact = emptyArtifact
+      )
+      runScript(script).map(r => assertEquals(r.status, expected))
