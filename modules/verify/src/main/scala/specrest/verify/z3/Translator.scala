@@ -1330,7 +1330,9 @@ object Translator:
         case SetOpKind.Subset                                       => Some(Z3Sort.Bool)
         case SetOpKind.Union | SetOpKind.Intersect | SetOpKind.Diff => inferSortOfZ3Expr(ctx, l)
     case Z3Expr.Ite(_, t, e, _) =>
-      inferSortOfZ3Expr(ctx, t).orElse(inferSortOfZ3Expr(ctx, e))
+      (inferSortOfZ3Expr(ctx, t), inferSortOfZ3Expr(ctx, e)) match
+        case (Some(ts), Some(es)) => if Z3Sort.eq(ts, es) then Some(ts) else None
+        case (ts, es)             => ts.orElse(es)
     case Z3Expr.OptNone(elemSort, _)   => Some(Z3Sort.OptionOf(elemSort))
     case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)

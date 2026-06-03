@@ -128,3 +128,31 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
       SmtLib.renderExpr(SetBinOp(SetOpKind.Subset, s, t)),
       "(subset s t)"
     )
+
+  test("map sort declares Pair datatype and renders (Seq (Pair K V))"):
+    val intStrMap = Z3Sort.MapOf(Z3Sort.Int, Z3Sort.Str)
+    val script = Z3Script(
+      sorts = Nil,
+      funcs = List(Z3FunctionDecl("m", Nil, intStrMap)),
+      assertions = Nil,
+      artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, false)
+    )
+    val out = SmtLib.renderSmtLib(script)
+    assert(
+      out.contains("(declare-datatype Pair (par (K V) ((mkPair (mapKey K) (mapVal V)))))"),
+      out
+    )
+    assert(out.contains("(declare-fun m () (Seq (Pair Int String)))"), out)
+
+  test("renderExpr(MapLit) folds entries into a seq of mkPair tuples"):
+    import Z3Expr.*
+    val lit = MapLit(
+      Z3Sort.Int,
+      Z3Sort.Str,
+      List((IntLit(BigInt(1)), StrLit("a")), (IntLit(BigInt(2)), StrLit("b")))
+    )
+    assertEquals(
+      SmtLib.renderExpr(lit),
+      "(seq.++ (seq.++ (as seq.empty (Seq (Pair Int String))) " +
+        "(seq.unit (mkPair 1 \"a\"))) (seq.unit (mkPair 2 \"b\")))"
+    )

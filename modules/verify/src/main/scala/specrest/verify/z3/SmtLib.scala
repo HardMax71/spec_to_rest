@@ -17,6 +17,9 @@ object SmtLib:
     if usesOption(script) then
       lines += "(declare-datatype Option (par (T) ((none) (some (valOf T)))))"
 
+    if usesMap(script) then
+      lines += "(declare-datatype Pair (par (K V) ((mkPair (mapKey K) (mapVal V)))))"
+
     if script.funcs.nonEmpty then lines += ";; funcs"
     for f <- script.funcs do lines += renderFuncDecl(f)
 
@@ -44,11 +47,24 @@ object SmtLib:
   private def containsOption(s: Z3Sort): Boolean = s match
     case Z3Sort.OptionOf(_) => true
     case Z3Sort.SetOf(e)    => containsOption(e)
+    case Z3Sort.SeqOf(e)    => containsOption(e)
+    case Z3Sort.MapOf(k, v) => containsOption(k) || containsOption(v)
     case _                  => false
 
   private def usesOption(script: Z3Script): Boolean =
     script.sorts.exists(containsOption) ||
       script.funcs.exists(f => f.argSorts.exists(containsOption) || containsOption(f.resultSort))
+
+  private def containsMap(s: Z3Sort): Boolean = s match
+    case Z3Sort.MapOf(_, _) => true
+    case Z3Sort.SetOf(e)    => containsMap(e)
+    case Z3Sort.SeqOf(e)    => containsMap(e)
+    case Z3Sort.OptionOf(e) => containsMap(e)
+    case _                  => false
+
+  private def usesMap(script: Z3Script): Boolean =
+    script.sorts.exists(containsMap) ||
+      script.funcs.exists(f => f.argSorts.exists(containsMap) || containsMap(f.resultSort))
 
   def renderExpr(e: Z3Expr): String = e match
     case Z3Expr.Var(name, _, _) => name
