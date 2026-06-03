@@ -9,6 +9,7 @@ import com.microsoft.z3.ArraySort
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.BoolSort
 import com.microsoft.z3.Context
+import com.microsoft.z3.DatatypeSort
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
@@ -140,6 +141,8 @@ private def registerSort(ctx: Context, map: mutable.Map[String, Sort], s: Z3Sort
       val _ = map.getOrElseUpdate(Z3Sort.key(s), ctx.mkUninterpretedSort(name))
     case Z3Sort.SetOf(elem) =>
       registerSort(ctx, map, elem)
+    case Z3Sort.OptionOf(elem) =>
+      registerSort(ctx, map, elem)
     case _ => ()
 
 private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3Sort): Sort =
@@ -156,6 +159,42 @@ private def resolveSort(ctx: Context, sortMap: mutable.Map[String, Sort], s: Z3S
           ctx.mkSetSort(inner)
         }
       )
+    case Z3Sort.OptionOf(elem) =>
+      sortMap.getOrElseUpdate(
+        Z3Sort.key(s),
+        optionSortFor(ctx, sortMap, resolveSort(ctx, sortMap, elem))
+      )
+
+@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+private def optionSortFor(
+    ctx: Context,
+    sortMap: mutable.Map[String, Sort],
+    elem: Sort
+): DatatypeSort[?] =
+  val ks = elem.toString.replaceAll("[^A-Za-z0-9]", "_")
+  sortMap
+    .getOrElseUpdate(
+      s"OptDT:${elem.toString}", {
+        val noneC =
+          ctx.mkConstructor[Sort](
+            s"none_$ks",
+            s"isNone_$ks",
+            Array.empty[String],
+            Array.empty[Sort],
+            Array.empty[Int]
+          )
+        val someC =
+          ctx.mkConstructor[Sort](
+            s"some_$ks",
+            s"isSome_$ks",
+            Array(s"valOf_$ks"),
+            Array[Sort](elem),
+            Array(0)
+          )
+        ctx.mkDatatypeSort[Sort](s"Option_$ks", Array(noneC, someC))
+      }
+    )
+    .asInstanceOf[DatatypeSort[?]]
 
 private def declareFuncs(
     ctx: Context,
@@ -239,6 +278,12 @@ private object Backend:
         renderExpr(rctx, t).asInstanceOf[Z3AstExpr[Sort]],
         renderExpr(rctx, e).asInstanceOf[Z3AstExpr[Sort]]
       )
+    case Z3Expr.OptNone(elemSort, _) =>
+      val elemZ = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
+      optionSortFor(rctx.ctx, rctx.sortMap, elemZ).getConstructors()(0).apply()
+    case Z3Expr.OptSome(value, _) =>
+      val v = renderExpr(rctx, value)
+      optionSortFor(rctx.ctx, rctx.sortMap, v.getSort).getConstructors()(1).apply(v)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]

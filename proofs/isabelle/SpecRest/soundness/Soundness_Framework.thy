@@ -19,6 +19,8 @@ fun value_to_smt :: "ir_value \<Rightarrow> smt_val" where
 | "value_to_smt (VSet members)   = SSet (map value_to_smt members)"
 | "value_to_smt (VEntityWith base fld v) =
      SEntityWith (value_to_smt base) fld (value_to_smt v)"
+| "value_to_smt VNone            = SNone"
+| "value_to_smt (VSome v)        = SSome (value_to_smt v)"
 
 abbreviation value_to_smt_opt :: "ir_value option \<Rightarrow> smt_val option" where
   "value_to_smt_opt \<equiv> map_option value_to_smt"
@@ -125,6 +127,16 @@ next
   proof (cases v2)
     case (VEntityWith base' fld' v')
     thus ?thesis using VEntityWith.IH(1)[of base'] VEntityWith.IH(2)[of v'] by simp
+  qed auto
+next
+  case VNone
+  show ?case by (cases v2) auto
+next
+  case (VSome v)
+  show ?case
+  proof (cases v2)
+    case (VSome v')
+    thus ?thesis using VSome.IH[of v'] by simp
   qed auto
 qed
 
@@ -283,6 +295,14 @@ lemma contains_smt_val_map_SEnumElem [simp]:
 lemma contains_smt_val_map_SEntityElem [simp]:
   "contains_smt_val (map value_to_smt vs) (SEntityElem en eid) = contains_value vs (VEntity en eid)"
   using contains_value_map_value_to_smt[of vs "VEntity en eid"] by simp
+
+lemma contains_smt_val_map_SNone [simp]:
+  "contains_smt_val (map value_to_smt vs) SNone = contains_value vs VNone"
+  using contains_value_map_value_to_smt[of vs VNone] by simp
+
+lemma contains_smt_val_map_SSome [simp]:
+  "contains_smt_val (map value_to_smt vs) (SSome (value_to_smt v)) = contains_value vs (VSome v)"
+  using contains_value_map_value_to_smt[of vs "VSome v"] by simp
 
 
 lemma set_union_values_map_value_to_smt:

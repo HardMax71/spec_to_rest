@@ -8,6 +8,7 @@ enum Z3Sort derives CanEqual:
   case Bool
   case Uninterp(name: String)
   case SetOf(elem: Z3Sort)
+  case OptionOf(elem: Z3Sort)
 
 object Z3Sort:
   val IntS: Z3Sort  = Int
@@ -23,6 +24,7 @@ object Z3Sort:
     case Real        => "Real"
     case Bool        => "Bool"
     case SetOf(e)    => s"Set(${key(e)})"
+    case OptionOf(e) => s"Option(${key(e)})"
 
   def eq(a: Z3Sort, b: Z3Sort): Boolean = key(a) == key(b)
 
@@ -92,6 +94,8 @@ enum Z3Expr derives CanEqual:
   case SetMember(elem: Z3Expr, set: Z3Expr, span: Option[span_t] = None)
   case SetBinOp(op: SetOpKind, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case Ite(cond: Z3Expr, thenE: Z3Expr, elseE: Z3Expr, span: Option[span_t] = None)
+  case OptNone(elemSort: Z3Sort, span: Option[span_t] = None)
+  case OptSome(value: Z3Expr, span: Option[span_t] = None)
 
   def spanOpt: Option[span_t] = this match
     case e: Var        => e.span
@@ -111,6 +115,8 @@ enum Z3Expr derives CanEqual:
     case e: SetMember  => e.span
     case e: SetBinOp   => e.span
     case e: Ite        => e.span
+    case e: OptNone    => e.span
+    case e: OptSome    => e.span
 
   def withSpan(s: Option[span_t]): Z3Expr =
     if s.isEmpty then this
@@ -133,6 +139,8 @@ enum Z3Expr derives CanEqual:
         case e: SetMember  => e.copy(span = s)
         case e: SetBinOp   => e.copy(span = s)
         case e: Ite        => e.copy(span = s)
+        case e: OptNone    => e.copy(span = s)
+        case e: OptSome    => e.copy(span = s)
 
 final case class ArtifactEntityField(name: String, sort: Z3Sort, funcName: String)
 final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[ArtifactEntityField])

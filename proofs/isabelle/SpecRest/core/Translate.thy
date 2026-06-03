@@ -47,5 +47,7 @@ fun translate :: "expr \<Rightarrow> smt_term" where
 | "translate (SetBin DiffOp      l r _)    = TSetDiff      (translate l) (translate r)"
 | "translate (WithRec base fld val_e _)    = TWithRec (translate base) fld (translate val_e)"
 | "translate (Ite c a b _)                 = TIte (translate c) (translate a) (translate b)"
+| "translate (NoneE _)                     = TNone"
+| "translate (SomeE e _)                   = TSome (translate e)"
 
 end

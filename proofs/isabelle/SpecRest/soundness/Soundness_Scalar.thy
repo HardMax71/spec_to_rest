@@ -173,4 +173,20 @@ proof -
   qed
 qed
 
+lemma soundness_NoneE:
+  "value_to_smt_opt (eval s st env (NoneE sp))
+     = smtEval (correlate_model s st) (correlate_env env) (translate (NoneE sp))"
+  by simp
+
+lemma soundness_SomeE:
+  assumes ih: "value_to_smt_opt (eval s st env e)
+                 = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "value_to_smt_opt (eval s st env (SomeE e sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (SomeE e sp))"
+proof -
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
+               = value_to_smt_opt (eval s st env e)" using ih by simp
+  show ?thesis using ih' by (cases "eval s st env e") simp_all
+qed
+
 end

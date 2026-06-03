@@ -75,6 +75,10 @@ next
   case (WithRec base fld value_e sp) show ?case using soundness_WithRec[OF WithRec.IH(1) WithRec.IH(2)] .
 next
   case (Ite c a b sp) show ?case using soundness_Ite[OF Ite.IH(1) Ite.IH(2) Ite.IH(3)] .
+next
+  case (NoneE sp) show ?case by (rule soundness_NoneE)
+next
+  case (SomeE e sp) show ?case using soundness_SomeE[OF SomeE.IH] .
 qed
 
 section \<open>Issue #202 Phase 3 — lower-soundness corollary\<close>

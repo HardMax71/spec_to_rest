@@ -35,14 +35,13 @@ where
 | "lower _ (IdentifierF x sp)  = Some (Ident x sp)"
 | "lower _ (FloatLitF s sp)    = map_option (\<lambda>r. RealLit r sp) (decimalToRat s)"
 | "lower _ (StringLitF _ _)    = None"
-| "lower _ (NoneLitF _)        = None"
+| "lower _ (NoneLitF sp)       = Some (NoneE sp)"
 | "lower _ (LambdaF _ _ _)     = None"
 | "lower _ (CallF _ _ _)       = None"
 | "lower _ (ConstructorF _ _ _)     = None"
 | "lower _ (MapLiteralF _ _)        = None"
 | "lower _ (SeqLiteralF _ _)        = None"
 | "lower _ (SetComprehensionF _ _ _ _) = None"
-| "lower _ (SomeWrapF _ _)     = None"
 | "lower _ (TheF _ _ _ _)      = None"
 | "lower _ (MatchesF _ _ _)    = None"
 
@@ -186,6 +185,7 @@ where
      (case (lower enums c, lower enums a, lower enums b) of
         (Some c', Some a', Some b') \<Rightarrow> Some (Ite c' a' b' sp)
       | _ \<Rightarrow> None)"
+| "lower enums (SomeWrapF e sp) = map_option (\<lambda>e'. SomeE e' sp) (lower enums e)"
 
 | "lowerSetList _ [] sp = Some (SetEmpty sp)"
 | "lowerSetList enums (e # rest) sp =

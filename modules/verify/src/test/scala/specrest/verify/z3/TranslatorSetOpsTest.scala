@@ -197,3 +197,11 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
       specWithInvariant("x: Int", "(if x > 0 then x else 1) > 0")
     ).map: out =>
       assert(out.contains("(ite "), s"expected an (ite ...) in SMT; got:\n$out")
+
+  test("`x = none` / `x = some(v)` lower via the Option datatype"):
+    smtOf(
+      specWithInvariant("token: Option[Int]", "token = none or token = some(1)")
+    ).map: out =>
+      assert(out.contains("declare-datatype Option"), s"expected Option datatype decl; got:\n$out")
+      assert(out.contains("none"), s"expected 'none'; got:\n$out")
+      assert(out.contains("(some "), s"expected '(some ...)'; got:\n$out")

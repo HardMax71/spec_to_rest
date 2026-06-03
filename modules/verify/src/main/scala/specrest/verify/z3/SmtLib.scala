@@ -14,6 +14,9 @@ object SmtLib:
         case Z3Sort.Uninterp(n) => lines += s"(declare-sort $n 0)"
         case _                  => ()
 
+    if usesOption(script) then
+      lines += "(declare-datatype Option (par (T) ((none) (some (valOf T)))))"
+
     if script.funcs.nonEmpty then lines += ";; funcs"
     for f <- script.funcs do lines += renderFuncDecl(f)
 
@@ -29,10 +32,20 @@ object SmtLib:
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
     case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
+    case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
 
   private def renderFuncDecl(f: Z3FunctionDecl): String =
     val args = f.argSorts.map(renderSort).mkString(" ")
     s"(declare-fun ${f.name} ($args) ${renderSort(f.resultSort)})"
+
+  private def containsOption(s: Z3Sort): Boolean = s match
+    case Z3Sort.OptionOf(_) => true
+    case Z3Sort.SetOf(e)    => containsOption(e)
+    case _                  => false
+
+  private def usesOption(script: Z3Script): Boolean =
+    script.sorts.exists(containsOption) ||
+      script.funcs.exists(f => f.argSorts.exists(containsOption) || containsOption(f.resultSort))
 
   def renderExpr(e: Z3Expr): String = e match
     case Z3Expr.Var(name, _, _) => name
@@ -76,6 +89,10 @@ object SmtLib:
       s"(${SetOpKind.token(op)} ${renderExpr(l)} ${renderExpr(r)})"
     case Z3Expr.Ite(c, t, e, _) =>
       s"(ite ${renderExpr(c)} ${renderExpr(t)} ${renderExpr(e)})"
+    case Z3Expr.OptNone(elemSort, _) =>
+      s"(as none (Option ${renderSort(elemSort)}))"
+    case Z3Expr.OptSome(value, _) =>
+      s"(some ${renderExpr(value)})"
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"
