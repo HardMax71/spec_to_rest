@@ -459,11 +459,15 @@ text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Righta
   \<open>typeExprFullToTy\<close> hoisted up to the \<open>value_has_ty\<close> block since
   \<open>schemaFieldType\<close> (referenced by \<open>vt_entity_with\<close>) depends on it.\<close>
 
+fun identNameFull :: "expr_full \<Rightarrow> String.literal option" where
+  "identNameFull (IdentifierF rel _) = Some rel"
+| "identNameFull _ = None"
+
 fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
-  "peelRelationRefFull (IdentifierF rel _)              = Some rel"
-| "peelRelationRefFull (PreF (IdentifierF rel _) _)     = Some rel"
-| "peelRelationRefFull (PrimeF (IdentifierF rel _) _)   = Some rel"
-| "peelRelationRefFull _                                = None"
+  "peelRelationRefFull (IdentifierF rel _) = Some rel"
+| "peelRelationRefFull (PreF b _)          = identNameFull b"
+| "peelRelationRefFull (PrimeF b _)        = identNameFull b"
+| "peelRelationRefFull _                   = None"
 
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"

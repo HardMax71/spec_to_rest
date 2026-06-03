@@ -24,10 +24,14 @@ fun wf_z3_bindings :: "quantifier_binding_full list \<Rightarrow> bool" where
 | "wf_z3_bindings (b # rest) = (is_ident_dom b \<and> wf_z3_bindings rest)"
 
 fun rel_ref_shape :: "expr_full \<Rightarrow> bool" where
-  "rel_ref_shape (IdentifierF _ _)            = True"
-| "rel_ref_shape (PreF (IdentifierF _ _) _)   = True"
-| "rel_ref_shape (PrimeF (IdentifierF _ _) _) = True"
-| "rel_ref_shape _                            = False"
+  "rel_ref_shape (IdentifierF _ _) = True"
+| "rel_ref_shape (PreF b _)        = (identNameFull b \<noteq> None)"
+| "rel_ref_shape (PrimeF b _)      = (identNameFull b \<noteq> None)"
+| "rel_ref_shape _                 = False"
+
+lemma identNameFull_SomeD:
+  "identNameFull e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
+  by (cases e rule: identNameFull.cases) auto
 
 fun wf_z3 :: "expr_full \<Rightarrow> bool"
 and wf_z3_list :: "expr_full list \<Rightarrow> bool"
@@ -115,7 +119,7 @@ qed
 lemma rel_ref_lower:
   "rel_ref_shape base
      \<Longrightarrow> \<exists>b' rel. lower enums base = Some b' \<and> peel_relation_ref b' = Some rel"
-  by (cases base rule: rel_ref_shape.cases) auto
+  by (cases base rule: rel_ref_shape.cases) (auto dest!: identNameFull_SomeD)
 
 lemma lower_unop_some:
   assumes ih: "wf_z3 e \<Longrightarrow> lower enums e \<noteq> None"
@@ -456,13 +460,13 @@ text \<open>Phase H3b helpers (relation-reference shape). Bridges the
 
 lemma peelRelationRefFull_some_imp_rel_ref_shape:
   "peelRelationRefFull base = Some rel \<Longrightarrow> rel_ref_shape base"
-  by (cases base rule: peelRelationRefFull.cases) auto
+  by (cases base rule: peelRelationRefFull.cases) (auto dest!: identNameFull_SomeD)
 
 lemma peelRelationRefFull_lower:
   assumes "peelRelationRefFull base = Some rel"
       and "lower enums base = Some base'"
   shows "peel_relation_ref base' = Some rel"
-  using assms by (cases base rule: peelRelationRefFull.cases) auto
+  using assms by (cases base rule: peelRelationRefFull.cases) (auto dest!: identNameFull_SomeD)
 
 text \<open>Phase H3c helpers (with-assigns chain). \<open>lower_with_assigns\<close>
   folds a \<open>FieldAssignFull\<close> list into nested \<open>WithRec\<close>s; eval

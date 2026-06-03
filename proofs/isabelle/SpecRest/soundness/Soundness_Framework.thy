@@ -517,42 +517,29 @@ lemma peel_smt_translate_SetBin [simp]:
   "peelSmtRelationRef (translate (SetBin op l r sp)) = None"
   by (cases op) simp_all
 
-lemma peel_smt_translate_TPrime_BoolBin [simp]:
-  "peelSmtRelationRef (TPrime (translate (BoolBin op l r sp))) = None"
+lemma relRefVarName_translate_BoolBin [simp]:
+  "relRefVarName (translate (BoolBin op l r sp)) = None"
   by (cases op) simp_all
 
-lemma peel_smt_translate_TPrime_Arith [simp]:
-  "peelSmtRelationRef (TPrime (translate (Arith op l r sp))) = None"
+lemma relRefVarName_translate_Arith [simp]:
+  "relRefVarName (translate (Arith op l r sp)) = None"
   by (cases op) simp_all
 
-lemma peel_smt_translate_TPrime_Cmp [simp]:
-  "peelSmtRelationRef (TPrime (translate (Cmp op l r sp))) = None"
+lemma relRefVarName_translate_Cmp [simp]:
+  "relRefVarName (translate (Cmp op l r sp)) = None"
   by (cases op) simp_all
 
-lemma peel_smt_translate_TPrime_SetBin [simp]:
-  "peelSmtRelationRef (TPrime (translate (SetBin op l r sp))) = None"
+lemma relRefVarName_translate_SetBin [simp]:
+  "relRefVarName (translate (SetBin op l r sp)) = None"
   by (cases op) simp_all
 
-lemma peel_smt_translate_TPre_BoolBin [simp]:
-  "peelSmtRelationRef (TPre (translate (BoolBin op l r sp))) = None"
-  by (cases op) simp_all
-
-lemma peel_smt_translate_TPre_Arith [simp]:
-  "peelSmtRelationRef (TPre (translate (Arith op l r sp))) = None"
-  by (cases op) simp_all
-
-lemma peel_smt_translate_TPre_Cmp [simp]:
-  "peelSmtRelationRef (TPre (translate (Cmp op l r sp))) = None"
-  by (cases op) simp_all
-
-lemma peel_smt_translate_TPre_SetBin [simp]:
-  "peelSmtRelationRef (TPre (translate (SetBin op l r sp))) = None"
-  by (cases op) simp_all
+lemma relRefVarName_translate_eq [simp]:
+  "relRefVarName (translate b) = identName b"
+  by (cases b) simp_all
 
 lemma peelSmtRelationRef_translate:
   "peelSmtRelationRef (translate base) = peel_relation_ref base"
-proof (induction base rule: peel_relation_ref.induct)
-qed simp_all
+  by (cases base rule: peel_relation_ref.cases) simp_all
 
 section \<open>FieldAccess\<close>
 

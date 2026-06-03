@@ -378,6 +378,74 @@ The four helpers are new top-level functions and the four rewritten bodies are r
 matches its constructors more than one or two levels deep, especially a two-operand cross-product.
 After adding constructors, re-profile and move the match into a `case` body.
 
+### Tier 2.8 - Flatten the relation-reference recognisers (post-lift re-detonation) (2026-06-03)
+
+The Z3-subset lift series (#378-#381: `If`/`Option`/`String`/`Seq`+`Map`) widened `smt_term` (33 to
+41 ctors) and `expr`/`expr_full`. That re-detonated **four sibling relation-reference recognisers**
+built on `Pre (Ident ...)` / `Prime (Ident ...)`-style **nested constructor patterns** (the Tier 2.6
+disease, in functions that pre-date the lift). A local clean rebuild plus a symbol-aware session-DB
+trace fingered them:
+
+| `fun`                 | theory             | before |
+| --------------------- | ------------------ | ------ |
+| `peelSmtRelationRef`  | `Smt.thy`          | 27.0 s |
+| `rel_ref_shape`       | `Preservation.thy` | 11.2 s |
+| `peel_relation_ref`   | `IR.thy`           | 11.1 s |
+| `peelRelationRefFull` | `Semantics.thy`    | 8.8 s  |
+
+~58 s across four non-recursive recognisers, all from `<Ctor> (<InnerCtor> ...)` nesting whose
+`pat_completeness` obligation is combinatorial in datatype width (41-ctor `smt_term`, ~50-ctor
+`expr_full`).
+
+**Fix:** the Tier 2.6 flatten. Match only the top-level constructor; delegate the inner
+`TVar`/`Ident` check to a flat one-level helper (`relRefVarName` / `identName` / `identNameFull`).
+Each completeness check becomes O(ctors), not O(ctors^2).
+
+Downstream proof updates (the reason Tier 2.5 deferred the SMT one when it was only a 10 s saving;
+the calculus changed once the widenings pushed the cluster to 58 s):
+
+- `peelSmtRelationRef`'s eight `TPre_*`/`TPrime_*` `[simp]` lemmas were re-keyed to the helper as
+  four `relRefVarName_translate_*` lemmas. The new `peelSmtRelationRef (TPre t) = relRefVarName t`
+  rule fires first, rewriting the goal past the old `peelSmtRelationRef (TPre (translate ...))`
+  shape before the old lemmas could match.
+- `peelSmtRelationRef_translate` (inducts on `peel_relation_ref.induct`) needed the bridge
+  `relRefVarName (translate b) = identName b`, since after flattening the induct case is `Pre b`
+  with `b` abstract, not `Pre (Ident ...)`.
+- The `.cases`-based proofs (`rel_ref_lower`, `peelRelationRefFull_some_imp_rel_ref_shape`,
+  `peelRelationRefFull_lower`) take `(auto dest!: identNameFull_SomeD)` with the inversion
+  `identNameFull e = Some r ==> (EX sp. e = IdentifierF r sp)`. It must be forced (`dest!`): `auto`
+  rewrites `~= None` into `= Some y` before a `~= None`-keyed elim could fire.
+
+| Metric                | Before | After     | Δ                |
+| --------------------- | ------ | --------- | ---------------- |
+| `peelSmtRelationRef`  | 27.0 s | <0.2 s    | -27 s            |
+| `rel_ref_shape`       | 11.2 s | <0.1 s    | -11 s            |
+| `peel_relation_ref`   | 11.1 s | <0.1 s    | -11 s            |
+| `peelRelationRefFull` | 8.8 s  | <0.1 s    | -9 s             |
+| Core (wall)           | 124 s  | **101 s** | -23 s            |
+| Soundness (wall)      | 28 s   | **21 s**  | -7 s             |
+| Full build (cold)     | 212 s  | **182 s** | **-30 s, -14 %** |
+
+`peel_relation_ref` and its new `identName` helper are reachable from the `export_code` roots, so
+`SpecRestGenerated.scala` was regenerated (the old extracted Scala literally enumerated the
+`TPre(BLit) ... TPre(TMapCons)` cross-product, which was the cost). `rel_ref_shape`/`wf_z3` live in
+the Soundness session and are not extracted. Verified: zero `sorry`, drift-clean, `sbt ir/compile`
+clean.
+
+**Profiling-visibility gap (fixed).** `isabelle-build.yml` previously extracted only
+`SpecRest_Codegen.db`, so the critical-path `SpecRest_Core` and `SpecRest_Soundness` sessions never
+appeared in the CI `isabelle-timing-trace` artifact - all four bottlenecks above were invisible
+there - and its byte-slicing line mapper under-reported lines by ~15 (the `command_timings` offset
+counts Isabelle _symbols_, where `\<dots>` is one symbol, not its byte length). The timing-extract
+step now calls `proofs/isabelle/timing_trace.py`, which auto-discovers every session declared in
+`ROOT` (no hardcoded session names), maps offsets symbol-accurately, and emits an OVERALL top-N
+merged across all sessions plus per-session detail. Run it locally with:
+
+```bash
+python3 proofs/isabelle/timing_trace.py \
+  "$(isabelle getenv -b ISABELLE_HOME_USER)/heaps" proofs/isabelle/SpecRest /tmp/trace.txt
+```
+
 ## Failed
 
 ### Tier 3.1 (partial) — Delete `peel_smt_translate_*` `[simp]` lemmas
