@@ -162,6 +162,8 @@ export_code
     lowerSetList
     requiresAlloy
     subexprs
+    allSubexprs
+    inline_calls
     stripSpans
     typeStripSpans
     peelSmtRelationRef

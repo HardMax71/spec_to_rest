@@ -228,6 +228,96 @@ where
 | "subst_bindings x r (QuantifierBindingFull n d kk sp # bs) =
      QuantifierBindingFull n (subst x r d) kk sp # subst_bindings x r bs"
 
+fun is_binder_full :: "expr_full \<Rightarrow> bool" where
+  "is_binder_full (LetF _ _ _ _)               = True"
+| "is_binder_full (QuantifierF _ _ _ _)        = True"
+| "is_binder_full (LambdaF _ _ _)              = True"
+| "is_binder_full (SetComprehensionF _ _ _ _)  = True"
+| "is_binder_full (TheF _ _ _ _)               = True"
+| "is_binder_full _                            = False"
+
+text \<open>\<open>inline_calls\<close> is a \<^emph>\<open>trusted\<close> pre-\<open>lower\<close> desugar (like \<open>lower\<close> itself: \<open>CallF\<close>
+  has no \<open>eval\<close>, so its meaning-preservation can't be stated against the verified
+  semantics). It beta-reduces a call to a user function/predicate by substituting
+  its arguments for the parameters in the body. To stay capture-free with the
+  non-renaming \<open>subst\<close>, it inlines a call ONLY when the callee body is binder-free
+  and no argument mentions a parameter name; otherwise the \<open>CallF\<close> is left in place
+  (it then falls outside \<open>lower\<close> and the check routes best-effort). It inlines one
+  level; the Scala driver iterates to a fixpoint (capped), so nested non-recursive
+  calls resolve and recursive ones stop.\<close>
+
+definition capture_safe :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> expr_full list \<Rightarrow> bool" where
+  "capture_safe body params args \<equiv>
+     (\<not> list_ex is_binder_full (allSubexprs body))
+       \<and> list_all (\<lambda>a. list_all (\<lambda>p. \<not> string_in_list p (free_vars a)) params) args"
+
+fun subst_params :: "String.literal list \<Rightarrow> expr_full list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+  "subst_params (p # ps) (a # args) body = subst_params ps args (subst p a body)"
+| "subst_params _ _ body = body"
+
+fun inline_calls :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full \<Rightarrow> expr_full"
+and inline_calls_list :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
+and inline_calls_fields :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> field_assign_full list \<Rightarrow> field_assign_full list"
+and inline_calls_entries :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> map_entry_full list \<Rightarrow> map_entry_full list"
+and inline_calls_bindings :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+where
+  "inline_calls fs ps (CallF callee args sp) =
+     (let args' = inline_calls_list fs ps args
+      in case callee of
+           IdentifierF nm sp1 \<Rightarrow>
+             (case List.find (\<lambda>f. fncName f = nm) fs of
+                Some f \<Rightarrow>
+                  (if length (fncParams f) = length args'
+                        \<and> capture_safe (fncBody f) (map prmName (fncParams f)) args'
+                     then subst_params (map prmName (fncParams f)) args' (fncBody f)
+                     else CallF callee args' sp)
+              | None \<Rightarrow>
+                  (case List.find (\<lambda>q. prdName q = nm) ps of
+                     Some pr \<Rightarrow>
+                       (if length (prdParams pr) = length args'
+                             \<and> capture_safe (prdBody pr) (map prmName (prdParams pr)) args'
+                          then subst_params (map prmName (prdParams pr)) args' (prdBody pr)
+                          else CallF callee args' sp)
+                   | None \<Rightarrow> CallF callee args' sp))
+         | _ \<Rightarrow> CallF (inline_calls fs ps callee) args' sp)"
+| "inline_calls fs ps (BinaryOpF op l r sp)        = BinaryOpF op (inline_calls fs ps l) (inline_calls fs ps r) sp"
+| "inline_calls fs ps (UnaryOpF op e sp)           = UnaryOpF op (inline_calls fs ps e) sp"
+| "inline_calls fs ps (FieldAccessF b f sp)        = FieldAccessF (inline_calls fs ps b) f sp"
+| "inline_calls fs ps (EnumAccessF b m sp)         = EnumAccessF (inline_calls fs ps b) m sp"
+| "inline_calls fs ps (IndexF b i sp)              = IndexF (inline_calls fs ps b) (inline_calls fs ps i) sp"
+| "inline_calls fs ps (PrimeF e sp)                = PrimeF (inline_calls fs ps e) sp"
+| "inline_calls fs ps (PreF e sp)                  = PreF (inline_calls fs ps e) sp"
+| "inline_calls fs ps (WithF b upds sp)            = WithF (inline_calls fs ps b) (inline_calls_fields fs ps upds) sp"
+| "inline_calls fs ps (IfF c t e sp)               = IfF (inline_calls fs ps c) (inline_calls fs ps t) (inline_calls fs ps e) sp"
+| "inline_calls fs ps (LetF v val body sp)         = LetF v (inline_calls fs ps val) (inline_calls fs ps body) sp"
+| "inline_calls fs ps (LambdaF p b sp)             = LambdaF p (inline_calls fs ps b) sp"
+| "inline_calls fs ps (ConstructorF n flds sp)     = ConstructorF n (inline_calls_fields fs ps flds) sp"
+| "inline_calls fs ps (SetLiteralF xs sp)          = SetLiteralF (inline_calls_list fs ps xs) sp"
+| "inline_calls fs ps (MapLiteralF es sp)          = MapLiteralF (inline_calls_entries fs ps es) sp"
+| "inline_calls fs ps (SetComprehensionF v d p sp) = SetComprehensionF v (inline_calls fs ps d) (inline_calls fs ps p) sp"
+| "inline_calls fs ps (SeqLiteralF xs sp)          = SeqLiteralF (inline_calls_list fs ps xs) sp"
+| "inline_calls fs ps (MatchesF e pat sp)          = MatchesF (inline_calls fs ps e) pat sp"
+| "inline_calls fs ps (SomeWrapF e sp)             = SomeWrapF (inline_calls fs ps e) sp"
+| "inline_calls fs ps (TheF v d b sp)              = TheF v (inline_calls fs ps d) (inline_calls fs ps b) sp"
+| "inline_calls fs ps (QuantifierF q bs body sp)   = QuantifierF q (inline_calls_bindings fs ps bs) (inline_calls fs ps body) sp"
+| "inline_calls _ _ (IntLitF n sp)                 = IntLitF n sp"
+| "inline_calls _ _ (FloatLitF n sp)               = FloatLitF n sp"
+| "inline_calls _ _ (StringLitF n sp)              = StringLitF n sp"
+| "inline_calls _ _ (BoolLitF v sp)                = BoolLitF v sp"
+| "inline_calls _ _ (NoneLitF sp)                  = NoneLitF sp"
+| "inline_calls _ _ (IdentifierF n sp)             = IdentifierF n sp"
+| "inline_calls_list _ _ []                        = []"
+| "inline_calls_list fs ps (e # es)                = inline_calls fs ps e # inline_calls_list fs ps es"
+| "inline_calls_fields _ _ []                      = []"
+| "inline_calls_fields fs ps (FieldAssignFull f v sp # rest) =
+     FieldAssignFull f (inline_calls fs ps v) sp # inline_calls_fields fs ps rest"
+| "inline_calls_entries _ _ []                     = []"
+| "inline_calls_entries fs ps (MapEntryFull k v sp # rest) =
+     MapEntryFull (inline_calls fs ps k) (inline_calls fs ps v) sp # inline_calls_entries fs ps rest"
+| "inline_calls_bindings _ _ []                    = []"
+| "inline_calls_bindings fs ps (QuantifierBindingFull n d kk sp # rest) =
+     QuantifierBindingFull n (inline_calls fs ps d) kk sp # inline_calls_bindings fs ps rest"
+
 text \<open>Phase 9\<delta> (lint TypeMismatch / L01): \<open>lit_class\<close> classifies an
   expression literal into a small ADT; \<open>litClass\<close> recognises which class
   (if any) an \<open>expr_full\<close> belongs to; \<open>binOpName\<close> renders a binary

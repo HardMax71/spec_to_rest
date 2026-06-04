@@ -55,6 +55,22 @@ class ConsistencyTest extends CatsEffectSuite:
       s"expected every check Sat (Entity{...} must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
     )
 
+  test("function/predicate calls inline + verify via Z3 (CallF lifted to the verified subset)"):
+    val spec =
+      """service CallDemo {
+        |  function dbl(n: Int): Int = n + n
+        |  predicate isPos(n: Int) = n > 0
+        |  invariant callsInline:
+        |    dbl(3) = 6 and isPos(dbl(1))
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("call_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (calls must inline + verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")
