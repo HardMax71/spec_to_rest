@@ -2146,6 +2146,43 @@ object Translator:
           Z3Expr.Implies(Z3Expr.SetMember(binderVar, setZ), inner)
         )
 
+      case TTheRel(varName, rel, body) =>
+        ctx.state.get(rel) match
+          case Some(_: StateRelationInfo)
+              if env.values.exists { case _: Z3Expr.Var => true; case _ => false } =>
+            // a Skolem constant only denotes "the unique element" at quantifier-free
+            // position; under a binder it would need a Skolem function of the bound vars
+            fail(ctx, "definite description `the` is not supported under a quantifier")
+          case Some(r: StateRelationInfo) =>
+            val mode       = ctx.stateMode
+            val sort       = r.keySort
+            val skolemName = ctx.freshSkolem(s"the_$rel")
+            ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, sort))
+            val c    = Z3Expr.App(skolemName, Nil)
+            val envC = env.clone()
+            envC(varName) = c
+            val bodyC = encodeFromSmtTerm(ctx, body, envC)
+            ctx.assertions += Z3Expr.And(List(Z3Expr.App(domFuncFor(r, mode), List(c)), bodyC))
+            val wName = ctx.freshSkolem(s"the_witness_$rel")
+            val w     = Z3Expr.Var(wName, sort)
+            val envW  = env.clone()
+            envW(varName) = w
+            val bodyW = encodeFromSmtTerm(ctx, body, envW)
+            ctx.assertions += Z3Expr.Quantifier(
+              QKind.ForAll,
+              List(Z3Binding(wName, sort)),
+              Z3Expr.Implies(
+                Z3Expr.And(List(Z3Expr.App(domFuncFor(r, mode), List(w)), bodyW)),
+                Z3Expr.Cmp(CmpOp.Eq, w, c)
+              )
+            )
+            c
+          case _ =>
+            fail(
+              ctx,
+              s"definite description `the` requires a state-relation domain; '$rel' is not one"
+            )
+
       case TIndexRel(base, key) =>
         peelRelationRef(base, ctx.stateMode) match
           case Some((rel, mode)) =>

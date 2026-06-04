@@ -16,6 +16,17 @@ class ConsistencyTest extends CatsEffectSuite:
         ).map(_.id)}"
     )
 
+  test("the_demo verifies the definite description via Z3 (TheF lifted to the verified subset)"):
+    for
+      ir     <- SpecFixtures.loadIR("the_demo")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.ok,
+      s"expected ok=true; failing checks: ${report.checks.filter(c =>
+          c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
+        ).map(_.id)}"
+    )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")

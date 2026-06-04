@@ -1172,6 +1172,8 @@ and eval_forall_enum ::
    \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> ir_value option"
 and eval_forall_rel ::
   "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr \<Rightarrow> ir_value option"
+and eval_the_rel ::
+  "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr \<Rightarrow> ir_value list option"
 where
   "eval s st env (BoolLit b _) = Some (VBool b)"
 | "eval s st env (IntLit n _) = Some (VInt n)"
@@ -1225,6 +1227,13 @@ where
      (case eval s st env setE of
         Some (VSet elems) \<Rightarrow> eval_forall_rel s st env var elems body
       | _ \<Rightarrow> None)"
+| "eval s st env (TheRel var rel_name body _) =
+     (case state_relation_domain st rel_name of
+        Some rel_dom \<Rightarrow>
+          (case eval_the_rel s st env var rel_dom body of
+             Some [x] \<Rightarrow> Some x
+           | _        \<Rightarrow> None)
+      | None \<Rightarrow> None)"
 | "eval s st env (Prime e _) = eval s st env e"
 | "eval s st env (Pre e _)   = eval s st env e"
 | "eval s st env (CardRel rel_name _) =
@@ -1293,17 +1302,27 @@ where
              Some (VBool acc) \<Rightarrow> Some (VBool (b \<and> acc))
            | _                \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+| "eval_the_rel s st env var [] body = Some []"
+| "eval_the_rel s st env var (v # rest) body =
+     (case eval s st ((var, v) # env) body of
+        Some (VBool b) \<Rightarrow>
+          (case eval_the_rel s st env var rest body of
+             Some matches \<Rightarrow> Some (if b then v # matches else matches)
+           | None         \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
   by pat_completeness auto
 
 termination
   by (relation "measures [
         (\<lambda>p. case p of
-               Inl (_, _, _, e) \<Rightarrow> size e
-             | Inr (Inl (_, _, _, _, _, _, body)) \<Rightarrow> size body
+               Inl (Inl (_, _, _, e)) \<Rightarrow> size e
+             | Inl (Inr (_, _, _, _, _, _, body)) \<Rightarrow> size body
+             | Inr (Inl (_, _, _, _, _, body)) \<Rightarrow> size body
              | Inr (Inr (_, _, _, _, _, body)) \<Rightarrow> size body),
         (\<lambda>p. case p of
-               Inl _ \<Rightarrow> 0
-             | Inr (Inl (_, _, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+               Inl (Inl _) \<Rightarrow> 0
+             | Inl (Inr (_, _, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+             | Inr (Inl (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom)
              | Inr (Inr (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom))
        ]")
      auto

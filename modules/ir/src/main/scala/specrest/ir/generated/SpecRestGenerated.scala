@@ -616,6 +616,8 @@ object SpecRestGenerated {
       extends expr
   final case class ForallSet(a: String, b: expr, c: expr, d: Option[span_t])
       extends expr
+  final case class TheRel(a: String, b: String, c: expr, d: Option[span_t])
+      extends expr
   final case class Prime(a: expr, b: Option[span_t])                  extends expr
   final case class Pre(a: expr, b: Option[span_t])                    extends expr
   final case class CardRel(a: String, b: Option[span_t])              extends expr
@@ -784,6 +786,7 @@ object SpecRestGenerated {
   final case class TLetIn(a: String, b: smt_term, c: smt_term)     extends smt_term
   final case class TForallEnum(a: String, b: String, c: smt_term)  extends smt_term
   final case class TForallRel(a: String, b: String, c: smt_term)   extends smt_term
+  final case class TTheRel(a: String, b: String, c: smt_term)      extends smt_term
   final case class TForallSet(a: String, b: smt_term, c: smt_term) extends smt_term
   final case class TIndexRel(a: smt_term, b: smt_term)             extends smt_term
   final case class TFieldAccess(a: smt_term, b: String)            extends smt_term
@@ -1934,6 +1937,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TTheRel(v, va, vb)     => None
     case TForallSet(v, va, vb)  => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
@@ -1981,6 +1985,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TTheRel(v, va, vb)     => None
     case TForallSet(v, va, vb)  => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
@@ -2078,6 +2083,41 @@ object SpecRestGenerated {
               case Some(SStr(_))              => None
               case Some(SSeq(_))              => None
               case Some(SMap(_))              => None
+            }
+          case Some(SInt(_))              => None
+          case Some(SReal(_))             => None
+          case Some(SEnumElem(_, _))      => None
+          case Some(SEntityElem(_, _))    => None
+          case Some(SSet(_))              => None
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
+    }
+
+  def smtEval_the_rel(
+      m: smt_model_ext[Unit],
+      env: List[(String, smt_val)],
+      vara: String,
+      x3: List[smt_val],
+      body: smt_term
+  ): Option[List[smt_val]] =
+    (m, env, vara, x3, body) match {
+      case (m, env, vara, Nil, body) => Some[List[smt_val]](Nil)
+      case (m, env, vara, v :: rest, body) =>
+        smtEval(m, (vara, v) :: env, body) match {
+          case None => None
+          case Some(SBool(b)) =>
+            smtEval_the_rel(m, env, vara, rest, body) match {
+              case None => None
+              case Some(matches) =>
+                Some[List[smt_val]](b match {
+                  case true  => v :: matches
+                  case false => matches
+                })
             }
           case Some(SInt(_))              => None
           case Some(SReal(_))             => None
@@ -2572,6 +2612,16 @@ object SpecRestGenerated {
           case None    => None
           case Some(d) => smtEval_forall_rel(m, env, vara, d, body)
         }
+      case (m, env, TTheRel(vara, rel_name, body)) =>
+        smt_model_lookup_rel(m, rel_name) match {
+          case None => None
+          case Some(d) => smtEval_the_rel(m, env, vara, d, body) match {
+              case None              => None
+              case Some(Nil)         => None
+              case Some(List(x))     => Some[smt_val](x)
+              case Some(_ :: _ :: _) => None
+            }
+        }
       case (m, env, TForallSet(vara, setT, body)) =>
         smtEval(m, env, setT) match {
           case None                       => None
@@ -2847,6 +2897,7 @@ object SpecRestGenerated {
     case ForallEnum(v, va, vb, vc) => None
     case ForallRel(v, va, vb, vc)  => None
     case ForallSet(v, va, vb, vc)  => None
+    case TheRel(v, va, vb, vc)     => None
     case Prime(v, va)              => None
     case Pre(v, va)                => None
     case CardRel(v, va)            => None
@@ -3221,6 +3272,7 @@ object SpecRestGenerated {
     case ForallEnum(v, va, vb, vc) => None
     case ForallRel(v, va, vb, vc)  => None
     case ForallSet(v, va, vb, vc)  => None
+    case TheRel(v, va, vb, vc)     => None
     case CardRel(v, va)            => None
     case IndexRel(v, va, vb)       => None
     case FieldAccess(v, va, vb)    => None
@@ -3314,14 +3366,14 @@ object SpecRestGenerated {
   }
 
   def lower_with_assigns(
-      vy: List[String],
+      vt: List[String],
       x1: List[field_assign_full],
       base: expr,
-      vz: Option[span_t]
+      vu: Option[span_t]
   ): Option[expr] =
-    (vy, x1, base, vz) match {
-      case (vy, Nil, base, vz) => Some[expr](base)
-      case (enums, FieldAssignFull(fld, v, wa) :: rest, base, sp) =>
+    (vt, x1, base, vu) match {
+      case (vt, Nil, base, vu) => Some[expr](base)
+      case (enums, FieldAssignFull(fld, v, vv) :: rest, base, sp) =>
         lower(enums, v) match {
           case None => None
           case Some(va) =>
@@ -3330,13 +3382,13 @@ object SpecRestGenerated {
     }
 
   def lowerMapEntries(
-      wc: List[String],
+      vx: List[String],
       x1: List[map_entry_full],
       sp: Option[span_t]
   ): Option[expr] =
-    (wc, x1, sp) match {
-      case (wc, Nil, sp) => Some[expr](MapEmpty(sp))
-      case (enums, MapEntryFull(k, v, wd) :: rest, sp) =>
+    (vx, x1, sp) match {
+      case (vx, Nil, sp) => Some[expr](MapEmpty(sp))
+      case (enums, MapEntryFull(k, v, vy) :: rest, sp) =>
         (lower(enums, k), (lower(enums, v), lowerMapEntries(enums, rest, sp))) match {
           case (None, _)                  => None
           case (Some(_), (None, _))       => None
@@ -3346,9 +3398,9 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSetList(vx: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (vx, x1, sp) match {
-      case (vx, Nil, sp) => Some[expr](SetEmpty(sp))
+  def lowerSetList(vs: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (vs, x1, sp) match {
+      case (vs, Nil, sp) => Some[expr](SetEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSetList(enums, rest, sp)) match {
           case (None, _)           => None
@@ -3357,9 +3409,9 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSeqList(wb: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (wb, x1, sp) match {
-      case (wb, Nil, sp) => Some[expr](SeqEmpty(sp))
+  def lowerSeqList(vw: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (vw, x1, sp) match {
+      case (vw, Nil, sp) => Some[expr](SeqEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSeqList(enums, rest, sp)) match {
           case (None, _)           => None
@@ -3380,7 +3432,44 @@ object SpecRestGenerated {
     case (ve, CallF(vf, vg, vh))                 => None
     case (vi, ConstructorF(vj, vk, vl))          => None
     case (vm, SetComprehensionF(vn, vo, vp, vq)) => None
-    case (vr, TheF(vs, vt, vu, vv))              => None
+    case (enums, TheF(vara, dm, body, sp)) =>
+      dm match {
+        case BinaryOpF(_, _, _, _)         => None
+        case UnaryOpF(_, _, _)             => None
+        case QuantifierF(_, _, _, _)       => None
+        case SomeWrapF(_, _)               => None
+        case TheF(_, _, _, _)              => None
+        case FieldAccessF(_, _, _)         => None
+        case EnumAccessF(_, _, _)          => None
+        case IndexF(_, _, _)               => None
+        case CallF(_, _, _)                => None
+        case PrimeF(_, _)                  => None
+        case PreF(_, _)                    => None
+        case WithF(_, _, _)                => None
+        case IfF(_, _, _, _)               => None
+        case LetF(_, _, _, _)              => None
+        case LambdaF(_, _, _)              => None
+        case ConstructorF(_, _, _)         => None
+        case SetLiteralF(_, _)             => None
+        case MapLiteralF(_, _)             => None
+        case SetComprehensionF(_, _, _, _) => None
+        case SeqLiteralF(_, _)             => None
+        case MatchesF(_, _, _)             => None
+        case IntLitF(_, _)                 => None
+        case FloatLitF(_, _)               => None
+        case StringLitF(_, _)              => None
+        case BoolLitF(_, _)                => None
+        case NoneLitF(_)                   => None
+        case IdentifierF(rel, _) =>
+          string_in_list(rel, enums) match {
+            case true => None
+            case false => map_option[expr, expr](
+                (b: expr) =>
+                  TheRel(vara, rel, b, sp),
+                lower(enums, body)
+              )
+          }
+      }
     case (enums, MatchesF(e, pat, sp)) =>
       map_option[expr, expr]((ea: expr) => Matches(ea, pat, sp), lower(enums, e))
     case (enums, QuantifierF(k, bs, body, sp)) =>
@@ -4445,7 +4534,7 @@ object SpecRestGenerated {
         case (Some(_), None)     => None
         case (Some(va), Some(b)) => Some[expr](LetIn(x, va, b, sp))
       }
-    case (vw, EnumAccessF(base, mem, sp)) =>
+    case (vr, EnumAccessF(base, mem, sp)) =>
       base match {
         case BinaryOpF(_, _, _, _)         => None
         case UnaryOpF(_, _, _)             => None
@@ -5128,6 +5217,42 @@ object SpecRestGenerated {
         }
     }
 
+  def eval_the_rel(
+      s: schema_ext[Unit],
+      st: state_ext[Unit],
+      env: List[(String, ir_value)],
+      vara: String,
+      x4: List[ir_value],
+      body: expr
+  ): Option[List[ir_value]] =
+    (s, st, env, vara, x4, body) match {
+      case (s, st, env, vara, Nil, body) => Some[List[ir_value]](Nil)
+      case (s, st, env, vara, v :: rest, body) =>
+        eval(s, st, (vara, v) :: env, body) match {
+          case None => None
+          case Some(VBool(b)) =>
+            eval_the_rel(s, st, env, vara, rest, body) match {
+              case None => None
+              case Some(matches) =>
+                Some[List[ir_value]](b match {
+                  case true  => v :: matches
+                  case false => matches
+                })
+            }
+          case Some(VInt(_))              => None
+          case Some(VReal(_))             => None
+          case Some(VEnum(_, _))          => None
+          case Some(VEntity(_, _))        => None
+          case Some(VSet(_))              => None
+          case Some(VEntityWith(_, _, _)) => None
+          case Some(VNone())              => None
+          case Some(VSome(_))             => None
+          case Some(VStr(_))              => None
+          case Some(VSeq(_))              => None
+          case Some(VMap(_))              => None
+        }
+    }
+
   def eval(
       s: schema_ext[Unit],
       st: state_ext[Unit],
@@ -5258,27 +5383,38 @@ object SpecRestGenerated {
           case Some(VSeq(_))              => None
           case Some(VMap(_))              => None
         }
-      case (s, st, env, Prime(e, vj)) => eval(s, st, env, e)
-      case (s, st, env, Pre(e, vk))   => eval(s, st, env, e)
-      case (s, st, env, CardRel(rel_name, vl)) =>
+      case (s, st, env, TheRel(vara, rel_name, body, vj)) =>
+        state_relation_domain(st, rel_name) match {
+          case None => None
+          case Some(rel_dom) =>
+            eval_the_rel(s, st, env, vara, rel_dom, body) match {
+              case None              => None
+              case Some(Nil)         => None
+              case Some(List(x))     => Some[ir_value](x)
+              case Some(_ :: _ :: _) => None
+            }
+        }
+      case (s, st, env, Prime(e, vk)) => eval(s, st, env, e)
+      case (s, st, env, Pre(e, vl))   => eval(s, st, env, e)
+      case (s, st, env, CardRel(rel_name, vm)) =>
         state_relation_domain(st, rel_name) match {
           case None => None
           case Some(rel_dom) =>
             Some[ir_value](VInt(int_of_nat(size_list[ir_value](rel_dom))))
         }
-      case (s, st, env, IndexRel(base, key, vm)) =>
+      case (s, st, env, IndexRel(base, key, vn)) =>
         (peel_relation_ref(base), eval(s, st, env, key)) match {
           case (None, _)            => None
           case (Some(_), None)      => None
           case (Some(rel), Some(a)) => state_lookup_key(st, rel, a)
         }
-      case (s, st, env, FieldAccess(base, fname, vn)) =>
+      case (s, st, env, FieldAccess(base, fname, vo)) =>
         eval(s, st, env, base) match {
           case None    => None
           case Some(v) => value_field_lookup(st, v, fname)
         }
-      case (s, st, env, SetEmpty(vo)) => Some[ir_value](VSet(Nil))
-      case (s, st, env, SetInsert(elem, set_e, vp)) =>
+      case (s, st, env, SetEmpty(vp)) => Some[ir_value](VSet(Nil))
+      case (s, st, env, SetInsert(elem, set_e, vq)) =>
         (eval(s, st, env, elem), eval(s, st, env, set_e)) match {
           case (None, _)                      => None
           case (Some(_), None)                => None
@@ -5296,7 +5432,7 @@ object SpecRestGenerated {
           case (Some(_), Some(VSeq(_)))              => None
           case (Some(_), Some(VMap(_)))              => None
         }
-      case (s, st, env, SetMember(elem, set_e, vq)) =>
+      case (s, st, env, SetMember(elem, set_e, vr)) =>
         (eval(s, st, env, elem), eval(s, st, env, set_e)) match {
           case (None, _)                      => None
           case (Some(_), None)                => None
@@ -5314,15 +5450,15 @@ object SpecRestGenerated {
           case (Some(_), Some(VSeq(_)))              => None
           case (Some(_), Some(VMap(_)))              => None
         }
-      case (s, st, env, SetBin(op, l, r, vr)) =>
+      case (s, st, env, SetBin(op, l, r, vs)) =>
         eval_set_bin(op, eval(s, st, env, l), eval(s, st, env, r))
-      case (s, st, env, WithRec(base, fld, value_e, vs)) =>
+      case (s, st, env, WithRec(base, fld, value_e, vt)) =>
         (eval(s, st, env, base), eval(s, st, env, value_e)) match {
           case (None, _)           => None
           case (Some(_), None)     => None
           case (Some(bv), Some(v)) => Some[ir_value](VEntityWith(bv, fld, v))
         }
-      case (s, st, env, Ite(c, a, b, vt)) =>
+      case (s, st, env, Ite(c, a, b, vu)) =>
         eval(s, st, env, c) match {
           case None                       => None
           case Some(VBool(true))          => eval(s, st, env, a)
@@ -5339,11 +5475,11 @@ object SpecRestGenerated {
           case Some(VSeq(_))              => None
           case Some(VMap(_))              => None
         }
-      case (s, st, env, NoneE(vu)) => Some[ir_value](VNone())
-      case (s, st, env, SomeE(e, vv)) =>
+      case (s, st, env, NoneE(vv)) => Some[ir_value](VNone())
+      case (s, st, env, SomeE(e, vw)) =>
         map_option[ir_value, ir_value]((a: ir_value) => VSome(a), eval(s, st, env, e))
-      case (s, st, env, StrLit(v, vw)) => Some[ir_value](VStr(v))
-      case (s, st, env, Matches(e, pat, vx)) =>
+      case (s, st, env, StrLit(v, vx)) => Some[ir_value](VStr(v))
+      case (s, st, env, Matches(e, pat, vy)) =>
         eval(s, st, env, e) match {
           case None                       => None
           case Some(VBool(_))             => None
@@ -5359,8 +5495,8 @@ object SpecRestGenerated {
           case Some(VSeq(_))              => None
           case Some(VMap(_))              => None
         }
-      case (s, st, env, SeqEmpty(vy)) => Some[ir_value](VSeq(Nil))
-      case (s, st, env, SeqCons(e, rest, vz)) =>
+      case (s, st, env, SeqEmpty(vz)) => Some[ir_value](VSeq(Nil))
+      case (s, st, env, SeqCons(e, rest, wa)) =>
         (eval(s, st, env, e), eval(s, st, env, rest)) match {
           case (None, _)                             => None
           case (Some(_), None)                       => None
@@ -5377,8 +5513,8 @@ object SpecRestGenerated {
           case (Some(v), Some(VSeq(vs)))             => Some[ir_value](VSeq(v :: vs))
           case (Some(_), Some(VMap(_)))              => None
         }
-      case (s, st, env, MapEmpty(wa)) => Some[ir_value](VMap(Nil))
-      case (s, st, env, MapCons(k, v, rest, wb)) =>
+      case (s, st, env, MapEmpty(wb)) => Some[ir_value](VMap(Nil))
+      case (s, st, env, MapCons(k, v, rest, wc)) =>
         (eval(s, st, env, k), (eval(s, st, env, v), eval(s, st, env, rest))) match {
           case (None, _)                                        => None
           case (Some(_), (None, _))                             => None
@@ -6536,31 +6672,32 @@ object SpecRestGenerated {
       TForallRel(vara, rel_n, translate(body))
     case ForallSet(vara, setE, body, vt) =>
       TForallSet(vara, translate(setE), translate(body))
-    case Prime(e, vu)                 => TPrime(translate(e))
-    case Pre(e, vv)                   => TPre(translate(e))
-    case CardRel(rel_name, vw)        => TCardRel(rel_name)
-    case IndexRel(base, key, vx)      => TIndexRel(translate(base), translate(key))
-    case FieldAccess(base, fname, vy) => TFieldAccess(translate(base), fname)
-    case SetEmpty(vz)                 => TSetEmpty()
-    case SetInsert(elem, set_e, wa) =>
+    case TheRel(vara, rel_n, body, vu) => TTheRel(vara, rel_n, translate(body))
+    case Prime(e, vv)                  => TPrime(translate(e))
+    case Pre(e, vw)                    => TPre(translate(e))
+    case CardRel(rel_name, vx)         => TCardRel(rel_name)
+    case IndexRel(base, key, vy)       => TIndexRel(translate(base), translate(key))
+    case FieldAccess(base, fname, vz)  => TFieldAccess(translate(base), fname)
+    case SetEmpty(wa)                  => TSetEmpty()
+    case SetInsert(elem, set_e, wb) =>
       TSetInsert(translate(elem), translate(set_e))
-    case SetMember(elem, set_e, wb) =>
+    case SetMember(elem, set_e, wc) =>
       TSetMember(translate(elem), translate(set_e))
-    case SetBin(UnionOp(), l, r, wc) => TSetUnion(translate(l), translate(r))
-    case SetBin(IntersectOp(), l, r, wd) =>
+    case SetBin(UnionOp(), l, r, wd) => TSetUnion(translate(l), translate(r))
+    case SetBin(IntersectOp(), l, r, we) =>
       TSetIntersect(translate(l), translate(r))
-    case SetBin(DiffOp(), l, r, we) => TSetDiff(translate(l), translate(r))
-    case WithRec(base, fld, val_e, wf) =>
+    case SetBin(DiffOp(), l, r, wf) => TSetDiff(translate(l), translate(r))
+    case WithRec(base, fld, val_e, wg) =>
       TWithRec(translate(base), fld, translate(val_e))
-    case Ite(c, a, b, wg)     => TIte(translate(c), translate(a), translate(b))
-    case NoneE(wh)            => TNone()
-    case SomeE(e, wi)         => TSome(translate(e))
-    case StrLit(v, wj)        => TStrLit(v)
-    case Matches(e, pat, wk)  => TMatches(translate(e), pat)
-    case SeqEmpty(wl)         => TSeqEmpty()
-    case SeqCons(e, rest, wm) => TSeqCons(translate(e), translate(rest))
-    case MapEmpty(wn)         => TMapEmpty()
-    case MapCons(k, v, rest, wo) =>
+    case Ite(c, a, b, wh)     => TIte(translate(c), translate(a), translate(b))
+    case NoneE(wi)            => TNone()
+    case SomeE(e, wj)         => TSome(translate(e))
+    case StrLit(v, wk)        => TStrLit(v)
+    case Matches(e, pat, wl)  => TMatches(translate(e), pat)
+    case SeqEmpty(wm)         => TSeqEmpty()
+    case SeqCons(e, rest, wn) => TSeqCons(translate(e), translate(rest))
+    case MapEmpty(wo)         => TMapEmpty()
+    case MapCons(k, v, rest, wp) =>
       TMapCons(translate(k), translate(v), translate(rest))
   }
 

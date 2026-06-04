@@ -44,6 +44,7 @@ datatype (plugins only: code size) smt_term =
   | TLetIn "String.literal" "smt_term" "smt_term"
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
+  | TTheRel "String.literal" "String.literal" "smt_term"
   | TForallSet "String.literal" "smt_term" "smt_term"
   | TIndexRel "smt_term" "smt_term"
   | TFieldAccess "smt_term" "String.literal"
@@ -189,6 +190,9 @@ and smtEval_forall_enum ::
 and smtEval_forall_rel ::
   "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> smt_val list
    \<Rightarrow> smt_term \<Rightarrow> smt_val option"
+and smtEval_the_rel ::
+  "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> smt_val list
+   \<Rightarrow> smt_term \<Rightarrow> smt_val list option"
 where
   "smtEval m env (BLit b) = Some (SBool b)"
 | "smtEval m env (ILit n) = Some (SInt n)"
@@ -293,6 +297,13 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow> smtEval_forall_rel m env var d body
       | None   \<Rightarrow> None)"
+| "smtEval m env (TTheRel var rel_name body) =
+     (case smt_model_lookup_rel m rel_name of
+        Some d \<Rightarrow>
+          (case smtEval_the_rel m env var d body of
+             Some [x] \<Rightarrow> Some x
+           | _        \<Rightarrow> None)
+      | None \<Rightarrow> None)"
 | "smtEval m env (TForallSet var setT body) =
      (case smtEval m env setT of
         Some (SSet elems) \<Rightarrow> smtEval_forall_rel m env var elems body
@@ -372,17 +383,27 @@ where
              Some (SBool acc) \<Rightarrow> Some (SBool (b \<and> acc))
            | _                \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+| "smtEval_the_rel m env var [] body = Some []"
+| "smtEval_the_rel m env var (v # rest) body =
+     (case smtEval m ((var, v) # env) body of
+        Some (SBool b) \<Rightarrow>
+          (case smtEval_the_rel m env var rest body of
+             Some matches \<Rightarrow> Some (if b then v # matches else matches)
+           | None         \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
   by pat_completeness auto
 
 termination
   by (relation "measures [
         (\<lambda>p. case p of
-               Inl (_, _, t) \<Rightarrow> size t
-             | Inr (Inl (_, _, _, _, _, body)) \<Rightarrow> size body
+               Inl (Inl (_, _, t)) \<Rightarrow> size t
+             | Inl (Inr (_, _, _, _, _, body)) \<Rightarrow> size body
+             | Inr (Inl (_, _, _, _, body)) \<Rightarrow> size body
              | Inr (Inr (_, _, _, _, body)) \<Rightarrow> size body),
         (\<lambda>p. case p of
-               Inl _ \<Rightarrow> 0
-             | Inr (Inl (_, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+               Inl (Inl _) \<Rightarrow> 0
+             | Inl (Inr (_, _, _, _, members, _)) \<Rightarrow> Suc (length members)
+             | Inr (Inl (_, _, _, d, _)) \<Rightarrow> Suc (length d)
              | Inr (Inr (_, _, _, d, _)) \<Rightarrow> Suc (length d))
        ]")
      auto

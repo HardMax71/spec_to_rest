@@ -78,6 +78,7 @@ datatype (plugins only: code size) expr =
   | ForallEnum "String.literal" "String.literal" "expr" "option_span"
   | ForallRel "String.literal" "String.literal" "expr" "option_span"
   | ForallSet "String.literal" "expr" "expr" "option_span"
+  | TheRel "String.literal" "String.literal" "expr" "option_span"
   | Prime "expr" "option_span"
   | Pre "expr" "option_span"
   | CardRel "String.literal" "option_span"

@@ -54,6 +54,17 @@ next
       by simp
   qed
 next
+  case (TheRel var rel_name body sp)
+  show ?case
+  proof (cases "state_relation_domain st rel_name")
+    case None thus ?thesis by simp
+  next
+    case (Some d)
+    thus ?thesis
+      using soundness_the_rel_known[OF Some, where var=var and env=env] TheRel.IH
+      by simp
+  qed
+next
   case (ForallSet var setE body sp)
   show ?case
     by (rule soundness_ForallSet[OF ForallSet.IH(1) ForallSet.IH(2)])
@@ -485,6 +496,18 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerMapEntries enums entries s = None"
       by (rule lowerMapEntries_ra_none[OF pe rl])
     thus ?thesis unfolding MapLiteralF by simp
+  next
+    case (TheF var dm body s)
+    have rb: "requiresAlloy body \<Longrightarrow> lower enums body = None"
+      using sub[of body] TheF by simp
+    show ?thesis
+    proof (cases dm)
+      case (IdentifierF rel sp1)
+      have "requiresAlloy body"
+        using less.prems TheF IdentifierF by (simp add: requiresAlloy_def)
+      hence "lower enums body = None" using rb by simp
+      thus ?thesis unfolding TheF IdentifierF by simp
+    qed (use TheF in \<open>simp_all\<close>)
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 
