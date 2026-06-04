@@ -54,6 +54,10 @@ next
       by simp
   qed
 next
+  case (ForallSet var setE body sp)
+  show ?case
+    by (rule soundness_ForallSet[OF ForallSet.IH(1) ForallSet.IH(2)])
+next
   case (Prime e sp) thus ?case by simp
 next
   case (Pre e sp) thus ?case by simp

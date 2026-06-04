@@ -683,6 +683,32 @@ lemma soundness_forall_rel_known:
   using hd eval_forall_rel_correlated[OF ihbody, where rd=d and var=var and env=env]
   by simp
 
+lemma soundness_ForallSet:
+  assumes ihset: "value_to_smt_opt (eval s st env setE)
+                    = smtEval (correlate_model s st) (correlate_env env) (translate setE)"
+      and ihbody: "\<And>env'.
+                    value_to_smt_opt (eval s st env' body)
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
+  shows "value_to_smt_opt (eval s st env (ForallSet var setE body sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (ForallSet var setE body sp))"
+proof (cases "eval s st env setE")
+  case None
+  thus ?thesis using ihset by simp
+next
+  case (Some sv)
+  hence smtset: "smtEval (correlate_model s st) (correlate_env env) (translate setE)
+                   = Some (value_to_smt sv)"
+    using ihset by simp
+  show ?thesis
+  proof (cases sv)
+    case (VSet elems)
+    show ?thesis
+      using Some VSet smtset
+            eval_forall_rel_correlated[OF ihbody, where rd=elems and var=var and env=env]
+      by simp
+  qed (use Some smtset in simp_all)
+qed
+
 section \<open>Phase 4 — universal soundness theorem\<close>
 
 text \<open>The universal `soundness` meta-theorem (M_L.2 in the Lean track,

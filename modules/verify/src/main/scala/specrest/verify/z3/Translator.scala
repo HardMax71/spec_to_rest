@@ -2072,6 +2072,9 @@ object Translator:
             inferSortOfZ3Expr(ctx, rhs) match
               case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, rhs)
               case _                     => fail(ctx, s"membership '$rel' requires a relation or set-typed constant")
+          case _ if ctx.entities.contains(rel) =>
+            // entity domain is the whole sort (as `resolveBindingDomain` treats `forall u in <Entity>`), so any value of that sort is a member
+            Z3Expr.BoolLit(true)
           case _ =>
             env.get(rel) match
               case Some(bound) =>
@@ -2109,6 +2112,21 @@ object Translator:
           QKind.ForAll,
           List(Z3Binding(varName, sort)),
           guarded
+        )
+
+      case TForallSet(varName, setT, body) =>
+        val setZ = encodeFromSmtTerm(ctx, setT, env)
+        val elemSort = inferSortOfZ3Expr(ctx, setZ) match
+          case Some(Z3Sort.SetOf(e)) => e
+          case _ =>
+            fail(ctx, "universal quantification requires a set-sorted domain")
+        val newEnv = env.clone()
+        newEnv(varName) = Z3Expr.Var(varName, elemSort)
+        val inner = encodeFromSmtTerm(ctx, body, newEnv)
+        Z3Expr.Quantifier(
+          QKind.ForAll,
+          List(Z3Binding(varName, elemSort)),
+          Z3Expr.Implies(Z3Expr.SetMember(Z3Expr.Var(varName, elemSort), setZ), inner)
         )
 
       case TIndexRel(base, key) =>

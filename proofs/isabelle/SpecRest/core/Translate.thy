@@ -34,6 +34,7 @@ fun translate :: "expr \<Rightarrow> smt_term" where
 | "translate (Member elem rel_name _)      = TInDom rel_name (translate elem)"
 | "translate (ForallEnum var en body _)    = TForallEnum var en (translate body)"
 | "translate (ForallRel var rel_n body _)  = TForallRel  var rel_n (translate body)"
+| "translate (ForallSet var setE body _)   = TForallSet  var (translate setE) (translate body)"
 | "translate (Prime e _) = TPrime (translate e)"
 | "translate (Pre e _)   = TPre   (translate e)"
 | "translate (CardRel rel_name _)          = TCardRel rel_name"

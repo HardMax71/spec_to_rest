@@ -44,6 +44,7 @@ datatype (plugins only: code size) smt_term =
   | TLetIn "String.literal" "smt_term" "smt_term"
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
+  | TForallSet "String.literal" "smt_term" "smt_term"
   | TIndexRel "smt_term" "smt_term"
   | TFieldAccess "smt_term" "String.literal"
   | TSetEmpty
@@ -291,6 +292,10 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow> smtEval_forall_rel m env var d body
       | None   \<Rightarrow> None)"
+| "smtEval m env (TForallSet var setT body) =
+     (case smtEval m env setT of
+        Some (SSet elems) \<Rightarrow> smtEval_forall_rel m env var elems body
+      | _ \<Rightarrow> None)"
 | "smtEval m env (TIndexRel base key) =
      (case (peelSmtRelationRef base, smtEval m env key) of
         (Some rel, Some kv) \<Rightarrow> smt_model_lookup_key m rel kv

@@ -23,25 +23,28 @@ where
         None \<Rightarrow> None
       | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
 
-text \<open>\<open>X = {var in dnm | predE}\<close> lowers by set extensionality to
-  \<open>\<forall>var\<in>dnm. var \<in> X \<longleftrightarrow> predE\<close>. Binding \<open>X\<close> with a let \<^emph>\<open>before\<close> the
-  quantifier (instead of placing \<open>X\<close> under the binder) keeps it capture-free:
-  \<open>X\<close> is evaluated in the outer scope, so a free \<open>var\<close> inside it (e.g. a state
-  field sharing the binder name) is not captured. The let binder \<open>0cmp\<close> starts
-  with a digit, which the lexer (\<open>[A-Za-z_][A-Za-z0-9_]*\<close>) forbids for source
-  identifiers, so it never collides with a user variable; lexical scoping keeps
-  it correct under nesting.\<close>
+text \<open>\<open>X = {var in dnm | predE}\<close> lowers to the FULL set extensionality — both
+  subset directions \<open>(\<forall>var\<in>dnm. predE \<longrightarrow> var\<in>X) \<and> (\<forall>var\<in>X. var\<in>dnm \<and> predE)\<close>.
+  (The bounded \<open>\<forall>var\<in>dnm. var\<in>X \<longleftrightarrow> predE\<close> alone is too weak: it omits \<open>X \<subseteq> dnm\<close>;
+  the second conjunct supplies it.) The second direction quantifies over the set
+  \<^emph>\<open>value\<close> \<open>X\<close> with \<open>ForallSet\<close>. \<open>X\<close> is let-bound to \<open>0cmp\<close> first so it is evaluated
+  in the outer scope (capture-free); the binder \<open>0cmp\<close> starts with a digit, which
+  the lexer (\<open>[A-Za-z_][A-Za-z0-9_]*\<close>) forbids for source identifiers, so it never
+  collides, and lexical scoping keeps it correct under nesting. An enum domain
+  makes its membership trivially true.\<close>
 fun lower_set_comp_eq ::
     "String.literal list \<Rightarrow> String.literal \<Rightarrow> String.literal
        \<Rightarrow> expr \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr"
 where
   "lower_set_comp_eq enums var dnm setE predE sp =
-     (let body = BoolBin IffOp
-                   (SetMember (Ident var None) (Ident (STR ''0cmp'') None) sp) predE sp;
-          quant = (if string_in_list dnm enums
-                     then ForallEnum var dnm body sp
-                     else ForallRel var dnm body sp)
-      in LetIn (STR ''0cmp'') setE quant sp)"
+     (let memX = SetMember (Ident var None) (Ident (STR ''0cmp'') None) sp;
+          memD = (if string_in_list dnm enums then BoolLit True sp
+                  else Member (Ident var None) dnm sp);
+          dir1 = (if string_in_list dnm enums
+                    then ForallEnum var dnm (BoolBin ImpliesOp predE memX sp) sp
+                    else ForallRel var dnm (BoolBin ImpliesOp predE memX sp) sp);
+          dir2 = ForallSet var (Ident (STR ''0cmp'') None) (BoolBin AndOp memD predE sp) sp
+      in LetIn (STR ''0cmp'') setE (BoolBin AndOp dir1 dir2 sp) sp)"
 
 function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
 and lowerSetList ::
