@@ -121,5 +121,8 @@ private[z3] object RegexParser:
     private def classChar(p: Int): (Char, Int) =
       if at(p) == '\\' then
         if !has(p + 1) then fail()
-        (at(p + 1), p + 2)
+        val c = at(p + 1)
+        // escaped shorthands (\d \w \s) inside a class aren't single chars; fall back
+        if c == 'd' || c == 'w' || c == 's' then fail()
+        (c, p + 2)
       else (at(p), p + 1)

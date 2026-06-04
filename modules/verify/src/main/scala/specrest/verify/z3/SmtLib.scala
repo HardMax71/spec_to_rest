@@ -131,7 +131,7 @@ object SmtLib:
     re match
       case Z3Regex.Str(s)        => s"(str.to_re ${q(s)})"
       case Z3Regex.Range(lo, hi) => s"(re.range ${q(lo.toString)} ${q(hi.toString)})"
-      case Z3Regex.AnyChar       => "re.allchar"
+      case Z3Regex.AnyChar       => "(as re.allchar RegLan)"
       case Z3Regex.Union(rs)     => s"(re.union ${rs.map(renderRe).mkString(" ")})"
       case Z3Regex.Concat(rs)    => s"(re.++ ${rs.map(renderRe).mkString(" ")})"
       case Z3Regex.Star(r)       => s"(re.* ${renderRe(r)})"

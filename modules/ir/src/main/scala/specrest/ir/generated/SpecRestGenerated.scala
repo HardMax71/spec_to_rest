@@ -2017,6 +2017,11 @@ object SpecRestGenerated {
   def smt_env_lookup(env: List[(String, smt_val)], name: String): Option[smt_val] =
     map_of[String, smt_val](env, name)
 
+  def list_all[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
+    case (p, Nil)     => true
+    case (p, x :: xs) => p(x) && list_all[A](p, xs)
+  }
+
   def smtEval_forall_enum(
       m: smt_model_ext[Unit],
       env: List[(String, smt_val)],
@@ -2619,11 +2624,15 @@ object SpecRestGenerated {
       case (m, env, TTheRel(vara, rel_name, body)) =>
         smt_model_lookup_rel(m, rel_name) match {
           case None => None
-          case Some(d) => smtEval_the_rel(m, env, vara, d, body) match {
-              case None              => None
-              case Some(Nil)         => None
-              case Some(List(x))     => Some[smt_val](x)
-              case Some(_ :: _ :: _) => None
+          case Some(d) =>
+            smtEval_the_rel(m, env, vara, d, body) match {
+              case None      => None
+              case Some(Nil) => None
+              case Some(x :: rest) =>
+                list_all[smt_val]((y: smt_val) => equal_smt_vala(y, x), rest) match {
+                  case true  => Some[smt_val](x)
+                  case false => None
+                }
             }
         }
       case (m, env, TEntityBase(name)) => Some[smt_val](SEntityElem(name, ""))
@@ -5396,10 +5405,13 @@ object SpecRestGenerated {
           case None => None
           case Some(rel_dom) =>
             eval_the_rel(s, st, env, vara, rel_dom, body) match {
-              case None              => None
-              case Some(Nil)         => None
-              case Some(List(x))     => Some[ir_value](x)
-              case Some(_ :: _ :: _) => None
+              case None      => None
+              case Some(Nil) => None
+              case Some(x :: rest) =>
+                list_all[ir_value]((y: ir_value) => equal_ir_valuea(y, x), rest) match {
+                  case true  => Some[ir_value](x)
+                  case false => None
+                }
             }
         }
       case (s, st, env, EntityBase(name, vk)) => Some[ir_value](VEntity(name, ""))
@@ -5947,11 +5959,6 @@ object SpecRestGenerated {
       case NoneLitF(_)                      => None
       case IdentifierF(_, _)                => None
     }
-
-  def list_all[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
-    case (p, Nil)     => true
-    case (p, x :: xs) => p(x) && list_all[A](p, xs)
-  }
 
   def isRedirectStatus(s: BigInt): Boolean =
     equal_int(s, BigInt(301)) ||

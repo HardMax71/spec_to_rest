@@ -302,8 +302,8 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow>
           (case smtEval_the_rel m env var d body of
-             Some [x] \<Rightarrow> Some x
-           | _        \<Rightarrow> None)
+             Some (x # rest) \<Rightarrow> (if list_all (\<lambda>y. y = x) rest then Some x else None)
+           | _               \<Rightarrow> None)
       | None \<Rightarrow> None)"
 | "smtEval m env (TEntityBase name) = Some (SEntityElem name (STR ''''))"
 | "smtEval m env (TForallSet var setT body) =

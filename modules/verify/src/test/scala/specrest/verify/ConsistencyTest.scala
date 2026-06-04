@@ -31,10 +31,8 @@ class ConsistencyTest extends CatsEffectSuite:
       ir     <- SpecFixtures.buildFromSource("the_demo", spec)
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield assert(
-      report.ok,
-      s"expected ok=true; failing checks: ${report.checks.filter(c =>
-          c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
-        ).map(_.id)}"
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (the must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
     )
 
   test(
@@ -53,10 +51,8 @@ class ConsistencyTest extends CatsEffectSuite:
       ir     <- SpecFixtures.buildFromSource("constructor_demo", spec)
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield assert(
-      report.ok,
-      s"expected ok=true; failing checks: ${report.checks.filter(c =>
-          c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
-        ).map(_.id)}"
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (Entity{...} must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
     )
 
   test("unsat_invariants has contradictory_invariants diagnostic"):

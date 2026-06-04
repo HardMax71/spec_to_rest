@@ -723,12 +723,17 @@ lemma soundness_forall_rel_known:
   by simp
 
 lemma the_select_vts:
-  "value_to_smt_opt (case xs of [x] \<Rightarrow> Some x | _ \<Rightarrow> None)
-     = (case map value_to_smt xs of [x] \<Rightarrow> Some x | _ \<Rightarrow> None)"
+  "value_to_smt_opt
+       (case xs of [] \<Rightarrow> None | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))
+     = (case map value_to_smt xs of [] \<Rightarrow> None
+          | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
 proof (cases xs)
   case Nil thus ?thesis by simp
 next
-  case (Cons a rest) thus ?thesis by (cases rest) simp_all
+  case (Cons y rest)
+  have "list_all (\<lambda>z. z = value_to_smt y) (map value_to_smt rest) = list_all (\<lambda>z. z = y) rest"
+    by (induction rest) auto
+  thus ?thesis by (simp add: Cons)
 qed
 
 lemma soundness_the_rel_known:
@@ -749,9 +754,11 @@ proof -
   next
     case (Some matches)
     have "value_to_smt_opt (eval s st env (TheRel var rel_name body sp))
-            = value_to_smt_opt (case matches of [x] \<Rightarrow> Some x | _ \<Rightarrow> None)"
+            = value_to_smt_opt (case matches of [] \<Rightarrow> None
+                | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
       using hd Some by simp
-    also have "\<dots> = (case map value_to_smt matches of [x] \<Rightarrow> Some x | _ \<Rightarrow> None)"
+    also have "\<dots> = (case map value_to_smt matches of [] \<Rightarrow> None
+                | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
       by (rule the_select_vts)
     also have "\<dots> = smtEval (correlate_model s st) (correlate_env env)
                        (translate (TheRel var rel_name body sp))"

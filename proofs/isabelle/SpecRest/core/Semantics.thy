@@ -1231,8 +1231,8 @@ where
      (case state_relation_domain st rel_name of
         Some rel_dom \<Rightarrow>
           (case eval_the_rel s st env var rel_dom body of
-             Some [x] \<Rightarrow> Some x
-           | _        \<Rightarrow> None)
+             Some (x # rest) \<Rightarrow> (if list_all (\<lambda>y. y = x) rest then Some x else None)
+           | _               \<Rightarrow> None)
       | None \<Rightarrow> None)"
 | "eval s st env (EntityBase name _) = Some (VEntity name (STR ''''))"
 | "eval s st env (Prime e _) = eval s st env e"
