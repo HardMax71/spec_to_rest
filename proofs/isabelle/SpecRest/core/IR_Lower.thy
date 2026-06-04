@@ -23,6 +23,16 @@ where
         None \<Rightarrow> None
       | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
 
+fun lower_set_comp_eq ::
+    "String.literal list \<Rightarrow> String.literal \<Rightarrow> String.literal
+       \<Rightarrow> expr \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr"
+where
+  "lower_set_comp_eq enums var dnm setE predE sp =
+     (let body = BoolBin IffOp (SetMember (Ident var None) setE sp) predE sp
+      in if string_in_list dnm enums
+           then ForallEnum var dnm body sp
+           else ForallRel var dnm body sp)"
+
 function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
 and lowerSetList ::
     "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
@@ -90,9 +100,15 @@ where
              (Some l', Some r') \<Rightarrow> Some (BoolBin IffOp l' r' sp)
            | _ \<Rightarrow> None)
       | BEq \<Rightarrow>
-          (case (lower enums l, lower enums r) of
-             (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
-           | _ \<Rightarrow> None)
+          (case r of
+             SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
+               (case (lower enums l, lower enums p) of
+                  (Some l', Some p') \<Rightarrow> Some (lower_set_comp_eq enums var dnm l' p' sp)
+                | _ \<Rightarrow> None)
+           | _ \<Rightarrow>
+               (case (lower enums l, lower enums r) of
+                  (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
+                | _ \<Rightarrow> None))
       | BNeq \<Rightarrow>
           (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp NeqOp l' r' sp)
@@ -145,6 +161,15 @@ where
           (case r of
              IdentifierF rel _ \<Rightarrow>
                map_option (\<lambda>l'. Member l' rel sp) (lower enums l)
+           | SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
+               (case (lower enums l, lower enums p) of
+                  (Some l', Some p') \<Rightarrow>
+                    Some (LetIn var l'
+                           (if string_in_list dnm enums
+                              then p'
+                              else BoolBin AndOp (Member (Ident var None) dnm sp) p' sp)
+                           sp)
+                | _ \<Rightarrow> None)
            | _ \<Rightarrow>
                (case (lower enums l, lower enums r) of
                   (Some l', Some r') \<Rightarrow> Some (SetMember l' r' sp)
@@ -236,5 +261,29 @@ termination
              | Inr (Inr (Inr (_, entries, _))) \<Rightarrow> Suc (length entries))
        ]")
      auto
+
+lemma lower_BEq_noncomp:
+  assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+  shows "lower enums (BinaryOpF BEq l r sp)
+           = (case (lower enums l, lower enums r) of
+                (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
+              | _ \<Rightarrow> None)"
+proof (cases r)
+  case (SetComprehensionF v dom pr s)
+  with assms show ?thesis by (cases dom) auto
+qed auto
+
+lemma lower_BIn_noncomp:
+  assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+  shows "lower enums (BinaryOpF BIn l r sp)
+           = (case r of
+                IdentifierF rel _ \<Rightarrow> map_option (\<lambda>l'. Member l' rel sp) (lower enums l)
+              | _ \<Rightarrow> (case (lower enums l, lower enums r) of
+                        (Some l', Some r') \<Rightarrow> Some (SetMember l' r' sp)
+                      | _ \<Rightarrow> None))"
+proof (cases r)
+  case (SetComprehensionF v dom pr s)
+  with assms show ?thesis by (cases dom) auto
+qed auto
 
 end

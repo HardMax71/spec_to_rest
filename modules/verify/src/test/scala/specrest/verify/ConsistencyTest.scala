@@ -99,7 +99,7 @@ class ConsistencyTest extends CatsEffectSuite:
         s"set_ops skips must be soundness-limitation only; got: ${unexpectedSkips.map(_.id)}"
       )
 
-  test("set_comp_demo — global skips with soundness_limitation (set comprehension out of subset)"):
+  test("set_comp_demo — global verifies via Z3 (set comprehension now in the verified subset)"):
     for
       ir     <- SpecFixtures.loadIR("set_comp_demo")
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
@@ -107,11 +107,7 @@ class ConsistencyTest extends CatsEffectSuite:
       val global = report.checks.find(_.id == "global").getOrElse(
         fail("expected a global check")
       )
-      assertEquals(global.status, CheckOutcome.Skipped)
-      assertEquals(
-        global.diagnostic.map(_.category),
-        Some(DiagnosticCategory.SoundnessLimitation)
-      )
+      assertEquals(global.status, CheckOutcome.Sat)
 
   test("powerset_demo — global invariant routes to Alloy and solves sat"):
     for
