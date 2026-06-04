@@ -14,9 +14,7 @@ private[z3] object RegexParser:
 
   private def strip(s: String): String =
     val a =
-      if s.length >= 2 && s.head == '/' then
-        val last = s.lastIndexOf('/')
-        if last > 0 then s.substring(1, last) else s
+      if s.length >= 2 && s.head == '/' && s.last == '/' then s.substring(1, s.length - 1)
       else s
     val b = if a.startsWith("^") then a.drop(1) else a
     if b.endsWith("$") && !b.endsWith("\\$") then b.dropRight(1) else b

@@ -24,7 +24,10 @@ class RegexMatchTest extends CatsEffectSuite:
       ),
       artifact = emptyArtifact
     )
-    backend.use(_.check(script, VerificationConfig.Default).map(_.toOption.get.status))
+    backend.use(_.check(script, VerificationConfig.Default).flatMap {
+      case Right(result) => IO.pure(result.status)
+      case Left(err)     => IO.raiseError(new AssertionError(s"backend check failed: $err"))
+    })
 
   private val alnum: Option[Z3Regex] =
     Some(
