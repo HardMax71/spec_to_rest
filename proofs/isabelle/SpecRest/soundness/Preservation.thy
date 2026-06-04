@@ -47,7 +47,14 @@ where
         | UPower \<Rightarrow> False)"
 | "wf_z3 (BinaryOpF op l r _)      =
      (case op of BSubset \<Rightarrow> (wf_z3 l \<and> wf_z3 r)
-        | BIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
+        | BEq \<Rightarrow>
+            (case r of
+               SetComprehensionF _ (IdentifierF _ _) p _ \<Rightarrow> wf_z3 l \<and> wf_z3 p
+             | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)
+        | BIn \<Rightarrow>
+            (case r of
+               SetComprehensionF _ (IdentifierF _ _) p _ \<Rightarrow> wf_z3 l \<and> wf_z3 p
+             | _ \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r)))
         | BNotIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
         | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)"
 | "wf_z3 (LetF _ v b _)            = (wf_z3 v \<and> wf_z3 b)"
@@ -78,6 +85,27 @@ where
 | "wf_z3_fields (FieldAssignFull _ v _ # rest) = (wf_z3 v \<and> wf_z3_fields rest)"
 | "wf_z3_entries []                = True"
 | "wf_z3_entries (MapEntryFull k v _ # rest) = (wf_z3 k \<and> wf_z3 v \<and> wf_z3_entries rest)"
+
+lemma not_expr_has_ty_set_comp:
+  "expr_has_ty \<Gamma> (SetComprehensionF v dm pr sp) t \<Longrightarrow> False"
+  by (auto elim: expr_has_ty.cases)
+
+lemma wf_z3_BEq_noncomp:
+  assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+  shows "wf_z3 (BinaryOpF BEq l r sp) = (wf_z3 l \<and> wf_z3 r)"
+proof (cases r)
+  case (SetComprehensionF v dom pr s)
+  with assms show ?thesis by (cases dom) auto
+qed auto
+
+lemma wf_z3_BIn_noncomp:
+  assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+  shows "wf_z3 (BinaryOpF BIn l r sp)
+           = (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))"
+proof (cases r)
+  case (SetComprehensionF v dom pr s)
+  with assms show ?thesis by (cases dom) auto
+qed auto
 
 lemma wf_z3_fields_iff:
   "wf_z3_fields updates
@@ -134,17 +162,41 @@ next
   with wf show ?thesis by simp
 qed (use wf ih in \<open>auto split: option.splits\<close>)
 
+lemma lower_eq_comp_some:
+  assumes "lower enums l \<noteq> None" and "lower enums p \<noteq> None"
+  shows "lower enums
+           (BinaryOpF BEq l (SetComprehensionF var (IdentifierF dnm sp2) p sp3) sp)
+           \<noteq> None"
+  using assms by (auto split: option.splits)
+
+lemma lower_in_comp_some:
+  assumes "lower enums l \<noteq> None" and "lower enums p \<noteq> None"
+  shows "lower enums
+           (BinaryOpF BIn l (SetComprehensionF var (IdentifierF dnm sp2) p sp3) sp)
+           \<noteq> None"
+  using assms by (auto split: option.splits)
+
 lemma lower_binop_some:
   assumes l: "wf_z3 l \<Longrightarrow> lower enums l \<noteq> None"
       and r: "wf_z3 r \<Longrightarrow> lower enums r \<noteq> None"
       and wf: "wf_z3 (BinaryOpF op l r sp)"
+      and ncr: "\<nexists>var dnm sp2 p sp3.
+                  r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "lower enums (BinaryOpF op l r sp) \<noteq> None"
 proof -
   have inout: "lower enums (BinaryOpF op l r sp) \<noteq> None"
     if opc: "op = BIn \<or> op = BNotIn"
   proof -
-    from wf opc have wl: "wf_z3 l"
-        and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by auto
+    have wlrd: "wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r)"
+    proof (rule disjE[OF opc])
+      assume oi: "op = BIn"
+      show ?thesis using wf[unfolded oi wf_z3_BIn_noncomp[OF ncr]] .
+    next
+      assume oi: "op = BNotIn"
+      show ?thesis using wf[unfolded oi] by simp
+    qed
+    from wlrd have wl: "wf_z3 l"
+        and rd: "(\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r" by simp_all
     from l wl obtain l' where l': "lower enums l = Some l'" by blast
     from rd show ?thesis
     proof
@@ -152,13 +204,20 @@ proof -
       then obtain rel s where "r = IdentifierF rel s" by blast
       thus ?thesis using l' opc by auto
     next
-      assume "wf_z3 r"
-      with r obtain r' where "lower enums r = Some r'" by blast
-      with l' opc show ?thesis by (cases r) auto
+      assume wr: "wf_z3 r"
+      with r obtain r' where r': "lower enums r = Some r'" by blast
+      from l' r' wr opc show ?thesis by (cases r) (auto split: option.splits)
     qed
   qed
   show ?thesis
   proof (cases op)
+    case BEq
+    from wf[unfolded BEq wf_z3_BEq_noncomp[OF ncr]] have wl: "wf_z3 l" and wr: "wf_z3 r"
+      by simp_all
+    from l wl obtain l' where l': "lower enums l = Some l'" by blast
+    from r wr obtain r' where r': "lower enums r = Some r'" by blast
+    from l' r' BEq show ?thesis by (cases r) (auto split: option.splits)
+  next
     case BIn
     thus ?thesis using inout by blast
   next
@@ -298,7 +357,42 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have r: "wf_z3 r \<Longrightarrow> lower enums r \<noteq> None"
       using sub[of r] BinaryOpF by simp
     show ?thesis unfolding BinaryOpF
-      by (rule lower_binop_some[OF l r less.prems[unfolded BinaryOpF]])
+    proof (cases "\<exists>var dnm sp2 p sp3.
+                    r = SetComprehensionF var (IdentifierF dnm sp2) p sp3")
+      case True
+      then obtain var dnm sp2 p sp3
+        where rc: "r = SetComprehensionF var (IdentifierF dnm sp2) p sp3" by blast
+      have opeq: "op = BEq \<or> op = BIn"
+        using less.prems[unfolded BinaryOpF] rc by (cases op) auto
+      have wlp: "wf_z3 l \<and> wf_z3 p"
+      proof (rule disjE[OF opeq])
+        assume "op = BEq"
+        thus ?thesis using less.prems[unfolded BinaryOpF] rc by simp
+      next
+        assume "op = BIn"
+        thus ?thesis using less.prems[unfolded BinaryOpF] rc by simp
+      qed
+      from wlp have wl: "wf_z3 l" and wp: "wf_z3 p" by simp_all
+      have szp: "size p < size e" using BinaryOpF rc by simp
+      from l wl have lne: "lower enums l \<noteq> None" by blast
+      from sub[OF szp] wp have pne: "lower enums p \<noteq> None" by blast
+      from opeq show "lower enums (BinaryOpF op l r s) \<noteq> None"
+      proof
+        assume oe: "op = BEq"
+        show "lower enums (BinaryOpF op l r s) \<noteq> None"
+          unfolding oe rc by (rule lower_eq_comp_some[OF lne pne])
+      next
+        assume oe: "op = BIn"
+        show "lower enums (BinaryOpF op l r s) \<noteq> None"
+          unfolding oe rc by (rule lower_in_comp_some[OF lne pne])
+      qed
+    next
+      case False
+      hence ncr: "\<nexists>var dnm sp2 p sp3.
+                    r = SetComprehensionF var (IdentifierF dnm sp2) p sp3" by blast
+      show "lower enums (BinaryOpF op l r s) \<noteq> None"
+        by (rule lower_binop_some[OF l r less.prems[unfolded BinaryOpF] ncr])
+    qed
   next
     case (QuantifierF k bs body s)
     have ih: "wf_z3 body \<Longrightarrow> lower enums body \<noteq> None"
@@ -564,7 +658,18 @@ proof (induction rule: expr_has_ty.induct)
   thus ?case by (cases op) auto
 next
   case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
-  thus ?case by (cases op) auto
+  have rnc: "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+    using T_Cmp_Eq.hyps(2) by (auto dest: not_expr_has_ty_set_comp)
+  from T_Cmp_Eq.hyps(4) have d2: "op = BEq \<or> op = BNeq" by auto
+  show ?case
+  proof (rule disjE[OF d2])
+    assume oe: "op = BEq"
+    show ?case unfolding oe
+      by (subst wf_z3_BEq_noncomp[OF rnc]) (simp add: T_Cmp_Eq.IH)
+  next
+    assume oe: "op = BNeq"
+    show ?case unfolding oe using T_Cmp_Eq.IH by simp
+  qed
 next
   case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
@@ -609,7 +714,10 @@ next
   thus ?case by simp
 next
   case (T_BIn_Set \<Gamma> l t r sp)
-  thus ?case by simp
+  have rnc: "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+    using T_BIn_Set.hyps(2) by (auto dest: not_expr_has_ty_set_comp)
+  show ?case
+    by (subst wf_z3_BIn_noncomp[OF rnc]) (simp add: T_BIn_Set.IH)
 next
   case (T_BNotIn_Set \<Gamma> l t r sp)
   thus ?case by simp
@@ -843,11 +951,20 @@ lemma h3_pres_Cmp:
   assumes "op \<in> {BEq, BNeq, BLt, BLe, BGt, BGe}"
       and "lower enums (BinaryOpF op l r sp) = Some e'"
       and "eval sch st env e' = Some v"
+      and ncr: "\<nexists>var dnm sp2 p sp3.
+                  r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "value_has_ty \<Gamma> v TBool"
 proof -
-  from assms(1,2) obtain l' r' cop where
-       e_eq: "e' = Cmp cop l' r' sp"
-    by (cases op) (auto split: option.splits)
+  have "\<exists>l' r' cop. e' = Cmp cop l' r' sp"
+  proof (cases "op = BEq")
+    case True
+    from assms(2)[unfolded True lower_BEq_noncomp[OF ncr]] show ?thesis
+      by (auto split: option.splits)
+  next
+    case False
+    with assms(1,2) show ?thesis by (cases op) (auto split: option.splits)
+  qed
+  then obtain l' r' cop where e_eq: "e' = Cmp cop l' r' sp" by blast
   from assms(3) e_eq
   have ev: "eval_cmp cop (eval sch st env l') (eval sch st env r') = Some v"
     by simp
@@ -914,10 +1031,24 @@ next
   qed
 next
   case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
-  thus ?case using h3_pres_Cmp by blast
+  have rnc: "\<nexists>var dnm sp2 p sp3.
+               r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+    using T_Cmp_Eq.hyps(2) by (auto dest: not_expr_has_ty_set_comp)
+  show ?case
+  proof (rule h3_pres_Cmp[OF _ T_Cmp_Eq.prems(2) T_Cmp_Eq.prems(3) rnc])
+    show "op \<in> {BEq, BNeq, BLt, BLe, BGt, BGe}"
+      using T_Cmp_Eq.hyps(4) by auto
+  qed
 next
   case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
-  thus ?case using h3_pres_Cmp by blast
+  have rnc: "\<nexists>var dnm sp2 p sp3.
+               r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+    using T_Cmp_Ord.hyps(2) by (auto dest: not_expr_has_ty_set_comp)
+  show ?case
+  proof (rule h3_pres_Cmp[OF _ T_Cmp_Ord.prems(2) T_Cmp_Ord.prems(3) rnc])
+    show "op \<in> {BEq, BNeq, BLt, BLe, BGt, BGe}"
+      using T_Cmp_Ord.hyps(5) by auto
+  qed
 next
   case (T_Bool_Bin \<Gamma> l r op sp)
   thus ?case using h3_pres_Bool_Bin by blast
@@ -1128,12 +1259,12 @@ next
     by (simp add: v_eq vt_set)
 next
   case (T_BIn_Set \<Gamma> l t r sp)
-  from T_BIn_Set.prems(2) T_BIn_Set.hyps(3)
+  from T_BIn_Set.prems(2) T_BIn_Set.hyps(2,3)
   obtain l' r' where
        l_low: "lower enums l = Some l'"
    and r_low: "lower enums r = Some r'"
    and e_eq: "e' = SetMember l' r' sp"
-    by (cases r) (auto split: option.splits)
+    by (cases r) (auto split: option.splits dest: not_expr_has_ty_set_comp)
   from T_BIn_Set.prems(3) e_eq obtain vl rv where
        ev_l: "eval sch st env l' = Some vl"
    and ev_r: "eval sch st env r' = Some (VSet rv)"
@@ -1143,12 +1274,12 @@ next
     by (simp add: v_eq vt_bool)
 next
   case (T_BNotIn_Set \<Gamma> l t r sp)
-  from T_BNotIn_Set.prems(2) T_BNotIn_Set.hyps(3)
+  from T_BNotIn_Set.prems(2) T_BNotIn_Set.hyps(2,3)
   obtain l' r' where
        l_low: "lower enums l = Some l'"
    and r_low: "lower enums r = Some r'"
    and e_eq: "e' = UnNot (SetMember l' r' sp) sp"
-    by (cases r) (auto split: option.splits)
+    by (cases r) (auto split: option.splits dest: not_expr_has_ty_set_comp)
   from T_BNotIn_Set.prems(3) e_eq obtain vl rv where
        ev_l: "eval sch st env l' = Some vl"
    and ev_r: "eval sch st env r' = Some (VSet rv)"

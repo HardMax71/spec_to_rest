@@ -54,6 +54,10 @@ next
       by simp
   qed
 next
+  case (ForallSet var setE body sp)
+  show ?case
+    by (rule soundness_ForallSet[OF ForallSet.IH(1) ForallSet.IH(2)])
+next
   case (Prime e sp) thus ?case by simp
 next
   case (Pre e sp) thus ?case by simp
@@ -221,19 +225,33 @@ lemma lower_binop_collapse:
   assumes l: "requiresAlloy l \<Longrightarrow> lower enums l = None"
       and r: "requiresAlloy r \<Longrightarrow> lower enums r = None"
       and ra: "requiresAlloy (BinaryOpF op l r sp)"
+      and ncr: "\<nexists>var dnm sp2 p sp3.
+                  r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "lower enums (BinaryOpF op l r sp) = None"
 proof -
   from ra have d: "requiresAlloy l \<or> requiresAlloy r" by simp
-  have inout: "lower enums (BinaryOpF op l r sp) = None"
-    if opc: "op = BIn \<or> op = BNotIn"
-    using opc l r d by (elim disjE; cases r) (auto split: option.splits)
   show ?thesis
   proof (cases op)
+    case BEq
+    have "lower enums (BinaryOpF op l r sp)
+            = (case (lower enums l, lower enums r) of
+                 (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
+               | _ \<Rightarrow> None)"
+      unfolding BEq by (rule lower_BEq_noncomp[OF ncr])
+    thus ?thesis using l r d by (auto split: option.splits)
+  next
     case BIn
-    thus ?thesis by (rule inout[OF disjI1])
+    have "lower enums (BinaryOpF op l r sp)
+            = (case r of
+                 IdentifierF rel _ \<Rightarrow> map_option (\<lambda>l'. Member l' rel sp) (lower enums l)
+               | _ \<Rightarrow> (case (lower enums l, lower enums r) of
+                         (Some l', Some r') \<Rightarrow> Some (SetMember l' r' sp)
+                       | _ \<Rightarrow> None))"
+      unfolding BIn by (rule lower_BIn_noncomp[OF ncr])
+    thus ?thesis using l r d by (cases r) (auto split: option.splits)
   next
     case BNotIn
-    thus ?thesis by (rule inout[OF disjI2])
+    with l r d show ?thesis by (cases r) (auto split: option.splits)
   qed (use l r d in \<open>auto split: option.splits\<close>)
 qed
 
@@ -342,7 +360,38 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have r: "requiresAlloy r \<Longrightarrow> lower enums r = None"
       using sub[of r] BinaryOpF by simp
     show ?thesis unfolding BinaryOpF
-      by (rule lower_binop_collapse[OF l r less.prems[unfolded BinaryOpF]])
+    proof (cases "\<exists>var dnm sp2 p sp3.
+                    r = SetComprehensionF var (IdentifierF dnm sp2) p sp3")
+      case True
+      then obtain var dnm sp2 p sp3
+        where rc: "r = SetComprehensionF var (IdentifierF dnm sp2) p sp3" by blast
+      have szp: "size p < size e" using BinaryOpF rc by simp
+      have pcol: "requiresAlloy p \<Longrightarrow> lower enums p = None"
+        using sub[OF szp] by blast
+      have d: "requiresAlloy l \<or> requiresAlloy p"
+        using less.prems[unfolded BinaryOpF] rc by simp
+      have lp: "lower enums l = None \<or> lower enums p = None"
+        using d
+      proof (elim disjE)
+        assume "requiresAlloy l" thus ?thesis using l by simp
+      next
+        assume "requiresAlloy p" thus ?thesis using pcol by simp
+      qed
+      show "lower enums (BinaryOpF op l r s) = None"
+      proof (cases op)
+        case BEq
+        thus ?thesis using lp unfolding rc by (auto split: option.splits)
+      next
+        case BIn
+        thus ?thesis using lp unfolding rc by (auto split: option.splits)
+      qed (use rc in \<open>auto split: option.splits\<close>)
+    next
+      case False
+      hence ncr: "\<nexists>var dnm sp2 p sp3.
+                    r = SetComprehensionF var (IdentifierF dnm sp2) p sp3" by blast
+      show "lower enums (BinaryOpF op l r s) = None"
+        by (rule lower_binop_collapse[OF l r less.prems[unfolded BinaryOpF] ncr])
+    qed
   next
     case (QuantifierF k bs body s)
     have ih: "requiresAlloy body \<Longrightarrow> lower enums body = None"

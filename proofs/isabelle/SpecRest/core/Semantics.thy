@@ -1221,6 +1221,10 @@ where
      (case state_relation_domain st rel_name of
         Some rel_dom \<Rightarrow> eval_forall_rel s st env var rel_dom body
       | None     \<Rightarrow> None)"
+| "eval s st env (ForallSet var setE body _) =
+     (case eval s st env setE of
+        Some (VSet elems) \<Rightarrow> eval_forall_rel s st env var elems body
+      | _ \<Rightarrow> None)"
 | "eval s st env (Prime e _) = eval s st env e"
 | "eval s st env (Pre e _)   = eval s st env e"
 | "eval s st env (CardRel rel_name _) =

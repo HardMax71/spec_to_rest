@@ -2072,6 +2072,18 @@ object Translator:
             inferSortOfZ3Expr(ctx, rhs) match
               case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, rhs)
               case _                     => fail(ctx, s"membership '$rel' requires a relation or set-typed constant")
+          case _ if ctx.entities.contains(rel) =>
+            // entity domain is the whole sort (as `resolveBindingDomain` treats `forall u in <Entity>`), so a value OF that sort is a member; a cross-sort element is a type confusion the verified `T_BIn_Rel` rule does not exclude
+            val entitySort = ctx.entities(rel).sort
+            inferSortOfZ3Expr(ctx, key) match
+              case Some(s) if Z3Sort.eq(s, entitySort) => Z3Expr.BoolLit(true)
+              case Some(s) =>
+                fail(
+                  ctx,
+                  s"membership '$rel' requires an element of the entity sort $entitySort; got $s"
+                )
+              case None =>
+                fail(ctx, s"membership '$rel' requires an element with an inferrable sort")
           case _ =>
             env.get(rel) match
               case Some(bound) =>
@@ -2109,6 +2121,24 @@ object Translator:
           QKind.ForAll,
           List(Z3Binding(varName, sort)),
           guarded
+        )
+
+      case TForallSet(varName, setT, body) =>
+        val setZ = encodeFromSmtTerm(ctx, setT, env)
+        val elemSort = inferSortOfZ3Expr(ctx, setZ) match
+          case Some(Z3Sort.SetOf(e)) => e
+          case _ =>
+            fail(ctx, "universal quantification requires a set-sorted domain")
+        // fresh binder so an outer identifier of the same name inside `setZ` is not captured
+        val freshName = ctx.freshSkolem(s"forall_set_$varName")
+        val binderVar = Z3Expr.Var(freshName, elemSort)
+        val newEnv    = env.clone()
+        newEnv(varName) = binderVar
+        val inner = encodeFromSmtTerm(ctx, body, newEnv)
+        Z3Expr.Quantifier(
+          QKind.ForAll,
+          List(Z3Binding(freshName, elemSort)),
+          Z3Expr.Implies(Z3Expr.SetMember(binderVar, setZ), inner)
         )
 
       case TIndexRel(base, key) =>
