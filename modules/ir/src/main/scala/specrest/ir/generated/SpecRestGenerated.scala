@@ -9115,6 +9115,280 @@ object SpecRestGenerated {
     case MapEntryFull(x1, x2, x3) => x1
   }
 
+  def is_binder_full(x0: expr_full): Boolean = x0 match {
+    case LetF(uu, uv, uw, ux)              => true
+    case QuantifierF(uy, uz, va, vb)       => true
+    case LambdaF(vc, vd, ve)               => true
+    case SetComprehensionF(vf, vg, vh, vi) => true
+    case TheF(vj, vk, vl, vm)              => true
+    case BinaryOpF(v, va, vb, vc)          => false
+    case UnaryOpF(v, va, vb)               => false
+    case SomeWrapF(v, va)                  => false
+    case FieldAccessF(v, va, vb)           => false
+    case EnumAccessF(v, va, vb)            => false
+    case IndexF(v, va, vb)                 => false
+    case CallF(v, va, vb)                  => false
+    case PrimeF(v, va)                     => false
+    case PreF(v, va)                       => false
+    case WithF(v, va, vb)                  => false
+    case IfF(v, va, vb, vc)                => false
+    case ConstructorF(v, va, vb)           => false
+    case SetLiteralF(v, va)                => false
+    case MapLiteralF(v, va)                => false
+    case SeqLiteralF(v, va)                => false
+    case MatchesF(v, va, vb)               => false
+    case IntLitF(v, va)                    => false
+    case FloatLitF(v, va)                  => false
+    case StringLitF(v, va)                 => false
+    case BoolLitF(v, va)                   => false
+    case NoneLitF(v)                       => false
+    case IdentifierF(v, va)                => false
+  }
+
+  def capture_safe(body: expr_full, params: List[String], args: List[expr_full]): Boolean =
+    !list_ex[expr_full]((a: expr_full) => is_binder_full(a), allSubexprs(body)) &&
+      list_all[expr_full](
+        (a: expr_full) =>
+          list_all[String](
+            (p: String) =>
+              !string_in_list(p, free_vars(a)),
+            params
+          ),
+        args
+      )
+
+  def prdParams(x0: predicate_decl_full): List[param_decl_full] = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x2
+  }
+
+  def fncParams(x0: function_decl_full): List[param_decl_full] = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x2
+  }
+
+  def prdName(x0: predicate_decl_full): String = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x1
+  }
+
+  def prdBody(x0: predicate_decl_full): expr_full = x0 match {
+    case PredicateDeclFull(x1, x2, x3, x4) => x3
+  }
+
+  def fncName(x0: function_decl_full): String = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x1
+  }
+
+  def fncBody(x0: function_decl_full): expr_full = x0 match {
+    case FunctionDeclFull(x1, x2, x3, x4, x5) => x4
+  }
+
+  def prmName(x0: param_decl_full): String = x0 match {
+    case ParamDeclFull(x1, x2, x3) => x1
+  }
+
+  def subst_params(uu: List[String], uv: List[expr_full], body: expr_full): expr_full =
+    (uu, uv, body) match {
+      case (p :: ps, a :: args, body) => subst_params(ps, args, subst(p, a, body))
+      case (Nil, uv, body)            => body
+      case (uu, Nil, body)            => body
+    }
+
+  def inline_calls_bindings(
+      vm: List[function_decl_full],
+      vn: List[predicate_decl_full],
+      x2: List[quantifier_binding_full]
+  ): List[quantifier_binding_full] =
+    (vm, vn, x2) match {
+      case (vm, vn, Nil) => Nil
+      case (fs, ps, QuantifierBindingFull(n, d, kk, sp) :: rest) =>
+        QuantifierBindingFull(n, inline_calls(fs, ps, d), kk, sp) ::
+          inline_calls_bindings(fs, ps, rest)
+    }
+
+  def inline_calls_entries(
+      vk: List[function_decl_full],
+      vl: List[predicate_decl_full],
+      x2: List[map_entry_full]
+  ): List[map_entry_full] =
+    (vk, vl, x2) match {
+      case (vk, vl, Nil) => Nil
+      case (fs, ps, MapEntryFull(k, v, sp) :: rest) =>
+        MapEntryFull(inline_calls(fs, ps, k), inline_calls(fs, ps, v), sp) ::
+          inline_calls_entries(fs, ps, rest)
+    }
+
+  def inline_calls_fields(
+      vi: List[function_decl_full],
+      vj: List[predicate_decl_full],
+      x2: List[field_assign_full]
+  ): List[field_assign_full] =
+    (vi, vj, x2) match {
+      case (vi, vj, Nil) => Nil
+      case (fs, ps, FieldAssignFull(f, v, sp) :: rest) =>
+        FieldAssignFull(f, inline_calls(fs, ps, v), sp) ::
+          inline_calls_fields(fs, ps, rest)
+    }
+
+  def inline_calls_list(
+      vg: List[function_decl_full],
+      vh: List[predicate_decl_full],
+      x2: List[expr_full]
+  ): List[expr_full] =
+    (vg, vh, x2) match {
+      case (vg, vh, Nil) => Nil
+      case (fs, ps, e :: es) =>
+        inline_calls(fs, ps, e) :: inline_calls_list(fs, ps, es)
+    }
+
+  def inline_calls(
+      fs: List[function_decl_full],
+      ps: List[predicate_decl_full],
+      x2: expr_full
+  ): expr_full =
+    (fs, ps, x2) match {
+      case (fs, ps, CallF(callee, args, sp)) =>
+        val argsa = inline_calls_list(fs, ps, args): List[expr_full];
+        callee match {
+          case BinaryOpF(_, _, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case UnaryOpF(_, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case QuantifierF(_, _, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case SomeWrapF(_, _)  => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case TheF(_, _, _, _) => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case FieldAccessF(_, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case EnumAccessF(_, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case IndexF(_, _, _)  => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case CallF(_, _, _)   => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case PrimeF(_, _)     => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case PreF(_, _)       => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case WithF(_, _, _)   => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case IfF(_, _, _, _)  => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case LetF(_, _, _, _) => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case LambdaF(_, _, _) => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case ConstructorF(_, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case SetLiteralF(_, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case MapLiteralF(_, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case SetComprehensionF(_, _, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case SeqLiteralF(_, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case MatchesF(_, _, _) =>
+            CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case IntLitF(_, _)    => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case FloatLitF(_, _)  => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case StringLitF(_, _) => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case BoolLitF(_, _)   => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case NoneLitF(_)      => CallF(inline_calls(fs, ps, callee), argsa, sp)
+          case IdentifierF(nm, _) =>
+            find[function_decl_full](
+              (f: function_decl_full) =>
+                fncName(f) == nm,
+              fs
+            ) match {
+              case None =>
+                find[predicate_decl_full](
+                  (q: predicate_decl_full) =>
+                    prdName(q) == nm,
+                  ps
+                ) match {
+                  case None => CallF(callee, argsa, sp)
+                  case Some(pr) =>
+                    equal_nat(
+                      size_list[param_decl_full](prdParams(pr)),
+                      size_list[expr_full](argsa)
+                    ) &&
+                      capture_safe(
+                        prdBody(pr),
+                        map[param_decl_full, String](
+                          (a: param_decl_full) => prmName(a),
+                          prdParams(pr)
+                        ),
+                        argsa
+                      ) match {
+                      case true => subst_params(
+                          map[param_decl_full, String](
+                            (a: param_decl_full) => prmName(a),
+                            prdParams(pr)
+                          ),
+                          argsa,
+                          prdBody(pr)
+                        )
+                      case false => CallF(callee, argsa, sp)
+                    }
+                }
+              case Some(f) =>
+                equal_nat(size_list[param_decl_full](fncParams(f)), size_list[expr_full](argsa)) &&
+                  capture_safe(
+                    fncBody(f),
+                    map[param_decl_full, String](
+                      (a: param_decl_full) =>
+                        prmName(a),
+                      fncParams(f)
+                    ),
+                    argsa
+                  ) match {
+                  case true => subst_params(
+                      map[param_decl_full, String](
+                        (a: param_decl_full) => prmName(a),
+                        fncParams(f)
+                      ),
+                      argsa,
+                      fncBody(f)
+                    )
+                  case false => CallF(callee, argsa, sp)
+                }
+            }
+        }
+      case (fs, ps, BinaryOpF(op, l, r, sp)) =>
+        BinaryOpF(op, inline_calls(fs, ps, l), inline_calls(fs, ps, r), sp)
+      case (fs, ps, UnaryOpF(op, e, sp)) =>
+        UnaryOpF(op, inline_calls(fs, ps, e), sp)
+      case (fs, ps, FieldAccessF(b, f, sp)) =>
+        FieldAccessF(inline_calls(fs, ps, b), f, sp)
+      case (fs, ps, EnumAccessF(b, m, sp)) =>
+        EnumAccessF(inline_calls(fs, ps, b), m, sp)
+      case (fs, ps, IndexF(b, i, sp)) =>
+        IndexF(inline_calls(fs, ps, b), inline_calls(fs, ps, i), sp)
+      case (fs, ps, PrimeF(e, sp)) => PrimeF(inline_calls(fs, ps, e), sp)
+      case (fs, ps, PreF(e, sp))   => PreF(inline_calls(fs, ps, e), sp)
+      case (fs, ps, WithF(b, upds, sp)) =>
+        WithF(inline_calls(fs, ps, b), inline_calls_fields(fs, ps, upds), sp)
+      case (fs, ps, IfF(c, t, e, sp)) =>
+        IfF(inline_calls(fs, ps, c), inline_calls(fs, ps, t), inline_calls(fs, ps, e), sp)
+      case (fs, ps, LetF(v, vala, body, sp)) =>
+        LetF(v, inline_calls(fs, ps, vala), inline_calls(fs, ps, body), sp)
+      case (fs, ps, LambdaF(p, b, sp)) => LambdaF(p, inline_calls(fs, ps, b), sp)
+      case (fs, ps, ConstructorF(n, flds, sp)) =>
+        ConstructorF(n, inline_calls_fields(fs, ps, flds), sp)
+      case (fs, ps, SetLiteralF(xs, sp)) =>
+        SetLiteralF(inline_calls_list(fs, ps, xs), sp)
+      case (fs, ps, MapLiteralF(es, sp)) =>
+        MapLiteralF(inline_calls_entries(fs, ps, es), sp)
+      case (fs, ps, SetComprehensionF(v, d, p, sp)) =>
+        SetComprehensionF(v, inline_calls(fs, ps, d), inline_calls(fs, ps, p), sp)
+      case (fs, ps, SeqLiteralF(xs, sp)) =>
+        SeqLiteralF(inline_calls_list(fs, ps, xs), sp)
+      case (fs, ps, MatchesF(e, pat, sp)) =>
+        MatchesF(inline_calls(fs, ps, e), pat, sp)
+      case (fs, ps, SomeWrapF(e, sp)) => SomeWrapF(inline_calls(fs, ps, e), sp)
+      case (fs, ps, TheF(v, d, b, sp)) =>
+        TheF(v, inline_calls(fs, ps, d), inline_calls(fs, ps, b), sp)
+      case (fs, ps, QuantifierF(q, bs, body, sp)) =>
+        QuantifierF(q, inline_calls_bindings(fs, ps, bs), inline_calls(fs, ps, body), sp)
+      case (uu, uv, IntLitF(n, sp))     => IntLitF(n, sp)
+      case (uw, ux, FloatLitF(n, sp))   => FloatLitF(n, sp)
+      case (uy, uz, StringLitF(n, sp))  => StringLitF(n, sp)
+      case (va, vb, BoolLitF(v, sp))    => BoolLitF(v, sp)
+      case (vc, vd, NoneLitF(sp))       => NoneLitF(sp)
+      case (ve, vf, IdentifierF(n, sp)) => IdentifierF(n, sp)
+    }
+
   def isEntityType(x0: type_expr_full, name: String): Boolean = (x0, name) match {
     case (NamedTypeF(n, uu), name)          => n == name
     case (SetTypeF(v, va), uw)              => false
@@ -11390,10 +11664,6 @@ object SpecRestGenerated {
 
   def mpeValue(x0: map_entry_full): expr_full = x0 match {
     case MapEntryFull(x1, x2, x3) => x2
-  }
-
-  def prmName(x0: param_decl_full): String = x0 match {
-    case ParamDeclFull(x1, x2, x3) => x1
   }
 
   def prmSpan(x0: param_decl_full): Option[span_t] = x0 match {
@@ -14194,14 +14464,6 @@ object SpecRestGenerated {
     case FieldDeclFull(x1, x2, x3, x4) => x3
   }
 
-  def fncBody(x0: function_decl_full): expr_full = x0 match {
-    case FunctionDeclFull(x1, x2, x3, x4, x5) => x4
-  }
-
-  def fncName(x0: function_decl_full): String = x0 match {
-    case FunctionDeclFull(x1, x2, x3, x4, x5) => x1
-  }
-
   def fncSpan(x0: function_decl_full): Option[span_t] = x0 match {
     case FunctionDeclFull(x1, x2, x3, x4, x5) => x5
   }
@@ -14739,14 +15001,6 @@ object SpecRestGenerated {
     case InvariantDeclFull(x1, x2, x3) => x3
   }
 
-  def prdBody(x0: predicate_decl_full): expr_full = x0 match {
-    case PredicateDeclFull(x1, x2, x3, x4) => x3
-  }
-
-  def prdName(x0: predicate_decl_full): String = x0 match {
-    case PredicateDeclFull(x1, x2, x3, x4) => x1
-  }
-
   def prdSpan(x0: predicate_decl_full): Option[span_t] = x0 match {
     case PredicateDeclFull(x1, x2, x3, x4) => x4
   }
@@ -15085,10 +15339,6 @@ object SpecRestGenerated {
 
   def cvrSpan(x0: convention_rule_full): Option[span_t] = x0 match {
     case ConventionRuleFull(x1, x2, x3, x4, x5) => x5
-  }
-
-  def fncParams(x0: function_decl_full): List[param_decl_full] = x0 match {
-    case FunctionDeclFull(x1, x2, x3, x4, x5) => x2
   }
 
   def operName(x0: operation_decl_full): String = x0 match {
@@ -15521,10 +15771,6 @@ object SpecRestGenerated {
 
   def fncRetType(x0: function_decl_full): type_expr_full = x0 match {
     case FunctionDeclFull(x1, x2, x3, x4, x5) => x3
-  }
-
-  def prdParams(x0: predicate_decl_full): List[param_decl_full] = x0 match {
-    case PredicateDeclFull(x1, x2, x3, x4) => x2
   }
 
   def svcInvariants(x0: service_ir_full): List[invariant_decl_full] = x0 match {

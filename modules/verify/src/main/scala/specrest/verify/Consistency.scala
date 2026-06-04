@@ -70,11 +70,52 @@ object Consistency:
     case Preservation(ir: service_ir_full, op: operation_decl_full, inv: NamedInvariant)
     case Temporal(ir: service_ir_full, decl: temporal_decl_full)
 
+  // Beta-reduce user function/predicate calls via the verified, capture-guarded
+  // `inline_calls` desugar before classification. Done at the IR level here, not
+  // in `Translator`, because the trust classifier runs `lower` on these raw exprs
+  // to pick Sound-vs-best-effort: it must see the inlined body too, else a
+  // now-verifiable call would still route best-effort. Capped fixpoint; a residual
+  // `CallF` (recursive / binder-containing / capture-risky) stays best-effort.
+  private def inlineExpr(
+      fs: List[function_decl_full],
+      ps: List[predicate_decl_full],
+      expr: expr_full
+  ): expr_full =
+    def hasUserCall(e: expr_full): Boolean =
+      allSubexprs(e).exists {
+        case CallF(IdentifierF(nm, _), _, _) =>
+          fs.exists(f => fncName(f) == nm) || ps.exists(p => prdName(p) == nm)
+        case _ => false
+      }
+    @annotation.tailrec
+    def loop(e: expr_full, fuel: Int): expr_full =
+      if fuel <= 0 || !hasUserCall(e) then e
+      else loop(inline_calls(fs, ps, e), fuel - 1)
+    loop(expr, 16)
+
+  private def inlineService(ir: service_ir_full): service_ir_full =
+    val fs = svcFunctions(ir)
+    val ps = svcPredicates(ir)
+    if fs.isEmpty && ps.isEmpty then ir
+    else
+      def inl(e: expr_full): expr_full = inlineExpr(fs, ps, e)
+      ir match
+        // positional fields: ServiceIRFull g=operations i=invariants;
+        // OperationDeclFull d=requires e=ensures; InvariantDeclFull b=body
+        case s: ServiceIRFull =>
+          s.copy(
+            g = s.g.map { case op: OperationDeclFull =>
+              op.copy(d = op.d.map(inl), e = op.e.map(inl))
+            },
+            i = s.i.map { case inv: InvariantDeclFull => inv.copy(b = inl(inv.b)) }
+          )
+
   def runConsistencyChecks(
-      ir: service_ir_full,
+      ir0: service_ir_full,
       config: VerificationConfig,
       dump: Option[DumpSink] = None
   ): IO[ConsistencyReport] =
+    val ir    = inlineService(ir0)
     val plans = planChecks(ir)
     val enums = Trust.enumNames(ir)
     val results: IO[List[CheckResult]] =
