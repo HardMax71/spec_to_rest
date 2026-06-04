@@ -8,12 +8,16 @@ import com.microsoft.z3.ArrayExpr
 import com.microsoft.z3.ArraySort
 import com.microsoft.z3.BoolExpr
 import com.microsoft.z3.BoolSort
+import com.microsoft.z3.CharSort
 import com.microsoft.z3.Context
 import com.microsoft.z3.DatatypeSort
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
+import com.microsoft.z3.ReExpr
+import com.microsoft.z3.ReSort
 import com.microsoft.z3.SeqExpr
+import com.microsoft.z3.SeqSort
 import com.microsoft.z3.Sort
 import com.microsoft.z3.Status
 import com.microsoft.z3.Symbol
@@ -327,6 +331,9 @@ private object Backend:
       optionSortFor(rctx.ctx, rctx.sortMap, v.getSort).getConstructors()(1).apply(v)
     case Z3Expr.StrLit(s, _) =>
       rctx.ctx.mkString(s)
+    case Z3Expr.InRe(str, re, _) =>
+      val strZ = renderExpr(rctx, str).asInstanceOf[Z3AstExpr[SeqSort[CharSort]]]
+      rctx.ctx.mkInRe(strZ, renderRe(rctx, re))
     case Z3Expr.SeqLit(elemSort, members, _) =>
       val elemZ   = resolveSort(rctx.ctx, rctx.sortMap, elemSort)
       val seqSort = rctx.ctx.mkSeqSort(elemZ)
@@ -348,6 +355,21 @@ private object Backend:
         val unit =
           rctx.ctx.mkUnit(tupVal.asInstanceOf[Z3AstExpr[Sort]]).asInstanceOf[SeqExpr[Sort]]
         rctx.ctx.mkConcat(acc, unit)
+
+  private def renderRe(rctx: RenderCtx, re: Z3Regex): ReExpr[SeqSort[CharSort]] =
+    val c = rctx.ctx
+    re match
+      case Z3Regex.Str(s)        => c.mkToRe(c.mkString(s))
+      case Z3Regex.Range(lo, hi) => c.mkRange(c.mkString(lo.toString), c.mkString(hi.toString))
+      case Z3Regex.AnyChar =>
+        c.mkAllcharRe(c.mkToRe(c.mkString("")).getSort.asInstanceOf[ReSort[SeqSort[CharSort]]])
+      case Z3Regex.Union(rs)  => c.mkUnion(rs.map(renderRe(rctx, _))*)
+      case Z3Regex.Concat(rs) => c.mkConcat(rs.map(renderRe(rctx, _))*)
+      case Z3Regex.Star(r)    => c.mkStar(renderRe(rctx, r))
+      case Z3Regex.Plus(r)    => c.mkPlus(renderRe(rctx, r))
+      case Z3Regex.Opt(r)     => c.mkOption(renderRe(rctx, r))
+      case Z3Regex.Comp(r)    => c.mkComplement(renderRe(rctx, r))
+      case Z3Regex.Inter(rs)  => c.mkIntersect(rs.map(renderRe(rctx, _))*)
 
   def renderBool(rctx: RenderCtx, e: Z3Expr): BoolExpr =
     renderExpr(rctx, e).asInstanceOf[BoolExpr]

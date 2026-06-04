@@ -662,6 +662,45 @@ next
   qed
 qed
 
+lemma eval_the_rel_correlated:
+  assumes ihbody: "\<And>env'.
+                    value_to_smt_opt (eval s st env' body)
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
+  shows "map_option (map value_to_smt) (eval_the_rel s st env var rd body)
+           = smtEval_the_rel (correlate_model s st) (correlate_env env) var
+                              (map value_to_smt rd) (translate body)"
+proof (induction rd)
+  case Nil show ?case by simp
+next
+  case (Cons v rest)
+  let ?env' = "(var, v) # env"
+  have body: "smtEval (correlate_model s st) ((var, value_to_smt v) # correlate_env env) (translate body)
+                = value_to_smt_opt (eval s st ?env' body)"
+    using ihbody[of ?env'] by simp
+  have ih_sym: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
+                                  (map value_to_smt rest) (translate body)
+                  = map_option (map value_to_smt) (eval_the_rel s st env var rest body)"
+    using Cons.IH by simp
+  show ?case
+  proof (cases "eval s st ?env' body")
+    case None thus ?thesis using body by simp
+  next
+    case (Some r)
+    show ?thesis
+    proof (cases r)
+      case (VBool b)
+      show ?thesis
+      proof (cases "eval_the_rel s st env var rest body")
+        case None thus ?thesis using Some VBool body ih_sym by simp
+      next
+        case (Some matches)
+        thus ?thesis
+          using \<open>eval s st ?env' body = Some r\<close> VBool body ih_sym by simp
+      qed
+    qed (use Some body in simp_all)
+  qed
+qed
+
 lemma soundness_forall_enum_known:
   assumes hd: "schema_lookup_enum s en = Some d"
       and ihbody: "\<And>env'.
@@ -682,6 +721,51 @@ lemma soundness_forall_rel_known:
            = smtEval (correlate_model s st) (correlate_env env) (translate (ForallRel var rel_name body sp))"
   using hd eval_forall_rel_correlated[OF ihbody, where rd=d and var=var and env=env]
   by simp
+
+lemma the_select_vts:
+  "value_to_smt_opt
+       (case xs of [] \<Rightarrow> None | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))
+     = (case map value_to_smt xs of [] \<Rightarrow> None
+          | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
+proof (cases xs)
+  case Nil thus ?thesis by simp
+next
+  case (Cons y rest)
+  have "list_all (\<lambda>z. z = value_to_smt y) (map value_to_smt rest) = list_all (\<lambda>z. z = y) rest"
+    by (induction rest) auto
+  thus ?thesis by (simp add: Cons)
+qed
+
+lemma soundness_the_rel_known:
+  assumes hd: "state_relation_domain st rel_name = Some d"
+      and ihbody: "\<And>env'.
+                    value_to_smt_opt (eval s st env' body)
+                      = smtEval (correlate_model s st) (correlate_env env') (translate body)"
+  shows "value_to_smt_opt (eval s st env (TheRel var rel_name body sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (TheRel var rel_name body sp))"
+proof -
+  have corr: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
+                               (map value_to_smt d) (translate body)
+                = map_option (map value_to_smt) (eval_the_rel s st env var d body)"
+    by (rule eval_the_rel_correlated[OF ihbody, symmetric])
+  show ?thesis
+  proof (cases "eval_the_rel s st env var d body")
+    case None thus ?thesis using hd corr by simp
+  next
+    case (Some matches)
+    have "value_to_smt_opt (eval s st env (TheRel var rel_name body sp))
+            = value_to_smt_opt (case matches of [] \<Rightarrow> None
+                | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
+      using hd Some by simp
+    also have "\<dots> = (case map value_to_smt matches of [] \<Rightarrow> None
+                | y # rest \<Rightarrow> (if list_all (\<lambda>z. z = y) rest then Some y else None))"
+      by (rule the_select_vts)
+    also have "\<dots> = smtEval (correlate_model s st) (correlate_env env)
+                       (translate (TheRel var rel_name body sp))"
+      using hd Some corr by simp
+    finally show ?thesis .
+  qed
+qed
 
 lemma soundness_ForallSet:
   assumes ihset: "value_to_smt_opt (eval s st env setE)

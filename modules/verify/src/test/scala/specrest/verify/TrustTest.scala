@@ -73,8 +73,13 @@ class TrustTest extends CatsEffectSuite:
       TrustLevel.BestEffort
     ),
     (
-      "BestEffort: TheF (definite description)",
+      "Sound: TheF (definite description) over a relation domain",
       TheF("s", id("sessions"), lit(true), None),
+      TrustLevel.Sound
+    ),
+    (
+      "BestEffort: TheF over a non-identifier domain",
+      TheF("s", BinaryOpF(BAdd(), i(1), i(2), None), lit(true), None),
       TrustLevel.BestEffort
     ),
     (

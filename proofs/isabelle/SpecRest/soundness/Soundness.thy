@@ -54,6 +54,17 @@ next
       by simp
   qed
 next
+  case (TheRel var rel_name body sp)
+  show ?case
+  proof (cases "state_relation_domain st rel_name")
+    case None thus ?thesis by simp
+  next
+    case (Some d)
+    thus ?thesis
+      using soundness_the_rel_known[OF Some, where var=var and env=env] TheRel.IH
+      by simp
+  qed
+next
   case (ForallSet var setE body sp)
   show ?case
     by (rule soundness_ForallSet[OF ForallSet.IH(1) ForallSet.IH(2)])
@@ -85,6 +96,10 @@ next
   case (SomeE e sp) show ?case using soundness_SomeE[OF SomeE.IH] .
 next
   case (StrLit v sp) show ?case by (rule soundness_StrLit)
+next
+  case (Matches e pat sp) show ?case using soundness_Matches[OF Matches.IH] .
+next
+  case (EntityBase name sp) show ?case by (rule soundness_EntityBase)
 next
   case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
 next
@@ -483,6 +498,36 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lowerMapEntries enums entries s = None"
       by (rule lowerMapEntries_ra_none[OF pe rl])
     thus ?thesis unfolding MapLiteralF by simp
+  next
+    case (TheF var dm body s)
+    have rb: "requiresAlloy body \<Longrightarrow> lower enums body = None"
+      using sub[of body] TheF by simp
+    show ?thesis
+    proof (cases dm)
+      case (IdentifierF rel sp1)
+      have "requiresAlloy body"
+        using less.prems TheF IdentifierF by (simp add: requiresAlloy_def)
+      hence "lower enums body = None" using rb by simp
+      thus ?thesis unfolding TheF IdentifierF by simp
+    qed (use TheF in \<open>simp_all\<close>)
+  next
+    case (ConstructorF nm fas s)
+    have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set fas
+                \<Longrightarrow> requiresAlloy vv \<Longrightarrow> lower enums vv = None"
+    proof -
+      fix fld vv fsp
+      assume m: "FieldAssignFull fld vv fsp \<in> set fas" and rv: "requiresAlloy vv"
+      have "size vv < size (FieldAssignFull fld vv fsp)" by simp
+      also have "\<dots> \<le> size_list size fas"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using ConstructorF by simp
+      finally have "size vv < size e" .
+      thus "lower enums vv = None" using sub rv by blast
+    qed
+    have rf: "requiresAlloy_fields fas" using less.prems ConstructorF by simp
+    have "lower_with_assigns enums fas (EntityBase nm s) s = None"
+      by (rule lower_with_assigns_ra_none[OF pe rf])
+    thus ?thesis unfolding ConstructorF by simp
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

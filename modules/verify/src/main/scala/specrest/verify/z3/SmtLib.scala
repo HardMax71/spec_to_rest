@@ -114,6 +114,8 @@ object SmtLib:
       s"(some ${renderExpr(value)})"
     case Z3Expr.StrLit(s, _) =>
       "\"" + s.replace("\"", "\"\"") + "\""
+    case Z3Expr.InRe(str, re, _) =>
+      s"(str.in_re ${renderExpr(str)} ${renderRe(re)})"
     case Z3Expr.SeqLit(elemSort, members, _) =>
       members.foldLeft(s"(as seq.empty (Seq ${renderSort(elemSort)}))")((acc, m) =>
         s"(seq.++ $acc (seq.unit ${renderExpr(m)}))"
@@ -123,6 +125,20 @@ object SmtLib:
       entries.foldLeft(empty) { case (acc, (k, v)) =>
         s"(seq.++ $acc (seq.unit (mkPair ${renderExpr(k)} ${renderExpr(v)})))"
       }
+
+  private def renderRe(re: Z3Regex): String =
+    def q(s: String): String = "\"" + s.replace("\"", "\"\"") + "\""
+    re match
+      case Z3Regex.Str(s)        => s"(str.to_re ${q(s)})"
+      case Z3Regex.Range(lo, hi) => s"(re.range ${q(lo.toString)} ${q(hi.toString)})"
+      case Z3Regex.AnyChar       => "(as re.allchar RegLan)"
+      case Z3Regex.Union(rs)     => s"(re.union ${rs.map(renderRe).mkString(" ")})"
+      case Z3Regex.Concat(rs)    => s"(re.++ ${rs.map(renderRe).mkString(" ")})"
+      case Z3Regex.Star(r)       => s"(re.* ${renderRe(r)})"
+      case Z3Regex.Plus(r)       => s"(re.+ ${renderRe(r)})"
+      case Z3Regex.Opt(r)        => s"(re.opt ${renderRe(r)})"
+      case Z3Regex.Comp(r)       => s"(re.comp ${renderRe(r)})"
+      case Z3Regex.Inter(rs)     => s"(re.inter ${rs.map(renderRe).mkString(" ")})"
 
   private def emptySetLit(elemSort: Z3Sort): String =
     s"((as const (Set ${renderSort(elemSort)})) false)"

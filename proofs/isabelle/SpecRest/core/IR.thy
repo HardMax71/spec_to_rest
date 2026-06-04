@@ -78,6 +78,8 @@ datatype (plugins only: code size) expr =
   | ForallEnum "String.literal" "String.literal" "expr" "option_span"
   | ForallRel "String.literal" "String.literal" "expr" "option_span"
   | ForallSet "String.literal" "expr" "expr" "option_span"
+  | TheRel "String.literal" "String.literal" "expr" "option_span"
+  | EntityBase "String.literal" "option_span"
   | Prime "expr" "option_span"
   | Pre "expr" "option_span"
   | CardRel "String.literal" "option_span"
@@ -92,10 +94,21 @@ datatype (plugins only: code size) expr =
   | NoneE "option_span"
   | SomeE "expr" "option_span"
   | StrLit "String.literal" "option_span"
+  | Matches "expr" "String.literal" "option_span"
   | SeqEmpty "option_span"
   | SeqCons "expr" "expr" "option_span"
   | MapEmpty "option_span"
   | MapCons "expr" "expr" "expr" "option_span"
+
+text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>Matches\<close>. It is
+  deliberately \<^emph>\<open>abstract\<close> (no defining equation): formalising the full SMT-LIB
+  regular-expression semantics in HOL is out of scope, and the trusted translator
+  realises it concretely as Z3's \<open>str.in_re\<close> over the parsed pattern. Keeping it
+  abstract is what makes the soundness theorem parametric in the matcher, so any
+  realisation that \<open>eval\<close> and \<open>smtEval\<close> share (here, the same constant) is sound by
+  construction; the (unused) extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters get a
+  serialisation stub in \<open>Codegen\<close>.\<close>
+consts string_matches :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
 
 text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
   relation name to an arbitrary \<open>expr\<close>, so the operation-side

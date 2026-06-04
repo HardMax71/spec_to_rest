@@ -16,6 +16,45 @@ class ConsistencyTest extends CatsEffectSuite:
         ).map(_.id)}"
     )
 
+  test(
+    "definite description (the v in rel | P) verifies via Z3 (TheF lifted to the verified subset)"
+  ):
+    val spec =
+      """service TheDemo {
+        |  state {
+        |    scores: Map[Int, Int]
+        |  }
+        |  invariant pivotNonNegative:
+        |    (the k in scores | scores[k] = 100) >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("the_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (the must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
+    "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
+  ):
+    val spec =
+      """service ConstructorDemo {
+        |  entity Point {
+        |    x: Int
+        |    y: Int
+        |  }
+        |  invariant ctorFieldRoundtrips:
+        |    (Point { x = 5, y = 7 }).x = 5
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("constructor_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (Entity{...} must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")

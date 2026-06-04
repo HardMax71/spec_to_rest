@@ -65,10 +65,16 @@ where
 | "lower _ (NoneLitF sp)       = Some (NoneE sp)"
 | "lower _ (LambdaF _ _ _)     = None"
 | "lower _ (CallF _ _ _)       = None"
-| "lower _ (ConstructorF _ _ _)     = None"
+| "lower enums (ConstructorF name fas sp) =
+     lower_with_assigns enums fas (EntityBase name sp) sp"
 | "lower _ (SetComprehensionF _ _ _ _) = None"
-| "lower _ (TheF _ _ _ _)      = None"
-| "lower _ (MatchesF _ _ _)    = None"
+| "lower enums (TheF var dm body sp) =
+     (case dm of
+        IdentifierF rel _ \<Rightarrow>
+          (if string_in_list rel enums then None
+           else map_option (\<lambda>b. TheRel var rel b sp) (lower enums body))
+      | _ \<Rightarrow> None)"
+| "lower enums (MatchesF e pat sp) = map_option (\<lambda>e'. Matches e' pat sp) (lower enums e)"
 
 | "lower enums (QuantifierF k bs body sp) =
      (case lower enums body of
