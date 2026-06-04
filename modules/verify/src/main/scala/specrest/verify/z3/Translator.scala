@@ -1993,18 +1993,35 @@ object Translator:
       fail(ctx, "ordering/arithmetic requires a numeric type (Int or Real)")
     z
 
+  private def encodeSetEmptyCmp(
+      ctx: TranslateCtx,
+      op: CmpOp,
+      setTerm: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val sz = encodeFromSmtTerm(ctx, setTerm, env)
+    inferSortOfZ3Expr(ctx, sz) match
+      case Some(Z3Sort.SetOf(elemSort)) =>
+        Z3Expr.Cmp(op, sz, Z3Expr.EmptySet(elemSort))
+      case _ =>
+        fail(ctx, "equality with an empty set literal requires a set-sorted operand")
+
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,
       term: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     term match
-      case TEq(l, TNone())       => encodeNoneEq(ctx, l, env)
-      case TEq(TNone(), r)       => encodeNoneEq(ctx, r, env)
-      case TNot(TEq(l, TNone())) => Z3Expr.Not(encodeNoneEq(ctx, l, env))
-      case TNot(TEq(TNone(), r)) => Z3Expr.Not(encodeNoneEq(ctx, r, env))
-      case BLit(b)               => Z3Expr.BoolLit(b)
-      case ILit(n)               => Z3Expr.IntLit(n)
+      case TEq(l, TNone())           => encodeNoneEq(ctx, l, env)
+      case TEq(TNone(), r)           => encodeNoneEq(ctx, r, env)
+      case TNot(TEq(l, TNone()))     => Z3Expr.Not(encodeNoneEq(ctx, l, env))
+      case TNot(TEq(TNone(), r))     => Z3Expr.Not(encodeNoneEq(ctx, r, env))
+      case TEq(l, TSetEmpty())       => encodeSetEmptyCmp(ctx, CmpOp.Eq, l, env)
+      case TEq(TSetEmpty(), r)       => encodeSetEmptyCmp(ctx, CmpOp.Eq, r, env)
+      case TNot(TEq(l, TSetEmpty())) => encodeSetEmptyCmp(ctx, CmpOp.Neq, l, env)
+      case TNot(TEq(TSetEmpty(), r)) => encodeSetEmptyCmp(ctx, CmpOp.Neq, r, env)
+      case BLit(b)                   => Z3Expr.BoolLit(b)
+      case ILit(n)                   => Z3Expr.IntLit(n)
       case RLit(r) =>
         val (num, den) = quotient_of(r)
         Z3Expr.RealLit(num, den)

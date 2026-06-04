@@ -92,14 +92,14 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
     ).map: out =>
       assert(out.contains("(setminus "), s"expected (setminus ...); got:\n$out")
 
-  test("`a subset b` emits (subset ...)"):
+  test("`a subset b` desugars to set-difference emptiness"):
     smtOf(
       specWithInvariant(
         "a: Set[Int]\n    b: Set[Int]",
         "a subset b implies b subset a or not (a subset b)"
       )
     ).map: out =>
-      assert(out.contains("(subset "), s"expected (subset ...); got:\n$out")
+      assert(out.contains("(setminus "), s"expected set-difference desugar; got:\n$out")
 
   test("`Set[Int]`-typed state field declares a (Set Int)-valued function"):
     smtOf(specWithInvariant("a: Set[Int]", "true")).map: out =>
