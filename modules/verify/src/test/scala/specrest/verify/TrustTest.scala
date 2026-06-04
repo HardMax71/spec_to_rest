@@ -47,7 +47,11 @@ class TrustTest extends CatsEffectSuite:
       TrustLevel.Sound
     ),
     ("BestEffort: UPower", UnaryOpF(UPower(), id("users"), None), TrustLevel.BestEffort),
-    ("BestEffort: BSubset", BinaryOpF(BSubset(), id("a"), id("b"), None), TrustLevel.BestEffort),
+    (
+      "Sound: BSubset (desugars to set-difference emptiness)",
+      BinaryOpF(BSubset(), id("a"), id("b"), None),
+      TrustLevel.Sound
+    ),
     (
       "BestEffort: CallF (predicate inlining not yet covered)",
       CallF(id("isPositive"), List(i(1)), None),

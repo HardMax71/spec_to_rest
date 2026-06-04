@@ -46,7 +46,7 @@ where
         | UCardinality \<Rightarrow> (\<exists>x s. e = IdentifierF x s)
         | UPower \<Rightarrow> False)"
 | "wf_z3 (BinaryOpF op l r _)      =
-     (case op of BSubset \<Rightarrow> False
+     (case op of BSubset \<Rightarrow> (wf_z3 l \<and> wf_z3 r)
         | BIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
         | BNotIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
         | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)"
@@ -164,9 +164,6 @@ proof -
   next
     case BNotIn
     thus ?thesis using inout by blast
-  next
-    case BSubset
-    with wf show ?thesis by simp
   qed (use l r wf in \<open>auto split: option.splits\<close>)
 qed
 
