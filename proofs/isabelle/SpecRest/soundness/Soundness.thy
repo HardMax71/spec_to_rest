@@ -86,6 +86,8 @@ next
 next
   case (StrLit v sp) show ?case by (rule soundness_StrLit)
 next
+  case (Matches e pat sp) show ?case using soundness_Matches[OF Matches.IH] .
+next
   case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
 next
   case (SeqCons e rest sp) show ?case using soundness_SeqCons[OF SeqCons.IH(1) SeqCons.IH(2)] .

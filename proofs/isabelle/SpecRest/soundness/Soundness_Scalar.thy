@@ -194,4 +194,20 @@ lemma soundness_StrLit:
      = smtEval (correlate_model s st) (correlate_env env) (translate (StrLit v sp))"
   by simp
 
+lemma soundness_Matches:
+  assumes ih: "value_to_smt_opt (eval s st env e)
+                 = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "value_to_smt_opt (eval s st env (Matches e pat sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (Matches e pat sp))"
+proof -
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
+               = value_to_smt_opt (eval s st env e)" using ih by simp
+  show ?thesis
+  proof (cases "eval s st env e")
+    case None thus ?thesis using ih' by simp
+  next
+    case (Some v) thus ?thesis using ih' by (cases v) simp_all
+  qed
+qed
+
 end

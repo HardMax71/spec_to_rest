@@ -928,6 +928,8 @@ object Translator:
         },
         sp
       )
+    case Z3Expr.InRe(str, re, sp) =>
+      Z3Expr.InRe(substituteVar(str, varName, replacement), re, sp)
     case other => other
 
   private def resolveStateRelationReference(
@@ -1130,14 +1132,16 @@ object Translator:
       expr: MatchesF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val arg = translateExpr(ctx, expr.a, env)
-    val argSort =
-      inferSort(ctx, expr.a, env, Some(arg)).getOrElse(Z3Sort.Str)
-    val baseName = ctx.matchesNameFor(expr.b)
-    val funcName = s"${baseName}_${sortNameOf(argSort)}"
-    if !ctx.funcs.contains(funcName) then
-      ctx.declareFunc(Z3FunctionDecl(funcName, List(argSort), Z3Sort.Bool))
-    Z3Expr.App(funcName, List(arg))
+    val arg     = translateExpr(ctx, expr.a, env)
+    val argSort = inferSort(ctx, expr.a, env, Some(arg))
+    (argSort, RegexParser.parse(expr.b)) match
+      case (Some(Z3Sort.Str), Some(re)) => Z3Expr.InRe(arg, re)
+      case _ =>
+        val s        = argSort.getOrElse(Z3Sort.Str)
+        val funcName = s"${ctx.matchesNameFor(expr.b)}_${sortNameOf(s)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
+        Z3Expr.App(funcName, List(arg))
 
   private def translateLet(
       ctx: TranslateCtx,
@@ -1336,6 +1340,7 @@ object Translator:
     case Z3Expr.OptNone(elemSort, _)   => Some(Z3Sort.OptionOf(elemSort))
     case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
+    case Z3Expr.InRe(_, _, _)          => Some(Z3Sort.Bool)
     case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
     case Z3Expr.MapLit(keySort, valueSort, _, _) =>
       Some(Z3Sort.MapOf(keySort, valueSort))
@@ -2249,6 +2254,20 @@ object Translator:
         Z3Expr.OptSome(encodeFromSmtTerm(ctx, t, env))
       case TStrLit(s) =>
         Z3Expr.StrLit(s)
+      case TMatches(t, pat) =>
+        val strZ    = encodeFromSmtTerm(ctx, t, env)
+        val strSort = inferSortOfZ3Expr(ctx, strZ)
+        (strSort, RegexParser.parse(pat)) match
+          case (Some(Z3Sort.Str), Some(re)) => Z3Expr.InRe(strZ, re)
+          case _                            =>
+            // `str.in_re` needs a String operand and a supported pattern; for a
+            // refinement-alias sort (modelled as its own sort) or an unsupported
+            // pattern, fall back to the sound uninterpreted matcher
+            val s        = strSort.getOrElse(Z3Sort.Str)
+            val funcName = s"${ctx.matchesNameFor(pat)}_${sortNameOf(s)}"
+            if !ctx.funcs.contains(funcName) then
+              ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
+            Z3Expr.App(funcName, List(strZ))
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>

@@ -103,6 +103,7 @@ enum Z3Expr derives CanEqual:
   case OptNone(elemSort: Z3Sort, span: Option[span_t] = None)
   case OptSome(value: Z3Expr, span: Option[span_t] = None)
   case StrLit(value: String, span: Option[span_t] = None)
+  case InRe(str: Z3Expr, re: Z3Regex, span: Option[span_t] = None)
   case SeqLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[span_t] = None)
   case MapLit(
       keySort: Z3Sort,
@@ -132,6 +133,7 @@ enum Z3Expr derives CanEqual:
     case e: OptNone    => e.span
     case e: OptSome    => e.span
     case e: StrLit     => e.span
+    case e: InRe       => e.span
     case e: SeqLit     => e.span
     case e: MapLit     => e.span
 
@@ -159,8 +161,21 @@ enum Z3Expr derives CanEqual:
         case e: OptNone    => e.copy(span = s)
         case e: OptSome    => e.copy(span = s)
         case e: StrLit     => e.copy(span = s)
+        case e: InRe       => e.copy(span = s)
         case e: SeqLit     => e.copy(span = s)
         case e: MapLit     => e.copy(span = s)
+
+enum Z3Regex derives CanEqual:
+  case Str(s: String)
+  case Range(lo: Char, hi: Char)
+  case AnyChar
+  case Union(res: List[Z3Regex])
+  case Concat(res: List[Z3Regex])
+  case Star(re: Z3Regex)
+  case Plus(re: Z3Regex)
+  case Opt(re: Z3Regex)
+  case Comp(re: Z3Regex)
+  case Inter(res: List[Z3Regex])
 
 final case class ArtifactEntityField(name: String, sort: Z3Sort, funcName: String)
 final case class ArtifactEntity(name: String, sort: Z3Sort, fields: List[ArtifactEntityField])

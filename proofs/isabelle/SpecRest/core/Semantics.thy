@@ -1261,6 +1261,10 @@ where
 | "eval s st env (NoneE _)   = Some VNone"
 | "eval s st env (SomeE e _) = map_option VSome (eval s st env e)"
 | "eval s st env (StrLit v _) = Some (VStr v)"
+| "eval s st env (Matches e pat _) =
+     (case eval s st env e of
+        Some (VStr str) \<Rightarrow> Some (VBool (string_matches str pat))
+      | _ \<Rightarrow> None)"
 | "eval s st env (SeqEmpty _) = Some (VSeq [])"
 | "eval s st env (SeqCons e rest _) =
      (case (eval s st env e, eval s st env rest) of

@@ -60,6 +60,7 @@ datatype (plugins only: code size) smt_term =
   | TNone
   | TSome "smt_term"
   | TStrLit "String.literal"
+  | TMatches "smt_term" "String.literal"
   | TSeqEmpty
   | TSeqCons "smt_term" "smt_term"
   | TMapEmpty
@@ -339,6 +340,10 @@ where
 | "smtEval m env TNone     = Some SNone"
 | "smtEval m env (TSome t) = map_option SSome (smtEval m env t)"
 | "smtEval m env (TStrLit v) = Some (SStr v)"
+| "smtEval m env (TMatches t pat) =
+     (case smtEval m env t of
+        Some (SStr str) \<Rightarrow> Some (SBool (string_matches str pat))
+      | _ \<Rightarrow> None)"
 | "smtEval m env TSeqEmpty = Some (SSeq [])"
 | "smtEval m env (TSeqCons e rest) =
      (case (smtEval m env e, smtEval m env rest) of

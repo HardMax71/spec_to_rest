@@ -115,6 +115,13 @@ code_printing
 | class_instance Int.int :: ord \<rightharpoonup> (Scala) -
 | class_instance Int.int :: equal \<rightharpoonup> (Scala) -
 
+text \<open>\<open>string_matches\<close> is abstract (see \<open>IR\<close>); the real regex semantics is Z3's
+  \<open>str.in_re\<close> in the hand-written translator. The extracted \<open>eval\<close>/\<open>smtEval\<close>
+  reference interpreters are not called by Scala consumers, so this serialisation
+  is a never-evaluated stub that only has to type-check.\<close>
+code_printing
+  constant string_matches \<rightharpoonup> (Scala) "((_) == (_))"
+
 export_code
     translate
     eval

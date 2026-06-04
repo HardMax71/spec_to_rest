@@ -68,7 +68,7 @@ where
 | "lower _ (ConstructorF _ _ _)     = None"
 | "lower _ (SetComprehensionF _ _ _ _) = None"
 | "lower _ (TheF _ _ _ _)      = None"
-| "lower _ (MatchesF _ _ _)    = None"
+| "lower enums (MatchesF e pat sp) = map_option (\<lambda>e'. Matches e' pat sp) (lower enums e)"
 
 | "lower enums (QuantifierF k bs body sp) =
      (case lower enums body of

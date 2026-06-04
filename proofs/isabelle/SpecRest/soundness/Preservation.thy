@@ -77,7 +77,7 @@ where
 | "wf_z3 (SetComprehensionF _ _ _ _) = False"
 | "wf_z3 (SomeWrapF e _)           = wf_z3 e"
 | "wf_z3 (TheF _ _ _ _)            = False"
-| "wf_z3 (MatchesF _ _ _)          = False"
+| "wf_z3 (MatchesF e _ _)          = wf_z3 e"
 | "wf_z3 (IfF c a b _)             = (wf_z3 c \<and> wf_z3 a \<and> wf_z3 b)"
 | "wf_z3_list []                   = True"
 | "wf_z3_list (e # rest)           = (wf_z3 e \<and> wf_z3_list rest)"
