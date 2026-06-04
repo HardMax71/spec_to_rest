@@ -3145,11 +3145,13 @@ object SpecRestGenerated {
       sp: Option[span_t]
   ): expr = {
     val body =
-      BoolBin(IffOp(), SetMember(Ident(vara, None), setE, sp), predE, sp): expr;
-    string_in_list(dnm, enums) match {
-      case true  => ForallEnum(vara, dnm, body, sp)
-      case false => ForallRel(vara, dnm, body, sp)
-    }
+      BoolBin(IffOp(), SetMember(Ident(vara, None), Ident("0cmp", None), sp), predE, sp): expr
+    val quant =
+      (string_in_list(dnm, enums) match {
+        case true  => ForallEnum(vara, dnm, body, sp)
+        case false => ForallRel(vara, dnm, body, sp)
+      }): expr;
+    LetIn("0cmp", setE, quant, sp)
   }
 
   def peel_relation_ref(x0: expr): Option[String] = x0 match {

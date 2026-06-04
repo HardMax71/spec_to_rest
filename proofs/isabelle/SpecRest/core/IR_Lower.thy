@@ -23,15 +23,25 @@ where
         None \<Rightarrow> None
       | Some inner \<Rightarrow> lower_forall_step enums b inner sp)"
 
+text \<open>\<open>X = {var in dnm | predE}\<close> lowers by set extensionality to
+  \<open>\<forall>var\<in>dnm. var \<in> X \<longleftrightarrow> predE\<close>. Binding \<open>X\<close> with a let \<^emph>\<open>before\<close> the
+  quantifier (instead of placing \<open>X\<close> under the binder) keeps it capture-free:
+  \<open>X\<close> is evaluated in the outer scope, so a free \<open>var\<close> inside it (e.g. a state
+  field sharing the binder name) is not captured. The let binder \<open>0cmp\<close> starts
+  with a digit, which the lexer (\<open>[A-Za-z_][A-Za-z0-9_]*\<close>) forbids for source
+  identifiers, so it never collides with a user variable; lexical scoping keeps
+  it correct under nesting.\<close>
 fun lower_set_comp_eq ::
     "String.literal list \<Rightarrow> String.literal \<Rightarrow> String.literal
        \<Rightarrow> expr \<Rightarrow> expr \<Rightarrow> option_span \<Rightarrow> expr"
 where
   "lower_set_comp_eq enums var dnm setE predE sp =
-     (let body = BoolBin IffOp (SetMember (Ident var None) setE sp) predE sp
-      in if string_in_list dnm enums
-           then ForallEnum var dnm body sp
-           else ForallRel var dnm body sp)"
+     (let body = BoolBin IffOp
+                   (SetMember (Ident var None) (Ident (STR ''0cmp'') None) sp) predE sp;
+          quant = (if string_in_list dnm enums
+                     then ForallEnum var dnm body sp
+                     else ForallRel var dnm body sp)
+      in LetIn (STR ''0cmp'') setE quant sp)"
 
 function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
 and lowerSetList ::
