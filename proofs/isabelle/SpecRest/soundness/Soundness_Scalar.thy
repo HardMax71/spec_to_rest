@@ -210,4 +210,9 @@ proof -
   qed
 qed
 
+lemma soundness_EntityBase:
+  "value_to_smt_opt (eval s st env (EntityBase name sp))
+     = smtEval (correlate_model s st) (correlate_env env) (translate (EntityBase name sp))"
+  by simp
+
 end

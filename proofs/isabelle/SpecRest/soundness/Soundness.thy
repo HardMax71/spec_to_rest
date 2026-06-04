@@ -99,6 +99,8 @@ next
 next
   case (Matches e pat sp) show ?case using soundness_Matches[OF Matches.IH] .
 next
+  case (EntityBase name sp) show ?case by (rule soundness_EntityBase)
+next
   case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
 next
   case (SeqCons e rest sp) show ?case using soundness_SeqCons[OF SeqCons.IH(1) SeqCons.IH(2)] .
@@ -508,6 +510,24 @@ proof (induction e rule: measure_induct_rule[where f = size])
       hence "lower enums body = None" using rb by simp
       thus ?thesis unfolding TheF IdentifierF by simp
     qed (use TheF in \<open>simp_all\<close>)
+  next
+    case (ConstructorF nm fas s)
+    have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set fas
+                \<Longrightarrow> requiresAlloy vv \<Longrightarrow> lower enums vv = None"
+    proof -
+      fix fld vv fsp
+      assume m: "FieldAssignFull fld vv fsp \<in> set fas" and rv: "requiresAlloy vv"
+      have "size vv < size (FieldAssignFull fld vv fsp)" by simp
+      also have "\<dots> \<le> size_list size fas"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using ConstructorF by simp
+      finally have "size vv < size e" .
+      thus "lower enums vv = None" using sub rv by blast
+    qed
+    have rf: "requiresAlloy_fields fas" using less.prems ConstructorF by simp
+    have "lower_with_assigns enums fas (EntityBase nm s) s = None"
+      by (rule lower_with_assigns_ra_none[OF pe rf])
+    thus ?thesis unfolding ConstructorF by simp
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

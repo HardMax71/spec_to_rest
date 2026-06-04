@@ -1234,6 +1234,7 @@ where
              Some [x] \<Rightarrow> Some x
            | _        \<Rightarrow> None)
       | None \<Rightarrow> None)"
+| "eval s st env (EntityBase name _) = Some (VEntity name (STR ''''))"
 | "eval s st env (Prime e _) = eval s st env e"
 | "eval s st env (Pre e _)   = eval s st env e"
 | "eval s st env (CardRel rel_name _) =

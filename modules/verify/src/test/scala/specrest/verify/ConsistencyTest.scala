@@ -27,6 +27,19 @@ class ConsistencyTest extends CatsEffectSuite:
         ).map(_.id)}"
     )
 
+  test(
+    "constructor_demo verifies entity construction via Z3 (ConstructorF lifted to the verified subset)"
+  ):
+    for
+      ir     <- SpecFixtures.loadIR("constructor_demo")
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.ok,
+      s"expected ok=true; failing checks: ${report.checks.filter(c =>
+          c.status != CheckOutcome.Sat && c.status != CheckOutcome.Skipped
+        ).map(_.id)}"
+    )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")

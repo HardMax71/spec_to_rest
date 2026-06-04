@@ -2183,6 +2183,18 @@ object Translator:
               s"definite description `the` requires a state-relation domain; '$rel' is not one"
             )
 
+      case TEntityBase(name) =>
+        // `Entity{...}` desugars (in `lower`) to a WithRec chain over this base;
+        // the base is a fresh entity of the named sort, the field updates are set
+        // by the surrounding TWithRec encoding
+        ctx.entities.get(name) match
+          case Some(_) =>
+            val skolemName = ctx.freshSkolem(s"construct_$name")
+            ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, Z3Sort.Uninterp(name)))
+            Z3Expr.App(skolemName, Nil)
+          case None =>
+            fail(ctx, s"entity constructor for unknown entity '$name'")
+
       case TIndexRel(base, key) =>
         peelRelationRef(base, ctx.stateMode) match
           case Some((rel, mode)) =>

@@ -71,7 +71,7 @@ where
 | "wf_z3 (NoneLitF _)              = True"
 | "wf_z3 (LambdaF _ _ _)           = False"
 | "wf_z3 (CallF _ _ _)             = False"
-| "wf_z3 (ConstructorF _ _ _)      = False"
+| "wf_z3 (ConstructorF _ fas _) = wf_z3_fields fas"
 | "wf_z3 (MapLiteralF entries _)   = wf_z3_entries entries"
 | "wf_z3 (SeqLiteralF es _)        = wf_z3_list es"
 | "wf_z3 (SetComprehensionF _ _ _ _) = False"
@@ -500,6 +500,24 @@ proof (induction e rule: measure_induct_rule[where f = size])
       using sub[of b] IfF by simp
     show ?thesis unfolding IfF using hc ha hb less.prems[unfolded IfF]
       by (auto split: option.splits)
+  next
+    case (ConstructorF nm fas s)
+    have pe: "\<And>fld vv fsp. FieldAssignFull fld vv fsp \<in> set fas
+                \<Longrightarrow> wf_z3 vv \<Longrightarrow> lower enums vv \<noteq> None"
+    proof -
+      fix fld vv fsp
+      assume m: "FieldAssignFull fld vv fsp \<in> set fas" and rv: "wf_z3 vv"
+      have "size vv < size (FieldAssignFull fld vv fsp)" by simp
+      also have "\<dots> \<le> size_list size fas"
+        by (rule size_list_estimation'[OF m order_refl])
+      also have "\<dots> < size e" using ConstructorF by simp
+      finally have "size vv < size e" .
+      thus "lower enums vv \<noteq> None" using sub rv by blast
+    qed
+    have wf: "wf_z3_fields fas" using less.prems ConstructorF by simp
+    have "lower_with_assigns enums fas (EntityBase nm s) s \<noteq> None"
+      by (rule lower_with_assigns_wf_some[OF pe wf])
+    thus ?thesis unfolding ConstructorF by simp
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

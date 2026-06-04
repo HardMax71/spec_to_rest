@@ -45,6 +45,7 @@ datatype (plugins only: code size) smt_term =
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
   | TTheRel "String.literal" "String.literal" "smt_term"
+  | TEntityBase "String.literal"
   | TForallSet "String.literal" "smt_term" "smt_term"
   | TIndexRel "smt_term" "smt_term"
   | TFieldAccess "smt_term" "String.literal"
@@ -304,6 +305,7 @@ where
              Some [x] \<Rightarrow> Some x
            | _        \<Rightarrow> None)
       | None \<Rightarrow> None)"
+| "smtEval m env (TEntityBase name) = Some (SEntityElem name (STR ''''))"
 | "smtEval m env (TForallSet var setT body) =
      (case smtEval m env setT of
         Some (SSet elems) \<Rightarrow> smtEval_forall_rel m env var elems body

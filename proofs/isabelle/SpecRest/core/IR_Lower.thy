@@ -65,7 +65,8 @@ where
 | "lower _ (NoneLitF sp)       = Some (NoneE sp)"
 | "lower _ (LambdaF _ _ _)     = None"
 | "lower _ (CallF _ _ _)       = None"
-| "lower _ (ConstructorF _ _ _)     = None"
+| "lower enums (ConstructorF name fas sp) =
+     lower_with_assigns enums fas (EntityBase name sp) sp"
 | "lower _ (SetComprehensionF _ _ _ _) = None"
 | "lower enums (TheF var dm body sp) =
      (case dm of
