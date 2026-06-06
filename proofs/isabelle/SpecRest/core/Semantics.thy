@@ -1349,4 +1349,683 @@ lemma eval_forall_rel_some_imp_bool:
   by (induction rel_dom arbitrary: v)
      (auto split: option.splits ir_value.splits)
 
+fun eval_full_bin :: "bin_op_full \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
+  "eval_full_bin BAnd     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin AndOp a b))     | _ \<Rightarrow> None)"
+| "eval_full_bin BOr      x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin OrOp a b))      | _ \<Rightarrow> None)"
+| "eval_full_bin BImplies x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin ImpliesOp a b)) | _ \<Rightarrow> None)"
+| "eval_full_bin BIff     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin IffOp a b))     | _ \<Rightarrow> None)"
+| "eval_full_bin BEq  x y = eval_cmp EqOp x y"
+| "eval_full_bin BNeq x y = eval_cmp NeqOp x y"
+| "eval_full_bin BLt  x y = eval_cmp LtOp x y"
+| "eval_full_bin BGt  x y = eval_cmp GtOp x y"
+| "eval_full_bin BLe  x y = eval_cmp LeOp x y"
+| "eval_full_bin BGe  x y = eval_cmp GeOp x y"
+| "eval_full_bin BAdd x y = eval_arith AddOp x y"
+| "eval_full_bin BSub x y = eval_arith SubOp x y"
+| "eval_full_bin BMul x y = eval_arith MulOp x y"
+| "eval_full_bin BDiv x y = eval_arith DivOp x y"
+| "eval_full_bin _ _ _ = None"
+
+fun eval_full_un :: "un_op_full \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
+  "eval_full_un UNot    x = (case x of Some (VBool b) \<Rightarrow> Some (VBool (\<not> b)) | _ \<Rightarrow> None)"
+| "eval_full_un UNegate x = (case x of Some (VInt n) \<Rightarrow> Some (VInt (- n)) | Some (VReal r) \<Rightarrow> Some (VReal (- r)) | _ \<Rightarrow> None)"
+| "eval_full_un _ _ = None"
+
+definition lookup_callee ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> String.literal
+     \<Rightarrow> (String.literal list \<times> expr_full) option" where
+  "lookup_callee fs ps nm =
+     (case List.find (\<lambda>f. fncName f = nm) fs of
+        Some f \<Rightarrow> Some (map prmName (fncParams f), fncBody f)
+      | None \<Rightarrow>
+          (case List.find (\<lambda>q. prdName q = nm) ps of
+             Some pr \<Rightarrow> Some (map prmName (prdParams pr), prdBody pr)
+           | None \<Rightarrow> None))"
+
+text \<open>\<open>eval_full\<close> is a reference semantics for the surface IR (\<open>expr_full\<close>): the
+  meaning the trusted \<open>lower\<close> and \<open>inline_calls\<close> desugars must preserve. It reuses
+  the verified-subset \<open>eval\<close>'s value operations and gives each operator a meaning
+  \<^emph>\<open>independent\<close> of \<open>lower\<close>, so agreement with \<open>lower\<close> is a real theorem rather than
+  a tautology. A \<open>CallF\<close> evaluates its arguments, binds their values in the
+  environment (call by value, hence capture-free), then evaluates the callee body;
+  this needs \<^emph>\<open>fuel\<close> because a call unfolds into a body of unrelated size, so
+  termination is lexicographic on \<open>(fuel, size)\<close>. Binder and collection forms
+  (\<open>QuantifierF\<close>, \<open>SetComprehensionF\<close>, \<open>TheF\<close>, \<open>ConstructorF\<close>, the list literals,
+  \<open>WithF\<close>, \<open>LambdaF\<close>) return \<open>None\<close> here pending later coverage: a gap in the
+  modelled fragment, not an unsoundness.\<close>
+
+function (sequential) eval_full ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
+     \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr_full \<Rightarrow> ir_value option"
+and eval_full_list ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
+     \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr_full list \<Rightarrow> ir_value list option" where
+  "eval_full fs ps fuel s st env (IntLitF n _)     = Some (VInt n)"
+| "eval_full fs ps fuel s st env (BoolLitF b _)    = Some (VBool b)"
+| "eval_full fs ps fuel s st env (StringLitF v _)  = Some (VStr v)"
+| "eval_full fs ps fuel s st env (NoneLitF _)      = Some VNone"
+| "eval_full fs ps fuel s st env (IdentifierF x _) =
+     (case env_lookup env x of Some v \<Rightarrow> Some v | None \<Rightarrow> state_lookup_scalar st x)"
+| "eval_full fs ps fuel s st env (BinaryOpF op l r _) =
+     eval_full_bin op (eval_full fs ps fuel s st env l) (eval_full fs ps fuel s st env r)"
+| "eval_full fs ps fuel s st env (UnaryOpF op e _) =
+     eval_full_un op (eval_full fs ps fuel s st env e)"
+| "eval_full fs ps fuel s st env (IfF c a b _) =
+     (case eval_full fs ps fuel s st env c of
+        Some (VBool True)  \<Rightarrow> eval_full fs ps fuel s st env a
+      | Some (VBool False) \<Rightarrow> eval_full fs ps fuel s st env b
+      | _ \<Rightarrow> None)"
+| "eval_full fs ps fuel s st env (LetF x v body _) =
+     (case eval_full fs ps fuel s st env v of
+        Some va \<Rightarrow> eval_full fs ps fuel s st ((x, va) # env) body
+      | None    \<Rightarrow> None)"
+| "eval_full fs ps fuel s st env (FieldAccessF base f _) =
+     (case eval_full fs ps fuel s st env base of
+        Some v \<Rightarrow> value_field_lookup st v f
+      | None   \<Rightarrow> None)"
+| "eval_full fs ps fuel s st env (PrimeF e _) = eval_full fs ps fuel s st env e"
+| "eval_full fs ps fuel s st env (PreF e _)   = eval_full fs ps fuel s st env e"
+| "eval_full fs ps fuel s st env (SomeWrapF e _) =
+     map_option VSome (eval_full fs ps fuel s st env e)"
+| "eval_full fs ps fuel s st env (MatchesF e pat _) =
+     (case eval_full fs ps fuel s st env e of
+        Some (VStr str) \<Rightarrow> Some (VBool (string_matches str pat))
+      | _ \<Rightarrow> None)"
+| "eval_full fs ps fuel s st env (CallF callee args _) =
+     (case fuel of
+        0 \<Rightarrow> None
+      | Suc fuel' \<Rightarrow>
+          (case callee of
+             IdentifierF nm _ \<Rightarrow>
+               (case lookup_callee fs ps nm of
+                  Some (params, body) \<Rightarrow>
+                    (if length params = length args \<and> distinct params
+                       then (case eval_full_list fs ps fuel s st env args of
+                               Some vals \<Rightarrow>
+                                 eval_full fs ps fuel' s st (zip params vals) body
+                             | None \<Rightarrow> None)
+                       else None)
+                | None \<Rightarrow> None)
+           | _ \<Rightarrow> None))"
+| "eval_full fs ps fuel s st env (FloatLitF d _) =
+     map_option VReal (decimalToRat d)"
+| "eval_full fs ps fuel s st env _ = None"
+| "eval_full_list fs ps fuel s st env [] = Some []"
+| "eval_full_list fs ps fuel s st env (e # es) =
+     (case eval_full fs ps fuel s st env e of
+        Some v \<Rightarrow>
+          (case eval_full_list fs ps fuel s st env es of
+             Some vs \<Rightarrow> Some (v # vs)
+           | None \<Rightarrow> None)
+      | None \<Rightarrow> None)"
+  by pat_completeness auto
+
+termination
+  by (relation "measures [
+        (\<lambda>x. case x of Inl (fs, ps, fuel, s, st, env, e) \<Rightarrow> fuel
+                     | Inr (fs, ps, fuel, s, st, env, es) \<Rightarrow> fuel),
+        (\<lambda>x. case x of Inl (fs, ps, fuel, s, st, env, e) \<Rightarrow> size e
+                     | Inr (fs, ps, fuel, s, st, env, es) \<Rightarrow> size_list size es)]")
+     auto
+
+lemma string_in_list_append [simp]:
+  "string_in_list y (xs @ ys) = (string_in_list y xs \<or> string_in_list y ys)"
+  by (induction xs) auto
+
+lemma string_in_list_remove_name [simp]:
+  "string_in_list y (remove_name n xs) = (y \<noteq> n \<and> string_in_list y xs)"
+  by (induction xs) auto
+
+lemma string_in_list_remove_names [simp]:
+  "string_in_list y (remove_names ns xs) = (\<not> string_in_list y ns \<and> string_in_list y xs)"
+  by (induction ns) auto
+
+lemma eval_full_list_length:
+  "eval_full_list fs ps fuel s st env es = Some vs \<Longrightarrow> length vs = length es"
+  by (induction es arbitrary: vs) (auto split: option.splits)
+
+lemma eval_full_coincidence:
+  "(\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
+     \<Longrightarrow> eval_full fs ps fuel s st env1 e = eval_full fs ps fuel s st env2 e"
+  "(\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
+     \<Longrightarrow> eval_full_list fs ps fuel s st env1 es = eval_full_list fs ps fuel s st env2 es"
+proof (induction fs ps fuel s st env1 e and fs ps fuel s st env1 es
+        arbitrary: env2 and env2
+        rule: eval_full_eval_full_list.induct)
+  case (6 fs ps fuel s st env bop l r sp env2)
+  have al: "\<forall>y. string_in_list y (free_vars l) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "6.prems" by auto
+  have ar: "\<forall>y. string_in_list y (free_vars r) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "6.prems" by auto
+  show ?case using "6.IH"(1)[OF al] "6.IH"(2)[OF ar] by simp
+next
+  case (7 fs ps fuel s st env uop e sp env2)
+  have ae: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "7.prems" by auto
+  show ?case using "7.IH"[OF ae] by simp
+next
+  case (8 fs ps fuel s st env c a b sp env2)
+  have ac: "\<forall>y. string_in_list y (free_vars c) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "8.prems" by auto
+  have aa: "\<forall>y. string_in_list y (free_vars a) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "8.prems" by auto
+  have ab: "\<forall>y. string_in_list y (free_vars b) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "8.prems" by auto
+  have c_eq: "eval_full fs ps fuel s st env c = eval_full fs ps fuel s st env2 c"
+    using "8.IH"(1)[OF ac] .
+  show ?case
+  proof (cases "eval_full fs ps fuel s st env c")
+    case None
+    then show ?thesis using c_eq by simp
+  next
+    case (Some vc)
+    show ?thesis
+    proof (cases vc)
+      case (VBool bb)
+      show ?thesis
+      proof (cases bb)
+        case True
+        have cT: "eval_full fs ps fuel s st env c = Some (VBool True)"
+          using Some VBool True by simp
+        have "eval_full fs ps fuel s st env a = eval_full fs ps fuel s st env2 a"
+          using "8.IH"(2)[OF cT refl refl aa] .
+        then show ?thesis using cT c_eq by simp
+      next
+        case False
+        have cF: "eval_full fs ps fuel s st env c = Some (VBool False)"
+          using Some VBool False by simp
+        have "eval_full fs ps fuel s st env b = eval_full fs ps fuel s st env2 b"
+          using "8.IH"(3)[OF cF refl refl ab] .
+        then show ?thesis using cF c_eq by simp
+      qed
+    qed (use Some c_eq in simp_all)
+  qed
+next
+  case (9 fs ps fuel s st env x v body sp env2)
+  have av: "\<forall>y. string_in_list y (free_vars v) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "9.prems" by auto
+  have v_eq: "eval_full fs ps fuel s st env v = eval_full fs ps fuel s st env2 v"
+    using "9.IH"(1)[OF av] .
+  show ?case
+  proof (cases "eval_full fs ps fuel s st env v")
+    case None
+    then show ?thesis using v_eq by simp
+  next
+    case (Some va)
+    have v2: "eval_full fs ps fuel s st env2 v = Some va" using v_eq Some by simp
+    have abd: "\<forall>y. string_in_list y (free_vars body)
+                 \<longrightarrow> env_lookup ((x, va) # env) y = env_lookup ((x, va) # env2) y"
+      using "9.prems" by (auto simp: env_lookup_def)
+    have body_eq: "eval_full fs ps fuel s st ((x, va) # env) body
+            = eval_full fs ps fuel s st ((x, va) # env2) body"
+      using "9.IH"(2)[OF Some abd] .
+    show ?thesis using Some v2 body_eq by simp
+  qed
+next
+  case (10 fs ps fuel s st env base f sp env2)
+  have ab: "\<forall>y. string_in_list y (free_vars base) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "10.prems" by auto
+  show ?case using "10.IH"[OF ab] by simp
+next
+  case (11 fs ps fuel s st env e sp env2)
+  have ae: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "11.prems" by auto
+  show ?case using "11.IH"[OF ae] by simp
+next
+  case (12 fs ps fuel s st env e sp env2)
+  have ae: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "12.prems" by auto
+  show ?case using "12.IH"[OF ae] by simp
+next
+  case (13 fs ps fuel s st env e sp env2)
+  have ae: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "13.prems" by auto
+  show ?case using "13.IH"[OF ae] by simp
+next
+  case (14 fs ps fuel s st env e pat sp env2)
+  have ae: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "14.prems" by auto
+  show ?case using "14.IH"[OF ae] by simp
+next
+  case (15 fs ps fuel s st env callee args sp env2)
+  have agr: "\<forall>y. string_in_list y (free_vars_list args) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "15.prems" by (auto simp: env_lookup_def)
+  show ?case
+  proof (cases fuel)
+    case 0
+    then show ?thesis by simp
+  next
+    case (Suc fuel')
+    show ?thesis
+    proof (cases "\<exists>nm sp1. callee = IdentifierF nm sp1")
+      case False
+      then show ?thesis using Suc by (cases callee) auto
+    next
+      case True
+      then obtain nm sp1 where idc: "callee = IdentifierF nm sp1" by blast
+      show ?thesis
+      proof (cases "lookup_callee fs ps nm")
+        case None
+        then show ?thesis using Suc idc by simp
+      next
+        case (Some pb)
+        obtain params body where pb: "pb = (params, body)" by (cases pb) auto
+        show ?thesis
+        proof (cases "length params = length args \<and> distinct params")
+          case False
+          then have "eval_full fs ps fuel s st env (CallF callee args sp) = None"
+            and "eval_full fs ps fuel s st env2 (CallF callee args sp) = None"
+            using Suc idc Some pb by auto
+          then show ?thesis by simp
+        next
+          case True
+          have args_eq: "eval_full_list fs ps fuel s st env args
+                           = eval_full_list fs ps fuel s st env2 args"
+            using "15.IH" Suc idc Some pb True agr by (auto simp: env_lookup_def)
+          then show ?thesis using Suc idc Some pb True by (simp split: option.splits)
+        qed
+      qed
+    qed
+  qed
+next
+  case (19 fs ps fuel s st env e es env2)
+  have agr_e: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "19.prems" by auto
+  have agr_es: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "19.prems" by auto
+  have e_eq: "eval_full fs ps fuel s st env e = eval_full fs ps fuel s st env2 e"
+    using "19.IH"(1)[OF agr_e] .
+  show ?case
+  proof (cases "eval_full fs ps fuel s st env e")
+    case None
+    then show ?thesis using e_eq by simp
+  next
+    case (Some v0)
+    have e2: "eval_full fs ps fuel s st env2 e = Some v0" using e_eq Some by simp
+    have es_eq: "eval_full_list fs ps fuel s st env es = eval_full_list fs ps fuel s st env2 es"
+      using "19.IH"(2)[OF Some agr_es] .
+    show ?thesis using Some e2 es_eq by simp
+  qed
+qed (auto simp: env_lookup_def)
+
+lemma string_in_free_vars_list:
+  "string_in_list y (free_vars_list es) = list_ex (\<lambda>e. string_in_list y (free_vars e)) es"
+  by (induction es) auto
+
+lemma map_of_swap_head:
+  assumes "k \<notin> fst ` set xs"
+  shows "map_of (xs @ (k, v) # ys) = map_of ((k, v) # xs @ ys)"
+proof (rule ext)
+  fix z
+  have nk: "map_of xs k = None" using assms by (simp add: map_of_eq_None_iff)
+  show "map_of (xs @ (k, v) # ys) z = map_of ((k, v) # xs @ ys) z"
+    using nk by (cases "map_of xs z") (auto simp: map_of_append map_add_def)
+qed
+
+lemma bind_params_eval:
+  assumes "list_all (\<lambda>a. list_all (\<lambda>q. \<not> string_in_list q (free_vars a)) pms) as"
+    and "length pms = length as"
+    and "distinct pms"
+    and "eval_full_list fs ps fuel s st env as = Some vals"
+  shows "eval_full fs ps fuel s st env (bind_params pms as body)
+           = eval_full fs ps fuel s st (zip pms vals @ env) body"
+  using assms
+proof (induction pms arbitrary: as vals env)
+  case Nil
+  then show ?case by simp
+next
+  case (Cons p pms')
+  obtain a as' where as_eq: "as = a # as'"
+    using Cons.prems(2) by (cases as) auto
+  obtain v0 vs0 where v0: "eval_full fs ps fuel s st env a = Some v0"
+    and vs0: "eval_full_list fs ps fuel s st env as' = Some vs0"
+    and vals_eq: "vals = v0 # vs0"
+    using Cons.prems(4) as_eq by (auto split: option.splits)
+  have p_notin: "p \<notin> set pms'" using Cons.prems(3) by simp
+  have len': "length pms' = length as'" using Cons.prems(2) as_eq by simp
+  have d': "distinct pms'" using Cons.prems(3) by simp
+  have pf': "list_all (\<lambda>a. list_all (\<lambda>q. \<not> string_in_list q (free_vars a)) pms') as'"
+    using Cons.prems(1) as_eq by (auto simp: list_all_iff)
+  have p_nf: "\<not> string_in_list p (free_vars_list as')"
+    using Cons.prems(1) as_eq by (auto simp: string_in_free_vars_list list_all_iff list_ex_iff)
+  have agr1: "\<forall>y. string_in_list y (free_vars_list as')
+                \<longrightarrow> env_lookup ((p, v0) # env) y = env_lookup env y"
+    using p_nf by (auto simp: env_lookup_def)
+  have vs0_ext: "eval_full_list fs ps fuel s st ((p, v0) # env) as' = Some vs0"
+    using eval_full_coincidence(2)[OF agr1] vs0 by simp
+  have IH: "eval_full fs ps fuel s st ((p, v0) # env) (bind_params pms' as' body)
+              = eval_full fs ps fuel s st (zip pms' vs0 @ (p, v0) # env) body"
+    using Cons.IH[OF pf' len' d' vs0_ext] .
+  have keys: "p \<notin> fst ` set (zip pms' vs0)"
+    using p_notin by (fastforce dest: set_zip_leftD)
+  have mEq: "map_of (zip pms' vs0 @ (p, v0) # env) = map_of ((p, v0) # zip pms' vs0 @ env)"
+    by (rule map_of_swap_head[OF keys])
+  have reorder: "eval_full fs ps fuel s st (zip pms' vs0 @ (p, v0) # env) body
+                   = eval_full fs ps fuel s st ((p, v0) # zip pms' vs0 @ env) body"
+  proof (rule eval_full_coincidence(1), intro allI impI)
+    fix y :: "String.literal"
+    assume "string_in_list y (free_vars body)"
+    show "env_lookup (zip pms' vs0 @ (p, v0) # env) y = env_lookup ((p, v0) # zip pms' vs0 @ env) y"
+      unfolding env_lookup_def by (rule fun_cong[OF mEq])
+  qed
+  have "eval_full fs ps fuel s st env (bind_params (p # pms') (a # as') body)
+          = eval_full fs ps fuel s st ((p, v0) # env) (bind_params pms' as' body)"
+    using v0 by simp
+  also have "\<dots> = eval_full fs ps fuel s st (zip pms' vs0 @ (p, v0) # env) body"
+    using IH .
+  also have "\<dots> = eval_full fs ps fuel s st ((p, v0) # zip pms' vs0 @ env) body"
+    using reorder .
+  also have "\<dots> = eval_full fs ps fuel s st (zip (p # pms') (v0 # vs0) @ env) body"
+    by simp
+  finally show ?case using as_eq vals_eq by simp
+qed
+
+lemma eval_full_callfree_fuel:
+  "\<not> list_ex is_call_full (allSubexprs e)
+     \<Longrightarrow> eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+  "\<not> list_ex is_call_full (allSubexprs_list es)
+     \<Longrightarrow> eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
+proof (induction fs ps fuel1 s st env e and fs ps fuel1 s st env es
+        arbitrary: fuel2 and fuel2
+        rule: eval_full_eval_full_list.induct)
+  case (6 fs ps fuel1 s st env bop l r sp fuel2)
+  have "eval_full fs ps fuel1 s st env l = eval_full fs ps fuel2 s st env l"
+    using "6.IH"(1) "6.prems" by (auto simp: list_ex_iff)
+  moreover have "eval_full fs ps fuel1 s st env r = eval_full fs ps fuel2 s st env r"
+    using "6.IH"(2) "6.prems" by (auto simp: list_ex_iff)
+  ultimately show ?case by simp
+next
+  case (7 fs ps fuel1 s st env uop e sp fuel2)
+  have "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "7.IH" "7.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (8 fs ps fuel1 s st env c a b sp fuel2)
+  have c_eq: "eval_full fs ps fuel1 s st env c = eval_full fs ps fuel2 s st env c"
+    using "8.IH"(1) "8.prems" by (auto simp: list_ex_iff)
+  show ?case
+  proof (cases "eval_full fs ps fuel1 s st env c")
+    case None
+    then show ?thesis using c_eq by simp
+  next
+    case (Some vc)
+    show ?thesis
+    proof (cases vc)
+      case (VBool bb)
+      show ?thesis
+      proof (cases bb)
+        case True
+        have cT: "eval_full fs ps fuel1 s st env c = Some (VBool True)"
+          using Some VBool True by simp
+        have "eval_full fs ps fuel1 s st env a = eval_full fs ps fuel2 s st env a"
+          using "8.IH"(2)[OF cT refl refl] "8.prems" by (auto simp: list_ex_iff)
+        then show ?thesis using cT c_eq by simp
+      next
+        case False
+        have cF: "eval_full fs ps fuel1 s st env c = Some (VBool False)"
+          using Some VBool False by simp
+        have "eval_full fs ps fuel1 s st env b = eval_full fs ps fuel2 s st env b"
+          using "8.IH"(3)[OF cF refl refl] "8.prems" by (auto simp: list_ex_iff)
+        then show ?thesis using cF c_eq by simp
+      qed
+    qed (use Some c_eq in simp_all)
+  qed
+next
+  case (9 fs ps fuel1 s st env x v body sp fuel2)
+  have v_eq: "eval_full fs ps fuel1 s st env v = eval_full fs ps fuel2 s st env v"
+    using "9.IH"(1) "9.prems" by (auto simp: list_ex_iff)
+  show ?case
+  proof (cases "eval_full fs ps fuel1 s st env v")
+    case None
+    then show ?thesis using v_eq by simp
+  next
+    case (Some va)
+    have v2: "eval_full fs ps fuel2 s st env v = Some va" using v_eq Some by simp
+    have "eval_full fs ps fuel1 s st ((x, va) # env) body
+            = eval_full fs ps fuel2 s st ((x, va) # env) body"
+      using "9.IH"(2)[OF Some] "9.prems" by (auto simp: list_ex_iff)
+    then show ?thesis using Some v2 by simp
+  qed
+next
+  case (10 fs ps fuel1 s st env base f sp fuel2)
+  have "eval_full fs ps fuel1 s st env base = eval_full fs ps fuel2 s st env base"
+    using "10.IH" "10.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (11 fs ps fuel1 s st env e sp fuel2)
+  have "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "11.IH" "11.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (12 fs ps fuel1 s st env e sp fuel2)
+  have "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "12.IH" "12.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (13 fs ps fuel1 s st env e sp fuel2)
+  have "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "13.IH" "13.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (14 fs ps fuel1 s st env e pat sp fuel2)
+  have "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "14.IH" "14.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (15 fs ps fuel1 s st env callee args sp fuel2)
+  have False using "15.prems" by simp
+  then show ?case by simp
+next
+  case (19 fs ps fuel1 s st env e es fuel2)
+  have e_eq: "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
+    using "19.IH"(1) "19.prems" by (auto simp: list_ex_iff)
+  show ?case
+  proof (cases "eval_full fs ps fuel1 s st env e")
+    case None
+    then show ?thesis using e_eq by simp
+  next
+    case (Some v0)
+    have e2: "eval_full fs ps fuel2 s st env e = Some v0" using e_eq Some by simp
+    have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
+      using "19.IH"(2)[OF Some] "19.prems" by (auto simp: list_ex_iff)
+    then show ?thesis using Some e2 by simp
+  qed
+qed (auto simp: list_ex_iff)
+
+lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
+  by (induction xs) auto
+
+lemma inline_calls_list_length [simp]:
+  "length (inline_calls_list fs ps es) = length es"
+  by (induction es) auto
+
+lemma eval_full_bin_someD:
+  "eval_full_bin bop x y = Some v \<Longrightarrow> \<exists>a b. x = Some a \<and> y = Some b"
+  by (cases bop; cases x; cases y; auto split: option.splits ir_value.splits)
+
+lemma eval_full_un_someD:
+  "eval_full_un uop x = Some v \<Longrightarrow> \<exists>a. x = Some a"
+  by (cases uop; cases x; auto split: option.splits ir_value.splits)
+
+lemma map_of_zip_prefix:
+  assumes "length ps = length vs" and "x \<in> set ps"
+  shows "map_of (zip ps vs @ env) x = map_of (zip ps vs) x"
+proof -
+  have "map_of (zip ps vs) x \<noteq> None" using assms by (simp add: map_of_zip_is_None)
+  then show ?thesis by (auto simp: map_of_append map_add_def split: option.splits)
+qed
+
+lemma inline_calls_CallF_lookup:
+  "lookup_callee fs ps nm = Some (params, body) \<Longrightarrow>
+   inline_calls fs ps (CallF (IdentifierF nm sp1) args sp)
+     = (if length params = length (inline_calls_list fs ps args)
+            \<and> capture_safe body params (inline_calls_list fs ps args)
+        then bind_params params (inline_calls_list fs ps args) body
+        else CallF (IdentifierF nm sp1) (inline_calls_list fs ps args) sp)"
+  by (auto simp: lookup_callee_def split: option.splits)
+
+lemma inline_calls_eval_full:
+  "eval_full fs ps fuel s st env e = Some w
+     \<Longrightarrow> eval_full fs ps fuel s st env (inline_calls fs ps e) = Some w"
+  "eval_full_list fs ps fuel s st env es = Some ws
+     \<Longrightarrow> eval_full_list fs ps fuel s st env (inline_calls_list fs ps es) = Some ws"
+proof (induction fs ps fuel s st env e and fs ps fuel s st env es
+        arbitrary: w and ws
+        rule: eval_full_eval_full_list.induct)
+  case (6 fs ps fuel s st env bop l r sp w)
+  have g: "eval_full_bin bop (eval_full fs ps fuel s st env l)
+             (eval_full fs ps fuel s st env r) = Some w"
+    using "6.prems" by simp
+  obtain vl vr where l_s: "eval_full fs ps fuel s st env l = Some vl"
+    and r_s: "eval_full fs ps fuel s st env r = Some vr"
+    using eval_full_bin_someD[OF g] by blast
+  show ?case using "6.IH"(1)[OF l_s] "6.IH"(2)[OF r_s] g l_s r_s by simp
+next
+  case (7 fs ps fuel s st env uop e sp w)
+  have g: "eval_full_un uop (eval_full fs ps fuel s st env e) = Some w"
+    using "7.prems" by simp
+  obtain ve where e_s: "eval_full fs ps fuel s st env e = Some ve"
+    using eval_full_un_someD[OF g] by blast
+  show ?case using "7.IH"[OF e_s] g e_s by simp
+next
+  case (8 fs ps fuel s st env c a b sp w)
+  obtain vc where c_s: "eval_full fs ps fuel s st env c = Some vc"
+    using "8.prems" by (cases "eval_full fs ps fuel s st env c") auto
+  have ic: "eval_full fs ps fuel s st env (inline_calls fs ps c) = Some vc"
+    using "8.IH"(1)[OF c_s] .
+  show ?case
+  proof (cases vc)
+    case (VBool bb)
+    show ?thesis
+    proof (cases bb)
+      case True
+      have cT: "eval_full fs ps fuel s st env c = Some (VBool True)"
+        using c_s VBool True by simp
+      have av: "eval_full fs ps fuel s st env a = Some w" using "8.prems" cT by simp
+      have "eval_full fs ps fuel s st env (inline_calls fs ps a) = Some w"
+        using "8.IH"(2)[OF cT refl refl av] .
+      then show ?thesis using ic cT VBool True by simp
+    next
+      case False
+      have cF: "eval_full fs ps fuel s st env c = Some (VBool False)"
+        using c_s VBool False by simp
+      have bv: "eval_full fs ps fuel s st env b = Some w" using "8.prems" cF by simp
+      have "eval_full fs ps fuel s st env (inline_calls fs ps b) = Some w"
+        using "8.IH"(3)[OF cF refl refl bv] .
+      then show ?thesis using ic cF VBool False by simp
+    qed
+  qed (use "8.prems" c_s in simp_all)
+next
+  case (9 fs ps fuel s st env x v body sp w)
+  obtain va where va: "eval_full fs ps fuel s st env v = Some va"
+    using "9.prems" by (cases "eval_full fs ps fuel s st env v") auto
+  have iv: "eval_full fs ps fuel s st env (inline_calls fs ps v) = Some va"
+    using "9.IH"(1)[OF va] .
+  have bw: "eval_full fs ps fuel s st ((x, va) # env) body = Some w"
+    using "9.prems" va by simp
+  have "eval_full fs ps fuel s st ((x, va) # env) (inline_calls fs ps body) = Some w"
+    using "9.IH"(2)[OF va bw] .
+  then show ?case using iv va by simp
+next
+  case (10 fs ps fuel s st env base f sp w)
+  obtain vb where vb: "eval_full fs ps fuel s st env base = Some vb"
+    using "10.prems" by (cases "eval_full fs ps fuel s st env base") auto
+  have "eval_full fs ps fuel s st env (inline_calls fs ps base) = Some vb"
+    using "10.IH"[OF vb] .
+  then show ?case using "10.prems" vb by simp
+next
+  case (11 fs ps fuel s st env e sp w)
+  have e_s: "eval_full fs ps fuel s st env e = Some w" using "11.prems" by simp
+  show ?case using "11.IH"[OF e_s] by simp
+next
+  case (12 fs ps fuel s st env e sp w)
+  have e_s: "eval_full fs ps fuel s st env e = Some w" using "12.prems" by simp
+  show ?case using "12.IH"[OF e_s] by simp
+next
+  case (13 fs ps fuel s st env e sp w)
+  obtain ve where e_s: "eval_full fs ps fuel s st env e = Some ve"
+    using "13.prems" by (cases "eval_full fs ps fuel s st env e") auto
+  have "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some ve"
+    using "13.IH"[OF e_s] .
+  then show ?case using "13.prems" e_s by simp
+next
+  case (14 fs ps fuel s st env e pat sp w)
+  obtain ve where e_s: "eval_full fs ps fuel s st env e = Some ve"
+    using "14.prems" by (cases "eval_full fs ps fuel s st env e") auto
+  have "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some ve"
+    using "14.IH"[OF e_s] .
+  then show ?case using "14.prems" e_s by simp
+next
+  case (15 fs ps fuel s st env callee args sp w)
+  obtain fuel' where fuel: "fuel = Suc fuel'"
+    using "15.prems" by (cases fuel) auto
+  obtain nm sp1 where idc: "callee = IdentifierF nm sp1"
+    using "15.prems" fuel by (cases callee) auto
+  obtain params body where lc: "lookup_callee fs ps nm = Some (params, body)"
+    using "15.prems" fuel idc by (cases "lookup_callee fs ps nm") auto
+  have lenpa: "length params = length args"
+    using "15.prems" fuel idc lc by (simp split: if_splits)
+  have dpe: "distinct params"
+    using "15.prems" fuel idc lc by (simp split: if_splits)
+  obtain vals where vals: "eval_full_list fs ps fuel s st env args = Some vals"
+    using "15.prems" fuel idc lc lenpa dpe
+    by (cases "eval_full_list fs ps fuel s st env args") auto
+  have body_w: "eval_full fs ps fuel' s st (zip params vals) body = Some w"
+    using "15.prems" fuel idc lc lenpa dpe vals by simp
+  have args_eq: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps args) = Some vals"
+    using "15.IH" fuel idc lc lenpa dpe vals by (auto split: if_splits)
+  have lenpa': "length params = length (inline_calls_list fs ps args)"
+    using lenpa by simp
+  have lenv: "length params = length vals"
+    using vals lenpa by (simp add: eval_full_list_length)
+  have inl: "inline_calls fs ps (CallF callee args sp)
+               = (if capture_safe body params (inline_calls_list fs ps args)
+                  then bind_params params (inline_calls_list fs ps args) body
+                  else CallF callee (inline_calls_list fs ps args) sp)"
+    using inline_calls_CallF_lookup[OF lc] idc lenpa' by simp
+  show ?case
+  proof (cases "capture_safe body params (inline_calls_list fs ps args)")
+    case True
+    have pf: "list_all (\<lambda>a. list_all (\<lambda>q. \<not> string_in_list q (free_vars a)) params)
+                 (inline_calls_list fs ps args)"
+      using True by (simp add: capture_safe_def)
+    have dp: "distinct params" using True by (simp add: capture_safe_def)
+    have fvb: "list_all (\<lambda>x. string_in_list x params) (free_vars body)"
+      using True by (simp add: capture_safe_def)
+    have cfb: "\<not> list_ex is_call_full (allSubexprs body)"
+      using True by (simp add: capture_safe_def)
+    have step1: "eval_full fs ps fuel s st env (bind_params params (inline_calls_list fs ps args) body)
+                   = eval_full fs ps fuel s st (zip params vals @ env) body"
+      using bind_params_eval[OF pf lenpa' dp args_eq] .
+    have step2: "eval_full fs ps fuel s st (zip params vals @ env) body
+                   = eval_full fs ps fuel s st (zip params vals) body"
+    proof (rule eval_full_coincidence(1), intro allI impI)
+      fix y assume "string_in_list y (free_vars body)"
+      then have yin: "y \<in> set params" using fvb by (auto simp: list_all_iff string_in_list_iff)
+      show "env_lookup (zip params vals @ env) y = env_lookup (zip params vals) y"
+        unfolding env_lookup_def by (rule map_of_zip_prefix[OF lenv yin])
+    qed
+    have step3: "eval_full fs ps fuel s st (zip params vals) body
+                   = eval_full fs ps fuel' s st (zip params vals) body"
+      using eval_full_callfree_fuel(1)[OF cfb] .
+    show ?thesis using inl True step1 step2 step3 body_w by simp
+  next
+    case False
+    have "eval_full fs ps fuel s st env (CallF callee (inline_calls_list fs ps args) sp) = Some w"
+      using fuel idc lc lenpa' dpe args_eq body_w by simp
+    then show ?thesis using inl False by simp
+  qed
+next
+  case (19 fs ps fuel s st env e es ws)
+  obtain v0 vs0 where v0: "eval_full fs ps fuel s st env e = Some v0"
+    and vs0: "eval_full_list fs ps fuel s st env es = Some vs0"
+    and ws_eq: "ws = v0 # vs0"
+    using "19.prems" by (auto split: option.splits)
+  have ie: "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some v0"
+    using "19.IH"(1)[OF v0] .
+  have ies: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps es) = Some vs0"
+    using "19.IH"(2)[OF v0 vs0] .
+  show ?case using ie ies ws_eq by simp
+qed (auto split: option.splits)
+
 end

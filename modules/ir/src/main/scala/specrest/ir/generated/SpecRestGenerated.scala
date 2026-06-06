@@ -7923,6 +7923,14 @@ object SpecRestGenerated {
   def mysqlCaps: dialect_caps =
     DialectCaps(false, true, false, true, true, false)
 
+  def bind_params(uu: List[String], uv: List[expr_full], body: expr_full): expr_full =
+    (uu, uv, body) match {
+      case (p :: ps, a :: args, body) =>
+        LetF(p, a, bind_params(ps, args, body), None)
+      case (Nil, uv, body) => body
+      case (uu, Nil, body) => body
+    }
+
   def desiredSize(x0: bin_op_full, n: BigInt): Option[BigInt] = (x0, n) match {
     case (BGt(), n) => Some[BigInt](max[BigInt](zero_int, plus_int(n, one_inta)))
     case (BGe(), n) => Some[BigInt](max[BigInt](zero_int, n))
@@ -9145,17 +9153,50 @@ object SpecRestGenerated {
     case IdentifierF(v, va)                => false
   }
 
+  def is_call_full(x0: expr_full): Boolean = x0 match {
+    case CallF(uu, uv, uw)                => true
+    case BinaryOpF(v, va, vb, vc)         => false
+    case UnaryOpF(v, va, vb)              => false
+    case QuantifierF(v, va, vb, vc)       => false
+    case SomeWrapF(v, va)                 => false
+    case TheF(v, va, vb, vc)              => false
+    case FieldAccessF(v, va, vb)          => false
+    case EnumAccessF(v, va, vb)           => false
+    case IndexF(v, va, vb)                => false
+    case PrimeF(v, va)                    => false
+    case PreF(v, va)                      => false
+    case WithF(v, va, vb)                 => false
+    case IfF(v, va, vb, vc)               => false
+    case LetF(v, va, vb, vc)              => false
+    case LambdaF(v, va, vb)               => false
+    case ConstructorF(v, va, vb)          => false
+    case SetLiteralF(v, va)               => false
+    case MapLiteralF(v, va)               => false
+    case SetComprehensionF(v, va, vb, vc) => false
+    case SeqLiteralF(v, va)               => false
+    case MatchesF(v, va, vb)              => false
+    case IntLitF(v, va)                   => false
+    case FloatLitF(v, va)                 => false
+    case StringLitF(v, va)                => false
+    case BoolLitF(v, va)                  => false
+    case NoneLitF(v)                      => false
+    case IdentifierF(v, va)               => false
+  }
+
   def capture_safe(body: expr_full, params: List[String], args: List[expr_full]): Boolean =
-    !list_ex[expr_full]((a: expr_full) => is_binder_full(a), allSubexprs(body)) &&
-      list_all[expr_full](
-        (a: expr_full) =>
-          list_all[String](
-            (p: String) =>
-              !string_in_list(p, free_vars(a)),
-            params
-          ),
-        args
-      )
+    distinct[String](params) &&
+      (!list_ex[expr_full]((a: expr_full) => is_binder_full(a), allSubexprs(body)) &&
+        (!list_ex[expr_full]((a: expr_full) => is_call_full(a), allSubexprs(body)) &&
+          (list_all[String]((x: String) => string_in_list(x, params), free_vars(body)) &&
+            list_all[expr_full](
+              (a: expr_full) =>
+                list_all[String](
+                  (p: String) =>
+                    !string_in_list(p, free_vars(a)),
+                  params
+                ),
+              args
+            ))))
 
   def prdParams(x0: predicate_decl_full): List[param_decl_full] = x0 match {
     case PredicateDeclFull(x1, x2, x3, x4) => x2
@@ -9184,13 +9225,6 @@ object SpecRestGenerated {
   def prmName(x0: param_decl_full): String = x0 match {
     case ParamDeclFull(x1, x2, x3) => x1
   }
-
-  def subst_params(uu: List[String], uv: List[expr_full], body: expr_full): expr_full =
-    (uu, uv, body) match {
-      case (p :: ps, a :: args, body) => subst_params(ps, args, subst(p, a, body))
-      case (Nil, uv, body)            => body
-      case (uu, Nil, body)            => body
-    }
 
   def inline_calls_bindings(
       vm: List[function_decl_full],
@@ -9311,7 +9345,7 @@ object SpecRestGenerated {
                         ),
                         argsa
                       ) match {
-                      case true => subst_params(
+                      case true => bind_params(
                           map[param_decl_full, String](
                             (a: param_decl_full) => prmName(a),
                             prdParams(pr)
@@ -9333,7 +9367,7 @@ object SpecRestGenerated {
                     ),
                     argsa
                   ) match {
-                  case true => subst_params(
+                  case true => bind_params(
                       map[param_decl_full, String](
                         (a: param_decl_full) => prmName(a),
                         fncParams(f)
