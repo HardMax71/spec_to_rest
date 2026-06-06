@@ -236,24 +236,34 @@ fun is_binder_full :: "expr_full \<Rightarrow> bool" where
 | "is_binder_full (TheF _ _ _ _)               = True"
 | "is_binder_full _                            = False"
 
-text \<open>\<open>inline_calls\<close> is a \<^emph>\<open>trusted\<close> pre-\<open>lower\<close> desugar (like \<open>lower\<close> itself: \<open>CallF\<close>
-  has no \<open>eval\<close>, so its meaning-preservation can't be stated against the verified
-  semantics). It beta-reduces a call to a user function/predicate by substituting
-  its arguments for the parameters in the body. To stay capture-free with the
-  non-renaming \<open>subst\<close>, it inlines a call ONLY when the callee body is binder-free
-  and no argument mentions a parameter name; otherwise the \<open>CallF\<close> is left in place
-  (it then falls outside \<open>lower\<close> and the check routes best-effort). It inlines one
-  level; the Scala driver iterates to a fixpoint (capped), so nested non-recursive
-  calls resolve and recursive ones stop.\<close>
+fun is_call_full :: "expr_full \<Rightarrow> bool" where
+  "is_call_full (CallF _ _ _) = True"
+| "is_call_full _             = False"
+
+text \<open>\<open>inline_calls\<close> is a pre-\<open>lower\<close> desugar that beta-reduces a call to a user
+  function/predicate, substituting its arguments for the parameters in the body.
+  \<open>capture_safe\<close> inlines only a \<^emph>\<open>simple\<close> body, on conditions that make the
+  (non-renaming) \<open>subst\<close> sound: (i) binder-free and (ii) call-free, so substitution
+  is a structural splice; (iii) every free variable of the body is a parameter, so it
+  cannot reference \<^emph>\<open>and capture\<close> an outer or state name; and (iv) no argument
+  mentions a parameter, so the sequential per-parameter substitution behaves
+  simultaneously. Otherwise the \<open>CallF\<close> is left in place, falls outside \<open>lower\<close>, and
+  the check routes best-effort. Under these conditions \<open>inline_calls\<close> preserves the
+  reference semantics \<open>eval_full\<close> (lemma \<open>inline_calls_eval_full\<close>, theory \<open>Semantics\<close>).
+  It inlines one level; the Scala driver iterates to a fixpoint (capped), so nested
+  non-recursive calls resolve and recursive ones stop.\<close>
 
 definition capture_safe :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> expr_full list \<Rightarrow> bool" where
   "capture_safe body params args \<equiv>
-     (\<not> list_ex is_binder_full (allSubexprs body))
+     distinct params
+       \<and> (\<not> list_ex is_binder_full (allSubexprs body))
+       \<and> (\<not> list_ex is_call_full (allSubexprs body))
+       \<and> list_all (\<lambda>x. string_in_list x params) (free_vars body)
        \<and> list_all (\<lambda>a. list_all (\<lambda>p. \<not> string_in_list p (free_vars a)) params) args"
 
-fun subst_params :: "String.literal list \<Rightarrow> expr_full list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
-  "subst_params (p # ps) (a # args) body = subst_params ps args (subst p a body)"
-| "subst_params _ _ body = body"
+fun bind_params :: "String.literal list \<Rightarrow> expr_full list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+  "bind_params (p # ps) (a # args) body = LetF p a (bind_params ps args body) None"
+| "bind_params _ _ body = body"
 
 fun inline_calls :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full \<Rightarrow> expr_full"
 and inline_calls_list :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
@@ -269,14 +279,14 @@ where
                 Some f \<Rightarrow>
                   (if length (fncParams f) = length args'
                         \<and> capture_safe (fncBody f) (map prmName (fncParams f)) args'
-                     then subst_params (map prmName (fncParams f)) args' (fncBody f)
+                     then bind_params (map prmName (fncParams f)) args' (fncBody f)
                      else CallF callee args' sp)
               | None \<Rightarrow>
                   (case List.find (\<lambda>q. prdName q = nm) ps of
                      Some pr \<Rightarrow>
                        (if length (prdParams pr) = length args'
                              \<and> capture_safe (prdBody pr) (map prmName (prdParams pr)) args'
-                          then subst_params (map prmName (prdParams pr)) args' (prdBody pr)
+                          then bind_params (map prmName (prdParams pr)) args' (prdBody pr)
                           else CallF callee args' sp)
                    | None \<Rightarrow> CallF callee args' sp))
          | _ \<Rightarrow> CallF (inline_calls fs ps callee) args' sp)"
