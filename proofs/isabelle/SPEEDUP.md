@@ -446,7 +446,66 @@ python3 proofs/isabelle/timing_trace.py \
   "$(isabelle getenv -b ISABELLE_HOME_USER)/heaps" proofs/isabelle/SpecRest /tmp/trace.txt
 ```
 
+### CI `-j 2` + the 89s preservation proof + theory splits (2026-06-06)
+
+Post-`eval_full` (#392) pass: the `isabelle-build` workflow had crept to ~15 min wall and several
+proof files exceeded 500 lines.
+
+**1. `-j 2` + collapse the redundant preflight/build double-step.** The `isabelle build -S -b`
+preflight step was doing the _entire_ build, while the separately-tuned "Build SpecRest session"
+step (carrying `-o process_policy=...`) then ran as a 7 s no-op. Merged into one source-change-gated
+step that carries the tuned flags AND `-j 2`. `SpecRest_Soundness` and `SpecRest_Codegen` are
+independent siblings over `SpecRest_Core` (see "Multi-session ROOT split"); at the default `-j 1`
+they built sequentially. Also fixed a latent bug: the "Save Isabelle heaps" gate still referenced
+the deleted `steps.preflight` id, which would have disabled heap caching on `main` (every run a cold
+rebuild).
+
+| Phase (local, Core cached) | `-j 1` (sequential) | `-j 2` |
+| -------------------------- | ------------------- | ------ |
+| Soundness + Codegen        | ~5:34               | 3:13   |
+
+Source: [system.pdf](https://isabelle.in.tum.de/doc/system.pdf), `-j`.
+
+**2. The 89 s preservation proof** (`lower_binop_some`, `Preservation.thy`) - the single biggest
+command in the whole build. `by (cases r) (auto split: option.splits)` over `r :: expr_full` (27
+ctors) generated 27 subgoals, each re-deriving `lower`'s 20-way `case op`. Fix: split the BIn/BNotIn
+disjunction on `op` _before_ `cases r`, so `op` is concrete and `auto` stops re-deriving the op
+dispatch per constructor. Same proof, semantically.
+
+| Command                    | Before  | After  |
+| -------------------------- | ------- | ------ |
+| `lower_binop_some` `by`    | 88.91 s | <0.7 s |
+| Soundness command-time sum | 165 s   | 85 s   |
+
+**3. Theory splits (maintainability, build-neutral).** `eval_full` (the proof-only reference
+semantics, not extracted) moved out of `Semantics.thy` (2031 -> 1385) into a new
+`core/Semantics_Reference.thy` leaf (651) imported by nothing - so reference-semantics edits no
+longer invalidate the `Codegen`/`Soundness` heaps. `Preservation.thy` (1657) split 4 ways along its
+phase comments: `Preservation_Wf` (120), `Preservation_Lower` (557), `Preservation_WellTyped` (153),
+`Preservation` (844, the irreducible `h3_preservation` umbrella - one theorem). Linear import chain,
+so no build-parallelism gain; pure maintainability. Drift-clean (no extracted function changed).
+
 ## Failed
+
+### wf_z3 / lower definition cost (mutual `fun`/`function` over `expr_full`) - the levers don't apply
+
+`wf_z3` (`Preservation.thy`, 4-way mutual `fun`, ~20 s) and `lower` (`IR_Lower.thy`, 5-way mutual
+`function`, ~37 s) appear in the per-command trace as the _definition_ command (not termination, not
+completeness). Two levers tried on `wf_z3`, both failed:
+
+- `fun` -> `function (sequential)` + hand termination: 20.6 s -> 17.8 s def + 2.0 s term = no
+  change. Unlike `walkUndefinedExpr` (Tier 2.x), `lexicographic_order` was never the cost here - the
+  recursion is trivially structural.
+- Flatten the nested `SetComprehensionF _ (IdentifierF _ _) p _` case into single-level cases (Tier
+  2.6 style): **worse**, 20.6 s -> 22.0 s (more case expressions to compile).
+
+Diagnosis: the cost is the package compiling the _complex recursive RHS_ (the 15-branch `case op`
+with many recursive call-sites), NOT mutual arity (`stripSpans` is **5-way** mutual over `expr_full`
+and is <2.2 s) nor nested patterns. `lower` shares the disease and is _extracted_ (any change forces
+a Scala regen). Left as-is: the gain is partly hidden by `-j 2` (Codegen overlaps Soundness's tail)
+and the standard Tier 2.x levers do not apply. The one untried idea - factor the repeated
+`(case (lower l, lower r) of (Some, Some) => ...)` into a helper - changes extracted Scala and is
+speculative.
 
 ### Tier 3.1 (partial) — Delete `peel_smt_translate_*` `[simp]` lemmas
 

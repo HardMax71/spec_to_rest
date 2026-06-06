@@ -249,7 +249,7 @@ text \<open>\<open>inline_calls\<close> is a pre-\<open>lower\<close> desugar th
   mentions a parameter, so the sequential per-parameter substitution behaves
   simultaneously. Otherwise the \<open>CallF\<close> is left in place, falls outside \<open>lower\<close>, and
   the check routes best-effort. Under these conditions \<open>inline_calls\<close> preserves the
-  reference semantics \<open>eval_full\<close> (lemma \<open>inline_calls_eval_full\<close>, theory \<open>Semantics\<close>).
+  reference semantics \<open>eval_full\<close> (lemma \<open>inline_calls_eval_full\<close>, theory \<open>Semantics_Reference\<close>).
   It inlines one level; the Scala driver iterates to a fixpoint (capped), so nested
   non-recursive calls resolve and recursive ones stop.\<close>
 
