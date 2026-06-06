@@ -102,29 +102,24 @@ jobs:
             isabelle-heaps-${{ env.ISABELLE_VERSION }}-${{ hashFiles('proofs/isabelle/SpecRest/ROOT', 'proofs/isabelle/SpecRest/core/IR.thy') }}-
             isabelle-heaps-${{ env.ISABELLE_VERSION }}-
 
-      - name: Soft-build pre-flight (skip if no theory work)
-        id: preflight
+      - name: Build SpecRest sessions (source-change gated, parallel)
+        id: build
         shell: bash
         run: |
           set -euo pipefail
-          isabelle build -S -d proofs/isabelle/SpecRest -b SpecRest_Soundness SpecRest_Codegen 2>&1 | tee /tmp/preflight.log
-          if grep -q "Nothing to build" /tmp/preflight.log; then
+          isabelle build -S -b -j 2 \
+            -o process_policy="taskset --cpu-list 0-3" \
+            -d proofs/isabelle/SpecRest \
+            SpecRest_Soundness SpecRest_Codegen 2>&1 | tee /tmp/build.log
+          if grep -q "Nothing to build" /tmp/build.log; then
             echo "needs_build=false" >> "$GITHUB_OUTPUT"
-            echo "All sessions already up-to-date — skipping rebuild."
+            echo "All sessions already up-to-date; skipping heap save."
           else
             echo "needs_build=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build SpecRest session
-        if: steps.preflight.outputs.needs_build == 'true'
-        run: |
-          isabelle build \
-            -o process_policy="taskset --cpu-list 0-3" \
-            -d proofs/isabelle/SpecRest \
-            -b SpecRest_Soundness SpecRest_Codegen
-
       - name: Save Isabelle heaps (push-to-main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.preflight.outputs.needs_build == 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build.outputs.needs_build == 'true'
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps

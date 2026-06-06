@@ -9,6 +9,7 @@ session SpecRest_Core in core = HOL +
     IR_Lower
     Smt
     Semantics
+    Semantics_Reference
     Translate
 
 session SpecRest_Soundness in soundness = SpecRest_Core +
@@ -18,6 +19,9 @@ session SpecRest_Soundness in soundness = SpecRest_Core +
     Soundness_Scalar
     Soundness_Collection
     Soundness
+    Preservation_Wf
+    Preservation_Lower
+    Preservation_WellTyped
     Preservation
 
 session SpecRest_Codegen in codegen = SpecRest_Core +
