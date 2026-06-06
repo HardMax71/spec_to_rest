@@ -1439,7 +1439,7 @@ and eval_full_list ::
              IdentifierF nm _ \<Rightarrow>
                (case lookup_callee fs ps nm of
                   Some (params, body) \<Rightarrow>
-                    (if length params = length args
+                    (if length params = length args \<and> distinct params
                        then (case eval_full_list fs ps fuel s st env args of
                                Some vals \<Rightarrow>
                                  eval_full fs ps fuel' s st (zip params vals) body
@@ -1447,6 +1447,8 @@ and eval_full_list ::
                        else None)
                 | None \<Rightarrow> None)
            | _ \<Rightarrow> None))"
+| "eval_full fs ps fuel s st env (FloatLitF d _) =
+     map_option VReal (decimalToRat d)"
 | "eval_full fs ps fuel s st env _ = None"
 | "eval_full_list fs ps fuel s st env [] = Some []"
 | "eval_full_list fs ps fuel s st env (e # es) =
@@ -1609,9 +1611,12 @@ next
         case (Some pb)
         obtain params body where pb: "pb = (params, body)" by (cases pb) auto
         show ?thesis
-        proof (cases "length params = length args")
+        proof (cases "length params = length args \<and> distinct params")
           case False
-          then show ?thesis using Suc idc Some pb by simp
+          then have "eval_full fs ps fuel s st env (CallF callee args sp) = None"
+            and "eval_full fs ps fuel s st env2 (CallF callee args sp) = None"
+            using Suc idc Some pb by auto
+          then show ?thesis by simp
         next
           case True
           have args_eq: "eval_full_list fs ps fuel s st env args
@@ -1623,13 +1628,13 @@ next
     qed
   qed
 next
-  case (18 fs ps fuel s st env e es env2)
+  case (19 fs ps fuel s st env e es env2)
   have agr_e: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "18.prems" by auto
+    using "19.prems" by auto
   have agr_es: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "18.prems" by auto
+    using "19.prems" by auto
   have e_eq: "eval_full fs ps fuel s st env e = eval_full fs ps fuel s st env2 e"
-    using "18.IH"(1)[OF agr_e] .
+    using "19.IH"(1)[OF agr_e] .
   show ?case
   proof (cases "eval_full fs ps fuel s st env e")
     case None
@@ -1638,7 +1643,7 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel s st env2 e = Some v0" using e_eq Some by simp
     have es_eq: "eval_full_list fs ps fuel s st env es = eval_full_list fs ps fuel s st env2 es"
-      using "18.IH"(2)[OF Some agr_es] .
+      using "19.IH"(2)[OF Some agr_es] .
     show ?thesis using Some e2 es_eq by simp
   qed
 qed (auto simp: env_lookup_def)
@@ -1811,9 +1816,9 @@ next
   have False using "15.prems" by simp
   then show ?case by simp
 next
-  case (18 fs ps fuel1 s st env e es fuel2)
+  case (19 fs ps fuel1 s st env e es fuel2)
   have e_eq: "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
-    using "18.IH"(1) "18.prems" by (auto simp: list_ex_iff)
+    using "19.IH"(1) "19.prems" by (auto simp: list_ex_iff)
   show ?case
   proof (cases "eval_full fs ps fuel1 s st env e")
     case None
@@ -1822,7 +1827,7 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel2 s st env e = Some v0" using e_eq Some by simp
     have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
-      using "18.IH"(2)[OF Some] "18.prems" by (auto simp: list_ex_iff)
+      using "19.IH"(2)[OF Some] "19.prems" by (auto simp: list_ex_iff)
     then show ?thesis using Some e2 by simp
   qed
 qed (auto simp: list_ex_iff)
@@ -1960,13 +1965,15 @@ next
     using "15.prems" fuel idc by (cases "lookup_callee fs ps nm") auto
   have lenpa: "length params = length args"
     using "15.prems" fuel idc lc by (simp split: if_splits)
+  have dpe: "distinct params"
+    using "15.prems" fuel idc lc by (simp split: if_splits)
   obtain vals where vals: "eval_full_list fs ps fuel s st env args = Some vals"
-    using "15.prems" fuel idc lc lenpa
+    using "15.prems" fuel idc lc lenpa dpe
     by (cases "eval_full_list fs ps fuel s st env args") auto
   have body_w: "eval_full fs ps fuel' s st (zip params vals) body = Some w"
-    using "15.prems" fuel idc lc lenpa vals by simp
+    using "15.prems" fuel idc lc lenpa dpe vals by simp
   have args_eq: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps args) = Some vals"
-    using "15.IH" fuel idc lc lenpa vals by (auto split: if_splits)
+    using "15.IH" fuel idc lc lenpa dpe vals by (auto split: if_splits)
   have lenpa': "length params = length (inline_calls_list fs ps args)"
     using lenpa by simp
   have lenv: "length params = length vals"
@@ -2005,19 +2012,19 @@ next
   next
     case False
     have "eval_full fs ps fuel s st env (CallF callee (inline_calls_list fs ps args) sp) = Some w"
-      using fuel idc lc lenpa' args_eq body_w by simp
+      using fuel idc lc lenpa' dpe args_eq body_w by simp
     then show ?thesis using inl False by simp
   qed
 next
-  case (18 fs ps fuel s st env e es ws)
+  case (19 fs ps fuel s st env e es ws)
   obtain v0 vs0 where v0: "eval_full fs ps fuel s st env e = Some v0"
     and vs0: "eval_full_list fs ps fuel s st env es = Some vs0"
     and ws_eq: "ws = v0 # vs0"
-    using "18.prems" by (auto split: option.splits)
+    using "19.prems" by (auto split: option.splits)
   have ie: "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some v0"
-    using "18.IH"(1)[OF v0] .
+    using "19.IH"(1)[OF v0] .
   have ies: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps es) = Some vs0"
-    using "18.IH"(2)[OF v0 vs0] .
+    using "19.IH"(2)[OF v0 vs0] .
   show ?case using ie ies ws_eq by simp
 qed (auto split: option.splits)
 
