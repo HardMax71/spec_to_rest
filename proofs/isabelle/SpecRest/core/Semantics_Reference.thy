@@ -69,6 +69,11 @@ and eval_full_list ::
            | _ \<Rightarrow> None))"
 | "eval_full fs ps fuel s st env (FloatLitF d _) =
      map_option VReal (decimalToRat d)"
+| "eval_full fs ps fuel s st env (SeqLiteralF es _) =
+     map_option VSeq (eval_full_list fs ps fuel s st env es)"
+| "eval_full fs ps fuel s st env (SetLiteralF es _) =
+     map_option (\<lambda>vs. VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))
+       (eval_full_list fs ps fuel s st env es)"
 | "eval_full fs ps fuel s st env _ = None"
 | "eval_full_list fs ps fuel s st env [] = Some []"
 | "eval_full_list fs ps fuel s st env (e # es) =
@@ -248,13 +253,13 @@ next
     qed
   qed
 next
-  case (19 fs ps fuel s st env e es env2)
+  case (21 fs ps fuel s st env e es env2)
   have agr_e: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "19.prems" by auto
+    using "21.prems" by auto
   have agr_es: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "19.prems" by auto
+    using "21.prems" by auto
   have e_eq: "eval_full fs ps fuel s st env e = eval_full fs ps fuel s st env2 e"
-    using "19.IH"(1)[OF agr_e] .
+    using "21.IH"(1)[OF agr_e] .
   show ?case
   proof (cases "eval_full fs ps fuel s st env e")
     case None
@@ -263,9 +268,19 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel s st env2 e = Some v0" using e_eq Some by simp
     have es_eq: "eval_full_list fs ps fuel s st env es = eval_full_list fs ps fuel s st env2 es"
-      using "19.IH"(2)[OF Some agr_es] .
+      using "21.IH"(2)[OF Some agr_es] .
     show ?thesis using Some e2 es_eq by simp
   qed
+next
+  case (17 fs ps fuel s st env es sp env2)
+  have agr: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "17.prems" by auto
+  show ?case using "17.IH"[OF agr] by simp
+next
+  case (18 fs ps fuel s st env es sp env2)
+  have agr: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
+    using "18.prems" by auto
+  show ?case using "18.IH"[OF agr] by simp
 qed (auto simp: env_lookup_def)
 
 lemma string_in_free_vars_list:
@@ -436,9 +451,9 @@ next
   have False using "15.prems" by simp
   then show ?case by simp
 next
-  case (19 fs ps fuel1 s st env e es fuel2)
+  case (21 fs ps fuel1 s st env e es fuel2)
   have e_eq: "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
-    using "19.IH"(1) "19.prems" by (auto simp: list_ex_iff)
+    using "21.IH"(1) "21.prems" by (auto simp: list_ex_iff)
   show ?case
   proof (cases "eval_full fs ps fuel1 s st env e")
     case None
@@ -447,9 +462,19 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel2 s st env e = Some v0" using e_eq Some by simp
     have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
-      using "19.IH"(2)[OF Some] "19.prems" by (auto simp: list_ex_iff)
+      using "21.IH"(2)[OF Some] "21.prems" by (auto simp: list_ex_iff)
     then show ?thesis using Some e2 by simp
   qed
+next
+  case (17 fs ps fuel1 s st env es sp fuel2)
+  have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
+    using "17.IH" "17.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
+next
+  case (18 fs ps fuel1 s st env es sp fuel2)
+  have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
+    using "18.IH" "18.prems" by (auto simp: list_ex_iff)
+  then show ?case by simp
 qed (auto simp: list_ex_iff)
 
 lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
@@ -636,15 +661,15 @@ next
     then show ?thesis using inl False by simp
   qed
 next
-  case (19 fs ps fuel s st env e es ws)
+  case (21 fs ps fuel s st env e es ws)
   obtain v0 vs0 where v0: "eval_full fs ps fuel s st env e = Some v0"
     and vs0: "eval_full_list fs ps fuel s st env es = Some vs0"
     and ws_eq: "ws = v0 # vs0"
-    using "19.prems" by (auto split: option.splits)
+    using "21.prems" by (auto split: option.splits)
   have ie: "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some v0"
-    using "19.IH"(1)[OF v0] .
+    using "21.IH"(1)[OF v0] .
   have ies: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps es) = Some vs0"
-    using "19.IH"(2)[OF v0 vs0] .
+    using "21.IH"(2)[OF v0 vs0] .
   show ?case using ie ies ws_eq by simp
 qed (auto split: option.splits)
 

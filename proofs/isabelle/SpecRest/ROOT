@@ -10,6 +10,7 @@ session SpecRest_Core in core = HOL +
     Smt
     Semantics
     Semantics_Reference
+    LowerMeaning
     Translate
 
 session SpecRest_Soundness in soundness = SpecRest_Core +
