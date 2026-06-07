@@ -16,9 +16,11 @@ lemma lower_preserves_eval_full:
      (\<forall>enums sp e'. lowerSeqList enums es sp = Some e' \<longrightarrow> eval s st env e' = Some (VSeq vs)) \<and>
      (\<forall>enums sp e'. lowerSetList enums es sp = Some e' \<longrightarrow>
         eval s st env e' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])))"
-proof (induction fs ps fuel s st env e and fs ps fuel s st env es
-        arbitrary: v e' enums and vs
-        rule: eval_full_eval_full_list.induct)
+  "eval_full_entries fs ps fuel s st env ents = Some mps \<Longrightarrow>
+     (\<forall>enums sp e'. lowerMapEntries enums ents sp = Some e' \<longrightarrow> eval s st env e' = Some (VMap mps))"
+proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel s st env ents
+        arbitrary: v e' enums and vs and mps
+        rule: eval_full_eval_full_list_eval_full_entries.induct)
   case (6 fs ps fuel s st env bop l r sp v e' enums)
   note IHl = "6.IH"(1) and IHr = "6.IH"(2)
   show ?case
@@ -291,11 +293,18 @@ next
   from "18.prems"(2) have ls: "lowerSetList enums es sp = Some e'" by simp
   show ?case using "18.IH"[OF efl] ls veq by auto
 next
-  case (20 fs ps fuel s st env vs)
+  case (19 fs ps fuel s st env entries sp v e' enums)
+  from "19.prems"(1) obtain mps where e: "eval_full_entries fs ps fuel s st env entries = Some mps"
+      and veq: "v = VMap mps"
+    by (auto split: option.splits)
+  from "19.prems"(2) have ls: "lowerMapEntries enums entries sp = Some e'" by simp
+  show ?case using "19.IH"[OF e] ls veq by auto
+next
+  case (21 fs ps fuel s st env vs)
   then show ?case by (auto split: option.splits)
 next
-  case (21 fs ps fuel s st env e es vs)
-  from "21.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
+  case (22 fs ps fuel s st env e es vs)
+  from "22.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
       and evs0: "eval_full_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
     by (auto split: option.splits)
   show ?case
@@ -305,9 +314,9 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSeqList enums es sp = Some s0'" and e'eq: "e' = SeqCons e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "21.IH"(1)[OF ev0 le0] .
+    have "eval s st env e0' = Some v0" using "22.IH"(1)[OF ev0 le0] .
     moreover have "eval s st env s0' = Some (VSeq vs0)"
-      using "21.IH"(2)[OF ev0 evs0] ls0 by blast
+      using "22.IH"(2)[OF ev0 evs0] ls0 by blast
     ultimately show "eval s st env e' = Some (VSeq vs)" using e'eq vseq by simp
   next
     fix enums sp e'
@@ -315,11 +324,33 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSetList enums es sp = Some s0'" and e'eq: "e' = SetInsert e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "21.IH"(1)[OF ev0 le0] .
+    have "eval s st env e0' = Some v0" using "22.IH"(1)[OF ev0 le0] .
     moreover have "eval s st env s0' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs0 []))"
-      using "21.IH"(2)[OF ev0 evs0] ls0 by blast
+      using "22.IH"(2)[OF ev0 evs0] ls0 by blast
     ultimately show "eval s st env e' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))"
       using e'eq vseq by simp
+  qed
+next
+  case (23 fs ps fuel s st env mps)
+  then show ?case by (auto split: option.splits)
+next
+  case (24 fs ps fuel s st env k v msp rest mps)
+  from "24.prems" obtain kv vv mps0 where ek: "eval_full fs ps fuel s st env k = Some kv"
+      and ev: "eval_full fs ps fuel s st env v = Some vv"
+      and er: "eval_full_entries fs ps fuel s st env rest = Some mps0" and mpeq: "mps = (kv, vv) # mps0"
+    by (auto split: option.splits)
+  show ?case
+  proof (intro allI impI)
+    fix enums sp e'
+    assume lme: "lowerMapEntries enums (MapEntryFull k v msp # rest) sp = Some e'"
+    from lme obtain k' v' m' where lk: "lower enums k = Some k'" and lv: "lower enums v = Some v'"
+        and lm: "lowerMapEntries enums rest sp = Some m'" and e'eq: "e' = MapCons k' v' m' sp"
+      by (auto split: option.splits)
+    have "eval s st env k' = Some kv" using "24.IH"(1)[OF ek lk] .
+    moreover have "eval s st env v' = Some vv" using "24.IH"(2)[OF ev lv] .
+    moreover have "eval s st env m' = Some (VMap mps0)"
+      using "24.IH"(3)[OF er] lm by blast
+    ultimately show "eval s st env e' = Some (VMap mps)" using e'eq mpeq by simp
   qed
 qed (auto split: option.splits ir_value.splits)
 
