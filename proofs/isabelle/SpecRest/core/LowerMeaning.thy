@@ -9,6 +9,15 @@ text \<open>Stage 1 of the \<open>expr\<close>/\<open>expr_full\<close> unificat
   is vacuous wherever \<open>eval_full\<close> is still \<open>None\<close> (binders/collections), so it widens for
   free as \<open>eval_full\<close>'s coverage grows.\<close>
 
+lemma identNameFull_SomeD:
+  "identNameFull e = Some x \<Longrightarrow> (\<exists>sp. e = IdentifierF x sp)"
+  by (cases e) auto
+
+lemma peelRelationRefFull_lower:
+  "peelRelationRefFull base = Some rel \<Longrightarrow> lower enums base = Some base'
+     \<Longrightarrow> peel_relation_ref base' = Some rel"
+  by (cases base rule: peelRelationRefFull.cases) (auto dest!: identNameFull_SomeD)
+
 lemma lower_preserves_eval_full:
   "eval_full fs ps fuel s st env e = Some v \<Longrightarrow> lower enums e = Some e'
      \<Longrightarrow> eval s st env e' = Some v"
@@ -313,11 +322,23 @@ next
     thus ?thesis using e' by simp
   qed (use "22.prems" in simp_all)
 next
-  case (24 fs ps fuel s st env vs)
+  case (23 fs ps fuel s st env base key sp v e' enums)
+  from "23.prems"(1) obtain rel kv where pk: "peelRelationRefFull base = Some rel"
+      and ek: "eval_full fs ps fuel s st env key = Some kv"
+      and slk: "state_lookup_key st rel kv = Some v"
+    by (auto split: option.splits)
+  from "23.prems"(2) obtain base' key' where lb: "lower enums base = Some base'"
+      and lk: "lower enums key = Some key'" and e'eq: "e' = IndexRel base' key' sp"
+    by (auto split: option.splits)
+  have pr: "peel_relation_ref base' = Some rel" using peelRelationRefFull_lower[OF pk lb] .
+  have "eval s st env key' = Some kv" using "23.IH"[OF ek lk] .
+  then show ?case using e'eq pr slk by simp
+next
+  case (25 fs ps fuel s st env vs)
   then show ?case by (auto split: option.splits)
 next
-  case (25 fs ps fuel s st env e es vs)
-  from "25.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
+  case (26 fs ps fuel s st env e es vs)
+  from "26.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
       and evs0: "eval_full_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
     by (auto split: option.splits)
   show ?case
@@ -327,9 +348,9 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSeqList enums es sp = Some s0'" and e'eq: "e' = SeqCons e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "25.IH"(1)[OF ev0 le0] .
+    have "eval s st env e0' = Some v0" using "26.IH"(1)[OF ev0 le0] .
     moreover have "eval s st env s0' = Some (VSeq vs0)"
-      using "25.IH"(2)[OF ev0 evs0] ls0 by blast
+      using "26.IH"(2)[OF ev0 evs0] ls0 by blast
     ultimately show "eval s st env e' = Some (VSeq vs)" using e'eq vseq by simp
   next
     fix enums sp e'
@@ -337,18 +358,18 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSetList enums es sp = Some s0'" and e'eq: "e' = SetInsert e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "25.IH"(1)[OF ev0 le0] .
+    have "eval s st env e0' = Some v0" using "26.IH"(1)[OF ev0 le0] .
     moreover have "eval s st env s0' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs0 []))"
-      using "25.IH"(2)[OF ev0 evs0] ls0 by blast
+      using "26.IH"(2)[OF ev0 evs0] ls0 by blast
     ultimately show "eval s st env e' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))"
       using e'eq vseq by simp
   qed
 next
-  case (26 fs ps fuel s st env mps)
+  case (27 fs ps fuel s st env mps)
   then show ?case by (auto split: option.splits)
 next
-  case (27 fs ps fuel s st env k v msp rest mps)
-  from "27.prems" obtain kv vv mps0 where ek: "eval_full fs ps fuel s st env k = Some kv"
+  case (28 fs ps fuel s st env k v msp rest mps)
+  from "28.prems" obtain kv vv mps0 where ek: "eval_full fs ps fuel s st env k = Some kv"
       and ev: "eval_full fs ps fuel s st env v = Some vv"
       and er: "eval_full_entries fs ps fuel s st env rest = Some mps0" and mpeq: "mps = (kv, vv) # mps0"
     by (auto split: option.splits)
@@ -359,10 +380,10 @@ next
     from lme obtain k' v' m' where lk: "lower enums k = Some k'" and lv: "lower enums v = Some v'"
         and lm: "lowerMapEntries enums rest sp = Some m'" and e'eq: "e' = MapCons k' v' m' sp"
       by (auto split: option.splits)
-    have "eval s st env k' = Some kv" using "27.IH"(1)[OF ek lk] .
-    moreover have "eval s st env v' = Some vv" using "27.IH"(2)[OF ev lv] .
+    have "eval s st env k' = Some kv" using "28.IH"(1)[OF ek lk] .
+    moreover have "eval s st env v' = Some vv" using "28.IH"(2)[OF ev lv] .
     moreover have "eval s st env m' = Some (VMap mps0)"
-      using "27.IH"(3)[OF er] lm by blast
+      using "28.IH"(3)[OF er] lm by blast
     ultimately show "eval s st env e' = Some (VMap mps)" using e'eq mpeq by simp
   qed
 next
@@ -385,11 +406,11 @@ next
   have eb': "eval s st env base' = Some bv" using "21.IH"(1)[OF eb lb] .
   show ?case using "21.IH"(2)[OF ef] eb' lw veq by blast
 next
-  case (28 fs ps fuel s st env fvs)
+  case (29 fs ps fuel s st env fvs)
   then show ?case by (auto split: option.splits)
 next
-  case (29 fs ps fuel s st env fld v fsp rest fvs)
-  from "29.prems" obtain fv fvs0 where ev: "eval_full fs ps fuel s st env v = Some fv"
+  case (30 fs ps fuel s st env fld v fsp rest fvs)
+  from "30.prems" obtain fv fvs0 where ev: "eval_full fs ps fuel s st env v = Some fv"
       and er: "eval_full_fields fs ps fuel s st env rest = Some fvs0" and fveq: "fvs = (fld, fv) # fvs0"
     by (auto split: option.splits)
   show ?case
@@ -400,12 +421,12 @@ next
     from lw obtain v' where lv: "lower enums v = Some v'"
         and lwr: "lower_with_assigns enums rest (WithRec b fld v' sp) sp = Some e'"
       by (auto split: option.splits)
-    have ev': "eval s st env v' = Some fv" using "29.IH"(1)[OF ev lv] .
+    have ev': "eval s st env v' = Some fv" using "30.IH"(1)[OF ev lv] .
     have ebw: "eval s st env (WithRec b fld v' sp) = Some (VEntityWith bv fld fv)"
       using eb ev' by simp
     have "eval s st env e'
             = Some (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) (VEntityWith bv fld fv) fvs0)"
-      using "29.IH"(2)[OF er] ebw lwr by blast
+      using "30.IH"(2)[OF er] ebw lwr by blast
     then show "eval s st env e'
                  = Some (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs)"
       using fveq by simp
