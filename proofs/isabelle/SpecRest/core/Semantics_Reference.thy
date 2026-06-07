@@ -611,6 +611,19 @@ lemma inline_calls_CallF_lookup:
         else CallF (IdentifierF nm sp1) (inline_calls_list fs ps args) sp)"
   by (auto simp: lookup_callee_def split: option.splits)
 
+lemma inline_calls_callfree_id:
+  "\<not> list_ex is_call_full (allSubexprs e) \<Longrightarrow> inline_calls fs ps e = e"
+  "\<not> list_ex is_call_full (allSubexprs_list es) \<Longrightarrow> inline_calls_list fs ps es = es"
+  "\<not> list_ex is_call_full (allSubexprs_fields fas) \<Longrightarrow> inline_calls_fields fs ps fas = fas"
+  "\<not> list_ex is_call_full (allSubexprs_entries ents) \<Longrightarrow> inline_calls_entries fs ps ents = ents"
+  "\<not> list_ex is_call_full (allSubexprs_bindings bs) \<Longrightarrow> inline_calls_bindings fs ps bs = bs"
+proof (induction fs ps e and fs ps es and fs ps fas and fs ps ents and fs ps bs
+        rule: inline_calls_inline_calls_list_inline_calls_fields_inline_calls_entries_inline_calls_bindings.induct)
+  case (1 fs ps callee args sp)
+  from "1.prems" have False by simp
+  thus ?case by blast
+qed simp_all
+
 lemma inline_calls_eval_full:
   "eval_full fs ps fuel s st env e = Some w
      \<Longrightarrow> eval_full fs ps fuel s st env (inline_calls fs ps e) = Some w"
