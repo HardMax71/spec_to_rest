@@ -14,6 +14,17 @@ text \<open>\<open>eval_full\<close> is a reference semantics for the surface IR
   \<open>WithF\<close>, \<open>LambdaF\<close>) return \<open>None\<close> here pending later coverage: a gap in the
   modelled fragment, not an unsoundness.\<close>
 
+fun quant_dom ::
+  "schema \<Rightarrow> state \<Rightarrow> quant_kind_full \<Rightarrow> quantifier_binding_full list
+     \<Rightarrow> (String.literal \<times> ir_value list) option" where
+  "quant_dom s st QAll [QuantifierBindingFull var (IdentifierF dnm _) _ _] =
+     (case schema_lookup_enum s dnm of
+        Some d \<Rightarrow> Some (var, map (\<lambda>m. VEnum dnm m) (enm_members d))
+      | None \<Rightarrow> (case state_relation_domain st dnm of
+                   Some dvs \<Rightarrow> Some (var, dvs)
+                 | None \<Rightarrow> None))"
+| "quant_dom _ _ _ _ = None"
+
 function (sequential) eval_full ::
   "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
      \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr_full \<Rightarrow> ir_value option"
@@ -28,7 +39,10 @@ and eval_full_fields ::
      \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> field_assign_full list \<Rightarrow> (String.literal \<times> ir_value) list option"
 and eval_full_the ::
   "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
-     \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr_full \<Rightarrow> ir_value list option" where
+     \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr_full \<Rightarrow> ir_value list option"
+and eval_full_forall ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
+     \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr_full \<Rightarrow> ir_value option" where
   "eval_full fs ps fuel s st env (IntLitF n _)     = Some (VInt n)"
 | "eval_full fs ps fuel s st env (BoolLitF b _)    = Some (VBool b)"
 | "eval_full fs ps fuel s st env (StringLitF v _)  = Some (VStr v)"
@@ -113,6 +127,10 @@ and eval_full_the ::
                 | _ \<Rightarrow> None)
            | None \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+| "eval_full fs ps fuel s st env (QuantifierF k bs body _) =
+     (case quant_dom s st k bs of
+        Some (var, dmv) \<Rightarrow> eval_full_forall fs ps fuel s st env var dmv body
+      | None \<Rightarrow> None)"
 | "eval_full fs ps fuel s st env _ = None"
 | "eval_full_list fs ps fuel s st env [] = Some []"
 | "eval_full_list fs ps fuel s st env (e # es) =
@@ -141,24 +159,35 @@ and eval_full_the ::
              Some matches \<Rightarrow> Some (if b then v # matches else matches)
            | None \<Rightarrow> None)
       | _ \<Rightarrow> None)"
+| "eval_full_forall fs ps fuel s st env var [] body = Some (VBool True)"
+| "eval_full_forall fs ps fuel s st env var (v # rest) body =
+     (case eval_full fs ps fuel s st ((var, v) # env) body of
+        Some (VBool b) \<Rightarrow>
+          (case eval_full_forall fs ps fuel s st env var rest body of
+             Some (VBool acc) \<Rightarrow> Some (VBool (b \<and> acc))
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
   by pat_completeness auto
 
 termination
   by (relation "measures [
         (\<lambda>x. case x of Inl (Inl (fs, ps, fuel, s, st, env, e)) \<Rightarrow> fuel
-                     | Inl (Inr (fs, ps, fuel, s, st, env, es)) \<Rightarrow> fuel
-                     | Inr (Inl (fs, ps, fuel, s, st, env, ents)) \<Rightarrow> fuel
-                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, fas))) \<Rightarrow> fuel
+                     | Inl (Inr (Inl (fs, ps, fuel, s, st, env, es))) \<Rightarrow> fuel
+                     | Inl (Inr (Inr (fs, ps, fuel, s, st, env, ents))) \<Rightarrow> fuel
+                     | Inr (Inl (fs, ps, fuel, s, st, env, fas)) \<Rightarrow> fuel
+                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> fuel
                      | Inr (Inr (Inr (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> fuel),
         (\<lambda>x. case x of Inl (Inl (fs, ps, fuel, s, st, env, e)) \<Rightarrow> size e
-                     | Inl (Inr (fs, ps, fuel, s, st, env, es)) \<Rightarrow> size_list size es
-                     | Inr (Inl (fs, ps, fuel, s, st, env, ents)) \<Rightarrow> size_list size ents
-                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, fas))) \<Rightarrow> size_list size fas
+                     | Inl (Inr (Inl (fs, ps, fuel, s, st, env, es))) \<Rightarrow> size_list size es
+                     | Inl (Inr (Inr (fs, ps, fuel, s, st, env, ents))) \<Rightarrow> size_list size ents
+                     | Inr (Inl (fs, ps, fuel, s, st, env, fas)) \<Rightarrow> size_list size fas
+                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> size body
                      | Inr (Inr (Inr (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> size body),
         (\<lambda>x. case x of Inl (Inl (fs, ps, fuel, s, st, env, e)) \<Rightarrow> 0
-                     | Inl (Inr (fs, ps, fuel, s, st, env, es)) \<Rightarrow> 0
-                     | Inr (Inl (fs, ps, fuel, s, st, env, ents)) \<Rightarrow> 0
-                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, fas))) \<Rightarrow> 0
+                     | Inl (Inr (Inl (fs, ps, fuel, s, st, env, es))) \<Rightarrow> 0
+                     | Inl (Inr (Inr (fs, ps, fuel, s, st, env, ents))) \<Rightarrow> 0
+                     | Inr (Inl (fs, ps, fuel, s, st, env, fas)) \<Rightarrow> 0
+                     | Inr (Inr (Inl (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> Suc (length dmv)
                      | Inr (Inr (Inr (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> Suc (length dmv))]")
      auto
 
@@ -178,6 +207,15 @@ lemma eval_full_list_length:
   "eval_full_list fs ps fuel s st env es = Some vs \<Longrightarrow> length vs = length es"
   by (induction es arbitrary: vs) (auto split: option.splits)
 
+lemma quant_dom_qb_names:
+  "quant_dom s st k bs = Some (var, dmv) \<Longrightarrow> qb_names bs = [var]"
+  by (erule quant_dom.elims; auto split: option.splits)
+
+lemma quant_dom_inline_calls:
+  "quant_dom s st k bs = Some (var, dmv)
+     \<Longrightarrow> quant_dom s st k (inline_calls_bindings fs ps bs) = Some (var, dmv)"
+  by (erule quant_dom.elims; auto split: option.splits)
+
 lemma eval_full_coincidence:
   "(\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
      \<Longrightarrow> eval_full fs ps fuel s st env1 e = eval_full fs ps fuel s st env2 e"
@@ -189,10 +227,12 @@ lemma eval_full_coincidence:
      \<Longrightarrow> eval_full_fields fs ps fuel s st env1 fas = eval_full_fields fs ps fuel s st env2 fas"
   "(\<forall>y. string_in_list y (remove_name var (free_vars body)) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
      \<Longrightarrow> eval_full_the fs ps fuel s st env1 var dmv body = eval_full_the fs ps fuel s st env2 var dmv body"
+  "(\<forall>y. string_in_list y (remove_name var (free_vars body)) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
+     \<Longrightarrow> eval_full_forall fs ps fuel s st env1 var dmv body = eval_full_forall fs ps fuel s st env2 var dmv body"
 proof (induction fs ps fuel s st env1 e and fs ps fuel s st env1 es and fs ps fuel s st env1 ents
-        and fs ps fuel s st env1 fas and fs ps fuel s st env1 var dmv body
-        arbitrary: env2 and env2 and env2 and env2 and env2
-        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the.induct)
+        and fs ps fuel s st env1 fas and fs ps fuel s st env1 var dmv body and fs ps fuel s st env1 var dmv body
+        arbitrary: env2 and env2 and env2 and env2 and env2 and env2
+        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the_eval_full_forall.induct)
   case (6 fs ps fuel s st env bop l r sp env2)
   have al: "\<forall>y. string_in_list y (free_vars l) \<longrightarrow> env_lookup env y = env_lookup env2 y"
     using "6.prems" by auto
@@ -334,13 +374,13 @@ next
     qed
   qed
 next
-  case (27 fs ps fuel s st env e es env2)
+  case (28 fs ps fuel s st env e es env2)
   have agr_e: "\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "27.prems" by auto
+    using "28.prems" by auto
   have agr_es: "\<forall>y. string_in_list y (free_vars_list es) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "27.prems" by auto
+    using "28.prems" by auto
   have e_eq: "eval_full fs ps fuel s st env e = eval_full fs ps fuel s st env2 e"
-    using "27.IH"(1)[OF agr_e] .
+    using "28.IH"(1)[OF agr_e] .
   show ?case
   proof (cases "eval_full fs ps fuel s st env e")
     case None
@@ -349,7 +389,7 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel s st env2 e = Some v0" using e_eq Some by simp
     have es_eq: "eval_full_list fs ps fuel s st env es = eval_full_list fs ps fuel s st env2 es"
-      using "27.IH"(2)[OF Some agr_es] .
+      using "28.IH"(2)[OF Some agr_es] .
     show ?thesis using Some e2 es_eq by simp
   qed
 next
@@ -368,14 +408,14 @@ next
     using "19.prems" by auto
   show ?case using "19.IH"[OF agr] by simp
 next
-  case (29 fs ps fuel s st env k v msp rest env2)
+  case (30 fs ps fuel s st env k v msp rest env2)
   have agk: "\<forall>y. string_in_list y (free_vars k) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "29.prems" by auto
+    using "30.prems" by auto
   have agv: "\<forall>y. string_in_list y (free_vars v) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "29.prems" by auto
+    using "30.prems" by auto
   have agr2: "\<forall>y. string_in_list y (free_vars_entries rest) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "29.prems" by auto
-  show ?case using "29.IH"(1)[OF agk] "29.IH"(2)[OF agv] "29.IH"(3)[OF agr2] by simp
+    using "30.prems" by auto
+  show ?case using "30.IH"(1)[OF agk] "30.IH"(2)[OF agv] "30.IH"(3)[OF agr2] by simp
 next
   case (20 fs ps fuel s st env name fas sp env2)
   have agr: "\<forall>y. string_in_list y (free_vars_fields fas) \<longrightarrow> env_lookup env y = env_lookup env2 y"
@@ -389,12 +429,12 @@ next
     using "21.prems" by auto
   show ?case using "21.IH"(1)[OF agb] "21.IH"(2)[OF agf] by simp
 next
-  case (31 fs ps fuel s st env fld v fsp rest env2)
+  case (32 fs ps fuel s st env fld v fsp rest env2)
   have agv: "\<forall>y. string_in_list y (free_vars v) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "31.prems" by auto
+    using "32.prems" by auto
   have agr3: "\<forall>y. string_in_list y (free_vars_fields rest) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "31.prems" by auto
-  show ?case using "31.IH"(1)[OF agv] "31.IH"(2)[OF agr3] by simp
+    using "32.prems" by auto
+  show ?case using "32.IH"(1)[OF agv] "32.IH"(2)[OF agr3] by simp
 next
   case (24 fs ps fuel s st env1 var dm body sp env2)
   have ha: "\<forall>y. string_in_list y (remove_name var (free_vars body))
@@ -416,26 +456,66 @@ next
     qed
   qed simp_all
 next
-  case (33 fs ps fuel s st env1 var v rest body env2)
+  case (34 fs ps fuel s st env1 var v rest body env2)
   have ext: "\<forall>y. string_in_list y (free_vars body)
                \<longrightarrow> env_lookup ((var, v) # env1) y = env_lookup ((var, v) # env2) y"
-    using "33.prems" by (auto simp: env_lookup_def)
+    using "34.prems" by (auto simp: env_lookup_def)
   show ?case
   proof (cases "eval_full fs ps fuel s st ((var, v) # env1) body")
     case None
-    then show ?thesis using "33.IH"(1)[OF ext] by simp
+    then show ?thesis using "34.IH"(1)[OF ext] by simp
   next
     case (Some bv)
     have e2: "eval_full fs ps fuel s st ((var, v) # env2) body = Some bv"
-      using "33.IH"(1)[OF ext] Some by metis
+      using "34.IH"(1)[OF ext] Some by metis
     show ?thesis
     proof (cases bv)
       case (VBool b)
       have rest_eq: "eval_full_the fs ps fuel s st env1 var rest body
               = eval_full_the fs ps fuel s st env2 var rest body"
-        using "33.IH"(2)[OF Some VBool "33.prems"] .
+        using "34.IH"(2)[OF Some VBool "34.prems"] .
       show ?thesis using Some e2 VBool rest_eq by simp
     qed (use Some e2 in simp_all)
+  qed
+next
+  case (36 fs ps fuel s st env1 var v rest body env2)
+  have ext: "\<forall>y. string_in_list y (free_vars body)
+               \<longrightarrow> env_lookup ((var, v) # env1) y = env_lookup ((var, v) # env2) y"
+    using "36.prems" by (auto simp: env_lookup_def)
+  show ?case
+  proof (cases "eval_full fs ps fuel s st ((var, v) # env1) body")
+    case None
+    then show ?thesis using "36.IH"(1)[OF ext] by simp
+  next
+    case (Some bv)
+    have e2: "eval_full fs ps fuel s st ((var, v) # env2) body = Some bv"
+      using "36.IH"(1)[OF ext] Some by metis
+    show ?thesis
+    proof (cases bv)
+      case (VBool b)
+      have rest_eq: "eval_full_forall fs ps fuel s st env1 var rest body
+              = eval_full_forall fs ps fuel s st env2 var rest body"
+        using "36.IH"(2)[OF Some VBool "36.prems"] .
+      show ?thesis using Some e2 VBool rest_eq by simp
+    qed (use Some e2 in simp_all)
+  qed
+next
+  case (25 fs ps fuel s st env1 k bs body sp env2)
+  show ?case
+  proof (cases "quant_dom s st k bs")
+    case None
+    then show ?thesis by simp
+  next
+    case (Some vd)
+    obtain var dmv where vdeq: "vd = (var, dmv)" by (cases vd) auto
+    have qn: "qb_names bs = [var]" using quant_dom_qb_names[OF Some[unfolded vdeq]] .
+    have ha: "\<forall>y. string_in_list y (remove_name var (free_vars body))
+                \<longrightarrow> env_lookup env1 y = env_lookup env2 y"
+      using "25.prems" qn by auto
+    have "eval_full_forall fs ps fuel s st env1 var dmv body
+            = eval_full_forall fs ps fuel s st env2 var dmv body"
+      using "25.IH"[OF Some[unfolded vdeq] refl ha] .
+    then show ?thesis using Some vdeq by simp
   qed
 qed (auto simp: env_lookup_def)
 
@@ -522,10 +602,12 @@ lemma eval_full_callfree_fuel:
      \<Longrightarrow> eval_full_fields fs ps fuel1 s st env fas = eval_full_fields fs ps fuel2 s st env fas"
   "\<not> list_ex is_call_full (allSubexprs body)
      \<Longrightarrow> eval_full_the fs ps fuel1 s st env var dmv body = eval_full_the fs ps fuel2 s st env var dmv body"
+  "\<not> list_ex is_call_full (allSubexprs body)
+     \<Longrightarrow> eval_full_forall fs ps fuel1 s st env var dmv body = eval_full_forall fs ps fuel2 s st env var dmv body"
 proof (induction fs ps fuel1 s st env e and fs ps fuel1 s st env es and fs ps fuel1 s st env ents
-        and fs ps fuel1 s st env fas and fs ps fuel1 s st env var dmv body
-        arbitrary: fuel2 and fuel2 and fuel2 and fuel2 and fuel2
-        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the.induct)
+        and fs ps fuel1 s st env fas and fs ps fuel1 s st env var dmv body and fs ps fuel1 s st env var dmv body
+        arbitrary: fuel2 and fuel2 and fuel2 and fuel2 and fuel2 and fuel2
+        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the_eval_full_forall.induct)
   case (6 fs ps fuel1 s st env bop l r sp fuel2)
   have "eval_full fs ps fuel1 s st env l = eval_full fs ps fuel2 s st env l"
     using "6.IH"(1) "6.prems" by (auto simp: list_ex_iff)
@@ -619,9 +701,9 @@ next
   have False using "15.prems" by simp
   then show ?case by simp
 next
-  case (27 fs ps fuel1 s st env e es fuel2)
+  case (28 fs ps fuel1 s st env e es fuel2)
   have e_eq: "eval_full fs ps fuel1 s st env e = eval_full fs ps fuel2 s st env e"
-    using "27.IH"(1) "27.prems" by (auto simp: list_ex_iff)
+    using "28.IH"(1) "28.prems" by (auto simp: list_ex_iff)
   show ?case
   proof (cases "eval_full fs ps fuel1 s st env e")
     case None
@@ -630,7 +712,7 @@ next
     case (Some v0)
     have e2: "eval_full fs ps fuel2 s st env e = Some v0" using e_eq Some by simp
     have "eval_full_list fs ps fuel1 s st env es = eval_full_list fs ps fuel2 s st env es"
-      using "27.IH"(2)[OF Some] "27.prems" by (auto simp: list_ex_iff)
+      using "28.IH"(2)[OF Some] "28.prems" by (auto simp: list_ex_iff)
     then show ?thesis using Some e2 by simp
   qed
 next
@@ -649,11 +731,11 @@ next
     using "19.IH" "19.prems" by (auto simp: list_ex_iff)
   then show ?case by simp
 next
-  case (29 fs ps fuel1 s st env k v msp rest fuel2)
+  case (30 fs ps fuel1 s st env k v msp rest fuel2)
   have "eval_full fs ps fuel1 s st env k = eval_full fs ps fuel2 s st env k"
       and "eval_full fs ps fuel1 s st env v = eval_full fs ps fuel2 s st env v"
       and "eval_full_entries fs ps fuel1 s st env rest = eval_full_entries fs ps fuel2 s st env rest"
-    using "29.IH"(1) "29.IH"(2) "29.IH"(3) "29.prems" by (auto simp: list_ex_iff)
+    using "30.IH"(1) "30.IH"(2) "30.IH"(3) "30.prems" by (auto simp: list_ex_iff)
   then show ?case by simp
 next
   case (20 fs ps fuel1 s st env name fas sp fuel2)
@@ -667,10 +749,10 @@ next
     using "21.IH"(1) "21.IH"(2) "21.prems" by (auto simp: list_ex_iff)
   then show ?case by simp
 next
-  case (31 fs ps fuel1 s st env fld v fsp rest fuel2)
+  case (32 fs ps fuel1 s st env fld v fsp rest fuel2)
   have "eval_full fs ps fuel1 s st env v = eval_full fs ps fuel2 s st env v"
       and "eval_full_fields fs ps fuel1 s st env rest = eval_full_fields fs ps fuel2 s st env rest"
-    using "31.IH"(1) "31.IH"(2) "31.prems" by (auto simp: list_ex_iff)
+    using "32.IH"(1) "32.IH"(2) "32.prems" by (auto simp: list_ex_iff)
   then show ?case by simp
 next
   case (24 fs ps fuel1 s st env var dm body sp fuel2)
@@ -692,23 +774,58 @@ next
     qed
   qed simp_all
 next
-  case (33 fs ps fuel1 s st env var v rest body fuel2)
+  case (34 fs ps fuel1 s st env var v rest body fuel2)
   show ?case
   proof (cases "eval_full fs ps fuel1 s st ((var, v) # env) body")
     case None
-    then show ?thesis using "33.IH"(1)[OF "33.prems"] by simp
+    then show ?thesis using "34.IH"(1)[OF "34.prems"] by simp
   next
     case (Some bv)
     have e2: "eval_full fs ps fuel2 s st ((var, v) # env) body = Some bv"
-      using "33.IH"(1)[OF "33.prems"] Some by metis
+      using "34.IH"(1)[OF "34.prems"] Some by metis
     show ?thesis
     proof (cases bv)
       case (VBool b)
       have rest_eq: "eval_full_the fs ps fuel1 s st env var rest body
               = eval_full_the fs ps fuel2 s st env var rest body"
-        using "33.IH"(2)[OF Some VBool "33.prems"] .
+        using "34.IH"(2)[OF Some VBool "34.prems"] .
       show ?thesis using Some e2 VBool rest_eq by simp
     qed (use Some e2 in simp_all)
+  qed
+next
+  case (36 fs ps fuel1 s st env var v rest body fuel2)
+  show ?case
+  proof (cases "eval_full fs ps fuel1 s st ((var, v) # env) body")
+    case None
+    then show ?thesis using "36.IH"(1)[OF "36.prems"] by simp
+  next
+    case (Some bv)
+    have e2: "eval_full fs ps fuel2 s st ((var, v) # env) body = Some bv"
+      using "36.IH"(1)[OF "36.prems"] Some by metis
+    show ?thesis
+    proof (cases bv)
+      case (VBool b)
+      have rest_eq: "eval_full_forall fs ps fuel1 s st env var rest body
+              = eval_full_forall fs ps fuel2 s st env var rest body"
+        using "36.IH"(2)[OF Some VBool "36.prems"] .
+      show ?thesis using Some e2 VBool rest_eq by simp
+    qed (use Some e2 in simp_all)
+  qed
+next
+  case (25 fs ps fuel1 s st env k bs body sp fuel2)
+  show ?case
+  proof (cases "quant_dom s st k bs")
+    case None
+    then show ?thesis by simp
+  next
+    case (Some vd)
+    obtain var dmv where vdeq: "vd = (var, dmv)" by (cases vd) auto
+    have cf: "\<not> list_ex is_call_full (allSubexprs body)"
+      using "25.prems" by (auto simp: list_ex_iff)
+    have "eval_full_forall fs ps fuel1 s st env var dmv body
+            = eval_full_forall fs ps fuel2 s st env var dmv body"
+      using "25.IH"[OF Some[unfolded vdeq] refl cf] .
+    then show ?thesis using Some vdeq by simp
   qed
 qed (auto simp: list_ex_iff)
 
@@ -777,10 +894,12 @@ lemma inline_calls_eval_full:
      \<Longrightarrow> eval_full_fields fs ps fuel s st env (inline_calls_fields fs ps fas) = Some wfs"
   "eval_full_the fs ps fuel s st env var dmv body = Some tms
      \<Longrightarrow> eval_full_the fs ps fuel s st env var dmv (inline_calls fs ps body) = Some tms"
+  "eval_full_forall fs ps fuel s st env var dmv body = Some fr
+     \<Longrightarrow> eval_full_forall fs ps fuel s st env var dmv (inline_calls fs ps body) = Some fr"
 proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel s st env ents
-        and fs ps fuel s st env fas and fs ps fuel s st env var dmv body
-        arbitrary: w and ws and wes and wfs and tms
-        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the.induct)
+        and fs ps fuel s st env fas and fs ps fuel s st env var dmv body and fs ps fuel s st env var dmv body
+        arbitrary: w and ws and wes and wfs and tms and fr
+        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the_eval_full_forall.induct)
   case (6 fs ps fuel s st env bop l r sp w)
   have g: "eval_full_bin bop (eval_full fs ps fuel s st env l)
              (eval_full fs ps fuel s st env r) = Some w"
@@ -941,15 +1060,15 @@ next
   show ?case
     using "23.prems" pk vk ik inline_calls_peelRelationRefFull[OF pk] by simp
 next
-  case (27 fs ps fuel s st env e es ws)
+  case (28 fs ps fuel s st env e es ws)
   obtain v0 vs0 where v0: "eval_full fs ps fuel s st env e = Some v0"
     and vs0: "eval_full_list fs ps fuel s st env es = Some vs0"
     and ws_eq: "ws = v0 # vs0"
-    using "27.prems" by (auto split: option.splits)
+    using "28.prems" by (auto split: option.splits)
   have ie: "eval_full fs ps fuel s st env (inline_calls fs ps e) = Some v0"
-    using "27.IH"(1)[OF v0] .
+    using "28.IH"(1)[OF v0] .
   have ies: "eval_full_list fs ps fuel s st env (inline_calls_list fs ps es) = Some vs0"
-    using "27.IH"(2)[OF v0 vs0] .
+    using "28.IH"(2)[OF v0 vs0] .
   show ?case using ie ies ws_eq by simp
 next
   case (19 fs ps fuel s st env entries sp w)
@@ -958,12 +1077,12 @@ next
     by (auto split: option.splits)
   show ?case using "19.IH"[OF e] weq by simp
 next
-  case (29 fs ps fuel s st env k v msp rest wes)
-  from "29.prems" obtain kv vv ps' where ek: "eval_full fs ps fuel s st env k = Some kv"
+  case (30 fs ps fuel s st env k v msp rest wes)
+  from "30.prems" obtain kv vv ps' where ek: "eval_full fs ps fuel s st env k = Some kv"
       and ev: "eval_full fs ps fuel s st env v = Some vv"
       and er: "eval_full_entries fs ps fuel s st env rest = Some ps'" and weq: "wes = (kv, vv) # ps'"
     by (auto split: option.splits)
-  show ?case using "29.IH"(1)[OF ek] "29.IH"(2)[OF ev] "29.IH"(3)[OF er] weq by simp
+  show ?case using "30.IH"(1)[OF ek] "30.IH"(2)[OF ev] "30.IH"(3)[OF er] weq by simp
 next
   case (20 fs ps fuel s st env name fas sp w)
   from "20.prems" obtain fvs where e: "eval_full_fields fs ps fuel s st env fas = Some fvs"
@@ -978,11 +1097,11 @@ next
     by (auto split: option.splits)
   show ?case using "21.IH"(1)[OF eb] "21.IH"(2)[OF ef] weq by simp
 next
-  case (31 fs ps fuel s st env fld v fsp rest wfs)
-  from "31.prems" obtain fv fvs0 where ev: "eval_full fs ps fuel s st env v = Some fv"
+  case (32 fs ps fuel s st env fld v fsp rest wfs)
+  from "32.prems" obtain fv fvs0 where ev: "eval_full fs ps fuel s st env v = Some fv"
       and er: "eval_full_fields fs ps fuel s st env rest = Some fvs0" and weq: "wfs = (fld, fv) # fvs0"
     by (auto split: option.splits)
-  show ?case using "31.IH"(1)[OF ev] "31.IH"(2)[OF er] weq by simp
+  show ?case using "32.IH"(1)[OF ev] "32.IH"(2)[OF er] weq by simp
 next
   case (24 fs ps fuel s st env var dm body sp w)
   show ?case
@@ -1003,11 +1122,11 @@ next
     qed
   qed (use "24.prems" in simp_all)
 next
-  case (33 fs ps fuel s st env var v rest body tms)
+  case (34 fs ps fuel s st env var v rest body tms)
   show ?case
   proof (cases "eval_full fs ps fuel s st ((var, v) # env) body")
     case None
-    then show ?thesis using "33.prems" by simp
+    then show ?thesis using "34.prems" by simp
   next
     case (Some bv)
     show ?thesis
@@ -1017,14 +1136,47 @@ next
         using Some VBool by simp
       obtain matches where mr: "eval_full_the fs ps fuel s st env var rest body = Some matches"
           and tms_eq: "tms = (if b then v # matches else matches)"
-        using "33.prems" evb by (auto split: option.splits)
+        using "34.prems" evb by (auto split: option.splits)
       have ib: "eval_full fs ps fuel s st ((var, v) # env) (inline_calls fs ps body) = Some (VBool b)"
-        using "33.IH"(1)[OF evb] .
+        using "34.IH"(1)[OF evb] .
       have im: "eval_full_the fs ps fuel s st env var rest (inline_calls fs ps body) = Some matches"
-        using "33.IH"(2)[OF Some VBool mr] .
+        using "34.IH"(2)[OF Some VBool mr] .
       show ?thesis using ib im evb tms_eq by simp
-    qed (use "33.prems" Some in simp_all)
+    qed (use "34.prems" Some in simp_all)
   qed
+next
+  case (36 fs ps fuel s st env var v rest body fr)
+  show ?case
+  proof (cases "eval_full fs ps fuel s st ((var, v) # env) body")
+    case None
+    then show ?thesis using "36.prems" by simp
+  next
+    case (Some bv)
+    show ?thesis
+    proof (cases bv)
+      case (VBool b)
+      have evb: "eval_full fs ps fuel s st ((var, v) # env) body = Some (VBool b)"
+        using Some VBool by simp
+      obtain acc where mr: "eval_full_forall fs ps fuel s st env var rest body = Some (VBool acc)"
+          and fr_eq: "fr = VBool (b \<and> acc)"
+        using "36.prems" evb by (auto split: option.splits ir_value.splits)
+      have ib: "eval_full fs ps fuel s st ((var, v) # env) (inline_calls fs ps body) = Some (VBool b)"
+        using "36.IH"(1)[OF evb] .
+      have im: "eval_full_forall fs ps fuel s st env var rest (inline_calls fs ps body) = Some (VBool acc)"
+        using "36.IH"(2)[OF Some VBool mr] .
+      show ?thesis using ib im evb fr_eq by simp
+    qed (use "36.prems" Some in simp_all)
+  qed
+next
+  case (25 fs ps fuel s st env k bs body sp w)
+  obtain var dmv where qd: "quant_dom s st k bs = Some (var, dmv)"
+      and ef: "eval_full_forall fs ps fuel s st env var dmv body = Some w"
+    using "25.prems" by (auto split: option.splits prod.splits)
+  have qd': "quant_dom s st k (inline_calls_bindings fs ps bs) = Some (var, dmv)"
+    using quant_dom_inline_calls[OF qd] .
+  have "eval_full_forall fs ps fuel s st env var dmv (inline_calls fs ps body) = Some w"
+    using "25.IH"[OF qd refl ef] .
+  then show ?case using qd' by simp
 qed (auto split: option.splits)
 
 end
