@@ -14,6 +14,10 @@ text \<open>\<open>eval_full\<close> is a reference semantics for the surface IR
   \<open>WithF\<close>, \<open>LambdaF\<close>) return \<open>None\<close> here pending later coverage: a gap in the
   modelled fragment, not an unsoundness.\<close>
 
+definition builtins_reserved ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> bool" where
+  "builtins_reserved fs ps \<equiv> (\<forall>nm. is_builtin_pred nm \<longrightarrow> lookup_callee fs ps nm = None)"
+
 fun quant_dom ::
   "schema \<Rightarrow> state \<Rightarrow> quant_kind_full \<Rightarrow> quantifier_binding_full list
      \<Rightarrow> (String.literal \<times> ir_value list) option" where
@@ -132,7 +136,13 @@ and eval_full_forall ::
                                  eval_full fs ps fuel' s st (zip params vals) body
                              | None \<Rightarrow> None)
                        else None)
-                | None \<Rightarrow> None)
+                | None \<Rightarrow>
+                    (case args of
+                       [arg] \<Rightarrow>
+                         (case eval_full fs ps fuel s st env arg of
+                            Some (VStr str) \<Rightarrow> Some (VBool (str_predicate nm str))
+                          | _ \<Rightarrow> None)
+                     | _ \<Rightarrow> None))
            | _ \<Rightarrow> None))"
 | "eval_full fs ps fuel s st env (FloatLitF d _) =
      map_option VReal (decimalToRat d)"
@@ -435,7 +445,24 @@ next
       show ?thesis
       proof (cases "lookup_callee fs ps nm")
         case None
-        then show ?thesis using Suc idc by simp
+        show ?thesis
+        proof (cases args)
+          case Nil then show ?thesis using Suc idc None by simp
+        next
+          case (Cons a as)
+          note ac = Cons
+          show ?thesis
+          proof (cases as)
+            case Nil
+            have "eval_full fs ps fuel s st env a = eval_full fs ps fuel s st env2 a"
+              using "15.IH" Suc idc None ac Nil agr by (auto simp: env_lookup_def)
+            then show ?thesis using Suc idc None ac Nil
+              by (auto split: option.splits ir_value.splits)
+          next
+            case (Cons b bs)
+            then show ?thesis using Suc idc None ac by simp
+          qed
+        qed
       next
         case (Some pb)
         obtain params body where pb: "pb = (params, body)" by (cases pb) auto
@@ -1150,8 +1177,25 @@ next
     using "15.prems" by (cases fuel) auto
   obtain nm sp1 where idc: "callee = IdentifierF nm sp1"
     using "15.prems" fuel by (cases callee) auto
-  obtain params body where lc: "lookup_callee fs ps nm = Some (params, body)"
-    using "15.prems" fuel idc by (cases "lookup_callee fs ps nm") auto
+  show ?case
+  proof (cases "lookup_callee fs ps nm")
+    case None
+    obtain arg str where aeq: "args = [arg]"
+        and ea: "eval_full fs ps fuel s st env arg = Some (VStr str)"
+        and w_eq: "w = VBool (str_predicate nm str)"
+      using "15.prems" fuel idc None
+      by (auto split: option.splits list.splits ir_value.splits)
+    have ea': "eval_full fs ps fuel s st env (inline_calls fs ps arg) = Some (VStr str)"
+      using "15.IH" fuel idc None aeq ea by (auto split: if_splits)
+    have inl: "inline_calls fs ps (CallF callee args sp)
+                 = CallF callee [inline_calls fs ps arg] sp"
+      using idc None aeq by (auto simp: lookup_callee_def split: option.splits)
+    show ?thesis using inl ea' w_eq fuel idc None aeq
+      by (simp split: option.splits ir_value.splits)
+  next
+    case (Some pb)
+    obtain params body where lc: "lookup_callee fs ps nm = Some (params, body)"
+      using Some by (cases pb) auto
   have lenpa: "length params = length args"
     using "15.prems" fuel idc lc by (simp split: if_splits)
   have dpe: "distinct params"
@@ -1172,7 +1216,7 @@ next
                   then bind_params params (inline_calls_list fs ps args) body
                   else CallF callee (inline_calls_list fs ps args) sp)"
     using inline_calls_CallF_lookup[OF lc] idc lenpa' by simp
-  show ?case
+  show ?thesis
   proof (cases "capture_safe body params (inline_calls_list fs ps args)")
     case True
     have pf: "list_all (\<lambda>a. list_all (\<lambda>q. \<not> string_in_list q (free_vars a)) params)
@@ -1203,6 +1247,7 @@ next
     have "eval_full fs ps fuel s st env (CallF callee (inline_calls_list fs ps args) sp) = Some w"
       using fuel idc lc lenpa' dpe args_eq body_w by simp
     then show ?thesis using inl False by simp
+  qed
   qed
 next
   case (22 fs ps fuel s st env base mem sp w)

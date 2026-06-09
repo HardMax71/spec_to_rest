@@ -99,6 +99,8 @@ next
 next
   case (Matches e pat sp) show ?case using soundness_Matches[OF Matches.IH] .
 next
+  case (UStrPred name e sp) show ?case using soundness_UStrPred[OF UStrPred.IH] .
+next
   case (EntityBase name sp) show ?case by (rule soundness_EntityBase)
 next
   case (SeqEmpty sp) show ?case by (rule soundness_SeqEmpty)
@@ -528,6 +530,21 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have "lower_with_assigns enums fas (EntityBase nm s) s = None"
       by (rule lower_with_assigns_ra_none[OF pe rf])
     thus ?thesis unfolding ConstructorF by simp
+  next
+    case (CallF c args sp2)
+    show ?thesis
+    proof (cases "\<exists>nm sp1 arg. c = IdentifierF nm sp1 \<and> args = [arg] \<and> is_builtin_pred nm")
+      case True
+      then obtain nm sp1 arg where ceq: "c = IdentifierF nm sp1" and aeq: "args = [arg]"
+          and bip: "is_builtin_pred nm" by blast
+      have ra_arg: "requiresAlloy arg" using less.prems CallF ceq aeq by simp
+      have s: "size arg < size e" using CallF aeq by simp
+      have "lower enums arg = None" using sub[OF s ra_arg] .
+      thus ?thesis using CallF ceq aeq bip by simp
+    next
+      case False
+      thus ?thesis using CallF by (auto split: expr_full.splits list.splits if_splits)
+    qed
   qed (use less.prems sub in \<open>auto split: option.splits\<close>)
 qed
 

@@ -210,6 +210,22 @@ proof -
   qed
 qed
 
+lemma soundness_UStrPred:
+  assumes ih: "value_to_smt_opt (eval s st env e)
+                 = smtEval (correlate_model s st) (correlate_env env) (translate e)"
+  shows "value_to_smt_opt (eval s st env (UStrPred name e sp))
+           = smtEval (correlate_model s st) (correlate_env env) (translate (UStrPred name e sp))"
+proof -
+  have ih': "smtEval (correlate_model s st) (correlate_env env) (translate e)
+               = value_to_smt_opt (eval s st env e)" using ih by simp
+  show ?thesis
+  proof (cases "eval s st env e")
+    case None thus ?thesis using ih' by simp
+  next
+    case (Some v) thus ?thesis using ih' by (cases v) simp_all
+  qed
+qed
+
 lemma soundness_EntityBase:
   "value_to_smt_opt (eval s st env (EntityBase name sp))
      = smtEval (correlate_model s st) (correlate_env env) (translate (EntityBase name sp))"

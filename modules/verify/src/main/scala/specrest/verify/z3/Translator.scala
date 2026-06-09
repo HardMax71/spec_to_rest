@@ -2317,6 +2317,13 @@ object Translator:
             if !ctx.funcs.contains(funcName) then
               ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
             Z3Expr.App(funcName, List(strZ))
+      case TUStrPred(name, t) =>
+        val strZ     = encodeFromSmtTerm(ctx, t, env)
+        val s        = inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str)
+        val funcName = s"${name}_${sortNameOf(s)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
+        Z3Expr.App(funcName, List(strZ))
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>

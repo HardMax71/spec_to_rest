@@ -1,5 +1,5 @@
 theory TranslateFull
-  imports Preservation_Lower SpecRest_Core.LowerMeaning
+  imports Preservation_Lower SpecRest_Core.LowerMeaning SpecRest_Core.TranslateFullDef
 begin
 
 text \<open>Stage 2 of the IR unification (#391): a total, fail-closed
@@ -12,9 +12,6 @@ text \<open>Stage 2 of the IR unification (#391): a total, fail-closed
   the emitted SMT term faithfully represents the source \<open>expr_full\<close>'s meaning
   rather than merely \<open>lower\<close>'s output. \<open>wf_z3\<close> characterises the inputs on
   which \<open>translate_full\<close> is guaranteed to succeed.\<close>
-
-definition translate_full :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> smt_term option" where
-  "translate_full enums e \<equiv> map_option translate (lower enums e)"
 
 lemma translate_full_wf_some:
   assumes "wf_z3 e"
@@ -30,26 +27,27 @@ theorem translate_full_soundness:
       and tf: "translate_full enums e = Some t"
       and ew: "enums_wf s enums"
       and nc: "no_cmp_var e"
+      and br: "builtins_reserved fs ps"
   shows "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
 proof -
   from tf obtain e' where le: "lower enums e = Some e'" and te: "t = translate e'"
     by (auto simp: translate_full_def)
   have "eval s st env e' = Some v"
-    by (rule lower_preserves_eval_full(1)[OF ef le ew nc])
+    by (rule lower_preserves_eval_full(1)[OF ef le ew nc br])
   thus ?thesis
     using soundness[where e = e' and s = s and st = st and env = env] te by simp
 qed
 
 corollary translate_full_gate_soundness:
   assumes "wf_z3 e" and "enums_wf s enums" and "no_cmp_var e"
-      and "eval_full fs ps fuel s st env e = Some v"
+      and "eval_full fs ps fuel s st env e = Some v" and "builtins_reserved fs ps"
   obtains t where "translate_full enums e = Some t"
     and "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
 proof -
   obtain t where t: "translate_full enums e = Some t"
     using translate_full_wf_some[OF assms(1)] by blast
   moreover have "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
-    by (rule translate_full_soundness[OF assms(4) t assms(2,3)])
+    by (rule translate_full_soundness[OF assms(4) t assms(2,3) assms(5)])
   ultimately show ?thesis ..
 qed
 

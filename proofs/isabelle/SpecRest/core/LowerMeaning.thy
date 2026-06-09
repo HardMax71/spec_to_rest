@@ -230,40 +230,42 @@ next
 next
   case 36 show ?case using "36.IH"(1)[OF "36.prems"] "36.IH"(2)[OF "36.prems"] "36.IH"(3)[OF "36.prems"] "36.prems" by (simp add: env_lookup_def split: option.splits ir_value.splits)
 next
-  case 37 show ?case by simp
+  case 37 show ?case using "37.IH"[OF "37.prems"] "37.prems" by (simp add: env_lookup_def split: option.splits ir_value.splits)
 next
-  case (38 s st env var en mem rest body env2)
+  case 38 show ?case by simp
+next
+  case (39 s st env var en mem rest body env2)
   have ext: "\<forall>y. env_lookup ((var, VEnum en mem) # env) y = env_lookup ((var, VEnum en mem) # env2) y"
-    using "38.prems" by (simp add: env_lookup_def)
+    using "39.prems" by (simp add: env_lookup_def)
   have b_eq: "eval s st ((var, VEnum en mem) # env) body = eval s st ((var, VEnum en mem) # env2) body"
-    using "38.IH"(1)[OF ext] .
+    using "39.IH"(1)[OF ext] .
   have r_eq: "eval_forall_enum s st env var en rest body = eval_forall_enum s st env2 var en rest body"
     if "eval s st ((var, VEnum en mem) # env) body = Some (VBool b)" for b
-    using "38.IH"(2)[OF that refl "38.prems"] .
+    using "39.IH"(2)[OF that refl "39.prems"] .
   show ?case using b_eq r_eq by (auto split: option.splits ir_value.splits)
 next
-  case 39 show ?case by simp
+  case 40 show ?case by simp
 next
-  case (40 s st env var v rest body env2)
+  case (41 s st env var v rest body env2)
   have ext: "\<forall>y. env_lookup ((var, v) # env) y = env_lookup ((var, v) # env2) y"
-    using "40.prems" by (simp add: env_lookup_def)
+    using "41.prems" by (simp add: env_lookup_def)
   have b_eq: "eval s st ((var, v) # env) body = eval s st ((var, v) # env2) body"
-    using "40.IH"(1)[OF ext] .
+    using "41.IH"(1)[OF ext] .
   have r_eq: "eval_forall_rel s st env var rest body = eval_forall_rel s st env2 var rest body"
     if "eval s st ((var, v) # env) body = Some (VBool b)" for b
-    using "40.IH"(2)[OF that refl "40.prems"] .
+    using "41.IH"(2)[OF that refl "41.prems"] .
   show ?case using b_eq r_eq by (auto split: option.splits ir_value.splits)
 next
-  case 41 show ?case by simp
+  case 42 show ?case by simp
 next
-  case (42 s st env var v rest body env2)
+  case (43 s st env var v rest body env2)
   have ext: "\<forall>y. env_lookup ((var, v) # env) y = env_lookup ((var, v) # env2) y"
-    using "42.prems" by (simp add: env_lookup_def)
+    using "43.prems" by (simp add: env_lookup_def)
   have b_eq: "eval s st ((var, v) # env) body = eval s st ((var, v) # env2) body"
-    using "42.IH"(1)[OF ext] .
+    using "43.IH"(1)[OF ext] .
   have r_eq: "eval_the_rel s st env var rest body = eval_the_rel s st env2 var rest body"
     if "eval s st ((var, v) # env) body = Some (VBool b)" for b
-    using "42.IH"(2)[OF that refl "42.prems"] .
+    using "43.IH"(2)[OF that refl "43.prems"] .
   show ?case using b_eq r_eq by (auto split: option.splits ir_value.splits)
 qed
 
@@ -385,6 +387,7 @@ fun free_vars_e :: "expr \<Rightarrow> String.literal list" where
 | "free_vars_e (SomeE e _) = free_vars_e e"
 | "free_vars_e (StrLit _ _) = []"
 | "free_vars_e (Matches e _ _) = free_vars_e e"
+| "free_vars_e (UStrPred _ e _) = free_vars_e e"
 | "free_vars_e (SeqEmpty _) = []"
 | "free_vars_e (SeqCons e r _) = free_vars_e e @ free_vars_e r"
 | "free_vars_e (MapEmpty _) = []"
@@ -730,7 +733,24 @@ proof (induction e arbitrary: enums e' rule: measure_induct_rule[where f = size]
   next
     case (LambdaF p b sp2) with less.prems show ?thesis by simp
   next
-    case (CallF c args sp2) with less.prems show ?thesis by simp
+    case (CallF c args sp2)
+    show ?thesis
+    proof (cases "\<exists>nm sp1 arg. c = IdentifierF nm sp1 \<and> args = [arg] \<and> is_builtin_pred nm")
+      case True
+      then obtain nm sp1 arg where ceq: "c = IdentifierF nm sp1" and aeq: "args = [arg]"
+          and bip: "is_builtin_pred nm" by blast
+      from less.prems CallF ceq aeq bip obtain a' where la: "lower enums arg = Some a'"
+          and eq: "e' = UStrPred nm a' sp2"
+        by (auto split: option.splits)
+      have s: "size arg < size e" using CallF aeq by simp
+      have ha: "set (free_vars_e a') \<subseteq> set (free_vars arg)" using less.IH[OF s la] .
+      show ?thesis using ha eq CallF ceq aeq by auto
+    next
+      case False
+      then have "lower enums (CallF c args sp2) = None"
+        by (auto split: expr_full.splits list.splits if_splits)
+      then show ?thesis using less.prems CallF by simp
+    qed
   next
     case (SetComprehensionF v d p sp2) with less.prems show ?thesis by simp
   next
@@ -1117,6 +1137,11 @@ next
   case (15 enums op l r sp e')
   have "set (free_vars_e e') \<subseteq> set (free_vars (BinaryOpF op l r sp))" using lower_fv_le[OF "15.prems"(1)] .
   thus ?case using "15.prems"(2) by (auto simp: string_in_list_set)
+next
+  case (8 enums callee args sp e')
+  have "set (free_vars_e e') \<subseteq> set (free_vars (CallF callee args sp))"
+    using lower_fv_le[OF "8.prems"(1)] .
+  thus ?case using "8.prems"(2) by (auto simp: string_in_list_set)
 qed (auto split: option.splits expr_full.splits if_splits simp: string_in_list_remove_name)
 
 fun no_cmp_var :: "expr_full \<Rightarrow> bool"
@@ -1273,19 +1298,24 @@ qed
 
 lemma lower_preserves_eval_full:
     "eval_full fs ps fuel s st env e = Some v \<Longrightarrow> lower enums e = Some e'
-       \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var e \<Longrightarrow> eval s st env e' = Some v"
+       \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var e \<Longrightarrow> builtins_reserved fs ps \<Longrightarrow> eval s st env e' = Some v"
     "eval_full_list fs ps fuel s st env es = Some vs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_list es \<Longrightarrow>
+       builtins_reserved fs ps \<Longrightarrow>
        (\<forall>sp e'. lowerSeqList enums es sp = Some e' \<longrightarrow> eval s st env e' = Some (VSeq vs)) \<and>
        (\<forall>sp e'. lowerSetList enums es sp = Some e' \<longrightarrow>
           eval s st env e' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])))"
     "eval_full_entries fs ps fuel s st env ents = Some mps \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_entries ents \<Longrightarrow>
+       builtins_reserved fs ps \<Longrightarrow>
        (\<forall>sp e'. lowerMapEntries enums ents sp = Some e' \<longrightarrow> eval s st env e' = Some (VMap mps))"
     "eval_full_fields fs ps fuel s st env fas = Some fvs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_fields fas \<Longrightarrow>
+       builtins_reserved fs ps \<Longrightarrow>
        (\<forall>b sp e' bv. eval s st env b = Some bv \<longrightarrow> lower_with_assigns enums fas b sp = Some e'
           \<longrightarrow> eval s st env e' = Some (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs))"
     "eval_full_the fs ps fuel s st env var dmv body = Some tms \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+       builtins_reserved fs ps \<Longrightarrow>
        (\<forall>body'. lower enums body = Some body' \<longrightarrow> eval_the_rel s st env var dmv body' = Some tms)"
     "eval_full_forall fs ps fuel s st env var dmv body = Some fr \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+       builtins_reserved fs ps \<Longrightarrow>
        (\<forall>body'. lower enums body = Some body' \<longrightarrow> eval_forall_rel s st env var dmv body' = Some fr)"
 proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel s st env ents
         and fs ps fuel s st env fas and fs ps fuel s st env var dmv body
@@ -1476,9 +1506,9 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
       by (rule lower_no_free_0cmp(1)[OF lp fpred])
     have enr': "\<not> schema_lookup_enum s dnm \<noteq> None" using enr by simp
     have etr: "eval_the_rel s st env var dvs p' = Some ms"
-      using "6.IH"(3)[OF bc refl refl enr' srd etm "6.prems"(3) ncp] lp by blast
+      using "6.IH"(3)[OF bc refl refl enr' srd etm "6.prems"(3) ncp "6.prems"(5)] lp by blast
     have el': "eval s st env l' = Some (VSet xs)"
-      using "6.IH"(4)[OF bc refl refl enr' srd etm efl ll "6.prems"(3) ncl] .
+      using "6.IH"(4)[OF bc refl refl enr' srd etm efl ll "6.prems"(3) ncl "6.prems"(5)] .
     show ?thesis
       using e'eq veq comp_assembly[OF el' etr srd la vne fp dne] by simp
   qed
@@ -1492,7 +1522,7 @@ next
       by (auto split: option.splits ir_value.splits)
     from "7.prems" UNot obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = UnNot e'' sp"
       by (auto split: option.splits)
-    have "eval s st env e'' = Some (VBool b)" using "7.IH"[OF ef le "7.prems"(3)] "7.prems"(4) by simp
+    have "eval s st env e'' = Some (VBool b)" using "7.IH"[OF ef le "7.prems"(3)] "7.prems"(4) "7.prems"(5) by simp
     then show ?thesis using e'eq veq by simp
   next
     case UNegate
@@ -1500,7 +1530,7 @@ next
       by (auto split: option.splits)
     from "7.prems" UNegate obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = UnNeg e'' sp"
       by (auto split: option.splits)
-    have "eval s st env e'' = Some v0" using "7.IH"[OF ef le "7.prems"(3)] "7.prems"(4) by simp
+    have "eval s st env e'' = Some v0" using "7.IH"[OF ef le "7.prems"(3)] "7.prems"(4) "7.prems"(5) by simp
     then show ?thesis using e'eq ef "7.prems" UNegate by (auto split: ir_value.splits)
   next
     case UCardinality
@@ -1517,19 +1547,19 @@ next
     by (auto split: option.splits)
   from "8.prems" obtain bb where ec: "eval_full fs ps fuel s st env c = Some (VBool bb)"
     by (auto split: option.splits ir_value.splits)
-  have ec': "eval s st env c' = Some (VBool bb)" using "8.IH"(1)[OF ec lc "8.prems"(3)] "8.prems"(4) by simp
+  have ec': "eval s st env c' = Some (VBool bb)" using "8.IH"(1)[OF ec lc "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
   show ?case
   proof (cases bb)
     case True
     with ec have cT: "eval_full fs ps fuel s st env c = Some (VBool True)" by simp
     have ea: "eval_full fs ps fuel s st env a = Some v" using "8.prems" cT by simp
-    have "eval s st env a' = Some v" using "8.IH"(2)[OF cT refl refl ea la "8.prems"(3)] "8.prems"(4) by simp
+    have "eval s st env a' = Some v" using "8.IH"(2)[OF cT refl refl ea la "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
     then show ?thesis using e'eq ec' True by simp
   next
     case False
     with ec have cF: "eval_full fs ps fuel s st env c = Some (VBool False)" by simp
     have eb: "eval_full fs ps fuel s st env b = Some v" using "8.prems" cF by simp
-    have "eval s st env b' = Some v" using "8.IH"(3)[OF cF refl refl eb lb "8.prems"(3)] "8.prems"(4) by simp
+    have "eval s st env b' = Some v" using "8.IH"(3)[OF cF refl refl eb lb "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
     then show ?thesis using e'eq ec' False by simp
   qed
 next
@@ -1540,8 +1570,8 @@ next
   from "9.prems" obtain v' b' where lve: "lower enums ve = Some v'"
       and lbody: "lower enums body = Some b'" and e'eq: "e' = LetIn x v' b' sp"
     by (auto split: option.splits)
-  have ev': "eval s st env v' = Some va" using "9.IH"(1)[OF eve lve "9.prems"(3)] "9.prems"(4) by simp
-  have eb': "eval s st ((x, va) # env) b' = Some v" using "9.IH"(2)[OF eve ebody lbody "9.prems"(3)] "9.prems"(4) by simp
+  have ev': "eval s st env v' = Some va" using "9.IH"(1)[OF eve lve "9.prems"(3)] "9.prems"(4) "9.prems"(5) by simp
+  have eb': "eval s st ((x, va) # env) b' = Some v" using "9.IH"(2)[OF eve ebody lbody "9.prems"(3)] "9.prems"(4) "9.prems"(5) by simp
   show ?case using e'eq ev' eb' by simp
 next
   case (10 fs ps fuel s st env base f sp v e')
@@ -1551,21 +1581,21 @@ next
   from "10.prems" obtain b' where lb: "lower enums base = Some b'"
       and e'eq: "e' = FieldAccess b' f sp"
     by (auto split: option.splits)
-  have "eval s st env b' = Some v0" using "10.IH"[OF ef lb "10.prems"(3)] "10.prems"(4) by simp
+  have "eval s st env b' = Some v0" using "10.IH"[OF ef lb "10.prems"(3)] "10.prems"(4) "10.prems"(5) by simp
   then show ?case using e'eq vfl by simp
 next
   case (11 fs ps fuel s st env e sp v e')
   from "11.prems" have ef: "eval_full fs ps fuel s st env e = Some v" by simp
   from "11.prems" obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = Prime e'' sp"
     by (auto split: option.splits)
-  have "eval s st env e'' = Some v" using "11.IH"[OF ef le "11.prems"(3)] "11.prems"(4) by simp
+  have "eval s st env e'' = Some v" using "11.IH"[OF ef le "11.prems"(3)] "11.prems"(4) "11.prems"(5) by simp
   then show ?case using e'eq by simp
 next
   case (12 fs ps fuel s st env e sp v e')
   from "12.prems" have ef: "eval_full fs ps fuel s st env e = Some v" by simp
   from "12.prems" obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = Pre e'' sp"
     by (auto split: option.splits)
-  have "eval s st env e'' = Some v" using "12.IH"[OF ef le "12.prems"(3)] "12.prems"(4) by simp
+  have "eval s st env e'' = Some v" using "12.IH"[OF ef le "12.prems"(3)] "12.prems"(4) "12.prems"(5) by simp
   then show ?case using e'eq by simp
 next
   case (13 fs ps fuel s st env e sp v e')
@@ -1574,7 +1604,7 @@ next
     by (auto split: option.splits)
   from "13.prems" obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = SomeE e'' sp"
     by (auto split: option.splits)
-  have "eval s st env e'' = Some v0" using "13.IH"[OF ef le "13.prems"(3)] "13.prems"(4) by simp
+  have "eval s st env e'' = Some v0" using "13.IH"[OF ef le "13.prems"(3)] "13.prems"(4) "13.prems"(5) by simp
   then show ?case using e'eq veq by simp
 next
   case (14 fs ps fuel s st env e pat sp v e')
@@ -1583,32 +1613,47 @@ next
     by (auto split: option.splits ir_value.splits)
   from "14.prems" obtain e'' where le: "lower enums e = Some e''" and e'eq: "e' = Matches e'' pat sp"
     by (auto split: option.splits)
-  have "eval s st env e'' = Some (VStr str)" using "14.IH"[OF ef le "14.prems"(3)] "14.prems"(4) by simp
+  have "eval s st env e'' = Some (VStr str)" using "14.IH"[OF ef le "14.prems"(3)] "14.prems"(4) "14.prems"(5) by simp
   then show ?case using e'eq veq by simp
 next
   case (15 fs ps fuel s st env callee args sp v e')
-  then show ?case by simp
+  obtain fuel' where fuel: "fuel = Suc fuel'" using "15.prems"(1) by (cases fuel) auto
+  from "15.prems"(2) obtain nm sp1 arg arg' where
+      ceq: "callee = IdentifierF nm sp1" and aeq: "args = [arg]" and bip: "is_builtin_pred nm"
+      and la: "lower enums arg = Some arg'" and e'eq: "e' = UStrPred nm arg' sp"
+    by (cases callee; cases args) (auto split: if_splits list.splits option.splits)
+  have lc_none: "lookup_callee fs ps nm = None"
+    using "15.prems"(5) bip by (simp add: builtins_reserved_def)
+  from "15.prems"(1) fuel ceq aeq lc_none obtain str where
+      ea: "eval_full fs ps fuel s st env arg = Some (VStr str)"
+      and veq: "v = VBool (str_predicate nm str)"
+    by (auto split: option.splits ir_value.splits)
+  have ncarg: "no_cmp_var arg" using "15.prems"(4) ceq aeq by simp
+  have ev: "eval s st env arg' = Some (VStr str)"
+    using "15.IH" fuel ceq aeq lc_none ea la "15.prems"(3) ncarg "15.prems"(5)
+    by (auto split: if_splits)
+  show ?case using e'eq veq ev by simp
 next
   case (17 fs ps fuel s st env es sp v e')
   from "17.prems"(1) obtain vs where efl: "eval_full_list fs ps fuel s st env es = Some vs"
       and veq: "v = VSeq vs"
     by (auto split: option.splits)
   from "17.prems"(2) have ls: "lowerSeqList enums es sp = Some e'" by simp
-  show ?case using "17.IH"[OF efl "17.prems"(3)] ls veq "17.prems"(4) by fastforce
+  show ?case using "17.IH"[OF efl "17.prems"(3)] ls veq "17.prems"(4) "17.prems"(5) by fastforce
 next
   case (18 fs ps fuel s st env es sp v e')
   from "18.prems"(1) obtain vs where efl: "eval_full_list fs ps fuel s st env es = Some vs"
       and veq: "v = VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])"
     by (auto split: option.splits)
   from "18.prems"(2) have ls: "lowerSetList enums es sp = Some e'" by simp
-  show ?case using "18.IH"[OF efl "18.prems"(3)] ls veq "18.prems"(4) by fastforce
+  show ?case using "18.IH"[OF efl "18.prems"(3)] ls veq "18.prems"(4) "18.prems"(5) by fastforce
 next
   case (19 fs ps fuel s st env entries sp v e')
   from "19.prems"(1) obtain mps where e: "eval_full_entries fs ps fuel s st env entries = Some mps"
       and veq: "v = VMap mps"
     by (auto split: option.splits)
   from "19.prems"(2) have ls: "lowerMapEntries enums entries sp = Some e'" by simp
-  show ?case using "19.IH"[OF e "19.prems"(3)] ls veq "19.prems"(4) by fastforce
+  show ?case using "19.IH"[OF e "19.prems"(3)] ls veq "19.prems"(4) "19.prems"(5) by fastforce
 next
   case (22 fs ps fuel s st env base mem sp v e')
   show ?case
@@ -1628,7 +1673,7 @@ next
       and lk: "lower enums key = Some key'" and e'eq: "e' = IndexRel base' key' sp"
     by (auto split: option.splits)
   have pr: "peel_relation_ref base' = Some rel" using peelRelationRefFull_lower[OF pk lb] .
-  have "eval s st env key' = Some kv" using "23.IH"[OF ek lk "23.prems"(3)] "23.prems"(4) by simp
+  have "eval s st env key' = Some kv" using "23.IH"[OF ek lk "23.prems"(3)] "23.prems"(4) "23.prems"(5) by simp
   then show ?case using e'eq pr slk by simp
 next
   case (27 fs ps fuel s st env vs)
@@ -1638,7 +1683,7 @@ next
   from "28.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
       and evs0: "eval_full_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
     by (auto split: option.splits)
-  have nclE: "no_cmp_var_list es" using "28.prems"(3) by simp
+  have nclE: "no_cmp_var_list es" using "28.prems"(3) "28.prems"(4) by simp
   show ?case
   proof (intro conjI allI impI)
     fix sp e'
@@ -1646,9 +1691,9 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSeqList enums es sp = Some s0'" and e'eq: "e' = SeqCons e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "28.IH"(1)[OF ev0 le0 "28.prems"(2)] "28.prems"(3) by simp
+    have "eval s st env e0' = Some v0" using "28.IH"(1)[OF ev0 le0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
     moreover have "eval s st env s0' = Some (VSeq vs0)"
-      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE] ls0 by blast
+      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE "28.prems"(4)] ls0 by blast
     ultimately show "eval s st env e' = Some (VSeq vs)" using e'eq vseq by simp
   next
     fix sp e'
@@ -1656,9 +1701,9 @@ next
     from lse obtain e0' s0' where le0: "lower enums e = Some e0'"
         and ls0: "lowerSetList enums es sp = Some s0'" and e'eq: "e' = SetInsert e0' s0' sp"
       by (auto split: option.splits)
-    have "eval s st env e0' = Some v0" using "28.IH"(1)[OF ev0 le0 "28.prems"(2)] "28.prems"(3) by simp
+    have "eval s st env e0' = Some v0" using "28.IH"(1)[OF ev0 le0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
     moreover have "eval s st env s0' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs0 []))"
-      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE] ls0 by blast
+      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE "28.prems"(4)] ls0 by blast
     ultimately show "eval s st env e' = Some (VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))"
       using e'eq vseq by simp
   qed
@@ -1678,10 +1723,10 @@ next
     from lme obtain k' v' m' where lk: "lower enums k = Some k'" and lv: "lower enums v = Some v'"
         and lm: "lowerMapEntries enums rest sp = Some m'" and e'eq: "e' = MapCons k' v' m' sp"
       by (auto split: option.splits)
-    have "eval s st env k' = Some kv" using "30.IH"(1)[OF ek lk "30.prems"(2)] "30.prems"(3) by simp
-    moreover have "eval s st env v' = Some vv" using "30.IH"(2)[OF ev lv "30.prems"(2)] "30.prems"(3) by simp
+    have "eval s st env k' = Some kv" using "30.IH"(1)[OF ek lk "30.prems"(2)] "30.prems"(3) "30.prems"(4) by simp
+    moreover have "eval s st env v' = Some vv" using "30.IH"(2)[OF ev lv "30.prems"(2)] "30.prems"(3) "30.prems"(4) by simp
     moreover have "eval s st env m' = Some (VMap mps0)"
-      using "30.IH"(3)[OF er "30.prems"(2)] lm "30.prems"(3) by fastforce
+      using "30.IH"(3)[OF er "30.prems"(2)] lm "30.prems"(3) "30.prems"(4) by fastforce
     ultimately show "eval s st env e' = Some (VMap mps)" using e'eq mpeq by simp
   qed
 next
@@ -1691,7 +1736,7 @@ next
     by (auto split: option.splits)
   from "20.prems"(2) have lw: "lower_with_assigns enums fas (EntityBase name sp) sp = Some e'" by simp
   have eb: "eval s st env (EntityBase name sp) = Some (VEntity name (STR ''''))" by simp
-  show ?case using "20.IH"[OF e "20.prems"(3)] eb lw veq "20.prems"(4) by fastforce
+  show ?case using "20.IH"[OF e "20.prems"(3)] eb lw veq "20.prems"(4) "20.prems"(5) by fastforce
 next
   case (21 fs ps fuel s st env base fas sp v e')
   from "21.prems"(1) obtain bv fvs where eb: "eval_full fs ps fuel s st env base = Some bv"
@@ -1701,8 +1746,8 @@ next
   from "21.prems"(2) obtain base' where lb: "lower enums base = Some base'"
       and lw: "lower_with_assigns enums fas base' sp = Some e'"
     by (auto split: option.splits)
-  have eb': "eval s st env base' = Some bv" using "21.IH"(1)[OF eb lb "21.prems"(3)] "21.prems"(4) by simp
-  show ?case using "21.IH"(2)[OF ef "21.prems"(3)] eb' lw veq "21.prems"(4) by fastforce
+  have eb': "eval s st env base' = Some bv" using "21.IH"(1)[OF eb lb "21.prems"(3)] "21.prems"(4) "21.prems"(5) by simp
+  show ?case using "21.IH"(2)[OF ef "21.prems"(3)] eb' lw veq "21.prems"(4) "21.prems"(5) by fastforce
 next
   case (31 fs ps fuel s st env fvs)
   then show ?case by (auto split: option.splits)
@@ -1719,12 +1764,12 @@ next
     from lw obtain v' where lv: "lower enums v = Some v'"
         and lwr: "lower_with_assigns enums rest (WithRec b fld v' sp) sp = Some e'"
       by (auto split: option.splits)
-    have ev': "eval s st env v' = Some fv" using "32.IH"(1)[OF ev lv "32.prems"(2)] "32.prems"(3) by simp
+    have ev': "eval s st env v' = Some fv" using "32.IH"(1)[OF ev lv "32.prems"(2)] "32.prems"(3) "32.prems"(4) by simp
     have ebw: "eval s st env (WithRec b fld v' sp) = Some (VEntityWith bv fld fv)"
       using eb ev' by simp
     have "eval s st env e'
             = Some (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) (VEntityWith bv fld fv) fvs0)"
-      using "32.IH"(2)[OF er "32.prems"(2)] ebw lwr "32.prems"(3) by fastforce
+      using "32.IH"(2)[OF er "32.prems"(2)] ebw lwr "32.prems"(3) "32.prems"(4) by fastforce
     then show "eval s st env e'
                  = Some (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs)"
       using fveq by simp
@@ -1742,7 +1787,7 @@ next
         and uniq: "list_all (\<lambda>y. y = x) rest" and v_eq: "v = x"
       by (auto split: option.splits list.splits if_splits)
     have etr: "eval_the_rel s st env var dmv body' = Some (x # rest)"
-      using "24.IH"[OF IdentifierF srd eft "24.prems"(3)] lb "24.prems"(4) by fastforce
+      using "24.IH"[OF IdentifierF srd eft "24.prems"(3)] lb "24.prems"(4) "24.prems"(5) by fastforce
     show ?thesis using e'eq srd etr uniq v_eq by simp
   qed (use "24.prems"(2) in simp_all)
 next
@@ -1767,7 +1812,7 @@ next
     obtain body' where lbody: "lower enums body = Some body'"
       using "25.prems"(2) kq bseq by (auto split: option.splits)
     have ih: "eval_forall_rel s st env var dmv body' = Some v"
-      using "25.IH"[OF Some[unfolded vdeq] refl eff wf] lbody "25.prems"(4) by fastforce
+      using "25.IH"[OF Some[unfolded vdeq] refl eff wf] lbody "25.prems"(4) "25.prems"(5) by fastforce
     show ?thesis
     proof (cases "schema_lookup_enum s dnm")
       case (Some d)
@@ -1825,9 +1870,9 @@ next
             and tms_eq: "tms = (if b then v # matches else matches)"
           using "34.prems" evb by (auto split: option.splits)
         have eb: "eval s st ((var, v) # env) body' = Some (VBool b)"
-          using "34.IH"(1)[OF evb lb "34.prems"(2)] "34.prems"(3) by simp
+          using "34.IH"(1)[OF evb lb "34.prems"(2)] "34.prems"(3) "34.prems"(4) by simp
         have er: "eval_the_rel s st env var rest body' = Some matches"
-          using "34.IH"(2)[OF Some VBool mr "34.prems"(2)] lb "34.prems"(3) by fastforce
+          using "34.IH"(2)[OF Some VBool mr "34.prems"(2)] lb "34.prems"(3) "34.prems"(4) by fastforce
         show ?thesis using eb er tms_eq by simp
       qed (use "34.prems" Some in simp_all)
     qed
@@ -1856,9 +1901,9 @@ next
             and fr_eq: "fr = VBool (b \<and> acc)"
           using "36.prems" evb by (auto split: option.splits ir_value.splits)
         have eb: "eval s st ((var, v) # env) body' = Some (VBool b)"
-          using "36.IH"(1)[OF evb lb "36.prems"(2)] "36.prems"(3) by simp
+          using "36.IH"(1)[OF evb lb "36.prems"(2)] "36.prems"(3) "36.prems"(4) by simp
         have er: "eval_forall_rel s st env var rest body' = Some (VBool acc)"
-          using "36.IH"(2)[OF Some VBool mr "36.prems"(2)] lb "36.prems"(3) by fastforce
+          using "36.IH"(2)[OF Some VBool mr "36.prems"(2)] lb "36.prems"(3) "36.prems"(4) by fastforce
         show ?thesis using eb er fr_eq by simp
       qed (use "36.prems" Some in simp_all)
     qed

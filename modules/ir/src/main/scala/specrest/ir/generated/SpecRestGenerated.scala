@@ -641,6 +641,7 @@ object SpecRestGenerated {
   final case class MapEmpty(a: Option[span_t])                       extends expr
   final case class MapCons(a: expr, b: expr, c: expr, d: Option[span_t])
       extends expr
+  final case class UStrPred(a: String, b: expr, c: Option[span_t]) extends expr
 
   sealed abstract class nat
   final case class Nata(a: BigInt) extends nat
@@ -806,6 +807,7 @@ object SpecRestGenerated {
   final case class TSome(a: smt_term)                              extends smt_term
   final case class TStrLit(a: String)                              extends smt_term
   final case class TMatches(a: smt_term, b: String)                extends smt_term
+  final case class TUStrPred(a: String, b: smt_term)               extends smt_term
   final case class TSeqEmpty()                                     extends smt_term
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
   final case class TMapEmpty()                                     extends smt_term
@@ -1958,6 +1960,7 @@ object SpecRestGenerated {
     case TSome(v)               => None
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
+    case TUStrPred(v, va)       => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -2005,6 +2008,7 @@ object SpecRestGenerated {
     case TSome(v)               => None
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
+    case TUStrPred(v, va)       => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -2832,6 +2836,22 @@ object SpecRestGenerated {
           case Some(SSeq(_))              => None
           case Some(SMap(_))              => None
         }
+      case (m, env, TUStrPred(name, t)) =>
+        smtEval(m, env, t) match {
+          case None                       => None
+          case Some(SBool(_))             => None
+          case Some(SInt(_))              => None
+          case Some(SReal(_))             => None
+          case Some(SEnumElem(_, _))      => None
+          case Some(SEntityElem(_, _))    => None
+          case Some(SSet(_))              => None
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(str))            => Some[smt_val](SBool(name == str))
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
       case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
       case (m, env, TSeqCons(e, rest)) =>
         (smtEval(m, env, e), smtEval(m, env, rest)) match {
@@ -2932,6 +2952,7 @@ object SpecRestGenerated {
     case SeqCons(v, va, vb)        => None
     case MapEmpty(v)               => None
     case MapCons(v, va, vb, vc)    => None
+    case UStrPred(v, va, vb)       => None
   }
 
   def isLitFull(x0: expr_full): Boolean = x0 match {
@@ -3306,7 +3327,11 @@ object SpecRestGenerated {
     case SeqCons(v, va, vb)        => None
     case MapEmpty(v)               => None
     case MapCons(v, va, vb, vc)    => None
+    case UStrPred(v, va, vb)       => None
   }
+
+  def is_builtin_pred(nm: String): Boolean =
+    nm == "isValidURI" || nm == "isValidEmail"
 
   def one_rat: rat = Frct((one_inta, one_inta))
 
@@ -3382,14 +3407,14 @@ object SpecRestGenerated {
   }
 
   def lower_with_assigns(
-      vp: List[String],
+      vl: List[String],
       x1: List[field_assign_full],
       base: expr,
-      vq: Option[span_t]
+      vm: Option[span_t]
   ): Option[expr] =
-    (vp, x1, base, vq) match {
-      case (vp, Nil, base, vq) => Some[expr](base)
-      case (enums, FieldAssignFull(fld, v, vr) :: rest, base, sp) =>
+    (vl, x1, base, vm) match {
+      case (vl, Nil, base, vm) => Some[expr](base)
+      case (enums, FieldAssignFull(fld, v, vn) :: rest, base, sp) =>
         lower(enums, v) match {
           case None => None
           case Some(va) =>
@@ -3398,13 +3423,13 @@ object SpecRestGenerated {
     }
 
   def lowerMapEntries(
-      vt: List[String],
+      vp: List[String],
       x1: List[map_entry_full],
       sp: Option[span_t]
   ): Option[expr] =
-    (vt, x1, sp) match {
-      case (vt, Nil, sp) => Some[expr](MapEmpty(sp))
-      case (enums, MapEntryFull(k, v, vu) :: rest, sp) =>
+    (vp, x1, sp) match {
+      case (vp, Nil, sp) => Some[expr](MapEmpty(sp))
+      case (enums, MapEntryFull(k, v, vq) :: rest, sp) =>
         (lower(enums, k), (lower(enums, v), lowerMapEntries(enums, rest, sp))) match {
           case (None, _)                  => None
           case (Some(_), (None, _))       => None
@@ -3414,9 +3439,9 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSetList(vo: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (vo, x1, sp) match {
-      case (vo, Nil, sp) => Some[expr](SetEmpty(sp))
+  def lowerSetList(vk: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (vk, x1, sp) match {
+      case (vk, Nil, sp) => Some[expr](SetEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSetList(enums, rest, sp)) match {
           case (None, _)           => None
@@ -3425,9 +3450,9 @@ object SpecRestGenerated {
         }
     }
 
-  def lowerSeqList(vs: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
-    (vs, x1, sp) match {
-      case (vs, Nil, sp) => Some[expr](SeqEmpty(sp))
+  def lowerSeqList(vo: List[String], x1: List[expr_full], sp: Option[span_t]): Option[expr] =
+    (vo, x1, sp) match {
+      case (vo, Nil, sp) => Some[expr](SeqEmpty(sp))
       case (enums, e :: rest, sp) =>
         (lower(enums, e), lowerSeqList(enums, rest, sp)) match {
           case (None, _)           => None
@@ -3445,10 +3470,45 @@ object SpecRestGenerated {
     case (uy, StringLitF(v, sp))   => Some[expr](StrLit(v, sp))
     case (uz, NoneLitF(sp))        => Some[expr](NoneE(sp))
     case (va, LambdaF(vb, vc, vd)) => None
-    case (ve, CallF(vf, vg, vh))   => None
+    case (enums, CallF(callee, args, sp)) =>
+      (callee, args) match {
+        case (BinaryOpF(_, _, _, _), _)         => None
+        case (UnaryOpF(_, _, _), _)             => None
+        case (QuantifierF(_, _, _, _), _)       => None
+        case (SomeWrapF(_, _), _)               => None
+        case (TheF(_, _, _, _), _)              => None
+        case (FieldAccessF(_, _, _), _)         => None
+        case (EnumAccessF(_, _, _), _)          => None
+        case (IndexF(_, _, _), _)               => None
+        case (CallF(_, _, _), _)                => None
+        case (PrimeF(_, _), _)                  => None
+        case (PreF(_, _), _)                    => None
+        case (WithF(_, _, _), _)                => None
+        case (IfF(_, _, _, _), _)               => None
+        case (LetF(_, _, _, _), _)              => None
+        case (LambdaF(_, _, _), _)              => None
+        case (ConstructorF(_, _, _), _)         => None
+        case (SetLiteralF(_, _), _)             => None
+        case (MapLiteralF(_, _), _)             => None
+        case (SetComprehensionF(_, _, _, _), _) => None
+        case (SeqLiteralF(_, _), _)             => None
+        case (MatchesF(_, _, _), _)             => None
+        case (IntLitF(_, _), _)                 => None
+        case (FloatLitF(_, _), _)               => None
+        case (StringLitF(_, _), _)              => None
+        case (BoolLitF(_, _), _)                => None
+        case (NoneLitF(_), _)                   => None
+        case (IdentifierF(_, _), Nil)           => None
+        case (IdentifierF(nm, _), List(arg)) =>
+          is_builtin_pred(nm) match {
+            case true  => map_option[expr, expr]((a: expr) => UStrPred(nm, a, sp), lower(enums, arg))
+            case false => None
+          }
+        case (IdentifierF(_, _), _ :: _ :: _) => None
+      }
     case (enums, ConstructorF(name, fas, sp)) =>
       lower_with_assigns(enums, fas, EntityBase(name, sp), sp)
-    case (vi, SetComprehensionF(vj, vk, vl, vm)) => None
+    case (ve, SetComprehensionF(vf, vg, vh, vi)) => None
     case (enums, TheF(vara, dm, body, sp)) =>
       dm match {
         case BinaryOpF(_, _, _, _)         => None
@@ -4551,7 +4611,7 @@ object SpecRestGenerated {
         case (Some(_), None)     => None
         case (Some(va), Some(b)) => Some[expr](LetIn(x, va, b, sp))
       }
-    case (vn, EnumAccessF(base, mem, sp)) =>
+    case (vj, EnumAccessF(base, mem, sp)) =>
       base match {
         case BinaryOpF(_, _, _, _)         => None
         case UnaryOpF(_, _, _)             => None
@@ -5553,6 +5613,22 @@ object SpecRestGenerated {
           case (Some(_), (Some(_), Some(VSeq(_))))              => None
           case (Some(kv), (Some(vv), Some(VMap(ps)))) =>
             Some[ir_value](VMap((kv, vv) :: ps))
+        }
+      case (s, st, env, UStrPred(name, e, we)) =>
+        eval(s, st, env, e) match {
+          case None                       => None
+          case Some(VBool(_))             => None
+          case Some(VInt(_))              => None
+          case Some(VReal(_))             => None
+          case Some(VEnum(_, _))          => None
+          case Some(VEntity(_, _))        => None
+          case Some(VSet(_))              => None
+          case Some(VEntityWith(_, _, _)) => None
+          case Some(VNone())              => None
+          case Some(VSome(_))             => None
+          case Some(VStr(str))            => Some[ir_value](VBool(name == str))
+          case Some(VSeq(_))              => None
+          case Some(VMap(_))              => None
         }
     }
 
@@ -6706,15 +6782,16 @@ object SpecRestGenerated {
     case SetBin(DiffOp(), l, r, wg) => TSetDiff(translate(l), translate(r))
     case WithRec(base, fld, val_e, wh) =>
       TWithRec(translate(base), fld, translate(val_e))
-    case Ite(c, a, b, wi)     => TIte(translate(c), translate(a), translate(b))
-    case NoneE(wj)            => TNone()
-    case SomeE(e, wk)         => TSome(translate(e))
-    case StrLit(v, wl)        => TStrLit(v)
-    case Matches(e, pat, wm)  => TMatches(translate(e), pat)
-    case SeqEmpty(wn)         => TSeqEmpty()
-    case SeqCons(e, rest, wo) => TSeqCons(translate(e), translate(rest))
-    case MapEmpty(wp)         => TMapEmpty()
-    case MapCons(k, v, rest, wq) =>
+    case Ite(c, a, b, wi)      => TIte(translate(c), translate(a), translate(b))
+    case NoneE(wj)             => TNone()
+    case SomeE(e, wk)          => TSome(translate(e))
+    case StrLit(v, wl)         => TStrLit(v)
+    case Matches(e, pat, wm)   => TMatches(translate(e), pat)
+    case UStrPred(name, e, wn) => TUStrPred(name, translate(e))
+    case SeqEmpty(wo)          => TSeqEmpty()
+    case SeqCons(e, rest, wp)  => TSeqCons(translate(e), translate(rest))
+    case MapEmpty(wq)          => TMapEmpty()
+    case MapCons(k, v, rest, wr) =>
       TMapCons(translate(k), translate(v), translate(rest))
   }
 
@@ -15735,6 +15812,9 @@ object SpecRestGenerated {
       (emptyStringConstraint, Nil),
       flattenAnd(e)
     )
+
+  def translate_full(enums: List[String], e: expr_full): Option[smt_term] =
+    map_option[expr, smt_term]((a: expr) => translate(a), lower(enums, e))
 
   def asStringLit(x0: expr_full): Option[String] = x0 match {
     case StringLitF(v, uu)                => Some[String](v)

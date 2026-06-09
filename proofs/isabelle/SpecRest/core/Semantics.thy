@@ -1285,6 +1285,10 @@ where
      (case (eval s st env k, eval s st env v, eval s st env rest) of
         (Some kv, Some vv, Some (VMap ps)) \<Rightarrow> Some (VMap ((kv, vv) # ps))
       | _ \<Rightarrow> None)"
+| "eval s st env (UStrPred name e _) =
+     (case eval s st env e of
+        Some (VStr str) \<Rightarrow> Some (VBool (str_predicate name str))
+      | _ \<Rightarrow> None)"
 
 | "eval_forall_enum s st env var en [] body = Some (VBool True)"
 | "eval_forall_enum s st env var en (mem # rest) body =

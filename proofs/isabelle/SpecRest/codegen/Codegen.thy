@@ -5,6 +5,7 @@ theory Codegen
     SpecRest_Core.IR_Helpers
     SpecRest_Core.IR_Analysis
     SpecRest_Core.IR_Lower
+    SpecRest_Core.TranslateFullDef
     TopoSort
     Schema
     MigrationOps
@@ -121,9 +122,11 @@ text \<open>\<open>string_matches\<close> is abstract (see \<open>IR\<close>); t
   is a never-evaluated stub that only has to type-check.\<close>
 code_printing
   constant string_matches \<rightharpoonup> (Scala) "((_) == (_))"
+| constant str_predicate \<rightharpoonup> (Scala) "((_) == (_))"
 
 export_code
     translate
+    translate_full
     eval
     smtEval
     isLitFull

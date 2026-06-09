@@ -64,7 +64,13 @@ where
 | "lower _ (StringLitF v sp)   = Some (StrLit v sp)"
 | "lower _ (NoneLitF sp)       = Some (NoneE sp)"
 | "lower _ (LambdaF _ _ _)     = None"
-| "lower _ (CallF _ _ _)       = None"
+| "lower enums (CallF callee args sp) =
+     (case (callee, args) of
+        (IdentifierF nm _, [arg]) \<Rightarrow>
+          (if is_builtin_pred nm
+             then map_option (\<lambda>a'. UStrPred nm a' sp) (lower enums arg)
+             else None)
+      | _ \<Rightarrow> None)"
 | "lower enums (ConstructorF name fas sp) =
      lower_with_assigns enums fas (EntityBase name sp) sp"
 | "lower _ (SetComprehensionF _ _ _ _) = None"

@@ -99,6 +99,7 @@ datatype (plugins only: code size) expr =
   | SeqCons "expr" "expr" "option_span"
   | MapEmpty "option_span"
   | MapCons "expr" "expr" "expr" "option_span"
+  | UStrPred "String.literal" "expr" "option_span"
 
 text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>Matches\<close>. It is
   deliberately \<^emph>\<open>abstract\<close> (no defining equation): formalising the full SMT-LIB
@@ -109,6 +110,24 @@ text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for
   construction; the (unused) extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters get a
   serialisation stub in \<open>Codegen\<close>.\<close>
 consts string_matches :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
+
+text \<open>\<open>str_predicate name s\<close> is the uninterpreted built-in string predicate \<open>name\<close>
+  (e.g.\ \<open>isValidURI\<close>) applied to string \<open>s\<close>. Like \<open>string_matches\<close> it is abstract: the
+  trusted translator emits it as a Z3 uninterpreted boolean function, so the soundness
+  theorem stays parametric in the predicate and any realisation \<open>eval\<close>/\<open>smtEval\<close> share
+  is sound by construction. Verifying an obligation mentioning \<open>str_predicate name\<close> is
+  thus a proof for every interpretation, which soundly over-approximates the intended
+  built-in.\<close>
+consts str_predicate :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
+
+text \<open>\<open>is_builtin_pred nm\<close> marks \<open>nm\<close> as a reserved built-in string predicate (e.g.\
+  \<open>isValidURI\<close>) - a name the surface language forbids as a user function/predicate. It
+  gates \<open>lower\<close>'s lifting of \<open>CallF (IdentifierF nm) [arg]\<close> to \<open>UStrPred\<close>: only reserved
+  built-ins are lifted, so a user call (which the reference semantics inlines) is never
+  mistaken for an uninterpreted predicate. Soundness uses \<open>is_builtin_pred nm \<Longrightarrow>
+  lookup_callee fs ps nm = None\<close> (reserved names are not user-defined).\<close>
+definition is_builtin_pred :: "String.literal \<Rightarrow> bool" where
+  "is_builtin_pred nm \<longleftrightarrow> nm = STR ''isValidURI'' \<or> nm = STR ''isValidEmail''"
 
 text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
   relation name to an arbitrary \<open>expr\<close>, so the operation-side
