@@ -108,7 +108,8 @@ proof -
       by simp_all
     from l wl obtain l' where l': "lower enums l = Some l'" by blast
     from r wr obtain r' where r': "lower enums r = Some r'" by blast
-    from l' r' BEq show ?thesis by (cases r) (auto split: option.splits)
+    from l' r' BEq show ?thesis
+      by (cases r) (auto simp: lower_beq_dom_or_none_def split: option.splits prod.splits)
   next
     case BIn
     thus ?thesis using inout by blast

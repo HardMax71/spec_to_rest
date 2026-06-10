@@ -238,6 +238,10 @@ next
   show ?thesis unfolding UPower by simp
 qed (use ra ih in simp_all)
 
+lemma requiresAlloy_dom_arg_none: "requiresAlloy e \<Longrightarrow> dom_arg e = None"
+  by (cases e rule: dom_arg.cases)
+     (auto simp: requiresAlloy_def split: expr_full.splits list.splits if_splits)
+
 lemma lower_binop_collapse:
   assumes l: "requiresAlloy l \<Longrightarrow> lower enums l = None"
       and r: "requiresAlloy r \<Longrightarrow> lower enums r = None"
@@ -250,11 +254,13 @@ proof -
   show ?thesis
   proof (cases op)
     case BEq
+    have dnone: "dom_arg l = None \<or> dom_arg r = None"
+      using d requiresAlloy_dom_arg_none by auto
     have "lower enums (BinaryOpF op l r sp)
             = (case (lower enums l, lower enums r) of
                  (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
                | _ \<Rightarrow> None)"
-      unfolding BEq by (rule lower_BEq_noncomp[OF ncr])
+      unfolding BEq by (rule lower_BEq_noncomp[OF ncr dnone])
     thus ?thesis using l r d by (auto split: option.splits)
   next
     case BIn

@@ -759,6 +759,18 @@ fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
 | "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
 | "rootIdentifier _                        = None"
 
+fun dom_arg :: "expr_full \<Rightarrow> String.literal option" where
+  "dom_arg (CallF c args _) =
+     (case (c, args) of
+        (IdentifierF d _, [IdentifierF x _]) \<Rightarrow> (if d = STR ''dom'' then Some x else None)
+      | _ \<Rightarrow> None)"
+| "dom_arg _ = None"
+
+lemma dom_arg_SomeD:
+  "dom_arg e = Some x
+     \<Longrightarrow> \<exists>sp1 sp2 sp. e = CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF x sp2] sp"
+  by (erule dom_arg.elims; auto split: expr_full.splits list.splits if_splits prod.splits)
+
 lemmas allSubexprs_code [code]            = allSubexprs.simps allSubexprs_list.simps
                                              allSubexprs_fields.simps
                                              allSubexprs_entries.simps

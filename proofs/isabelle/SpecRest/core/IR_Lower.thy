@@ -46,6 +46,25 @@ where
           dir2 = ForallSet var (Ident (STR ''0cmp'') None) (BoolBin AndOp memD predE sp) sp
       in LetIn (STR ''0cmp'') setE (BoolBin AndOp dir1 dir2 sp) sp)"
 
+definition lower_dom_eq ::
+    "String.literal \<Rightarrow> String.literal \<Rightarrow> option_span \<Rightarrow> expr" where
+  "lower_dom_eq xrel yrel sp =
+     BoolBin AndOp
+       (ForallRel (STR ''0cmp'') xrel (Member (Ident (STR ''0cmp'') None) yrel sp) sp)
+       (ForallRel (STR ''0cmp'') yrel (Member (Ident (STR ''0cmp'') None) xrel sp) sp)
+       sp"
+
+definition lower_beq_dom_or_none ::
+    "expr_full \<Rightarrow> expr_full \<Rightarrow> option_span \<Rightarrow> expr option" where
+  "lower_beq_dom_or_none l r sp =
+     (case (dom_arg l, dom_arg r) of
+        (Some x, Some y) \<Rightarrow> Some (lower_dom_eq x y sp) | _ \<Rightarrow> None)"
+
+lemma lower_beq_dom_or_none_None [simp]:
+  "dom_arg l = None \<Longrightarrow> lower_beq_dom_or_none l r sp = None"
+  "dom_arg r = None \<Longrightarrow> lower_beq_dom_or_none l r sp = None"
+  by (auto simp: lower_beq_dom_or_none_def split: option.splits)
+
 function (sequential) lower :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr option"
 and lowerSetList ::
     "String.literal list \<Rightarrow> expr_full list \<Rightarrow> option_span \<Rightarrow> expr option"
@@ -125,15 +144,18 @@ where
              (Some l', Some r') \<Rightarrow> Some (BoolBin IffOp l' r' sp)
            | _ \<Rightarrow> None)
       | BEq \<Rightarrow>
-          (case r of
-             SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
-               (case (lower enums l, lower enums p) of
-                  (Some l', Some p') \<Rightarrow> Some (lower_set_comp_eq enums var dnm l' p' sp)
-                | _ \<Rightarrow> None)
-           | _ \<Rightarrow>
-               (case (lower enums l, lower enums r) of
-                  (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
-                | _ \<Rightarrow> None))
+          (case lower_beq_dom_or_none l r sp of
+             Some e \<Rightarrow> Some e
+           | None \<Rightarrow>
+             (case r of
+                SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
+                  (case (lower enums l, lower enums p) of
+                     (Some l', Some p') \<Rightarrow> Some (lower_set_comp_eq enums var dnm l' p' sp)
+                   | _ \<Rightarrow> None)
+              | _ \<Rightarrow>
+                  (case (lower enums l, lower enums r) of
+                     (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
+                   | _ \<Rightarrow> None)))
       | BNeq \<Rightarrow>
           (case (lower enums l, lower enums r) of
              (Some l', Some r') \<Rightarrow> Some (Cmp NeqOp l' r' sp)
@@ -287,16 +309,31 @@ termination
        ]")
      auto
 
+lemma lower_BEq_dom:
+  assumes "dom_arg l = Some xrel" and "dom_arg r = Some yrel"
+  shows "lower enums (BinaryOpF BEq l r sp) = Some (lower_dom_eq xrel yrel sp)"
+proof -
+  have "lower_beq_dom_or_none l r sp = Some (lower_dom_eq xrel yrel sp)"
+    using assms by (simp add: lower_beq_dom_or_none_def)
+  thus ?thesis by simp
+qed
+
 lemma lower_BEq_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+      and "dom_arg l = None \<or> dom_arg r = None"
   shows "lower enums (BinaryOpF BEq l r sp)
            = (case (lower enums l, lower enums r) of
                 (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp)
               | _ \<Rightarrow> None)"
-proof (cases r)
-  case (SetComprehensionF v dom pr s)
-  with assms show ?thesis by (cases dom) auto
-qed auto
+proof -
+  have dn: "lower_beq_dom_or_none l r sp = None"
+    using assms(2) by (auto simp: lower_beq_dom_or_none_def split: option.splits)
+  show ?thesis
+  proof (cases r)
+    case (SetComprehensionF v dm pr s)
+    with assms dn show ?thesis by (cases dm) (auto split: option.splits)
+  qed (use assms dn in \<open>auto split: option.splits\<close>)
+qed
 
 lemma lower_BIn_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"

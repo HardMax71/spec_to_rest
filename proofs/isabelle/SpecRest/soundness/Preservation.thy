@@ -167,20 +167,34 @@ lemma h3_pres_Cmp:
                   r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "value_has_ty \<Gamma> v TBool"
 proof -
-  have "\<exists>l' r' cop. e' = Cmp cop l' r' sp"
-  proof (cases "op = BEq")
+  show "value_has_ty \<Gamma> v TBool"
+  proof (cases "op = BEq \<and> dom_arg l \<noteq> None \<and> dom_arg r \<noteq> None")
     case True
-    from assms(2)[unfolded True lower_BEq_noncomp[OF ncr]] show ?thesis
-      by (auto split: option.splits)
+    then obtain xrel yrel where da: "dom_arg l = Some xrel" "dom_arg r = Some yrel"
+        and ope: "op = BEq" by auto
+    have e'_eq: "e' = lower_dom_eq xrel yrel sp"
+      using assms(2)[unfolded ope lower_BEq_dom[OF da(1) da(2)]] by simp
+    from assms(3) have "\<exists>a b. v = VBool (eval_bool_bin AndOp a b)"
+      unfolding e'_eq lower_dom_eq_def by (auto split: option.splits ir_value.splits)
+    thus ?thesis by auto
   next
-    case False
-    with assms(1,2) show ?thesis by (cases op) (auto split: option.splits)
+    case ndomc: False
+    have "\<exists>l' r' cop. e' = Cmp cop l' r' sp"
+    proof (cases "op = BEq")
+      case True
+      with ndomc have dnone: "dom_arg l = None \<or> dom_arg r = None" by auto
+      from assms(2)[unfolded True lower_BEq_noncomp[OF ncr dnone]] show ?thesis
+        by (auto split: option.splits)
+    next
+      case False
+      with assms(1,2) show ?thesis by (cases op) (auto split: option.splits)
+    qed
+    then obtain l' r' cop where e_eq: "e' = Cmp cop l' r' sp" by blast
+    from assms(3) e_eq
+    have ev: "eval_cmp cop (eval sch st env l') (eval sch st env r') = Some v"
+      by simp
+    from eval_cmp_preservation[OF ev] show "value_has_ty \<Gamma> v TBool" .
   qed
-  then obtain l' r' cop where e_eq: "e' = Cmp cop l' r' sp" by blast
-  from assms(3) e_eq
-  have ev: "eval_cmp cop (eval sch st env l') (eval sch st env r') = Some v"
-    by simp
-  from eval_cmp_preservation[OF ev] show "value_has_ty \<Gamma> v TBool" .
 qed
 
 lemma h3_pres_Bool_Bin:

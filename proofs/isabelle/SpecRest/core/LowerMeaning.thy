@@ -714,6 +714,9 @@ lemma lower_BNotIn_fv:
   using lo[unfolded lower_BNotIn_char] hl hr
   by (cases r) (auto split: option.splits del: lower.simps)
 
+lemma lower_dom_eq_fv: "free_vars_e (lower_dom_eq xrel yrel sp) = []"
+  by (simp add: lower_dom_eq_def)
+
 lemma lower_fv_le: "lower enums e = Some e' \<Longrightarrow> set (free_vars_e e') \<subseteq> set (free_vars e)"
 proof (induction e arbitrary: enums e' rule: measure_induct_rule[where f = size])
   case (less e)
@@ -931,7 +934,17 @@ proof (induction e arbitrary: enums e' rule: measure_induct_rule[where f = size]
     next
       case BEq
       show ?thesis
-      proof (cases "beq_comp BEq r2")
+      proof (cases "\<exists>xrel yrel. dom_arg l2 = Some xrel \<and> dom_arg r2 = Some yrel")
+        case True
+        then obtain xrel yrel where da: "dom_arg l2 = Some xrel" "dom_arg r2 = Some yrel" by blast
+        have e'eq: "e' = lower_dom_eq xrel yrel sp2"
+          using less.prems[unfolded BinaryOpF BEq lower_BEq_dom[OF da(1) da(2)]] by simp
+        show ?thesis using e'eq by (simp add: lower_dom_eq_fv)
+      next
+        case False
+        hence dnone: "dom_arg l2 = None \<or> dom_arg r2 = None" by auto
+        show ?thesis
+        proof (cases "beq_comp BEq r2")
         case (Some t)
         then obtain cvar dnm cpred where bc: "beq_comp BEq r2 = Some (cvar, dnm, cpred)" by (cases t) auto
         from bc obtain s2 s3 where req: "r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3"
@@ -948,11 +961,12 @@ proof (induction e arbitrary: enums e' rule: measure_induct_rule[where f = size]
         hence nc: "\<nexists>v d s2 p s3. r2 = SetComprehensionF v (IdentifierF d s2) p s3" by (cases r2) auto
         have leq: "lower enums (BinaryOpF BEq l2 r2 sp2)
                      = (case (lower enums l2, lower enums r2) of (Some l', Some r') \<Rightarrow> Some (Cmp EqOp l' r' sp2) | _ \<Rightarrow> None)"
-          by (rule lower_BEq_noncomp[OF nc])
+          by (rule lower_BEq_noncomp[OF nc dnone])
         from less.prems[unfolded BinaryOpF BEq leq] obtain l' r' where ll: "lower enums l2 = Some l'"
             and lr: "lower enums r2 = Some r'" and eq: "e' = Cmp EqOp l' r' sp2"
           by (auto split: option.splits del: lower.simps)
         show ?thesis using less.IH[OF sl ll] less.IH[OF sr lr] eq BinaryOpF by auto
+      qed
       qed
     next
       case BIn
@@ -1200,6 +1214,65 @@ lemma no_cmp_var_free_vars:
 lemma contains_value_set: "contains_value xs v = (v \<in> set xs)"
   by (induction xs) auto
 
+lemma eval_forall_member_rel:
+  assumes "state_relation_domain st rel = Some d2"
+  shows "eval_forall_rel s st env var dvs (Member (Ident var None) rel sp)
+           = Some (VBool (list_all (\<lambda>v. contains_value d2 v) dvs))"
+proof (induction dvs)
+  case Nil
+  show ?case by simp
+next
+  case (Cons v rest)
+  have ev: "eval s st ((var, v) # env) (Member (Ident var None) rel sp)
+              = Some (VBool (contains_value d2 v))"
+    using assms by (simp add: env_lookup_def)
+  show ?case using ev Cons.IH by simp
+qed
+
+lemma eval_BoolBin_AndOp:
+  assumes "eval s st env a = Some (VBool p)" and "eval s st env b = Some (VBool q)"
+  shows "eval s st env (BoolBin AndOp a b sp) = Some (VBool (p \<and> q))"
+  using assms by simp
+
+lemma lower_dom_eq_meaning:
+  assumes "state_relation_domain st xrel = Some dx"
+      and "state_relation_domain st yrel = Some dy"
+  shows "eval s st env (lower_dom_eq xrel yrel sp) = Some (VBool (set dx = set dy))"
+proof -
+  have dir1: "eval s st env
+                (ForallRel (STR ''0cmp'') xrel (Member (Ident (STR ''0cmp'') None) yrel sp) sp)
+              = Some (VBool (set dx \<subseteq> set dy))"
+  proof -
+    have "eval s st env
+            (ForallRel (STR ''0cmp'') xrel (Member (Ident (STR ''0cmp'') None) yrel sp) sp)
+          = eval_forall_rel s st env (STR ''0cmp'') dx (Member (Ident (STR ''0cmp'') None) yrel sp)"
+      by (rule eval_ForallRel_Some[OF assms(1)])
+    also have "\<dots> = Some (VBool (list_all (\<lambda>v. contains_value dy v) dx))"
+      by (rule eval_forall_member_rel[OF assms(2)])
+    also have "\<dots> = Some (VBool (set dx \<subseteq> set dy))"
+      by (simp add: list_all_iff contains_value_set subset_eq)
+    finally show ?thesis .
+  qed
+  have dir2: "eval s st env
+                (ForallRel (STR ''0cmp'') yrel (Member (Ident (STR ''0cmp'') None) xrel sp) sp)
+              = Some (VBool (set dy \<subseteq> set dx))"
+  proof -
+    have "eval s st env
+            (ForallRel (STR ''0cmp'') yrel (Member (Ident (STR ''0cmp'') None) xrel sp) sp)
+          = eval_forall_rel s st env (STR ''0cmp'') dy (Member (Ident (STR ''0cmp'') None) xrel sp)"
+      by (rule eval_ForallRel_Some[OF assms(2)])
+    also have "\<dots> = Some (VBool (list_all (\<lambda>v. contains_value dx v) dy))"
+      by (rule eval_forall_member_rel[OF assms(1)])
+    also have "\<dots> = Some (VBool (set dy \<subseteq> set dx))"
+      by (simp add: list_all_iff contains_value_set subset_eq)
+    finally show ?thesis .
+  qed
+  have "eval s st env (lower_dom_eq xrel yrel sp)
+          = Some (VBool ((set dx \<subseteq> set dy) \<and> (set dy \<subseteq> set dx)))"
+    unfolding lower_dom_eq_def by (rule eval_BoolBin_AndOp[OF dir1 dir2])
+  thus ?thesis by (simp add: set_eq_subset)
+qed
+
 lemma comp_dir1:
   assumes ethe: "eval_the_rel s st env var dvs p' = Some ms"
       and dropp: "\<And>d. eval s st ((var, d) # (STR ''0cmp'', VSet xs) # env) p'
@@ -1325,7 +1398,25 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
   case (6 fs ps fuel s st env bop l r sp v e')
   note IHl = "6.IH"(1) and IHr = "6.IH"(2)
   show ?case
-  proof (cases "beq_comp bop r")
+  proof (cases "dom_eq_domains fs ps st bop l r")
+    case (Some p)
+    obtain dx dy where peq: "p = (dx, dy)" by (cases p)
+    hence de: "dom_eq_domains fs ps st bop l r = Some (dx, dy)" using Some by simp
+    from dom_eq_domains_SomeD[OF de] have f0: "bop = BEq"
+        and "\<exists>rx. dom_arg l = Some rx \<and> state_relation_domain st rx = Some dx"
+        and "\<exists>ry. dom_arg r = Some ry \<and> state_relation_domain st ry = Some dy" by auto
+    then obtain rx ry where f2: "dom_arg l = Some rx" and f2d: "state_relation_domain st rx = Some dx"
+        and f3: "dom_arg r = Some ry" and f3d: "state_relation_domain st ry = Some dy" by auto
+    have veq: "v = VBool (set dx = set dy)"
+      using "6.prems"(1)[unfolded eval_full_dom_eq[OF de]] by simp
+    have e'eq: "e' = lower_dom_eq rx ry sp"
+      using "6.prems"(2)[unfolded f0 lower_BEq_dom[OF f2 f3]] by simp
+    show ?thesis using lower_dom_eq_meaning[OF f2d f3d] e'eq veq by simp
+  next
+    case None
+    note deN = this
+    show ?thesis
+    proof (cases "beq_comp bop r")
     case None
     show ?thesis
     proof (cases bop)
@@ -1336,7 +1427,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BAnd obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = BoolBin AndOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BAnd efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BAnd efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BOr
     from "6.prems" BOr obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
@@ -1345,7 +1436,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BOr obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = BoolBin OrOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BOr efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BOr efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BImplies
     from "6.prems" BImplies obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
@@ -1354,7 +1445,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BImplies obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = BoolBin ImpliesOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BImplies efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BImplies efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BIff
     from "6.prems" BIff obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
@@ -1363,19 +1454,30 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BIff obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = BoolBin IffOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BIff efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BIff efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BEq
-    from "6.prems" BEq None obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
+    from "6.prems" deN BEq None obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
         and efr: "eval_full fs ps fuel s st env r = Some vr"
       by (auto split: option.splits)
     have rnc: "\<nexists>var dnm s2 p s3. r = SetComprehensionF var (IdentifierF dnm s2) p s3"
       using efr by (cases r) auto
-    from "6.prems"(2)[unfolded BEq lower_BEq_noncomp[OF rnc]] obtain l' r'
+    have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
+      using "6.prems"(5) by (simp add: builtins_reserved_def)
+    have dnone: "dom_arg l = None \<or> dom_arg r = None"
+    proof (rule ccontr)
+      assume "\<not> (dom_arg l = None \<or> dom_arg r = None)"
+      then obtain rx where "dom_arg l = Some rx" by auto
+      then obtain a b c where "l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
+        using dom_arg_SomeD by blast
+      hence "eval_full fs ps fuel s st env l = None" using eval_full_dom_CallF[OF lcdom] by simp
+      thus False using efl by simp
+    qed
+    from "6.prems"(2)[unfolded BEq lower_BEq_noncomp[OF rnc dnone]] obtain l' r'
         where ll: "lower enums l = Some l'" and lr: "lower enums r = Some r'"
           and e'eq: "e' = Cmp EqOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BEq None efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BEq None deN efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BNeq
     from "6.prems" BNeq obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1384,7 +1486,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BNeq obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Cmp NeqOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BNeq efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BNeq efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BLt
     from "6.prems" BLt obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1393,7 +1495,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BLt obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Cmp LtOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BLt efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BLt efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BGt
     from "6.prems" BGt obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1402,7 +1504,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BGt obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Cmp GtOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BGt efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BGt efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BLe
     from "6.prems" BLe obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1411,7 +1513,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BLe obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Cmp LeOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BLe efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BLe efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BGe
     from "6.prems" BGe obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1420,7 +1522,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BGe obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Cmp GeOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BGe efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BGe efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BAdd
     from "6.prems" BAdd obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1429,7 +1531,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BAdd obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Arith AddOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BAdd efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BAdd efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BSub
     from "6.prems" BSub obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1438,7 +1540,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BSub obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Arith SubOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BSub efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BSub efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BMul
     from "6.prems" BMul obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1447,7 +1549,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BMul obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Arith MulOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BMul efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BMul efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BDiv
     from "6.prems" BDiv obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
@@ -1456,7 +1558,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     from "6.prems" BDiv obtain l' r' where ll: "lower enums l = Some l'"
         and lr: "lower enums r = Some r'" and e'eq: "e' = Arith DivOp l' r' sp"
       by (auto split: option.splits)
-    show ?thesis using e'eq "6.prems" BDiv efl efr IHl[OF None efl ll] IHr[OF None efr lr] by simp
+    show ?thesis using e'eq "6.prems" BDiv efl efr IHl[OF deN None efl ll] IHr[OF deN None efr lr] by simp
   next
     case BUnion
     with "6.prems" show ?thesis by simp
@@ -1483,7 +1585,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     have bopeq: "bop = BEq" using bc by (cases bop) auto
     from bc bopeq obtain s2 s3 where req: "r = SetComprehensionF var (IdentifierF dnm s2) pred s3"
       by (cases r) (auto split: expr_full.splits)
-    from "6.prems"(1) bc obtain dvs ms xs where
+    from "6.prems"(1) deN bc obtain dvs ms xs where
         enr: "schema_lookup_enum s dnm = None"
         and srd: "state_relation_domain st dnm = Some dvs"
         and etm: "eval_full_the fs ps fuel s st env var dvs pred = Some ms"
@@ -1506,11 +1608,12 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
       by (rule lower_no_free_0cmp(1)[OF lp fpred])
     have enr': "\<not> schema_lookup_enum s dnm \<noteq> None" using enr by simp
     have etr: "eval_the_rel s st env var dvs p' = Some ms"
-      using "6.IH"(3)[OF bc refl refl enr' srd etm "6.prems"(3) ncp "6.prems"(5)] lp by blast
+      using "6.IH"(3)[OF deN bc refl refl enr' srd etm "6.prems"(3) ncp "6.prems"(5)] lp by blast
     have el': "eval s st env l' = Some (VSet xs)"
-      using "6.IH"(4)[OF bc refl refl enr' srd etm efl ll "6.prems"(3) ncl "6.prems"(5)] .
+      using "6.IH"(4)[OF deN bc refl refl enr' srd etm efl ll "6.prems"(3) ncl "6.prems"(5)] .
     show ?thesis
       using e'eq veq comp_assembly[OF el' etr srd la vne fp dne] by simp
+  qed
   qed
 next
   case (7 fs ps fuel s st env uop e sp v e')
@@ -1624,13 +1727,13 @@ next
     by (cases callee; cases args) (auto split: if_splits list.splits option.splits)
   have lc_none: "lookup_callee fs ps nm = None"
     using "15.prems"(5) bip by (simp add: builtins_reserved_def)
-  from "15.prems"(1) fuel ceq aeq lc_none obtain str where
+  from "15.prems"(1) fuel ceq aeq lc_none bip obtain str where
       ea: "eval_full fs ps fuel s st env arg = Some (VStr str)"
       and veq: "v = VBool (str_predicate nm str)"
-    by (auto split: option.splits ir_value.splits)
+    by (auto split: option.splits ir_value.splits if_splits)
   have ncarg: "no_cmp_var arg" using "15.prems"(4) ceq aeq by simp
   have ev: "eval s st env arg' = Some (VStr str)"
-    using "15.IH" fuel ceq aeq lc_none ea la "15.prems"(3) ncarg "15.prems"(5)
+    using "15.IH" fuel ceq aeq lc_none bip ea la "15.prems"(3) ncarg "15.prems"(5)
     by (auto split: if_splits)
   show ?case using e'eq veq ev by simp
 next

@@ -1543,6 +1543,97 @@ object SpecRestGenerated {
       }
   }
 
+  def dom_arg(x0: expr_full): Option[String] = x0 match {
+    case CallF(c, args, uu) =>
+      (c, args) match {
+        case (BinaryOpF(_, _, _, _), _)                              => None
+        case (UnaryOpF(_, _, _), _)                                  => None
+        case (QuantifierF(_, _, _, _), _)                            => None
+        case (SomeWrapF(_, _), _)                                    => None
+        case (TheF(_, _, _, _), _)                                   => None
+        case (FieldAccessF(_, _, _), _)                              => None
+        case (EnumAccessF(_, _, _), _)                               => None
+        case (IndexF(_, _, _), _)                                    => None
+        case (CallF(_, _, _), _)                                     => None
+        case (PrimeF(_, _), _)                                       => None
+        case (PreF(_, _), _)                                         => None
+        case (WithF(_, _, _), _)                                     => None
+        case (IfF(_, _, _, _), _)                                    => None
+        case (LetF(_, _, _, _), _)                                   => None
+        case (LambdaF(_, _, _), _)                                   => None
+        case (ConstructorF(_, _, _), _)                              => None
+        case (SetLiteralF(_, _), _)                                  => None
+        case (MapLiteralF(_, _), _)                                  => None
+        case (SetComprehensionF(_, _, _, _), _)                      => None
+        case (SeqLiteralF(_, _), _)                                  => None
+        case (MatchesF(_, _, _), _)                                  => None
+        case (IntLitF(_, _), _)                                      => None
+        case (FloatLitF(_, _), _)                                    => None
+        case (StringLitF(_, _), _)                                   => None
+        case (BoolLitF(_, _), _)                                     => None
+        case (NoneLitF(_), _)                                        => None
+        case (IdentifierF(_, _), Nil)                                => None
+        case (IdentifierF(_, _), BinaryOpF(_, _, _, _) :: _)         => None
+        case (IdentifierF(_, _), UnaryOpF(_, _, _) :: _)             => None
+        case (IdentifierF(_, _), QuantifierF(_, _, _, _) :: _)       => None
+        case (IdentifierF(_, _), SomeWrapF(_, _) :: _)               => None
+        case (IdentifierF(_, _), TheF(_, _, _, _) :: _)              => None
+        case (IdentifierF(_, _), FieldAccessF(_, _, _) :: _)         => None
+        case (IdentifierF(_, _), EnumAccessF(_, _, _) :: _)          => None
+        case (IdentifierF(_, _), IndexF(_, _, _) :: _)               => None
+        case (IdentifierF(_, _), CallF(_, _, _) :: _)                => None
+        case (IdentifierF(_, _), PrimeF(_, _) :: _)                  => None
+        case (IdentifierF(_, _), PreF(_, _) :: _)                    => None
+        case (IdentifierF(_, _), WithF(_, _, _) :: _)                => None
+        case (IdentifierF(_, _), IfF(_, _, _, _) :: _)               => None
+        case (IdentifierF(_, _), LetF(_, _, _, _) :: _)              => None
+        case (IdentifierF(_, _), LambdaF(_, _, _) :: _)              => None
+        case (IdentifierF(_, _), ConstructorF(_, _, _) :: _)         => None
+        case (IdentifierF(_, _), SetLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), MapLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), SetComprehensionF(_, _, _, _) :: _) => None
+        case (IdentifierF(_, _), SeqLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), MatchesF(_, _, _) :: _)             => None
+        case (IdentifierF(_, _), IntLitF(_, _) :: _)                 => None
+        case (IdentifierF(_, _), FloatLitF(_, _) :: _)               => None
+        case (IdentifierF(_, _), StringLitF(_, _) :: _)              => None
+        case (IdentifierF(_, _), BoolLitF(_, _) :: _)                => None
+        case (IdentifierF(_, _), NoneLitF(_) :: _)                   => None
+        case (IdentifierF(d, _), List(IdentifierF(x, _))) =>
+          d == "dom" match {
+            case true  => Some[String](x)
+            case false => None
+          }
+        case (IdentifierF(_, _), IdentifierF(_, _) :: _ :: _) => None
+      }
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
   def foldl[A, B](f: A => B => A, a: A, x2: List[B]): A = (f, a, x2) match {
     case (f, a, Nil)     => a
     case (f, a, x :: xs) => foldl[A, B](f, f(a)(x), xs)
@@ -3266,6 +3357,21 @@ object SpecRestGenerated {
         }
     }
 
+  def lower_dom_eq(xrel: String, yrel: String, sp: Option[span_t]): expr =
+    BoolBin(
+      AndOp(),
+      ForallRel("0cmp", xrel, Member(Ident("0cmp", None), yrel, sp), sp),
+      ForallRel("0cmp", yrel, Member(Ident("0cmp", None), xrel, sp), sp),
+      sp
+    )
+
+  def lower_beq_dom_or_none(l: expr_full, r: expr_full, sp: Option[span_t]): Option[expr] =
+    (dom_arg(l), dom_arg(r)) match {
+      case (None, _)          => None
+      case (Some(_), None)    => None
+      case (Some(x), Some(y)) => Some[expr](lower_dom_eq(x, y, sp))
+    }
+
   def lower_set_comp_eq(
       enums: List[String],
       vara: String,
@@ -3636,378 +3742,382 @@ object SpecRestGenerated {
               Some[expr](BoolBin(IffOp(), la, ra, sp))
           }
         case BEq() =>
-          r match {
-            case BinaryOpF(_, _, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
+          lower_beq_dom_or_none(l, r, sp) match {
+            case None =>
+              r match {
+                case BinaryOpF(_, _, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case UnaryOpF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case QuantifierF(_, _, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SomeWrapF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case TheF(_, _, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case FieldAccessF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case EnumAccessF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case IndexF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case CallF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case PrimeF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case PreF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case WithF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case IfF(_, _, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case LetF(_, _, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case LambdaF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case ConstructorF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetLiteralF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case MapLiteralF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, BinaryOpF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, UnaryOpF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, QuantifierF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, SomeWrapF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, TheF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, FieldAccessF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, EnumAccessF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, IndexF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, CallF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, PrimeF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, PreF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, WithF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, IfF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, LetF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, LambdaF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, ConstructorF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, SetLiteralF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, MapLiteralF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, SetComprehensionF(_, _, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, SeqLiteralF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, MatchesF(_, _, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, IntLitF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, FloatLitF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, StringLitF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, BoolLitF(_, _), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(_, NoneLitF(_), _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case SetComprehensionF(vara, IdentifierF(dnm, _), p, _) =>
+                  (lower(enums, l), lower(enums, p)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(pa)) =>
+                      Some[expr](lower_set_comp_eq(enums, vara, dnm, la, pa, sp))
+                  }
+                case SeqLiteralF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case MatchesF(_, _, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case IntLitF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case FloatLitF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case StringLitF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case BoolLitF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case NoneLitF(_) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
+                case IdentifierF(_, _) =>
+                  (lower(enums, l), lower(enums, r)) match {
+                    case (None, _)       => None
+                    case (Some(_), None) => None
+                    case (Some(la), Some(ra)) =>
+                      Some[expr](Cmp(EqOp(), la, ra, sp))
+                  }
               }
-            case UnaryOpF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case QuantifierF(_, _, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SomeWrapF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case TheF(_, _, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case FieldAccessF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case EnumAccessF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case IndexF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case CallF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case PrimeF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case PreF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case WithF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case IfF(_, _, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case LetF(_, _, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case LambdaF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case ConstructorF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetLiteralF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case MapLiteralF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, BinaryOpF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, UnaryOpF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, QuantifierF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, SomeWrapF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, TheF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, FieldAccessF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, EnumAccessF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, IndexF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, CallF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, PrimeF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, PreF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, WithF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, IfF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, LetF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, LambdaF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, ConstructorF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, SetLiteralF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, MapLiteralF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, SetComprehensionF(_, _, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, SeqLiteralF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, MatchesF(_, _, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, IntLitF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, FloatLitF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, StringLitF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, BoolLitF(_, _), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(_, NoneLitF(_), _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case SetComprehensionF(vara, IdentifierF(dnm, _), p, _) =>
-              (lower(enums, l), lower(enums, p)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(pa)) =>
-                  Some[expr](lower_set_comp_eq(enums, vara, dnm, la, pa, sp))
-              }
-            case SeqLiteralF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case MatchesF(_, _, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case IntLitF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case FloatLitF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case StringLitF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case BoolLitF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case NoneLitF(_) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
-            case IdentifierF(_, _) =>
-              (lower(enums, l), lower(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(la), Some(ra)) =>
-                  Some[expr](Cmp(EqOp(), la, ra, sp))
-              }
+            case Some(a) => Some[expr](a)
           }
         case BNeq() =>
           (lower(enums, l), lower(enums, r)) match {

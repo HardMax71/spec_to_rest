@@ -16,7 +16,8 @@ text \<open>\<open>eval_full\<close> is a reference semantics for the surface IR
 
 definition builtins_reserved ::
   "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> bool" where
-  "builtins_reserved fs ps \<equiv> (\<forall>nm. is_builtin_pred nm \<longrightarrow> lookup_callee fs ps nm = None)"
+  "builtins_reserved fs ps \<equiv> (\<forall>nm. is_builtin_pred nm \<longrightarrow> lookup_callee fs ps nm = None)
+                              \<and> lookup_callee fs ps (STR ''dom'') = None"
 
 fun quant_dom ::
   "schema \<Rightarrow> state \<Rightarrow> quant_kind_full \<Rightarrow> quantifier_binding_full list
@@ -58,6 +59,29 @@ lemma beq_comp_SetComp:
   "beq_comp op r = Some t \<Longrightarrow> \<exists>v d p sp. r = SetComprehensionF v d p sp"
   by (erule beq_comp.elims; auto split: expr_full.splits)
 
+definition dom_eq_domains ::
+  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> state \<Rightarrow> bin_op_full
+     \<Rightarrow> expr_full \<Rightarrow> expr_full \<Rightarrow> (ir_value list \<times> ir_value list) option" where
+  "dom_eq_domains fs ps st op l r =
+     (if op = BEq \<and> lookup_callee fs ps (STR ''dom'') = None
+      then (case (dom_arg l, dom_arg r) of
+              (Some rx, Some ry) \<Rightarrow>
+                (case (state_relation_domain st rx, state_relation_domain st ry) of
+                   (Some dx, Some dy) \<Rightarrow> Some (dx, dy) | _ \<Rightarrow> None)
+            | _ \<Rightarrow> None)
+      else None)"
+
+lemma dom_eq_domains_SomeD:
+  "dom_eq_domains fs ps st op l r = Some (dx, dy)
+     \<Longrightarrow> op = BEq \<and> lookup_callee fs ps (STR ''dom'') = None
+           \<and> (\<exists>rx. dom_arg l = Some rx \<and> state_relation_domain st rx = Some dx)
+           \<and> (\<exists>ry. dom_arg r = Some ry \<and> state_relation_domain st ry = Some dy)"
+  by (auto simp: dom_eq_domains_def split: bin_op_full.splits option.splits if_splits)
+
+lemma dom_eq_domains_non_BEq [simp]:
+  "op \<noteq> BEq \<Longrightarrow> dom_eq_domains fs ps st op l r = None"
+  by (simp add: dom_eq_domains_def)
+
 function (sequential) eval_full ::
   "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> nat
      \<Rightarrow> schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr_full \<Rightarrow> ir_value option"
@@ -83,7 +107,10 @@ and eval_full_forall ::
 | "eval_full fs ps fuel s st env (IdentifierF x _) =
      (case env_lookup env x of Some v \<Rightarrow> Some v | None \<Rightarrow> state_lookup_scalar st x)"
 | "eval_full fs ps fuel s st env (BinaryOpF op l r _) =
-     (case beq_comp op r of
+     (case dom_eq_domains fs ps st op l r of
+        Some (dx, dy) \<Rightarrow> Some (VBool (set dx = set dy))
+      | None \<Rightarrow>
+      (case beq_comp op r of
         Some (var, dnm, pred) \<Rightarrow>
           (if schema_lookup_enum s dnm \<noteq> None then None
            else case state_relation_domain st dnm of
@@ -98,7 +125,7 @@ and eval_full_forall ::
                 | None \<Rightarrow> None)
            | None \<Rightarrow> None)
       | None \<Rightarrow> eval_full_bin op (eval_full fs ps fuel s st env l)
-                               (eval_full fs ps fuel s st env r))"
+                               (eval_full fs ps fuel s st env r)))"
 | "eval_full fs ps fuel s st env (UnaryOpF op e _) =
      eval_full_un op (eval_full fs ps fuel s st env e)"
 | "eval_full fs ps fuel s st env (IfF c a b _) =
@@ -139,9 +166,11 @@ and eval_full_forall ::
                 | None \<Rightarrow>
                     (case args of
                        [arg] \<Rightarrow>
-                         (case eval_full fs ps fuel s st env arg of
-                            Some (VStr str) \<Rightarrow> Some (VBool (str_predicate nm str))
-                          | _ \<Rightarrow> None)
+                         (if is_builtin_pred nm
+                            then (case eval_full fs ps fuel s st env arg of
+                                    Some (VStr str) \<Rightarrow> Some (VBool (str_predicate nm str))
+                                  | _ \<Rightarrow> None)
+                            else None)
                      | _ \<Rightarrow> None))
            | _ \<Rightarrow> None))"
 | "eval_full fs ps fuel s st env (FloatLitF d _) =
@@ -261,6 +290,17 @@ lemma eval_full_list_length:
   "eval_full_list fs ps fuel s st env es = Some vs \<Longrightarrow> length vs = length es"
   by (induction es arbitrary: vs) (auto split: option.splits)
 
+lemma eval_full_dom_eq:
+  assumes "dom_eq_domains fs ps st op l r = Some (dx, dy)"
+  shows "eval_full fs ps fuel s st env (BinaryOpF op l r sp) = Some (VBool (set dx = set dy))"
+  using assms by simp
+
+lemma eval_full_dom_CallF:
+  assumes "lookup_callee fs ps (STR ''dom'') = None"
+  shows "eval_full fs ps fuel s st env
+           (CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF rel sp2] sp) = None"
+  using assms by (simp add: is_builtin_pred_def split: nat.splits)
+
 lemma quant_dom_qb_names:
   "quant_dom s st k bs = Some (var, dmv) \<Longrightarrow> qb_names bs = [var]"
   by (erule quant_dom.elims; auto split: option.splits)
@@ -291,11 +331,20 @@ proof (induction fs ps fuel s st env1 e and fs ps fuel s st env1 es and fs ps fu
   have al: "\<forall>y. string_in_list y (free_vars l) \<longrightarrow> env_lookup env y = env_lookup env2 y"
     using "6.prems" by auto
   show ?case
-  proof (cases "beq_comp bop r")
+  proof (cases "dom_eq_domains fs ps st bop l r")
+    case (Some p)
+    obtain dx dy where peq: "p = (dx, dy)" by (cases p)
+    hence de: "dom_eq_domains fs ps st bop l r = Some (dx, dy)" using Some by simp
+    show ?thesis by (simp only: eval_full_dom_eq[OF de])
+  next
+    case None
+    note deN = this
+    show ?thesis
+    proof (cases "beq_comp bop r")
     case None
     have ar: "\<forall>y. string_in_list y (free_vars r) \<longrightarrow> env_lookup env y = env_lookup env2 y"
       using "6.prems" by auto
-    show ?thesis using "6.IH"(1)[OF None al] "6.IH"(2)[OF None ar] None by simp
+    show ?thesis using "6.IH"(1)[OF deN None al] "6.IH"(2)[OF deN None ar] deN None by simp
   next
     case (Some t)
     obtain var dnm pred where teq: "t = (var, dnm, pred)" by (cases t)
@@ -305,31 +354,32 @@ proof (induction fs ps fuel s st env1 e and fs ps fuel s st env1 es and fs ps fu
     show ?thesis
     proof (cases "schema_lookup_enum s dnm")
       case (Some d)
-      thus ?thesis using bc by simp
+      thus ?thesis using bc deN by simp
     next
       case None
       have enr: "\<not> schema_lookup_enum s dnm \<noteq> None" using None by simp
       show ?thesis
       proof (cases "state_relation_domain st dnm")
         case None
-        thus ?thesis using bc enr by simp
+        thus ?thesis using bc enr deN by simp
       next
         case (Some dvs)
         note srd = this
         have ethe: "eval_full_the fs ps fuel s st env var dvs pred = eval_full_the fs ps fuel s st env2 var dvs pred"
-          using "6.IH"(3)[OF bc refl refl enr srd apred] .
+          using "6.IH"(3)[OF deN bc refl refl enr srd apred] .
         show ?thesis
         proof (cases "eval_full_the fs ps fuel s st env var dvs pred")
           case None
-          thus ?thesis using bc enr srd ethe by simp
+          thus ?thesis using bc enr srd ethe deN by simp
         next
           case (Some ms)
           note etm = this
           have el: "eval_full fs ps fuel s st env l = eval_full fs ps fuel s st env2 l"
-            using "6.IH"(4)[OF bc refl refl enr srd etm al] .
-          show ?thesis using bc enr srd ethe el by (simp split: option.split ir_value.split)
+            using "6.IH"(4)[OF deN bc refl refl enr srd etm al] .
+          show ?thesis using bc enr srd ethe el deN by (simp split: option.split ir_value.split)
         qed
       qed
+    qed
     qed
   qed
 next
@@ -454,10 +504,17 @@ next
           show ?thesis
           proof (cases as)
             case Nil
-            have "eval_full fs ps fuel s st env a = eval_full fs ps fuel s st env2 a"
-              using "15.IH" Suc idc None ac Nil agr by (auto simp: env_lookup_def)
-            then show ?thesis using Suc idc None ac Nil
-              by (auto split: option.splits ir_value.splits)
+            show ?thesis
+            proof (cases "is_builtin_pred nm")
+              case True
+              have "eval_full fs ps fuel s st env a = eval_full fs ps fuel s st env2 a"
+                using "15.IH" Suc idc None ac Nil agr True by (auto simp: env_lookup_def)
+              then show ?thesis using Suc idc None ac Nil True
+                by (auto split: option.splits ir_value.splits)
+            next
+              case False
+              thus ?thesis using Suc idc None ac Nil by simp
+            qed
           next
             case (Cons b bs)
             then show ?thesis using Suc idc None ac by simp
@@ -721,14 +778,23 @@ proof (induction fs ps fuel1 s st env e and fs ps fuel1 s st env es and fs ps fu
   case (6 fs ps fuel1 s st env bop l r sp fuel2)
   have cfl: "\<not> list_ex is_call_full (allSubexprs l)" using "6.prems" by (auto simp: list_ex_iff)
   show ?case
-  proof (cases "beq_comp bop r")
+  proof (cases "dom_eq_domains fs ps st bop l r")
+    case (Some p)
+    obtain dx dy where peq: "p = (dx, dy)" by (cases p)
+    hence de: "dom_eq_domains fs ps st bop l r = Some (dx, dy)" using Some by simp
+    show ?thesis by (simp only: eval_full_dom_eq[OF de])
+  next
+    case None
+    note deN = this
+    show ?thesis
+    proof (cases "beq_comp bop r")
     case None
     have cfr: "\<not> list_ex is_call_full (allSubexprs r)" using "6.prems" by (auto simp: list_ex_iff)
     have "eval_full fs ps fuel1 s st env l = eval_full fs ps fuel2 s st env l"
-      using "6.IH"(1)[OF None cfl] .
+      using "6.IH"(1)[OF deN None cfl] .
     moreover have "eval_full fs ps fuel1 s st env r = eval_full fs ps fuel2 s st env r"
-      using "6.IH"(2)[OF None cfr] .
-    ultimately show ?thesis using None by simp
+      using "6.IH"(2)[OF deN None cfr] .
+    ultimately show ?thesis using deN None by simp
   next
     case (Some t)
     obtain var dnm pred where teq: "t = (var, dnm, pred)" by (cases t)
@@ -738,31 +804,32 @@ proof (induction fs ps fuel1 s st env e and fs ps fuel1 s st env es and fs ps fu
     show ?thesis
     proof (cases "schema_lookup_enum s dnm")
       case (Some d)
-      thus ?thesis using bc by simp
+      thus ?thesis using bc deN by simp
     next
       case None
       have enr: "\<not> schema_lookup_enum s dnm \<noteq> None" using None by simp
       show ?thesis
       proof (cases "state_relation_domain st dnm")
         case None
-        thus ?thesis using bc enr by simp
+        thus ?thesis using bc enr deN by simp
       next
         case (Some dvs)
         note srd = this
         have ethe: "eval_full_the fs ps fuel1 s st env var dvs pred = eval_full_the fs ps fuel2 s st env var dvs pred"
-          using "6.IH"(3)[OF bc refl refl enr srd cfp] .
+          using "6.IH"(3)[OF deN bc refl refl enr srd cfp] .
         show ?thesis
         proof (cases "eval_full_the fs ps fuel1 s st env var dvs pred")
           case None
-          thus ?thesis using bc enr srd ethe by simp
+          thus ?thesis using bc enr srd ethe deN by simp
         next
           case (Some ms)
           note etm = this
           have el: "eval_full fs ps fuel1 s st env l = eval_full fs ps fuel2 s st env l"
-            using "6.IH"(4)[OF bc refl refl enr srd etm cfl] .
-          show ?thesis using bc enr srd ethe el by (simp split: option.split ir_value.split)
+            using "6.IH"(4)[OF deN bc refl refl enr srd etm cfl] .
+          show ?thesis using bc enr srd ethe el deN by (simp split: option.split ir_value.split)
         qed
       qed
+    qed
     qed
   qed
 next
@@ -1034,6 +1101,20 @@ lemma inline_calls_peelRelationRefFull:
      \<Longrightarrow> peelRelationRefFull (inline_calls fs ps base) = Some rel"
   by (cases base rule: peelRelationRefFull.cases) (auto simp: identNameFull_inline_calls)
 
+lemma dom_arg_inline_Some:
+  assumes "lookup_callee fs ps (STR ''dom'') = None" and "dom_arg e = Some x"
+  shows "dom_arg (inline_calls fs ps e) = Some x"
+proof -
+  obtain sp1 sp2 sp where e: "e = CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF x sp2] sp"
+    using dom_arg_SomeD[OF assms(2)] by blast
+  have "List.find (\<lambda>f. fncName f = STR ''dom'') fs = None"
+       "List.find (\<lambda>q. prdName q = STR ''dom'') ps = None"
+    using assms(1) by (auto simp: lookup_callee_def split: option.splits)
+  hence "inline_calls fs ps e = CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF x sp2] sp"
+    using e by simp
+  thus ?thesis by simp
+qed
+
 lemma inline_calls_eval_full:
   "eval_full fs ps fuel s st env e = Some w
      \<Longrightarrow> eval_full fs ps fuel s st env (inline_calls fs ps e) = Some w"
@@ -1053,22 +1134,56 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the_eval_full_forall.induct)
   case (6 fs ps fuel s st env bop l r sp w)
   show ?case
-  proof (cases "beq_comp bop r")
+  proof (cases "dom_eq_domains fs ps st bop l r")
+    case (Some p)
+    obtain dx dy where peq: "p = (dx, dy)" by (cases p)
+    hence de: "dom_eq_domains fs ps st bop l r = Some (dx, dy)" using Some by simp
+    from dom_eq_domains_SomeD[OF de] have f0: "bop = BEq"
+        and f1: "lookup_callee fs ps (STR ''dom'') = None"
+        and "\<exists>rx. dom_arg l = Some rx \<and> state_relation_domain st rx = Some dx"
+        and "\<exists>ry. dom_arg r = Some ry \<and> state_relation_domain st ry = Some dy" by auto
+    then obtain rx ry where f2: "dom_arg l = Some rx" and f2d: "state_relation_domain st rx = Some dx"
+        and f3: "dom_arg r = Some ry" and f3d: "state_relation_domain st ry = Some dy" by auto
+    have dei: "dom_eq_domains fs ps st bop (inline_calls fs ps l) (inline_calls fs ps r) = Some (dx, dy)"
+      using f0 f1 dom_arg_inline_Some[OF f1 f2] dom_arg_inline_Some[OF f1 f3] f2d f3d
+      by (simp add: dom_eq_domains_def)
+    have inlBin: "inline_calls fs ps (BinaryOpF bop l r sp)
+                    = BinaryOpF bop (inline_calls fs ps l) (inline_calls fs ps r) sp" by simp
+    show ?thesis using "6.prems"[unfolded eval_full_dom_eq[OF de]]
+      unfolding inlBin eval_full_dom_eq[OF dei] by simp
+  next
+    case None
+    note deN = this
+    show ?thesis
+    proof (cases "beq_comp bop r")
     case None
     have g: "eval_full_bin bop (eval_full fs ps fuel s st env l)
                (eval_full fs ps fuel s st env r) = Some w"
-      using "6.prems" None by simp
+      using "6.prems" deN None by simp
     obtain vl vr where l_s: "eval_full fs ps fuel s st env l = Some vl"
       and r_s: "eval_full fs ps fuel s st env r = Some vr"
       using eval_full_bin_someD[OF g] by blast
     have il: "eval_full fs ps fuel s st env (inline_calls fs ps l) = Some vl"
-      using "6.IH"(1)[OF None l_s] .
+      using "6.IH"(1)[OF deN None l_s] .
     have ir: "eval_full fs ps fuel s st env (inline_calls fs ps r) = Some vr"
-      using "6.IH"(2)[OF None r_s] .
+      using "6.IH"(2)[OF deN None r_s] .
+    have deiN: "dom_eq_domains fs ps st bop (inline_calls fs ps l) (inline_calls fs ps r) = None"
+    proof (cases "dom_eq_domains fs ps st bop (inline_calls fs ps l) (inline_calls fs ps r)")
+      case (Some q)
+      obtain dx dy where "q = (dx, dy)" by (cases q)
+      with Some have sq: "dom_eq_domains fs ps st bop (inline_calls fs ps l) (inline_calls fs ps r) = Some (dx, dy)" by simp
+      from dom_eq_domains_SomeD[OF sq] obtain rx where lkn: "lookup_callee fs ps (STR ''dom'') = None"
+        and da: "dom_arg (inline_calls fs ps l) = Some rx" by auto
+      obtain a b c where "inline_calls fs ps l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
+        using dom_arg_SomeD[OF da] by blast
+      hence "eval_full fs ps fuel s st env (inline_calls fs ps l) = None"
+        using eval_full_dom_CallF[OF lkn] by simp
+      thus ?thesis using il by simp
+    qed simp
     show ?thesis
     proof (cases "beq_comp bop (inline_calls fs ps r)")
       case None
-      thus ?thesis using il ir g l_s r_s by simp
+      thus ?thesis using il ir g l_s r_s deiN by simp
     next
       case (Some t')
       obtain v d p sp' where "inline_calls fs ps r = SetComprehensionF v d p sp'"
@@ -1082,7 +1197,14 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     have bc: "beq_comp bop r = Some (var, dnm, pred)" using Some teq by simp
     have bci: "beq_comp bop (inline_calls fs ps r) = Some (var, dnm, inline_calls fs ps pred)"
       using beq_comp_inline_Some[OF bc] .
-    from "6.prems" bc obtain dvs ms xs where
+    have deiN: "dom_eq_domains fs ps st bop (inline_calls fs ps l) (inline_calls fs ps r) = None"
+    proof -
+      obtain v' d' p' s' where "inline_calls fs ps r = SetComprehensionF v' d' p' s'"
+        using beq_comp_SetComp[OF bci] by blast
+      hence "dom_arg (inline_calls fs ps r) = None" by simp
+      thus ?thesis by (simp add: dom_eq_domains_def split: option.splits prod.splits)
+    qed
+    from "6.prems" deN bc obtain dvs ms xs where
         enr: "\<not> schema_lookup_enum s dnm \<noteq> None"
         and srd: "state_relation_domain st dnm = Some dvs"
         and etm: "eval_full_the fs ps fuel s st env var dvs pred = Some ms"
@@ -1091,10 +1213,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         and weq: "w = VBool (set xs = set ms)"
       by (auto split: option.splits ir_value.splits if_splits)
     have ethe: "eval_full_the fs ps fuel s st env var dvs (inline_calls fs ps pred) = Some ms"
-      using "6.IH"(3)[OF bc refl refl enr srd etm] .
+      using "6.IH"(3)[OF deN bc refl refl enr srd etm] .
     have el: "eval_full fs ps fuel s st env (inline_calls fs ps l) = Some (VSet xs)"
-      using "6.IH"(4)[OF bc refl refl enr srd etm els] .
-    show ?thesis using bci enr srd ethe el lag weq by simp
+      using "6.IH"(4)[OF deN bc refl refl enr srd etm els] .
+    show ?thesis using bci enr srd ethe el lag weq deiN by simp
+    qed
   qed
 next
   case (7 fs ps fuel s st env uop e sp w)
@@ -1180,17 +1303,17 @@ next
   show ?case
   proof (cases "lookup_callee fs ps nm")
     case None
-    obtain arg str where aeq: "args = [arg]"
+    obtain arg str where aeq: "args = [arg]" and bip: "is_builtin_pred nm"
         and ea: "eval_full fs ps fuel s st env arg = Some (VStr str)"
         and w_eq: "w = VBool (str_predicate nm str)"
       using "15.prems" fuel idc None
-      by (auto split: option.splits list.splits ir_value.splits)
+      by (auto split: option.splits list.splits ir_value.splits if_splits)
     have ea': "eval_full fs ps fuel s st env (inline_calls fs ps arg) = Some (VStr str)"
-      using "15.IH" fuel idc None aeq ea by (auto split: if_splits)
+      using "15.IH" fuel idc None aeq ea bip by (auto split: if_splits)
     have inl: "inline_calls fs ps (CallF callee args sp)
                  = CallF callee [inline_calls fs ps arg] sp"
       using idc None aeq by (auto simp: lookup_callee_def split: option.splits)
-    show ?thesis using inl ea' w_eq fuel idc None aeq
+    show ?thesis using inl ea' w_eq fuel idc None aeq bip
       by (simp split: option.splits ir_value.splits)
   next
     case (Some pb)
