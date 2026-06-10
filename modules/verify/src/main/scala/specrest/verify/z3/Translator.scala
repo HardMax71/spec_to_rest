@@ -627,7 +627,7 @@ object Translator:
 
   def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
-    val out = translate_full(enums, expr) match
+    val out = translate_full_direct(enums, expr) match
       case Some(smtTerm) => encodeFromSmtTerm(ctx, smtTerm, env)
       case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)

@@ -13,6 +13,7 @@ session SpecRest_Core in core = HOL +
     LowerMeaning
     Translate
     TranslateFullDef
+    TranslateDirect
 
 session SpecRest_Soundness in soundness = SpecRest_Core +
   options [document = false, threads = 0]

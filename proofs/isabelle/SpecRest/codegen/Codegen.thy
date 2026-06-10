@@ -6,6 +6,7 @@ theory Codegen
     SpecRest_Core.IR_Analysis
     SpecRest_Core.IR_Lower
     SpecRest_Core.TranslateFullDef
+    SpecRest_Core.TranslateDirect
     TopoSort
     Schema
     MigrationOps
@@ -127,6 +128,7 @@ code_printing
 export_code
     translate
     translate_full
+    translate_full_direct
     eval
     smtEval
     isLitFull

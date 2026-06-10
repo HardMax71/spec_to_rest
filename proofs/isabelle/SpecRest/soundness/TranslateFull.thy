@@ -1,5 +1,9 @@
 theory TranslateFull
-  imports Preservation_Lower SpecRest_Core.LowerMeaning SpecRest_Core.TranslateFullDef
+  imports
+    Preservation_Lower
+    SpecRest_Core.LowerMeaning
+    SpecRest_Core.TranslateFullDef
+    SpecRest_Core.TranslateDirect
 begin
 
 text \<open>Stage 2 of the IR unification (#391): a total, fail-closed
@@ -50,5 +54,35 @@ proof -
     by (rule translate_full_soundness[OF assms(4) t assms(2,3) assms(5)])
   ultimately show ?thesis ..
 qed
+
+text \<open>Stage 4 of the IR unification (#391): a direct surface-to-SMT translator
+  \<open>translate_full_direct\<close> that maps \<open>expr_full\<close> to \<open>smt_term option\<close> in one pass,
+  without materialising the verified-subset \<open>expr\<close> tree. The fusion lemma
+  \<open>translate_full_direct_eq\<close> (proven in \<open>TranslateDirect\<close>) establishes it equals
+  the \<open>lower\<close>-then-\<open>translate\<close> composition, so soundness is inherited from
+  \<open>translate_full_soundness\<close> rather than re-proven.\<close>
+
+lemma translate_full_direct_eq_translate_full:
+  "translate_full_direct enums e = translate_full enums e"
+  by (simp add: translate_full_def translate_full_direct_eq)
+
+theorem translate_full_direct_soundness:
+  assumes ef: "eval_full fs ps fuel s st env e = Some v"
+      and tf: "translate_full_direct enums e = Some t"
+      and ew: "enums_wf s enums"
+      and nc: "no_cmp_var e"
+      and br: "builtins_reserved fs ps"
+  shows "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
+proof -
+  from tf have "translate_full enums e = Some t"
+    by (simp add: translate_full_direct_eq_translate_full)
+  thus ?thesis using translate_full_soundness[OF ef _ ew nc br] by simp
+qed
+
+lemma translate_full_direct_wf_some:
+  assumes "wf_z3 e"
+  shows "\<exists>t. translate_full_direct enums e = Some t"
+  using translate_full_wf_some[OF assms]
+  by (simp add: translate_full_direct_eq_translate_full)
 
 end
