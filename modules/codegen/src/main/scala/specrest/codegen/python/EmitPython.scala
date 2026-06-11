@@ -463,9 +463,9 @@ object EmitPython:
     base.toMap
 
   private def resolveAliasToPython(
-      typeExpr: type_expr_full,
+      typeExpr: type_expr,
       base: Map[String, String],
-      aliasesByName: Map[String, type_alias_decl_full],
+      aliasesByName: Map[String, type_alias_decl],
       visited: Set[String]
   ): Option[String] = typeExpr match
     case NamedTypeF(name, _) =>
@@ -480,7 +480,7 @@ object EmitPython:
     case _ => None
 
   private def pythonTypeForParam(
-      typeExpr: type_expr_full,
+      typeExpr: type_expr,
       typeLookup: Map[String, String]
   ): String =
     typeExpr match

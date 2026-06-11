@@ -78,7 +78,7 @@ object Strategies:
       case _ => None
     .toMap
 
-  def expressionFor(t: type_expr_full, ir: ServiceIRFull): StrategyExpr =
+  def expressionFor(t: type_expr, ir: ServiceIRFull): StrategyExpr =
     expressionFor(
       t,
       ir,
@@ -88,7 +88,7 @@ object Strategies:
     )
 
   def expressionFor(
-      t: type_expr_full,
+      t: type_expr,
       ir: ServiceIRFull,
       ctx: StrategyCtx,
       overrides: TestStrategyOverrides,
@@ -120,7 +120,7 @@ object Strategies:
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
   private def bareExpression(
-      t: type_expr_full,
+      t: type_expr,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategyExpr = t match
@@ -159,7 +159,7 @@ object Strategies:
     b.functionName(typeName)
 
   private def specForAlias(
-      alias: type_alias_decl_full,
+      alias: type_alias_decl,
       ir: ServiceIRFull,
       overrides: Map[String, StrategyImport],
       b: StrategyBackend
@@ -183,7 +183,7 @@ object Strategies:
         )
 
   private def specForEntity(
-      entity: entity_decl_full,
+      entity: entity_decl,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategySpec =
@@ -207,15 +207,15 @@ object Strategies:
     )
 
   private def jsonStrategyForField(
-      f: field_decl_full,
+      f: field_decl,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategyExpr =
     jsonStrategyForType(fldType(f), fldDefault(f), ir, b)
 
   private def jsonStrategyForType(
-      t: type_expr_full,
-      constraint: Option[expr_full],
+      t: type_expr,
+      constraint: Option[expr],
       ir: ServiceIRFull,
       b: StrategyBackend
   ): StrategyExpr = t match
@@ -260,7 +260,7 @@ object Strategies:
     case RelationTypeF(_, _, _, _) => StrategyExpr.Skip("RelationType field not seedable")
 
   private def specForEnum(
-      decl: enum_decl_full,
+      decl: enum_decl,
       overrides: Map[String, StrategyImport],
       b: StrategyBackend
   ): StrategySpec =
@@ -282,7 +282,7 @@ object Strategies:
         )
 
   private def renderAlias(
-      alias: type_alias_decl_full,
+      alias: type_alias_decl,
       ir: ServiceIRFull,
       b: StrategyBackend
   ): (String, List[String]) =
@@ -298,7 +298,7 @@ object Strategies:
           case StrategyExpr.Code(t) => (t, Nil)
           case StrategyExpr.Skip(r) => (b.nothing, List(r))
 
-  private def collectIntConstraint(c: Option[expr_full]): (int_constraint, List[String]) =
+  private def collectIntConstraint(c: Option[expr]): (int_constraint, List[String]) =
     c match
       case None    => (emptyIntConstraint, Nil)
       case Some(e) => walkIntConstraint(e)
@@ -308,7 +308,7 @@ object Strategies:
   // here against the service IR: inline arity-1 matches predicates as regexes,
   // surface other arity-1 predicates as filter helpers, and drop them from skips.
   private def collectStringConstraint(
-      c: Option[expr_full],
+      c: Option[expr],
       ir: ServiceIRFull
   ): (string_constraint, List[String]) =
     c match

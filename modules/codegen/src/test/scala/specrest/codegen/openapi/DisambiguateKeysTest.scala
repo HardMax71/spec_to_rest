@@ -9,9 +9,9 @@ import specrest.ir.generated.SpecRestGenerated.*
 object DisambiguateKeysTest:
   private def n(i: Int): nat                = Nata(BigInt(i))
   private def ident(s: String): IdentifierF = IdentifierF(s, None)
-  private def call(name: String, arg: expr_full): CallF =
+  private def call(name: String, arg: expr): CallF =
     CallF(ident(name), List(arg), None)
-  private val dummyArg: expr_full = BoolLitF(true, None)
+  private val dummyArg: expr = BoolLitF(true, None)
 
 class DisambiguateKeysTest extends CatsEffectSuite:
 
@@ -74,7 +74,7 @@ class DisambiguateKeysTest extends CatsEffectSuite:
 
   // -- parseTemporalBody --
 
-  List[(String, expr_full, temporal_body)](
+  List[(String, expr, temporal_body)](
     ("always", call("always", dummyArg), TbAlways(dummyArg)),
     ("eventually", call("eventually", dummyArg), TbEventually(dummyArg)),
     ("fairness", call("fairness", dummyArg), TbFairness(dummyArg)),

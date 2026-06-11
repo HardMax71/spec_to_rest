@@ -12,21 +12,21 @@ private type AlloyLabel = boundary.Label[Either[VerifyError.AlloyTranslator, Not
 private def failAlloy(msg: String)(using AlloyLabel): Nothing =
   boundary.break(Left(VerifyError.AlloyTranslator(msg)))
 
-extension (e: expr_full) private def spanOpt: Option[span_t] = spanOf(e)
+extension (e: expr) private def spanOpt: Option[span_t] = spanOf(e)
 
 object Translator:
 
   final private case class Ctx(
-      ir: service_ir_full,
-      stateFields: Map[String, type_expr_full],
-      inputFields: Map[String, type_expr_full] = Map.empty,
+      ir: service_ir,
+      stateFields: Map[String, type_expr],
+      inputFields: Map[String, type_expr] = Map.empty,
       currentStateSig: String = "State",
       postStateSig: String = "State",
       boundVars: Set[String] = Set.empty
   )
 
   def translateGlobal(
-      ir: service_ir_full,
+      ir: service_ir,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -48,8 +48,8 @@ object Translator:
   final case class TemporalTranslation(kind: TemporalKind, module: AlloyModule)
 
   def translateTemporal(
-      ir: service_ir_full,
-      decl: temporal_decl_full,
+      ir: service_ir,
+      decl: temporal_decl,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, TemporalTranslation]] =
     IO.delay {
@@ -89,8 +89,8 @@ object Translator:
     }
 
   def translateOperationRequires(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: service_ir,
+      op: operation_decl,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -107,8 +107,8 @@ object Translator:
     }
 
   def translateOperationEnabled(
-      ir: service_ir_full,
-      op: operation_decl_full,
+      ir: service_ir,
+      op: operation_decl,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -124,13 +124,13 @@ object Translator:
         ))
     }
 
-  private def buildCtxWithInputs(ir: service_ir_full, op: operation_decl_full): Ctx =
+  private def buildCtxWithInputs(ir: service_ir, op: operation_decl): Ctx =
     val stateFields = irStateFields(ir)
       .map(sf => stfName(sf) -> stfType(sf))
     val inputFields = operInputs(op).map(p => prmName(p) -> prmType(p))
     Ctx(ir, stateFields.toMap, inputFields.toMap)
 
-  private def invariantFacts(ctx: Ctx, ir: service_ir_full)(using AlloyLabel): List[AlloyFact] =
+  private def invariantFacts(ctx: Ctx, ir: service_ir)(using AlloyLabel): List[AlloyFact] =
     svcInvariants(ir).zipWithIndex.map { case (inv, i) =>
       AlloyFact(
         Some(invName(inv).getOrElse(s"inv_$i")),
@@ -140,9 +140,9 @@ object Translator:
     }
 
   def translateOperationPreservation(
-      ir: service_ir_full,
-      op: operation_decl_full,
-      inv: invariant_decl_full,
+      ir: service_ir,
+      op: operation_decl,
+      inv: invariant_decl,
       scope: Int
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
@@ -212,10 +212,10 @@ object Translator:
   private def buildPreservationSigs(ctx: Ctx)(using AlloyLabel): List[AlloySig] =
     runLiftedSigBuild(ctx, includeStatePost = true)
 
-  private def primedStateFields(ensures: List[expr_full]): Set[String] =
+  private def primedStateFields(ensures: List[expr]): Set[String] =
     collectPrimedIdentifiers(ensures).toSet
 
-  private def buildCtx(ir: service_ir_full): Ctx =
+  private def buildCtx(ir: service_ir): Ctx =
     val stateFields = irStateFields(ir)
       .map(sf => stfName(sf) -> stfType(sf))
     Ctx(ir, stateFields.toMap)
@@ -230,7 +230,7 @@ object Translator:
       ctx.inputFields.toList
     )
 
-  private def renderExpr(ctx: Ctx, e: expr_full)(using AlloyLabel): String = e match
+  private def renderExpr(ctx: Ctx, e: expr)(using AlloyLabel): String = e match
     case BinaryOpF(op, l, r, _) => renderBinaryOp(ctx, op, l, r)
     case UnaryOpF(op, x, _) =>
       alloyUnopShape(op) match
@@ -271,7 +271,7 @@ object Translator:
     case other =>
       failAlloy(s"Alloy translator does not support expression: ${other.getClass.getSimpleName}")
 
-  private def renderBinaryOp(ctx: Ctx, op: bin_op_full, l: expr_full, r: expr_full)(using
+  private def renderBinaryOp(ctx: Ctx, op: bin_op, l: expr, r: expr)(using
       AlloyLabel
   ): String =
     val lr = renderExpr(ctx, l)
@@ -316,7 +316,7 @@ object Translator:
         s"($guard)$joiner($bodyInner)"
     s"($keyword $bindings | $body)"
 
-  private def buildBinding(ctx: Ctx, b: quantifier_binding_full)(using
+  private def buildBinding(ctx: Ctx, b: quantifier_binding)(using
       AlloyLabel
   ): (String, Option[String]) =
     qbdCollection(b) match
@@ -341,7 +341,7 @@ object Translator:
       case _ =>
         (s"${qbdVar(b)}: ${renderExpr(ctx, qbdCollection(b))}", None)
 
-  private def domainSigName(ctx: Ctx, e: expr_full)(using AlloyLabel): String =
+  private def domainSigName(ctx: Ctx, e: expr)(using AlloyLabel): String =
     SpecRestGenerated.domainSigNameAlloy(
       e,
       ctx.stateFields.toList,
@@ -355,7 +355,7 @@ object Translator:
           "powerset binder domain must be an identifier referring to an entity or set-typed state"
         )
 
-  private def renderCall(ctx: Ctx, callee: expr_full, args: List[expr_full])(using
+  private def renderCall(ctx: Ctx, callee: expr, args: List[expr])(using
       AlloyLabel
   ): String =
     callee match

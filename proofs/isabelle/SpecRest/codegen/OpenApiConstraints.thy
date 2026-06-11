@@ -160,7 +160,7 @@ text \<open>Length bounds are non-negative integers — \<open>BGt\<close> colla
   (length is always integer-valued), \<open>BLt 0\<close> yields no bound.\<close>
 
 definition applyLengthBoundOpenApi ::
-  "bin_op_full \<Rightarrow> int \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
+  "bin_op \<Rightarrow> int \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
 where
   "applyLengthBoundOpenApi op n bounds = (
     if n < 0 then bounds
@@ -178,7 +178,7 @@ text \<open>Numeric bounds preserve the inclusive/exclusive distinction — JSON
   treats \<open>minimum\<close> and \<open>exclusiveMinimum\<close> as distinct annotations.\<close>
 
 definition applyNumericBoundOpenApi ::
-  "bin_op_full \<Rightarrow> decimal_lit \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
+  "bin_op \<Rightarrow> decimal_lit \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
 where
   "applyNumericBoundOpenApi op d bounds = (case op of
        BGe \<Rightarrow> withMinimum (tightenDecMin (minimumOf bounds) d) bounds
@@ -195,7 +195,7 @@ text \<open>Atom dispatch. The \<open>decomposeAtom\<close> recognizer covers in
   numeric depending on whether the LHS is a length-of-value expression).\<close>
 
 definition applyFloatAtomOpenApi ::
-  "expr_full \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
+  "expr \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
 where
   "applyFloatAtomOpenApi atom bounds = (case atom of
        BinaryOpF op lhs (FloatLitF v _) _ \<Rightarrow>
@@ -212,7 +212,7 @@ where
      | _ \<Rightarrow> bounds)"
 
 definition applyAtomOpenApi ::
-  "expr_full \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
+  "expr \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
 where
   "applyAtomOpenApi atom bounds = (case decomposeAtom atom of
        RaMatches pat \<Rightarrow> withPattern (Some pat) bounds
@@ -221,7 +221,7 @@ where
      | _ \<Rightarrow> applyFloatAtomOpenApi atom bounds)"
 
 definition visitConstraintOpenApi ::
-  "expr_full \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
+  "expr \<Rightarrow> openapi_bounds \<Rightarrow> openapi_bounds"
 where
   "visitConstraintOpenApi e bounds =
      foldl (\<lambda>acc atom. applyAtomOpenApi atom acc) bounds (flattenAnd e)"

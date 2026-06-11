@@ -6,7 +6,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object UndefinedRef extends LintPass:
   val code = "L02"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: service_ir): List[LintDiagnostic] =
     val out         = List.newBuilder[LintDiagnostic]
     val stateFields = irStateFieldNames(ir).toSet
     val entityNames = svcEntities(ir).map(entName).toSet
@@ -37,7 +37,7 @@ object UndefinedRef extends LintPass:
         )
       }
 
-    def check(expr: expr_full, scope: Set[String]): Unit =
+    def check(expr: expr, scope: Set[String]): Unit =
       emit(walkUndefinedExpr(expr, scope.toList))
 
     for op <- svcOperations(ir) do

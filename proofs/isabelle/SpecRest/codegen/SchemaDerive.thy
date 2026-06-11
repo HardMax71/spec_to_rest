@@ -1,5 +1,5 @@
 theory SchemaDerive
-  imports Schema MigrationOps SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.IR_Lower SchemaTraversal
+  imports Schema MigrationOps SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SchemaTraversal
 begin
 
 text \<open>Pure utility lifts from \<open>specrest.convention.Schema\<close>. The bulk of
@@ -26,7 +26,7 @@ where
      then STR ''BIGINT''
      else sql_type)"
 
-definition sqlOp :: "bin_op_full \<Rightarrow> String.literal option" where
+definition sqlOp :: "bin_op \<Rightarrow> String.literal option" where
   "sqlOp op = (case op of
        BGt \<Rightarrow> Some (STR ''>'')
      | BLt \<Rightarrow> Some (STR ''<'')
@@ -44,7 +44,7 @@ definition aggregateForName :: "String.literal \<Rightarrow> trigger_aggregate o
     else if name = STR ''max'' then Some MaxAgg
     else None)"
 
-definition lambdaProjection :: "expr_full \<Rightarrow> String.literal option" where
+definition lambdaProjection :: "expr \<Rightarrow> String.literal option" where
   "lambdaProjection body = (case body of
        FieldAccessF (IdentifierF _ _) field _ \<Rightarrow> Some field
      | _ \<Rightarrow> None)"
@@ -61,7 +61,7 @@ datatype aggregate_call = AggregateCall
   trigger_aggregate          \<comment> \<open>aggregate\<close>
   "String.literal option"    \<comment> \<open>source_projection\<close>
 
-definition decodeAggregateCall :: "expr_full \<Rightarrow> aggregate_call option" where
+definition decodeAggregateCall :: "expr \<Rightarrow> aggregate_call option" where
   "decodeAggregateCall call = (case call of
        CallF (IdentifierF name _) args _ \<Rightarrow>
          (case aggregateForName name of
@@ -87,7 +87,7 @@ definition decodeAggregateCall :: "expr_full \<Rightarrow> aggregate_call option
                     | _ \<Rightarrow> None)))
      | _ \<Rightarrow> None)"
 
-definition detectAggregateInvariant :: "expr_full \<Rightarrow> detected_aggregate option" where
+definition detectAggregateInvariant :: "expr \<Rightarrow> detected_aggregate option" where
   "detectAggregateInvariant invExpr = (case invExpr of
        BinaryOpF BEq lhs rhs _ \<Rightarrow>
          (case extractFieldName lhs of
@@ -150,7 +150,7 @@ text \<open>\<open>stripOptions\<close> (from SchemaTraversal) peels all outer \
   \<open>OptionTypeF\<close>.\<close>
 
 fun classifyColumnTypeAux ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
+  "nat \<Rightarrow> type_expr \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
     \<Rightarrow> String.literal list \<Rightarrow> bool \<Rightarrow> classified_column"
 where
   "classifyColumnTypeAux 0 _ _ _ _ _ nullable = ClassifiedColumn CkUnknown nullable"
@@ -184,7 +184,7 @@ where
        | OptionTypeF _ _   \<Rightarrow> ClassifiedColumn CkUnknown nullable')"
 
 definition classifyColumnType ::
-  "type_expr_full \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
+  "type_expr \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
     \<Rightarrow> classified_column"
 where
   "classifyColumnType ty am em entityNames =
@@ -219,7 +219,7 @@ datatype trigger_candidate = TriggerCandidate
   "String.literal option"    \<comment> \<open>source_field (Scala turns into column name)\<close>
 
 definition collectionElementEntityName ::
-  "type_expr_full \<Rightarrow> String.literal option"
+  "type_expr \<Rightarrow> String.literal option"
 where
   "collectionElementEntityName ty = (case ty of
        SetTypeF (NamedTypeF n _) _ \<Rightarrow> Some n
@@ -234,8 +234,8 @@ where
      in case matching of [fk] \<Rightarrow> Some (fkColumn fk) | _ \<Rightarrow> None)"
 
 definition validateTrigger ::
-  "table_spec \<Rightarrow> field_decl_full list \<Rightarrow>
-    table_spec \<Rightarrow> entity_decl_full \<Rightarrow>
+  "table_spec \<Rightarrow> field_decl list \<Rightarrow>
+    table_spec \<Rightarrow> entity_decl \<Rightarrow>
     String.literal \<Rightarrow> trigger_aggregate \<Rightarrow> String.literal option \<Rightarrow>
     trigger_candidate option"
 where
@@ -282,7 +282,7 @@ text \<open>Partial-index convention extraction. Lifts the pure parts of
     derived indexes onto a \<open>table_spec\<close>, preserving the other fields.\<close>
 
 primrec extractPartialIndexRuleOpt ::
-  "convention_rule_full \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
+  "convention_rule \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
 where
   "extractPartialIndexRuleOpt (ConventionRuleFull target prop colOpt value _) =
      (if prop = STR ''partial_index''
@@ -292,7 +292,7 @@ where
       else None)"
 
 definition extractPartialIndexRules ::
-  "conventions_decl_full option \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
+  "conventions_decl option \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
 where
   "extractPartialIndexRules conv = (case conv of
        None \<Rightarrow> []
@@ -331,10 +331,10 @@ text \<open>Invariant-atom classifier for entity \<open>CHECK\<close> constraint
 
 datatype invariant_check_class =
     IcSkip
-  | IcInClause "String.literal" "expr_full list"
-  | IcCompare "String.literal" bin_op_full expr_full
+  | IcInClause "String.literal" "expr list"
+  | IcCompare "String.literal" bin_op expr
 
-definition classifyInvariantAtom :: "expr_full \<Rightarrow> invariant_check_class" where
+definition classifyInvariantAtom :: "expr \<Rightarrow> invariant_check_class" where
   "classifyInvariantAtom e = (case e of
       BinaryOpF op left rhs _ \<Rightarrow>
         (case extractFieldName left of
@@ -377,12 +377,12 @@ text \<open>Column-CHECK atom classifier for \<open>Schema.applyAtom\<close>. Mi
 datatype column_check_class =
     CcSkip
   | CcRegexMatch "String.literal"               \<comment> \<open>regex pattern\<close>
-  | CcLenCompare bin_op_full int                \<comment> \<open>op, n\<close>
-  | CcValueCompare bin_op_full int              \<comment> \<open>op, n\<close>
-  | CcLenLitCompare bin_op_full expr_full       \<comment> \<open>op, literal\<close>
-  | CcValueLitCompare bin_op_full expr_full     \<comment> \<open>op, literal\<close>
+  | CcLenCompare bin_op int                \<comment> \<open>op, n\<close>
+  | CcValueCompare bin_op int              \<comment> \<open>op, n\<close>
+  | CcLenLitCompare bin_op expr       \<comment> \<open>op, literal\<close>
+  | CcValueLitCompare bin_op expr     \<comment> \<open>op, literal\<close>
 
-definition classifyColumnCheckAtom :: "expr_full \<Rightarrow> column_check_class" where
+definition classifyColumnCheckAtom :: "expr \<Rightarrow> column_check_class" where
   "classifyColumnCheckAtom e =
      (case decomposeAtom e of
         RaMatches pat \<Rightarrow> CcRegexMatch pat

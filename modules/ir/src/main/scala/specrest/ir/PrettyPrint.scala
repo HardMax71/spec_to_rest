@@ -4,9 +4,9 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object PrettyPrint:
 
-  def expr(e: expr_full): String = render(e)
+  def expr(e: expr): String = render(e)
 
-  private def render(e: expr_full): String = e match
+  private def render(e: expr): String = e match
     case IntLitF(v, _) =>
       v match
         case b => b.toString
@@ -68,7 +68,7 @@ object PrettyPrint:
     case SeqLiteralF(es, _) => es.map(render).mkString("[", ", ", "]")
     case MatchesF(x, p, _)  => s"(${render(x)} matches /$p/)"
 
-  private def binOpToken(op: bin_op_full): String = op match
+  private def binOpToken(op: bin_op): String = op match
     case _: BAnd       => "and"
     case _: BOr        => "or"
     case _: BImplies   => "=>"
@@ -90,13 +90,13 @@ object PrettyPrint:
     case _: BMul       => "*"
     case _: BDiv       => "/"
 
-  private def unOpToken(op: un_op_full): String = op match
+  private def unOpToken(op: un_op): String = op match
     case _: UNot         => "not"
     case _: UNegate      => "-"
     case _: UCardinality => "#"
     case _: UPower       => "^"
 
-  private def quantToken(q: quant_kind_full): String = q match
+  private def quantToken(q: quant_kind): String = q match
     case _: QAll    => "all"
     case _: QSome   => "some"
     case _: QNo     => "no"

@@ -66,8 +66,13 @@ object SmtLib:
     script.sorts.exists(containsMap) ||
       script.funcs.exists(f => f.argSorts.exists(containsMap) || containsMap(f.resultSort))
 
+  private val simpleSymbol = "[a-zA-Z~!@$%^&*_+=<>.?/-][a-zA-Z0-9~!@$%^&*_+=<>.?/-]*".r
+
+  private def sym(name: String): String =
+    if simpleSymbol.matches(name) then name else s"|$name|"
+
   def renderExpr(e: Z3Expr): String = e match
-    case Z3Expr.Var(name, _, _) => name
+    case Z3Expr.Var(name, _, _) => sym(name)
     case Z3Expr.App(func, args, _) =>
       if args.isEmpty then func
       else s"($func ${args.map(renderExpr).mkString(" ")})"
@@ -97,7 +102,7 @@ object SmtLib:
       s"(${ArithOp.token(op)} ${args.map(renderExpr).mkString(" ")})"
     case Z3Expr.Quantifier(q, bindings, body, _) =>
       val qTok    = if q == QKind.ForAll then "forall" else "exists"
-      val binders = bindings.map(b => s"(${b.name} ${renderSort(b.sort)})").mkString(" ")
+      val binders = bindings.map(b => s"(${sym(b.name)} ${renderSort(b.sort)})").mkString(" ")
       s"($qTok ($binders) ${renderExpr(body)})"
     case Z3Expr.EmptySet(elemSort, _) => emptySetLit(elemSort)
     case Z3Expr.SetLit(elemSort, members, _) =>

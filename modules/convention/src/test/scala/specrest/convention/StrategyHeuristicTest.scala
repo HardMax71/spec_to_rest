@@ -7,11 +7,11 @@ class StrategyHeuristicTest extends CatsEffectSuite:
 
   private given CanEqual[synthesis_strategy, synthesis_strategy] = CanEqual.derived
 
-  private val state                    = List("store")
-  private def id(n: String): expr_full = IdentifierF(n, None)
-  private def lit(n: Int): expr_full   = IntLitF(BigInt(n), None)
+  private val state               = List("store")
+  private def id(n: String): expr = IdentifierF(n, None)
+  private def lit(n: Int): expr   = IntLitF(BigInt(n), None)
 
-  private def strategyOf(ensures: List[expr_full]): synthesis_strategy =
+  private def strategyOf(ensures: List[expr]): synthesis_strategy =
     classifyStrategy(ensures, state, Nil)
 
   test("empty ensures → LlmSynthesis (regression: no longer vacuously DirectEmit)"):

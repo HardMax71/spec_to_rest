@@ -6,15 +6,15 @@ import specrest.ir.generated.SpecRestGenerated.*
 class ClassifyOpenApiNamedTypeTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF = NamedTypeF(t, None)
-  private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
+  private def alias(name: String, target: type_expr): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
   private def enumD(name: String, values: List[String]): EnumDeclFull =
     EnumDeclFull(name, values, None)
 
   private def classify(
       name: String,
-      aliases: List[(String, type_alias_decl_full)] = Nil,
-      enums: List[(String, enum_decl_full)] = Nil,
+      aliases: List[(String, type_alias_decl)] = Nil,
+      enums: List[(String, enum_decl)] = Nil,
       entityNames: List[String] = Nil
   ): openapi_named_kind =
     classifyOpenApiNamedType(name, aliases, enums, entityNames)

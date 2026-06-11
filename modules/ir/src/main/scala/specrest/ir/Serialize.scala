@@ -6,7 +6,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 object Serialize:
 
-  given Encoder[bin_op_full] = Encoder.encodeString.contramap:
+  given Encoder[bin_op] = Encoder.encodeString.contramap:
     case _: BAnd       => "and"
     case _: BOr        => "or"
     case _: BImplies   => "implies"
@@ -28,7 +28,7 @@ object Serialize:
     case _: BMul       => "*"
     case _: BDiv       => "/"
 
-  given Decoder[bin_op_full] = Decoder.decodeString.emap:
+  given Decoder[bin_op] = Decoder.decodeString.emap:
     case "and"       => Right(BAnd())
     case "or"        => Right(BOr())
     case "implies"   => Right(BImplies())
@@ -51,26 +51,26 @@ object Serialize:
     case "/"         => Right(BDiv())
     case other       => Left(s"Unknown BinOp: $other")
 
-  given Encoder[un_op_full] = Encoder.encodeString.contramap:
+  given Encoder[un_op] = Encoder.encodeString.contramap:
     case _: UNot         => "not"
     case _: UNegate      => "negate"
     case _: UCardinality => "cardinality"
     case _: UPower       => "power"
 
-  given Decoder[un_op_full] = Decoder.decodeString.emap:
+  given Decoder[un_op] = Decoder.decodeString.emap:
     case "not"         => Right(UNot())
     case "negate"      => Right(UNegate())
     case "cardinality" => Right(UCardinality())
     case "power"       => Right(UPower())
     case other         => Left(s"Unknown UnOp: $other")
 
-  given Encoder[quant_kind_full] = Encoder.encodeString.contramap:
+  given Encoder[quant_kind] = Encoder.encodeString.contramap:
     case _: QAll    => "all"
     case _: QSome   => "some"
     case _: QNo     => "no"
     case _: QExists => "exists"
 
-  given Decoder[quant_kind_full] = Decoder.decodeString.emap:
+  given Decoder[quant_kind] = Decoder.decodeString.emap:
     case "all"    => Right(QAll())
     case "some"   => Right(QSome())
     case "no"     => Right(QNo())
@@ -90,11 +90,11 @@ object Serialize:
     case "set"  => Right(MultSet())
     case other  => Left(s"Unknown Multiplicity: $other")
 
-  given Encoder[binding_kind_full] = Encoder.encodeString.contramap:
+  given Encoder[binding_kind] = Encoder.encodeString.contramap:
     case _: BkIn    => "in"
     case _: BkColon => "colon"
 
-  given Decoder[binding_kind_full] = Decoder.decodeString.emap:
+  given Decoder[binding_kind] = Decoder.decodeString.emap:
     case "in"    => Right(BkIn())
     case "colon" => Right(BkColon())
     case other   => Left(s"Unknown BindingKind: $other")
@@ -127,8 +127,8 @@ object Serialize:
         )
   )
 
-  private lazy val typeExprEncoder: Encoder[type_expr_full] = Encoder.AsObject.instance: te =>
-    given Encoder[type_expr_full] = typeExprEncoder
+  private lazy val typeExprEncoder: Encoder[type_expr] = Encoder.AsObject.instance: te =>
+    given Encoder[type_expr] = typeExprEncoder
     te match
       case NamedTypeF(n, sp) =>
         kindObj("NamedType", "name" -> n.asJson).addSpan(sp)
@@ -148,8 +148,8 @@ object Serialize:
           "toType"       -> t.asJson
         ).addSpan(sp)
 
-  private lazy val typeExprDecoder: Decoder[type_expr_full] = Decoder.instance: c =>
-    given Decoder[type_expr_full] = typeExprDecoder
+  private lazy val typeExprDecoder: Decoder[type_expr] = Decoder.instance: c =>
+    given Decoder[type_expr] = typeExprDecoder
     c.get[String]("kind").flatMap:
       case "NamedType" =>
         for
@@ -158,39 +158,39 @@ object Serialize:
         yield NamedTypeF(n, sp)
       case "SetType" =>
         for
-          e  <- c.get[type_expr_full]("elementType")
+          e  <- c.get[type_expr]("elementType")
           sp <- c.getOrElse[Option[span_t]]("span")(None)
         yield SetTypeF(e, sp)
       case "MapType" =>
         for
-          k  <- c.get[type_expr_full]("keyType")
-          v  <- c.get[type_expr_full]("valueType")
+          k  <- c.get[type_expr]("keyType")
+          v  <- c.get[type_expr]("valueType")
           sp <- c.getOrElse[Option[span_t]]("span")(None)
         yield MapTypeF(k, v, sp)
       case "SeqType" =>
         for
-          e  <- c.get[type_expr_full]("elementType")
+          e  <- c.get[type_expr]("elementType")
           sp <- c.getOrElse[Option[span_t]]("span")(None)
         yield SeqTypeF(e, sp)
       case "OptionType" =>
         for
-          i  <- c.get[type_expr_full]("innerType")
+          i  <- c.get[type_expr]("innerType")
           sp <- c.getOrElse[Option[span_t]]("span")(None)
         yield OptionTypeF(i, sp)
       case "RelationType" =>
         for
-          f  <- c.get[type_expr_full]("fromType")
+          f  <- c.get[type_expr]("fromType")
           m  <- c.get[multiplicity]("multiplicity")
-          t  <- c.get[type_expr_full]("toType")
+          t  <- c.get[type_expr]("toType")
           sp <- c.getOrElse[Option[span_t]]("span")(None)
         yield RelationTypeF(f, m, t, sp)
       case other => Left(DecodingFailure(s"Unknown TypeExpr kind: $other", c.history))
 
-  given Encoder[type_expr_full] = typeExprEncoder
-  given Decoder[type_expr_full] = typeExprDecoder
+  given Encoder[type_expr] = typeExprEncoder
+  given Decoder[type_expr] = typeExprDecoder
 
-  private lazy val exprEncoder: Encoder[expr_full] = Encoder.AsObject.instance: e =>
-    given Encoder[expr_full] = exprEncoder
+  private lazy val exprEncoder: Encoder[expr] = Encoder.AsObject.instance: e =>
+    given Encoder[expr] = exprEncoder
     e match
       case BinaryOpF(op, l, r, sp) =>
         kindObj(
@@ -263,133 +263,133 @@ object Serialize:
       case NoneLitF(sp)       => kindObj("NoneLit").addSpan(sp)
       case IdentifierF(n, sp) => kindObj("Identifier", "name" -> n.asJson).addSpan(sp)
 
-  private lazy val exprDecoder: Decoder[expr_full] = Decoder.instance: c =>
-    given Decoder[expr_full] = exprDecoder
-    val sp                   = c.getOrElse[Option[span_t]]("span")(None)
+  private lazy val exprDecoder: Decoder[expr] = Decoder.instance: c =>
+    given Decoder[expr] = exprDecoder
+    val sp              = c.getOrElse[Option[span_t]]("span")(None)
     c.get[String]("kind").flatMap:
       case "BinaryOp" =>
         for
-          op <- c.get[bin_op_full]("op")
-          l  <- c.get[expr_full]("left")
-          r  <- c.get[expr_full]("right")
+          op <- c.get[bin_op]("op")
+          l  <- c.get[expr]("left")
+          r  <- c.get[expr]("right")
           s  <- sp
         yield BinaryOpF(op, l, r, s)
       case "UnaryOp" =>
         for
-          op <- c.get[un_op_full]("op")
-          a  <- c.get[expr_full]("operand")
+          op <- c.get[un_op]("op")
+          a  <- c.get[expr]("operand")
           s  <- sp
         yield UnaryOpF(op, a, s)
       case "Quantifier" =>
         for
-          q  <- c.get[quant_kind_full]("quantifier")
-          bs <- c.get[List[quantifier_binding_full]]("bindings")
-          b  <- c.get[expr_full]("body")
+          q  <- c.get[quant_kind]("quantifier")
+          bs <- c.get[List[quantifier_binding]]("bindings")
+          b  <- c.get[expr]("body")
           s  <- sp
         yield QuantifierF(q, bs, b, s)
       case "SomeWrap" =>
         for
-          e <- c.get[expr_full]("expr")
+          e <- c.get[expr]("expr")
           s <- sp
         yield SomeWrapF(e, s)
       case "The" =>
         for
           v <- c.get[String]("variable")
-          d <- c.get[expr_full]("domain")
-          b <- c.get[expr_full]("body")
+          d <- c.get[expr]("domain")
+          b <- c.get[expr]("body")
           s <- sp
         yield TheF(v, d, b, s)
       case "FieldAccess" =>
         for
-          b <- c.get[expr_full]("base")
+          b <- c.get[expr]("base")
           f <- c.get[String]("field")
           s <- sp
         yield FieldAccessF(b, f, s)
       case "EnumAccess" =>
         for
-          b <- c.get[expr_full]("base")
+          b <- c.get[expr]("base")
           m <- c.get[String]("member")
           s <- sp
         yield EnumAccessF(b, m, s)
       case "Index" =>
         for
-          b <- c.get[expr_full]("base")
-          i <- c.get[expr_full]("index")
+          b <- c.get[expr]("base")
+          i <- c.get[expr]("index")
           s <- sp
         yield IndexF(b, i, s)
       case "Call" =>
         for
-          callee <- c.get[expr_full]("callee")
-          args   <- c.get[List[expr_full]]("args")
+          callee <- c.get[expr]("callee")
+          args   <- c.get[List[expr]]("args")
           s      <- sp
         yield CallF(callee, args, s)
       case "Prime" =>
         for
-          e <- c.get[expr_full]("expr")
+          e <- c.get[expr]("expr")
           s <- sp
         yield PrimeF(e, s)
       case "Pre" =>
         for
-          e <- c.get[expr_full]("expr")
+          e <- c.get[expr]("expr")
           s <- sp
         yield PreF(e, s)
       case "With" =>
         for
-          b <- c.get[expr_full]("base")
-          u <- c.get[List[field_assign_full]]("updates")
+          b <- c.get[expr]("base")
+          u <- c.get[List[field_assign]]("updates")
           s <- sp
         yield WithF(b, u, s)
       case "If" =>
         for
-          cond <- c.get[expr_full]("condition")
-          t    <- c.get[expr_full]("then")
-          e    <- c.get[expr_full]("else_")
+          cond <- c.get[expr]("condition")
+          t    <- c.get[expr]("then")
+          e    <- c.get[expr]("else_")
           s    <- sp
         yield IfF(cond, t, e, s)
       case "Let" =>
         for
           v <- c.get[String]("variable")
-          x <- c.get[expr_full]("value")
-          b <- c.get[expr_full]("body")
+          x <- c.get[expr]("value")
+          b <- c.get[expr]("body")
           s <- sp
         yield LetF(v, x, b, s)
       case "Lambda" =>
         for
           p <- c.get[String]("param")
-          b <- c.get[expr_full]("body")
+          b <- c.get[expr]("body")
           s <- sp
         yield LambdaF(p, b, s)
       case "Constructor" =>
         for
           tn <- c.get[String]("typeName")
-          f  <- c.get[List[field_assign_full]]("fields")
+          f  <- c.get[List[field_assign]]("fields")
           s  <- sp
         yield ConstructorF(tn, f, s)
       case "SetLiteral" =>
         for
-          es <- c.get[List[expr_full]]("elements")
+          es <- c.get[List[expr]]("elements")
           s  <- sp
         yield SetLiteralF(es, s)
       case "MapLiteral" =>
         for
-          en <- c.get[List[map_entry_full]]("entries")
+          en <- c.get[List[map_entry]]("entries")
           s  <- sp
         yield MapLiteralF(en, s)
       case "SetComprehension" =>
         for
           v <- c.get[String]("variable")
-          d <- c.get[expr_full]("domain")
-          p <- c.get[expr_full]("predicate")
+          d <- c.get[expr]("domain")
+          p <- c.get[expr]("predicate")
           s <- sp
         yield SetComprehensionF(v, d, p, s)
       case "SeqLiteral" =>
         for
-          es <- c.get[List[expr_full]]("elements")
+          es <- c.get[List[expr]]("elements")
           s  <- sp
         yield SeqLiteralF(es, s)
       case "Matches" =>
         for
-          e <- c.get[expr_full]("expr")
+          e <- c.get[expr]("expr")
           p <- c.get[String]("pattern")
           s <- sp
         yield MatchesF(e, p, s)
@@ -403,32 +403,32 @@ object Serialize:
       case "Identifier" => for n <- c.get[String]("name"); s <- sp yield IdentifierF(n, s)
       case other        => Left(DecodingFailure(s"Unknown Expr kind: $other", c.history))
 
-  given Encoder[expr_full] = exprEncoder
-  given Decoder[expr_full] = exprDecoder
+  given Encoder[expr] = exprEncoder
+  given Decoder[expr] = exprDecoder
 
-  given fieldAssignEnc: Encoder[field_assign_full] = Encoder.AsObject.instance:
+  given fieldAssignEnc: Encoder[field_assign] = Encoder.AsObject.instance:
     case FieldAssignFull(n, v, sp) =>
       JsonObject("name" -> n.asJson, "value" -> v.asJson).addSpan(sp)
 
-  given fieldAssignDec: Decoder[field_assign_full] = Decoder.instance: c =>
+  given fieldAssignDec: Decoder[field_assign] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      v  <- c.get[expr_full]("value")
+      v  <- c.get[expr]("value")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield FieldAssignFull(n, v, sp)
 
-  given mapEntryEnc: Encoder[map_entry_full] = Encoder.AsObject.instance:
+  given mapEntryEnc: Encoder[map_entry] = Encoder.AsObject.instance:
     case MapEntryFull(k, v, sp) =>
       JsonObject("key" -> k.asJson, "value" -> v.asJson).addSpan(sp)
 
-  given mapEntryDec: Decoder[map_entry_full] = Decoder.instance: c =>
+  given mapEntryDec: Decoder[map_entry] = Decoder.instance: c =>
     for
-      k  <- c.get[expr_full]("key")
-      v  <- c.get[expr_full]("value")
+      k  <- c.get[expr]("key")
+      v  <- c.get[expr]("value")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield MapEntryFull(k, v, sp)
 
-  given quantBindingEnc: Encoder[quantifier_binding_full] = Encoder.AsObject.instance:
+  given quantBindingEnc: Encoder[quantifier_binding] = Encoder.AsObject.instance:
     case QuantifierBindingFull(v, d, bk, sp) =>
       JsonObject(
         "variable"    -> v.asJson,
@@ -436,15 +436,15 @@ object Serialize:
         "bindingKind" -> bk.asJson
       ).addSpan(sp)
 
-  given quantBindingDec: Decoder[quantifier_binding_full] = Decoder.instance: c =>
+  given quantBindingDec: Decoder[quantifier_binding] = Decoder.instance: c =>
     for
       v  <- c.get[String]("variable")
-      d  <- c.get[expr_full]("domain")
-      bk <- c.get[binding_kind_full]("bindingKind")
+      d  <- c.get[expr]("domain")
+      bk <- c.get[binding_kind]("bindingKind")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield QuantifierBindingFull(v, d, bk, sp)
 
-  given fieldDeclEnc: Encoder[field_decl_full] = Encoder.AsObject.instance:
+  given fieldDeclEnc: Encoder[field_decl] = Encoder.AsObject.instance:
     case FieldDeclFull(n, t, c, sp) =>
       kindObj(
         "Field",
@@ -453,15 +453,15 @@ object Serialize:
         "constraint" -> nullable(c)
       ).addSpan(sp)
 
-  given fieldDeclDec: Decoder[field_decl_full] = Decoder.instance: c =>
+  given fieldDeclDec: Decoder[field_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      t  <- c.get[type_expr_full]("typeExpr")
-      k  <- c.getOrElse[Option[expr_full]]("constraint")(None)
+      t  <- c.get[type_expr]("typeExpr")
+      k  <- c.getOrElse[Option[expr]]("constraint")(None)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield FieldDeclFull(n, t, k, sp)
 
-  given entityDeclEnc: Encoder[entity_decl_full] = Encoder.AsObject.instance:
+  given entityDeclEnc: Encoder[entity_decl] = Encoder.AsObject.instance:
     case EntityDeclFull(n, ex, f, i, sp) =>
       kindObj(
         "Entity",
@@ -471,27 +471,27 @@ object Serialize:
         "invariants" -> i.asJson
       ).addSpan(sp)
 
-  given entityDeclDec: Decoder[entity_decl_full] = Decoder.instance: c =>
+  given entityDeclDec: Decoder[entity_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
       ex <- c.getOrElse[Option[String]]("extends_")(None)
-      f  <- c.getOrElse[List[field_decl_full]]("fields")(Nil)
-      i  <- c.getOrElse[List[expr_full]]("invariants")(Nil)
+      f  <- c.getOrElse[List[field_decl]]("fields")(Nil)
+      i  <- c.getOrElse[List[expr]]("invariants")(Nil)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield EntityDeclFull(n, ex, f, i, sp)
 
-  given enumDeclEnc: Encoder[enum_decl_full] = Encoder.AsObject.instance:
+  given enumDeclEnc: Encoder[enum_decl] = Encoder.AsObject.instance:
     case EnumDeclFull(n, vs, sp) =>
       kindObj("Enum", "name" -> n.asJson, "values" -> vs.asJson).addSpan(sp)
 
-  given enumDeclDec: Decoder[enum_decl_full] = Decoder.instance: c =>
+  given enumDeclDec: Decoder[enum_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
       vs <- c.get[List[String]]("values")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield EnumDeclFull(n, vs, sp)
 
-  given typeAliasDeclEnc: Encoder[type_alias_decl_full] = Encoder.AsObject.instance:
+  given typeAliasDeclEnc: Encoder[type_alias_decl] = Encoder.AsObject.instance:
     case TypeAliasDeclFull(n, t, c, sp) =>
       kindObj(
         "TypeAlias",
@@ -500,47 +500,47 @@ object Serialize:
         "constraint" -> nullable(c)
       ).addSpan(sp)
 
-  given typeAliasDeclDec: Decoder[type_alias_decl_full] = Decoder.instance: c =>
+  given typeAliasDeclDec: Decoder[type_alias_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      t  <- c.get[type_expr_full]("typeExpr")
-      k  <- c.getOrElse[Option[expr_full]]("constraint")(None)
+      t  <- c.get[type_expr]("typeExpr")
+      k  <- c.getOrElse[Option[expr]]("constraint")(None)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield TypeAliasDeclFull(n, t, k, sp)
 
-  given stateFieldDeclEnc: Encoder[state_field_decl_full] = Encoder.AsObject.instance:
+  given stateFieldDeclEnc: Encoder[state_field_decl] = Encoder.AsObject.instance:
     case StateFieldDeclFull(n, t, sp) =>
       kindObj("StateField", "name" -> n.asJson, "typeExpr" -> t.asJson).addSpan(sp)
 
-  given stateFieldDeclDec: Decoder[state_field_decl_full] = Decoder.instance: c =>
+  given stateFieldDeclDec: Decoder[state_field_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      t  <- c.get[type_expr_full]("typeExpr")
+      t  <- c.get[type_expr]("typeExpr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield StateFieldDeclFull(n, t, sp)
 
-  given stateDeclEnc: Encoder[state_decl_full] = Encoder.AsObject.instance:
+  given stateDeclEnc: Encoder[state_decl] = Encoder.AsObject.instance:
     case StateDeclFull(f, sp) =>
       kindObj("State", "fields" -> f.asJson).addSpan(sp)
 
-  given stateDeclDec: Decoder[state_decl_full] = Decoder.instance: c =>
+  given stateDeclDec: Decoder[state_decl] = Decoder.instance: c =>
     for
-      f  <- c.get[List[state_field_decl_full]]("fields")
+      f  <- c.get[List[state_field_decl]]("fields")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield StateDeclFull(f, sp)
 
-  given paramDeclEnc: Encoder[param_decl_full] = Encoder.AsObject.instance:
+  given paramDeclEnc: Encoder[param_decl] = Encoder.AsObject.instance:
     case ParamDeclFull(n, t, sp) =>
       kindObj("Param", "name" -> n.asJson, "typeExpr" -> t.asJson).addSpan(sp)
 
-  given paramDeclDec: Decoder[param_decl_full] = Decoder.instance: c =>
+  given paramDeclDec: Decoder[param_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      t  <- c.get[type_expr_full]("typeExpr")
+      t  <- c.get[type_expr]("typeExpr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield ParamDeclFull(n, t, sp)
 
-  given operationDeclEnc: Encoder[operation_decl_full] = Encoder.AsObject.instance:
+  given operationDeclEnc: Encoder[operation_decl] = Encoder.AsObject.instance:
     case OperationDeclFull(n, i, o, r, e, sp) =>
       kindObj(
         "Operation",
@@ -551,17 +551,17 @@ object Serialize:
         "ensures"  -> e.asJson
       ).addSpan(sp)
 
-  given operationDeclDec: Decoder[operation_decl_full] = Decoder.instance: c =>
+  given operationDeclDec: Decoder[operation_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      i  <- c.getOrElse[List[param_decl_full]]("inputs")(Nil)
-      o  <- c.getOrElse[List[param_decl_full]]("outputs")(Nil)
-      r  <- c.getOrElse[List[expr_full]]("requires")(Nil)
-      e  <- c.getOrElse[List[expr_full]]("ensures")(Nil)
+      i  <- c.getOrElse[List[param_decl]]("inputs")(Nil)
+      o  <- c.getOrElse[List[param_decl]]("outputs")(Nil)
+      r  <- c.getOrElse[List[expr]]("requires")(Nil)
+      e  <- c.getOrElse[List[expr]]("ensures")(Nil)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield OperationDeclFull(n, i, o, r, e, sp)
 
-  given transitionRuleEnc: Encoder[transition_rule_full] = Encoder.AsObject.instance:
+  given transitionRuleEnc: Encoder[transition_rule] = Encoder.AsObject.instance:
     case TransitionRuleFull(f, t, v, g, sp) =>
       kindObj(
         "TransitionRule",
@@ -571,16 +571,16 @@ object Serialize:
         "guard" -> nullable(g)
       ).addSpan(sp)
 
-  given transitionRuleDec: Decoder[transition_rule_full] = Decoder.instance: c =>
+  given transitionRuleDec: Decoder[transition_rule] = Decoder.instance: c =>
     for
       f  <- c.get[String]("from")
       t  <- c.get[String]("to")
       v  <- c.get[String]("via")
-      g  <- c.getOrElse[Option[expr_full]]("guard")(None)
+      g  <- c.getOrElse[Option[expr]]("guard")(None)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield TransitionRuleFull(f, t, v, g, sp)
 
-  given transitionDeclEnc: Encoder[transition_decl_full] = Encoder.AsObject.instance:
+  given transitionDeclEnc: Encoder[transition_decl] = Encoder.AsObject.instance:
     case TransitionDeclFull(n, e, f, r, sp) =>
       kindObj(
         "Transition",
@@ -590,49 +590,49 @@ object Serialize:
         "rules"      -> r.asJson
       ).addSpan(sp)
 
-  given transitionDeclDec: Decoder[transition_decl_full] = Decoder.instance: c =>
+  given transitionDeclDec: Decoder[transition_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
       e  <- c.get[String]("entityName")
       f  <- c.get[String]("fieldName")
-      r  <- c.getOrElse[List[transition_rule_full]]("rules")(Nil)
+      r  <- c.getOrElse[List[transition_rule]]("rules")(Nil)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield TransitionDeclFull(n, e, f, r, sp)
 
-  given invariantDeclEnc: Encoder[invariant_decl_full] = Encoder.AsObject.instance:
+  given invariantDeclEnc: Encoder[invariant_decl] = Encoder.AsObject.instance:
     case InvariantDeclFull(n, e, sp) =>
       kindObj("Invariant", "name" -> nullable(n), "expr" -> e.asJson).addSpan(sp)
 
-  given invariantDeclDec: Decoder[invariant_decl_full] = Decoder.instance: c =>
+  given invariantDeclDec: Decoder[invariant_decl] = Decoder.instance: c =>
     for
       n  <- c.getOrElse[Option[String]]("name")(None)
-      e  <- c.get[expr_full]("expr")
+      e  <- c.get[expr]("expr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield InvariantDeclFull(n, e, sp)
 
-  given temporalDeclEnc: Encoder[temporal_decl_full] = Encoder.AsObject.instance:
+  given temporalDeclEnc: Encoder[temporal_decl] = Encoder.AsObject.instance:
     case TemporalDeclFull(n, b, sp) =>
       kindObj("Temporal", "name" -> n.asJson, "expr" -> synthTemporalExpr(b).asJson).addSpan(sp)
 
-  given temporalDeclDec: Decoder[temporal_decl_full] = Decoder.instance: c =>
+  given temporalDeclDec: Decoder[temporal_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      e  <- c.get[expr_full]("expr")
+      e  <- c.get[expr]("expr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield TemporalDeclFull(n, parseTemporalBody(e), sp)
 
-  given factDeclEnc: Encoder[fact_decl_full] = Encoder.AsObject.instance:
+  given factDeclEnc: Encoder[fact_decl] = Encoder.AsObject.instance:
     case FactDeclFull(n, e, sp) =>
       kindObj("Fact", "name" -> nullable(n), "expr" -> e.asJson).addSpan(sp)
 
-  given factDeclDec: Decoder[fact_decl_full] = Decoder.instance: c =>
+  given factDeclDec: Decoder[fact_decl] = Decoder.instance: c =>
     for
       n  <- c.getOrElse[Option[String]]("name")(None)
-      e  <- c.get[expr_full]("expr")
+      e  <- c.get[expr]("expr")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield FactDeclFull(n, e, sp)
 
-  given functionDeclEnc: Encoder[function_decl_full] = Encoder.AsObject.instance:
+  given functionDeclEnc: Encoder[function_decl] = Encoder.AsObject.instance:
     case FunctionDeclFull(n, p, r, b, sp) =>
       kindObj(
         "Function",
@@ -642,16 +642,16 @@ object Serialize:
         "body"       -> b.asJson
       ).addSpan(sp)
 
-  given functionDeclDec: Decoder[function_decl_full] = Decoder.instance: c =>
+  given functionDeclDec: Decoder[function_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      p  <- c.get[List[param_decl_full]]("params")
-      r  <- c.get[type_expr_full]("returnType")
-      b  <- c.get[expr_full]("body")
+      p  <- c.get[List[param_decl]]("params")
+      r  <- c.get[type_expr]("returnType")
+      b  <- c.get[expr]("body")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield FunctionDeclFull(n, p, r, b, sp)
 
-  given predicateDeclEnc: Encoder[predicate_decl_full] = Encoder.AsObject.instance:
+  given predicateDeclEnc: Encoder[predicate_decl] = Encoder.AsObject.instance:
     case PredicateDeclFull(n, p, b, sp) =>
       kindObj(
         "Predicate",
@@ -660,15 +660,15 @@ object Serialize:
         "body"   -> b.asJson
       ).addSpan(sp)
 
-  given predicateDeclDec: Decoder[predicate_decl_full] = Decoder.instance: c =>
+  given predicateDeclDec: Decoder[predicate_decl] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
-      p  <- c.get[List[param_decl_full]]("params")
-      b  <- c.get[expr_full]("body")
+      p  <- c.get[List[param_decl]]("params")
+      b  <- c.get[expr]("body")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield PredicateDeclFull(n, p, b, sp)
 
-  given conventionRuleEnc: Encoder[convention_rule_full] = Encoder.AsObject.instance:
+  given conventionRuleEnc: Encoder[convention_rule] = Encoder.AsObject.instance:
     case ConventionRuleFull(t, p, q, v, sp) =>
       kindObj(
         "ConventionRule",
@@ -678,26 +678,26 @@ object Serialize:
         "value"     -> synthConventionValue(v).asJson
       ).addSpan(sp)
 
-  given conventionRuleDec: Decoder[convention_rule_full] = Decoder.instance: c =>
+  given conventionRuleDec: Decoder[convention_rule] = Decoder.instance: c =>
     for
       t  <- c.get[String]("target")
       p  <- c.get[String]("property")
       q  <- c.getOrElse[Option[String]]("qualifier")(None)
-      v  <- c.get[expr_full]("value")
+      v  <- c.get[expr]("value")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield ConventionRuleFull(t, p, q, parseConventionValue(p, v), sp)
 
-  given conventionsDeclEnc: Encoder[conventions_decl_full] = Encoder.AsObject.instance:
+  given conventionsDeclEnc: Encoder[conventions_decl] = Encoder.AsObject.instance:
     case ConventionsDeclFull(rules, sp) =>
       kindObj("Conventions", "rules" -> rules.asJson).addSpan(sp)
 
-  given conventionsDeclDec: Decoder[conventions_decl_full] = Decoder.instance: c =>
+  given conventionsDeclDec: Decoder[conventions_decl] = Decoder.instance: c =>
     for
-      r  <- c.get[List[convention_rule_full]]("rules")
+      r  <- c.get[List[convention_rule]]("rules")
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield ConventionsDeclFull(r, sp)
 
-  given serviceIREnc: Encoder[service_ir_full] = Encoder.AsObject.instance:
+  given serviceIREnc: Encoder[service_ir] = Encoder.AsObject.instance:
     case ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, sp) =>
       kindObj(
         "Service",
@@ -717,29 +717,29 @@ object Serialize:
         "conventions" -> nullable(cv)
       ).addSpan(sp)
 
-  given serviceIRDec: Decoder[service_ir_full] = Decoder.instance: c =>
+  given serviceIRDec: Decoder[service_ir] = Decoder.instance: c =>
     for
       n  <- c.get[String]("name")
       im <- c.getOrElse[List[String]]("imports")(Nil)
-      en <- c.getOrElse[List[entity_decl_full]]("entities")(Nil)
-      es <- c.getOrElse[List[enum_decl_full]]("enums")(Nil)
-      ta <- c.getOrElse[List[type_alias_decl_full]]("typeAliases")(Nil)
-      st <- c.getOrElse[Option[state_decl_full]]("state")(None)
-      op <- c.getOrElse[List[operation_decl_full]]("operations")(Nil)
-      tr <- c.getOrElse[List[transition_decl_full]]("transitions")(Nil)
-      iv <- c.getOrElse[List[invariant_decl_full]]("invariants")(Nil)
-      tm <- c.getOrElse[List[temporal_decl_full]]("temporals")(Nil)
-      fa <- c.getOrElse[List[fact_decl_full]]("facts")(Nil)
-      fn <- c.getOrElse[List[function_decl_full]]("functions")(Nil)
-      pr <- c.getOrElse[List[predicate_decl_full]]("predicates")(Nil)
-      cv <- c.getOrElse[Option[conventions_decl_full]]("conventions")(None)
+      en <- c.getOrElse[List[entity_decl]]("entities")(Nil)
+      es <- c.getOrElse[List[enum_decl]]("enums")(Nil)
+      ta <- c.getOrElse[List[type_alias_decl]]("typeAliases")(Nil)
+      st <- c.getOrElse[Option[state_decl]]("state")(None)
+      op <- c.getOrElse[List[operation_decl]]("operations")(Nil)
+      tr <- c.getOrElse[List[transition_decl]]("transitions")(Nil)
+      iv <- c.getOrElse[List[invariant_decl]]("invariants")(Nil)
+      tm <- c.getOrElse[List[temporal_decl]]("temporals")(Nil)
+      fa <- c.getOrElse[List[fact_decl]]("facts")(Nil)
+      fn <- c.getOrElse[List[function_decl]]("functions")(Nil)
+      pr <- c.getOrElse[List[predicate_decl]]("predicates")(Nil)
+      cv <- c.getOrElse[Option[conventions_decl]]("conventions")(None)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, sp)
 
-  def toJson(ir: service_ir_full): Json = ir.asJson
+  def toJson(ir: service_ir): Json = ir.asJson
 
-  def toPrettyString(ir: service_ir_full): String =
+  def toPrettyString(ir: service_ir): String =
     ir.asJson.spaces2
 
-  def fromJson(s: String): Either[Error, service_ir_full] =
-    io.circe.parser.decode[service_ir_full](s)
+  def fromJson(s: String): Either[Error, service_ir] =
+    io.circe.parser.decode[service_ir](s)

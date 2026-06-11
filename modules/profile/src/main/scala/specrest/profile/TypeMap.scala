@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 final case class TypeContext(
     entityNames: Set[String],
     enumNames: Set[String],
-    aliasMap: Map[String, type_expr_full]
+    aliasMap: Map[String, type_expr]
 )
 
 object TypeMap:
@@ -88,7 +88,7 @@ object TypeMap:
   val TsPrimitives: Map[String, TypeMapping] =
     PrimitiveTable.map((k, _, _, ts) => k -> ts).toMap
 
-  def mapType(typeExpr: type_expr_full, profile: DeploymentProfile, ctx: TypeContext): MappedType =
+  def mapType(typeExpr: type_expr, profile: DeploymentProfile, ctx: TypeContext): MappedType =
     typeExpr match
       case NamedTypeF(name, _) => mapNamedType(name, profile, ctx)
       case OptionTypeF(inner, _) =>
@@ -189,9 +189,9 @@ object TypeMap:
       case _    => MappedType("str", "str", "Mapped[str]")
 
   def resolveTypeExpr(
-      typeExpr: type_expr_full,
-      aliasMap: Map[String, type_expr_full]
-  ): type_expr_full =
+      typeExpr: type_expr,
+      aliasMap: Map[String, type_expr]
+  ): type_expr =
     typeExpr match
       case NamedTypeF(n, _) =>
         aliasMap.get(n) match

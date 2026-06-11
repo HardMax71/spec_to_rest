@@ -112,18 +112,18 @@ class BackendTest extends CatsEffectSuite:
       unbackedStateFields = unbacked
     )
 
-  private def i1(n: Int): expr_full = IntLitF(BigInt(n), None)
-  private def pyText(e: expr_full, c: TestCtx): String = ExprToPython.translate(e, c) match
+  private def i1(n: Int): expr = IntLitF(BigInt(n), None)
+  private def pyText(e: expr, c: TestCtx): String = ExprToPython.translate(e, c) match
     case Translated.Emit(t)    => t
     case Translated.Skip(r, _) => s"<skip:$r>"
-  private def tsText(e: expr_full, c: TestCtx): String = TsExprBackend.translate(e, c) match
+  private def tsText(e: expr, c: TestCtx): String = TsExprBackend.translate(e, c) match
     case Translated.Emit(t)    => t
     case Translated.Skip(r, _) => s"<skip:$r>"
 
   List(
-    ("bool", (BoolLitF(true, None): expr_full), "True", "true"),
-    ("none", (NoneLitF(None): expr_full), "None", "null"),
-    ("empty-set", (SetLiteralF(Nil, None): expr_full), "set()", "new Set()")
+    ("bool", (BoolLitF(true, None): expr), "True", "true"),
+    ("none", (NoneLitF(None): expr), "None", "null"),
+    ("empty-set", (SetLiteralF(Nil, None): expr), "set()", "new Set()")
   ).foreach: (label, e, pyE, tsE) =>
     test(s"ExprBackend renders literal '$label' per-language"):
       assertEquals(pyText(e, ctx()), pyE)
@@ -168,7 +168,7 @@ class BackendTest extends CatsEffectSuite:
   test("every Builtins.all entry has a non-empty emission in every backend"):
     val c = ctx(inputs = Set("arg0", "arg1"))
     specrest.ir.Builtins.all.foreach: spec =>
-      val argIds = (0 until spec.arity).map(i => IdentifierF(s"arg$i", None): expr_full).toList
+      val argIds = (0 until spec.arity).map(i => IdentifierF(s"arg$i", None): expr).toList
       val callE  = CallF(IdentifierF(spec.name, None), argIds, None)
       // sum/2 needs a LambdaF (not a bare identifier) as its second arg — fix it up.
       val effective =
@@ -365,7 +365,7 @@ class BackendTest extends CatsEffectSuite:
 
   // ---- Go (go test + rapid) backend: same seam, third language ----
 
-  private def goText(e: expr_full, c: TestCtx): String = GoExprBackend.translate(e, c) match
+  private def goText(e: expr, c: TestCtx): String = GoExprBackend.translate(e, c) match
     case Translated.Emit(t)    => t
     case Translated.Skip(r, _) => s"<skip:$r>"
 

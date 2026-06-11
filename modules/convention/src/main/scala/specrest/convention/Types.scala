@@ -4,7 +4,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 final case class ParamSpec(
     name: String,
-    typeExpr: type_expr_full,
+    typeExpr: type_expr,
     required: Boolean
 )
 

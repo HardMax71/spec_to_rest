@@ -136,11 +136,11 @@ final case class OpenApiDocument(
 )
 
 final case class BuildContext(
-    aliasMap: Map[String, type_alias_decl_full],
-    enumMap: Map[String, enum_decl_full],
-    entityDecls: Map[String, entity_decl_full],
-    aliasAList: List[(String, type_alias_decl_full)],
-    enumAList: List[(String, enum_decl_full)],
+    aliasMap: Map[String, type_alias_decl],
+    enumMap: Map[String, enum_decl],
+    entityDecls: Map[String, entity_decl],
+    aliasAList: List[(String, type_alias_decl)],
+    enumAList: List[(String, enum_decl)],
     entityNamesList: List[String]
 )
 
@@ -151,8 +151,8 @@ final case class FieldSchema(schema: SchemaObject, nullable: Boolean)
 object Schema:
 
   def fieldToSchema(
-      typeExpr: type_expr_full,
-      constraint: Option[expr_full],
+      typeExpr: type_expr,
+      constraint: Option[expr],
       ctx: BuildContext
   ): FieldSchema =
     val (lifted, nullable) = specrest.ir.generated.SpecRestGenerated.fieldToSchema(
@@ -191,7 +191,7 @@ object Components:
 
   private def decorateFields(
       entity: ProfiledEntity,
-      decl: entity_decl_full,
+      decl: entity_decl,
       ctx: BuildContext
   ): List[(String, (schema_object, Boolean))] =
     val irFields = entFields(decl)
@@ -521,7 +521,7 @@ object OpenApi:
     if pairs.isEmpty then None
     else Some(scala.collection.immutable.ListMap.from(pairs))
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def buildTags(profiled: ProfiledService): List[TagObject] =

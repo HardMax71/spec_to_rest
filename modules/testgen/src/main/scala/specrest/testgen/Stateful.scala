@@ -29,14 +29,14 @@ object Stateful:
       bundleName: String,
       pyVarName: String,
       pkFieldName: String,
-      pkTypeExpr: type_expr_full
+      pkTypeExpr: type_expr
   )
 
   final private case class EntityBundles(
       entityName: String,
       pkFieldName: String,
-      pkTypeExpr: type_expr_full,
-      transition: Option[transition_decl_full],
+      pkTypeExpr: type_expr,
+      transition: Option[transition_decl],
       enumValues: List[String],
       bundles: List[BundleSpec],
       initialStatusByCreateOp: Map[String, String]
@@ -177,10 +177,10 @@ object Stateful:
               )
 
   private def perStatusBundlesFor(
-      entity: entity_decl_full,
+      entity: entity_decl,
       ir: ServiceIRFull,
       createOpNames: Set[String]
-  ): Option[(transition_decl_full, List[String], Map[String, String])] =
+  ): Option[(transition_decl, List[String], Map[String, String])] =
     val transitionsConcrete = svcTransitions(ir)
     val td = transitionsConcrete.find(t => trnEntity(t) == entName(entity)) match
       case Some(t) => t
@@ -214,13 +214,13 @@ object Stateful:
     if initialByOp.size != createDecls.size then None
     else Some((td, enumValues, initialByOp.toMap))
 
-  private def primaryKey(entity: entity_decl_full): Option[field_decl_full] =
+  private def primaryKey(entity: entity_decl): Option[field_decl] =
     val fields = entFields(entity)
     fields.find(f => fldName(f) == "id").orElse(fields.headOption)
 
   private def emitRules(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       entityBundles: List[EntityBundles]
   ): List[(Either[Unit, List[String]], List[TestSkip])] =
@@ -238,7 +238,7 @@ object Stateful:
 
   private def emitTransitionRules(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       eb: EntityBundles,
       entityBundles: List[EntityBundles]
@@ -258,9 +258,9 @@ object Stateful:
 
   private def buildTransitionMoveRule(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       eb: EntityBundles,
-      tr: transition_rule_full,
+      tr: transition_rule,
       pathParam: String
   ): (Either[Unit, List[String]], List[TestSkip]) =
     val fromBundle = eb.bundles.find(_.statusValue.contains(trlFrom(tr)))
@@ -291,7 +291,7 @@ object Stateful:
 
   private def buildTransitionMoveBlock(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       from: String,
       to: String,
       fromBundle: BundleSpec,
@@ -325,7 +325,7 @@ object Stateful:
 
   private def emitRule(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       entityBundles: List[EntityBundles]
   ): (Either[Unit, List[String]], List[TestSkip]) =
@@ -368,7 +368,7 @@ object Stateful:
 
   private def inferCreateRole(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       entityBundles: List[EntityBundles]
   ): (RuleRole, List[TestSkip]) =
     val isCreateLike = pop.kind match
@@ -401,7 +401,7 @@ object Stateful:
                   (RuleRole.Plain, List(skip))
 
   private def projectionForCreateOutput(
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       bundle: BundleSpec
   ): Option[String] =
     val outputs = operOutputs(opDecl)
@@ -419,7 +419,7 @@ object Stateful:
           )
 
   private def enumValuesForField(
-      field: field_decl_full,
+      field: field_decl,
       ir: ServiceIRFull
   ): Option[List[String]] =
     SpecRestGenerated.enumValuesForField(field, svcEnums(ir), svcTypeAliases(ir))
@@ -431,7 +431,7 @@ object Stateful:
   )
 
   private def recognizeStatusRestriction(
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull
   ): Option[StatusRestriction] =
     val stateFields = stateFieldNames(ir)
@@ -459,7 +459,7 @@ object Stateful:
       else Some(StatusRestriction(stateName, inputName, perField))
 
   private def fieldRestrictionConjunct(
-      c: expr_full,
+      c: expr,
       inputName: String,
       stateName: String
   ): Option[(String, Set[String])] =
@@ -476,7 +476,7 @@ object Stateful:
 
   private def bindForInput(
       paramName: String,
-      paramType: type_expr_full,
+      paramType: type_expr,
       pop: ProfiledOperation,
       ir: ServiceIRFull,
       entityBundles: List[EntityBundles],
@@ -540,7 +540,7 @@ object Stateful:
 
   private def buildRuleBlock(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       bindings: List[(String, InputBinding)],
       role: RuleRole,
       stateFields: Set[String]
@@ -619,7 +619,7 @@ object Stateful:
     (targetArg ++ paramArgs).mkString(", ")
 
   private def emitInvariant(
-      inv: invariant_decl_full,
+      inv: invariant_decl,
       idx: Int,
       ir: ServiceIRFull
   ): (Option[String], Option[TestSkip]) =
@@ -644,7 +644,7 @@ object Stateful:
         (Some(sb.toString), None)
 
   private def emitTemporal(
-      decl: temporal_decl_full,
+      decl: temporal_decl,
       ir: ServiceIRFull
   ): TemporalEmission =
     val ctx = invariantCtx(ir)
@@ -896,7 +896,7 @@ object Stateful:
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
 
-  private def operationSummary(op: operation_decl_full): String =
+  private def operationSummary(op: operation_decl): String =
     val req = operRequires(op)
       .filterNot(isTrueLit)
       .map(prettyOneLine)
@@ -909,7 +909,7 @@ object Stateful:
     if parts.isEmpty then operName(op) else s"${operName(op)}: ${parts.mkString(" | ")}"
 
   private def requiresIsSatisfiedByBundles(
-      e: expr_full,
+      e: expr,
       bundleInputs: Set[String],
       stateFields: Set[String]
   ): Boolean =
@@ -924,7 +924,7 @@ object Stateful:
         requiresIsSatisfiedByBundles(r, bundleInputs, stateFields)
       case _ => false
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def escapeDocstring(s: String): String =

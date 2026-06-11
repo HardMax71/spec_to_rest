@@ -65,8 +65,8 @@ final case class TestCtx(
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
-    userFunctions: Map[String, function_decl_full],
-    userPredicates: Map[String, predicate_decl_full],
+    userFunctions: Map[String, function_decl],
+    userPredicates: Map[String, predicate_decl],
     boundVars: Set[String],
     capture: CaptureMode,
     // The single output an endpoint returns as the bare response body (e.g. a `list`
@@ -102,7 +102,7 @@ final case class TestCtx(
 
 object TestCtx:
   def fromOperation(
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull,
       capture: CaptureMode,
       bareBodyOutput: Option[String] = None

@@ -10,7 +10,7 @@ text \<open>Pure decision predicates and IR walkers for the lint analyses in
 
 text \<open>\<open>L03 — MissingEnsures\<close>: trivial per-op predicate.\<close>
 
-fun operationMissingEnsures :: "operation_decl_full \<Rightarrow> bool" where
+fun operationMissingEnsures :: "operation_decl \<Rightarrow> bool" where
   "operationMissingEnsures (OperationDeclFull _ _ outputs _ ensures _) =
      (outputs \<noteq> [] \<and> ensures = [])"
 
@@ -20,18 +20,18 @@ text \<open>\<open>L05 — UnusedEntity\<close>: collect Identifier + Constructo
   start with uppercase and binders are lowercase, so the asymmetry is
   harmless).\<close>
 
-fun exprSelfNames :: "expr_full \<Rightarrow> String.literal list" where
+fun exprSelfNames :: "expr \<Rightarrow> String.literal list" where
   "exprSelfNames (IdentifierF n _)     = [n]"
 | "exprSelfNames (ConstructorF n _ _)  = [n]"
 | "exprSelfNames _                     = []"
 
-definition collectExprNames :: "expr_full \<Rightarrow> String.literal list" where
+definition collectExprNames :: "expr \<Rightarrow> String.literal list" where
   "collectExprNames e = concat (map exprSelfNames (allSubexprs e))"
 
 text \<open>Recursive type-name collector: every \<open>NamedTypeF\<close> name reachable
   through the type structure.\<close>
 
-fun collectTypeNames :: "type_expr_full \<Rightarrow> String.literal list" where
+fun collectTypeNames :: "type_expr \<Rightarrow> String.literal list" where
   "collectTypeNames (NamedTypeF n _)          = [n]"
 | "collectTypeNames (SetTypeF t _)            = collectTypeNames t"
 | "collectTypeNames (SeqTypeF t _)            = collectTypeNames t"
@@ -48,19 +48,19 @@ text \<open>\<open>L02 — UndefinedRef\<close>: walks an expression with a scop
   earlier bindings, matching the legacy Scala fold).\<close>
 
 function (sequential) walkUndefinedExpr ::
-  "expr_full \<Rightarrow> String.literal list
+  "expr \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_list ::
-  "expr_full list \<Rightarrow> String.literal list
+  "expr list \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_fields ::
-  "field_assign_full list \<Rightarrow> String.literal list
+  "field_assign list \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_entries ::
-  "map_entry_full list \<Rightarrow> String.literal list
+  "map_entry list \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 and walkUndefinedExpr_bindings ::
-  "quantifier_binding_full list \<Rightarrow> String.literal list
+  "quantifier_binding list \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> option_span) list"
 where
   "walkUndefinedExpr (IdentifierF n sp) scope =
@@ -148,22 +148,22 @@ text \<open>Call-callee collectors composed on top of \<open>allSubexprs\<close>
   \<open>collectCallNames\<close> applies a filter (used by CircularPredicate to
   restrict to known predicate/function names).\<close>
 
-fun callSelfAllNames :: "expr_full \<Rightarrow> String.literal list" where
+fun callSelfAllNames :: "expr \<Rightarrow> String.literal list" where
   "callSelfAllNames (CallF (IdentifierF n _) _ _) = [n]"
 | "callSelfAllNames _                              = []"
 
-definition collectAllCallNames :: "expr_full \<Rightarrow> String.literal list" where
+definition collectAllCallNames :: "expr \<Rightarrow> String.literal list" where
   "collectAllCallNames e = concat (map callSelfAllNames (allSubexprs e))"
 
 fun callSelfFilteredNames ::
-  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list"
+  "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list"
 where
   "callSelfFilteredNames filt (CallF (IdentifierF n _) _ _) =
      (if List.member filt n then [n] else [])"
 | "callSelfFilteredNames _ _ = []"
 
 definition collectCallNames ::
-  "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
+  "expr \<Rightarrow> String.literal list \<Rightarrow> String.literal list"
 where
   "collectCallNames e filt = concat (map (callSelfFilteredNames filt) (allSubexprs e))"
 

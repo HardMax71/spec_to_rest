@@ -26,22 +26,22 @@ class StrategiesTest extends CatsEffectSuite:
   private def intL(n: Int): IntLitF          = IntLitF(BigInt(n), None)
   private def alias(
       name: String,
-      t: type_expr_full,
-      constraint: Option[expr_full] = None
+      t: type_expr,
+      constraint: Option[expr] = None
   ): TypeAliasDeclFull =
     TypeAliasDeclFull(name, t, constraint, None)
   private def enumD(name: String, values: List[String]): EnumDeclFull =
     EnumDeclFull(name, values, None)
   private def fieldD(
       name: String,
-      t: type_expr_full,
-      constraint: Option[expr_full] = None
+      t: type_expr,
+      constraint: Option[expr] = None
   ): FieldDeclFull =
     FieldDeclFull(name, t, constraint, None)
   private def entityD(
       name: String,
-      fields: List[field_decl_full] = Nil,
-      invariants: List[expr_full] = Nil,
+      fields: List[field_decl] = Nil,
+      invariants: List[expr] = Nil,
       parent: Option[String] = None
   ): EntityDeclFull =
     EntityDeclFull(name, parent, fields, invariants, None)
@@ -49,45 +49,45 @@ class StrategiesTest extends CatsEffectSuite:
       name: String,
       entityName: String,
       fieldName: String,
-      rules: List[transition_rule_full] = Nil
+      rules: List[transition_rule] = Nil
   ): TransitionDeclFull =
     TransitionDeclFull(name, entityName, fieldName, rules, None)
   private def predicateD(
       name: String,
-      params: List[param_decl_full],
-      body: expr_full
+      params: List[param_decl],
+      body: expr
   ): PredicateDeclFull =
     PredicateDeclFull(name, params, body, None)
-  private def paramD(name: String, t: type_expr_full): ParamDeclFull =
+  private def paramD(name: String, t: type_expr): ParamDeclFull =
     ParamDeclFull(name, t, None)
   private def operationD(
       name: String,
-      inputs: List[param_decl_full] = Nil,
-      outputs: List[param_decl_full] = Nil,
-      requires: List[expr_full] = Nil,
-      ensures: List[expr_full] = Nil
+      inputs: List[param_decl] = Nil,
+      outputs: List[param_decl] = Nil,
+      requires: List[expr] = Nil,
+      ensures: List[expr] = Nil
   ): OperationDeclFull =
     OperationDeclFull(name, inputs, outputs, requires, ensures, None)
   private def conventionRule(
       target: String,
       property: String,
-      value: expr_full,
+      value: expr,
       qualifier: Option[String] = None
   ): ConventionRuleFull =
     ConventionRuleFull(target, property, qualifier, parseConventionValue(property, value), None)
-  private def conventions(rules: List[convention_rule_full]): ConventionsDeclFull =
+  private def conventions(rules: List[convention_rule]): ConventionsDeclFull =
     ConventionsDeclFull(rules, None)
 
   private def serviceIR(
       name: String = "X",
-      typeAliases: List[type_alias_decl_full] = Nil,
-      enums: List[enum_decl_full] = Nil,
-      entities: List[entity_decl_full] = Nil,
-      operations: List[operation_decl_full] = Nil,
-      transitions: List[transition_decl_full] = Nil,
-      invariants: List[invariant_decl_full] = Nil,
-      predicates: List[predicate_decl_full] = Nil,
-      conventions: Option[conventions_decl_full] = None
+      typeAliases: List[type_alias_decl] = Nil,
+      enums: List[enum_decl] = Nil,
+      entities: List[entity_decl] = Nil,
+      operations: List[operation_decl] = Nil,
+      transitions: List[transition_decl] = Nil,
+      invariants: List[invariant_decl] = Nil,
+      predicates: List[predicate_decl] = Nil,
+      conventions: Option[conventions_decl] = None
   ): ServiceIRFull =
     ServiceIRFull(
       a = name,

@@ -1,8 +1,8 @@
 package specrest.verify
 
 import specrest.ir.generated.SpecRestGenerated
-import specrest.ir.generated.SpecRestGenerated.expr_full
-import specrest.ir.generated.SpecRestGenerated.service_ir_full
+import specrest.ir.generated.SpecRestGenerated.expr
+import specrest.ir.generated.SpecRestGenerated.service_ir
 import specrest.ir.generated.SpecRestGenerated.trust_level
 
 enum TrustLevel derives CanEqual:
@@ -19,11 +19,11 @@ object TrustLevel:
 
 object Trust:
 
-  def enumNames(ir: service_ir_full): List[String] =
+  def enumNames(ir: service_ir): List[String] =
     SpecRestGenerated.verifyEnumNames(ir)
 
-  def classify(enums: List[String], exprs: List[expr_full]): TrustLevel =
+  def classify(enums: List[String], exprs: List[expr]): TrustLevel =
     TrustLevel.fromLifted(SpecRestGenerated.foldTrust(enums, exprs))
 
-  def classify(enums: List[String], e: expr_full): TrustLevel =
+  def classify(enums: List[String], e: expr): TrustLevel =
     classify(enums, List(e))

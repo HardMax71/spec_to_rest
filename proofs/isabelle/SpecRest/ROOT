@@ -6,7 +6,6 @@ session SpecRest_Core in core = HOL +
     IR
     IR_Helpers
     IR_Analysis
-    IR_Lower
     Smt
     Semantics
     Semantics_Reference
@@ -16,13 +15,10 @@ session SpecRest_Soundness in soundness = SpecRest_Core +
   options [document = false, threads = 0]
   theories
     Soundness_Framework
-    Soundness_Scalar
-    Soundness_Collection
-    Soundness
     Preservation_Wf
-    Preservation_Lower
     Preservation_WellTyped
-    Preservation
+    DirectSound
+    DirectPreservation
 
 session SpecRest_Codegen in codegen = SpecRest_Core +
   options [document = false, threads = 0]

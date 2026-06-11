@@ -1,5 +1,5 @@
 theory Preservation_Wf
-  imports Soundness
+  imports SpecRest_Core.Semantics
 begin
 
 text \<open>Phase 9j (dual of 9i). \<open>requiresAlloy_imp_lower_none\<close> proved the
@@ -13,29 +13,33 @@ text \<open>Phase 9j (dual of 9i). \<open>requiresAlloy_imp_lower_none\<close> p
   binding domain to be an identifier (the \<open>lower_forall_bindings\<close>
   totality condition, dual to \<open>lfb_none_of_alloy\<close>).\<close>
 
-fun is_ident_dom :: "quantifier_binding_full \<Rightarrow> bool" where
+fun is_ident_dom :: "quantifier_binding \<Rightarrow> bool" where
   "is_ident_dom (QuantifierBindingFull _ (IdentifierF _ _) _ _) = True"
 | "is_ident_dom _ = False"
 
-fun wf_z3_bindings :: "quantifier_binding_full list \<Rightarrow> bool" where
+fun wf_z3_bindings :: "quantifier_binding list \<Rightarrow> bool" where
   "wf_z3_bindings [] = False"
 | "wf_z3_bindings [b] = is_ident_dom b"
 | "wf_z3_bindings (b # rest) = (is_ident_dom b \<and> wf_z3_bindings rest)"
 
-fun rel_ref_shape :: "expr_full \<Rightarrow> bool" where
+fun rel_ref_shape :: "expr \<Rightarrow> bool" where
   "rel_ref_shape (IdentifierF _ _) = True"
-| "rel_ref_shape (PreF b _)        = (identNameFull b \<noteq> None)"
-| "rel_ref_shape (PrimeF b _)      = (identNameFull b \<noteq> None)"
+| "rel_ref_shape (PreF b _)        = (identName b \<noteq> None)"
+| "rel_ref_shape (PrimeF b _)      = (identName b \<noteq> None)"
 | "rel_ref_shape _                 = False"
 
 lemma identNameFull_SomeD:
-  "identNameFull e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
-  by (cases e rule: identNameFull.cases) auto
+  "identName e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
+  by (cases e rule: identName.cases) auto
 
-fun wf_z3 :: "expr_full \<Rightarrow> bool"
-and wf_z3_list :: "expr_full list \<Rightarrow> bool"
-and wf_z3_fields :: "field_assign_full list \<Rightarrow> bool"
-and wf_z3_entries :: "map_entry_full list \<Rightarrow> bool"
+lemma peelRelationRefFull_some_imp_rel_ref_shape:
+  "peelRelationRef base = Some rel \<Longrightarrow> rel_ref_shape base"
+  by (cases base rule: peelRelationRef.cases) (auto dest!: identNameFull_SomeD)
+
+fun wf_z3 :: "expr \<Rightarrow> bool"
+and wf_z3_list :: "expr list \<Rightarrow> bool"
+and wf_z3_fields :: "field_assign list \<Rightarrow> bool"
+and wf_z3_entries :: "map_entry list \<Rightarrow> bool"
 where
   "wf_z3 (BoolLitF _ _)            = True"
 | "wf_z3 (IntLitF _ _)             = True"

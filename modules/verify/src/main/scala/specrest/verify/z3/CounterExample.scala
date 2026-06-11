@@ -26,7 +26,7 @@ object Z3CounterExample:
       sortMap: Map[String, Sort],
       funcMap: Map[String, FuncDecl[?]],
       artifact: TranslatorArtifact,
-      ir: service_ir_full
+      ir: service_ir
   ): DecodedCounterExample =
     val rawToLabel  = mutable.LinkedHashMap.empty[String, String]
     val typingFails = mutable.ListBuffer.empty[String]

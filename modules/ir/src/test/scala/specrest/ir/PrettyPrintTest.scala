@@ -4,12 +4,12 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class PrettyPrintTest extends munit.CatsEffectSuite:
 
-  private def i(n: Int): expr_full        = IntLitF(BigInt(n), None)
-  private def s(t: String): expr_full     = StringLitF(t, None)
-  private def b(v: Boolean): expr_full    = BoolLitF(v, None)
-  private def id(name: String): expr_full = IdentifierF(name, None)
+  private def i(n: Int): expr        = IntLitF(BigInt(n), None)
+  private def s(t: String): expr     = StringLitF(t, None)
+  private def b(v: Boolean): expr    = BoolLitF(v, None)
+  private def id(name: String): expr = IdentifierF(name, None)
 
-  private val cases: List[(String, expr_full, String)] = List(
+  private val cases: List[(String, expr, String)] = List(
     ("int literal", i(42), "42"),
     ("string literal", s("ok"), "\"ok\""),
     ("string literal with quotes/backslashes/newline", s("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\""),

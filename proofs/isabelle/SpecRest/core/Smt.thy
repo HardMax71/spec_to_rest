@@ -63,6 +63,7 @@ datatype (plugins only: code size) smt_term =
   | TSome "smt_term"
   | TStrLit "String.literal"
   | TMatches "smt_term" "String.literal"
+  | TUStrPred "String.literal" "smt_term"
   | TSeqEmpty
   | TSeqCons "smt_term" "smt_term"
   | TMapEmpty
@@ -356,6 +357,10 @@ where
 | "smtEval m env (TMatches t pat) =
      (case smtEval m env t of
         Some (SStr str) \<Rightarrow> Some (SBool (string_matches str pat))
+      | _ \<Rightarrow> None)"
+| "smtEval m env (TUStrPred name t) =
+     (case smtEval m env t of
+        Some (SStr str) \<Rightarrow> Some (SBool (str_predicate name str))
       | _ \<Rightarrow> None)"
 | "smtEval m env TSeqEmpty = Some (SSeq [])"
 | "smtEval m env (TSeqCons e rest) =

@@ -198,5 +198,5 @@ object TsStateful:
   private val RuntimeHelpers =
     List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim

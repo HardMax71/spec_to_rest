@@ -39,7 +39,7 @@ object GoBehavioral:
 
   private def ensuresGo(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
@@ -184,7 +184,7 @@ object GoBehavioral:
       sb.append("}\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def behavioralSkipPlaceholder(ir: ServiceIRFull): String =

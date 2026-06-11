@@ -6,13 +6,13 @@ import specrest.ir.generated.SpecRestGenerated.*
 class ClassifyColumnTypeTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF = NamedTypeF(t, None)
-  private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
+  private def alias(name: String, target: type_expr): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
   private def enumD(name: String, values: List[String]): EnumDeclFull =
     EnumDeclFull(name, values, None)
 
   private def classify(
-      ty: type_expr_full,
+      ty: type_expr,
       aliases: List[(String, TypeAliasDeclFull)] = Nil,
       enums: List[(String, EnumDeclFull)] = Nil,
       entityNames: List[String] = Nil

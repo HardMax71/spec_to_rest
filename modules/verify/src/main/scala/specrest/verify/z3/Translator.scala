@@ -8,8 +8,8 @@ import specrest.ir.generated.SpecRestGenerated.*
 import scala.collection.mutable
 import scala.util.boundary
 
-private given CanEqual[smt_term, smt_term]   = CanEqual.derived
-private given CanEqual[expr_full, expr_full] = CanEqual.derived
+private given CanEqual[smt_term, smt_term] = CanEqual.derived
+private given CanEqual[expr, expr]         = CanEqual.derived
 
 private type TranslateBoundary =
   boundary.Label[Either[VerifyError.Translator, Z3Script]]
@@ -17,7 +17,7 @@ private type TranslateBoundary =
 private def fail(ctx: TranslateCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Translator(msg)))(using ctx.bnd)
 
-extension (e: expr_full)
+extension (e: expr)
   private def spanOpt: Option[span_t] = spanOf(e)
 
 private enum StateMode derives CanEqual:
@@ -30,7 +30,7 @@ final private case class EntityInfo(
 
 final private case class EnumInfo(sort: Z3Sort, members: List[String])
 
-final private case class PrimitiveAliasInfo(underlyingSort: Z3Sort, constraint: expr_full)
+final private case class PrimitiveAliasInfo(underlyingSort: Z3Sort, constraint: expr)
 
 final private case class TypeAliasInfo(sort: Z3Sort)
 
@@ -129,7 +129,7 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
 )
 object Translator:
 
-  def translate(ir: service_ir_full): IO[Either[VerifyError.Translator, Z3Script]] =
+  def translate(ir: service_ir): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
         val ctx = new TranslateCtx(summon[TranslateBoundary])
@@ -139,8 +139,8 @@ object Translator:
     }
 
   def translateOperationRequires(
-      ir: service_ir_full,
-      op: operation_decl_full
+      ir: service_ir,
+      op: operation_decl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -152,8 +152,8 @@ object Translator:
     }
 
   def translateOperationEnabled(
-      ir: service_ir_full,
-      op: operation_decl_full
+      ir: service_ir,
+      op: operation_decl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -166,9 +166,9 @@ object Translator:
     }
 
   def translateOperationPreservation(
-      ir: service_ir_full,
-      op: operation_decl_full,
-      inv: invariant_decl_full
+      ir: service_ir,
+      op: operation_decl,
+      inv: invariant_decl
   ): IO[Either[VerifyError.Translator, Z3Script]] =
     IO.delay {
       boundary:
@@ -190,7 +190,7 @@ object Translator:
         Right(finalizeScript(ctx))
     }
 
-  private def declareBase(ctx: TranslateCtx, ir: service_ir_full): Unit =
+  private def declareBase(ctx: TranslateCtx, ir: service_ir): Unit =
     svcPredicates(ir).foreach(p => ctx.predicateNames += prdName(p))
     for e <- svcEnums(ir) do declareEnum(ctx, e)
     for t <- svcTypeAliases(ir) do declareTypeAlias(ctx, t)
@@ -240,7 +240,7 @@ object Translator:
 
   private def declareOperationInputs(
       ctx: TranslateCtx,
-      op: operation_decl_full
+      op: operation_decl
   ): mutable.Map[String, Z3Expr] =
     val env = mutable.Map.empty[String, Z3Expr]
     for input <- operInputs(op) do
@@ -257,7 +257,7 @@ object Translator:
 
   private def maybeAssertInputRefinement(
       ctx: TranslateCtx,
-      input: param_decl_full,
+      input: param_decl,
       funcName: String
   ): Unit =
     prmType(input) match
@@ -270,7 +270,7 @@ object Translator:
 
   private def declareOperationOutputs(
       ctx: TranslateCtx,
-      op: operation_decl_full,
+      op: operation_decl,
       env: mutable.Map[String, Z3Expr]
   ): Unit =
     for out <- operOutputs(op) do
@@ -290,7 +290,7 @@ object Translator:
             ctx.assertions += translateExpr(ctx, alias.constraint, refineEnv)
         case _ => ()
 
-  private def declareEnum(ctx: TranslateCtx, e: enum_decl_full): Unit =
+  private def declareEnum(ctx: TranslateCtx, e: enum_decl): Unit =
     val sort = Z3Sort.Uninterp(enmName(e))
     ctx.declareSort(sort)
     ctx.enums(enmName(e)) = EnumInfo(sort, enmVariants(e))
@@ -305,7 +305,7 @@ object Translator:
       val out = if pairs.length == 1 then pairs.head else Z3Expr.And(pairs.toList)
       ctx.assertions += out
 
-  private def declareTypeAlias(ctx: TranslateCtx, t: type_alias_decl_full): Unit =
+  private def declareTypeAlias(ctx: TranslateCtx, t: type_alias_decl): Unit =
     val primitiveSort = primitiveUnderlyingSort(t)
     (primitiveSort, talConstraint(t)) match
       case (Some(ps), Some(c)) =>
@@ -328,12 +328,12 @@ object Translator:
     case "Bool" | "Boolean"            => Some(Z3Sort.Bool)
     case _                             => None
 
-  private def primitiveUnderlyingSort(t: type_alias_decl_full): Option[Z3Sort] =
+  private def primitiveUnderlyingSort(t: type_alias_decl): Option[Z3Sort] =
     talType(t) match
       case NamedTypeF(n, _) => primitiveSortOf(n)
       case _                => None
 
-  private def emitTypeAliasConstraint(ctx: TranslateCtx, t: type_alias_decl_full): Unit =
+  private def emitTypeAliasConstraint(ctx: TranslateCtx, t: type_alias_decl): Unit =
     talConstraint(t) match
       case None => ()
       case Some(constraint) =>
@@ -363,7 +363,7 @@ object Translator:
             body
           )
 
-  private def declareEntity(ctx: TranslateCtx, e: entity_decl_full): Unit =
+  private def declareEntity(ctx: TranslateCtx, e: entity_decl): Unit =
     val sort = Z3Sort.Uninterp(entName(e))
     ctx.declareSort(sort)
     val fields = mutable.LinkedHashMap.empty[String, (Z3Sort, String)]
@@ -376,7 +376,7 @@ object Translator:
       fields(fName) = (fieldSort, funcName)
     ctx.entities(entName(e)) = EntityInfo(sort, fields)
 
-  private def emitEntityAssertions(ctx: TranslateCtx, e: entity_decl_full): Unit =
+  private def emitEntityAssertions(ctx: TranslateCtx, e: entity_decl): Unit =
     val info    = ctx.entities(entName(e))
     val varName = s"self_${entName(e)}"
     val selfRef = Z3Expr.Var(varName, info.sort)
@@ -418,22 +418,22 @@ object Translator:
         body
       )
 
-  private def refinementConstraintFor(ctx: TranslateCtx, te: type_expr_full): Option[expr_full] =
+  private def refinementConstraintFor(ctx: TranslateCtx, te: type_expr): Option[expr] =
     te match
       case NamedTypeF(n, _) => ctx.primitiveAliases.get(n).map(_.constraint)
       case _                => None
 
-  private def declareState(ctx: TranslateCtx, state: state_decl_full): Unit =
+  private def declareState(ctx: TranslateCtx, state: state_decl): Unit =
     for sf <- stdFields(state) do declareStateField(ctx, sf)
     for sf <- stdFields(state) do emitStateTotality(ctx, sf, StateMode.Pre)
     for sf <- stdFields(state) do emitStateRefinement(ctx, sf, StateMode.Pre)
 
-  private def declareStatePostState(ctx: TranslateCtx, state: state_decl_full): Unit =
+  private def declareStatePostState(ctx: TranslateCtx, state: state_decl): Unit =
     for sf <- stdFields(state) do declareStatePostFunc(ctx, sf)
     for sf <- stdFields(state) do emitStateTotality(ctx, sf, StateMode.Post)
     for sf <- stdFields(state) do emitStateRefinement(ctx, sf, StateMode.Post)
 
-  private def declareStatePostFunc(ctx: TranslateCtx, sf: state_field_decl_full): Unit =
+  private def declareStatePostFunc(ctx: TranslateCtx, sf: state_field_decl): Unit =
     ctx.state.get(stfName(sf)) match
       case Some(r: StateRelationInfo) =>
         ctx.declareFunc(Z3FunctionDecl(r.domFuncPost, List(r.keySort), Z3Sort.Bool))
@@ -444,7 +444,7 @@ object Translator:
 
   private def emitStateRefinement(
       ctx: TranslateCtx,
-      sf: state_field_decl_full,
+      sf: state_field_decl,
       mode: StateMode
   ): Unit =
     ctx.state.get(stfName(sf)) match
@@ -468,7 +468,7 @@ object Translator:
       ctx: TranslateCtx,
       info: StateRelationInfo,
       fieldName: String,
-      keyConstraint: expr_full,
+      keyConstraint: expr,
       mode: StateMode
   ): Unit =
     val suffix  = if mode == StateMode.Post then "_post" else ""
@@ -490,7 +490,7 @@ object Translator:
       ctx: TranslateCtx,
       info: StateRelationInfo,
       fieldName: String,
-      valueConstraint: expr_full,
+      valueConstraint: expr,
       mode: StateMode
   ): Unit =
     val suffix  = if mode == StateMode.Post then "_post" else ""
@@ -512,7 +512,7 @@ object Translator:
       guarded
     )
 
-  private def declareStateField(ctx: TranslateCtx, sf: state_field_decl_full): Unit =
+  private def declareStateField(ctx: TranslateCtx, sf: state_field_decl): Unit =
     stfType(sf) match
       case RelationTypeF(from, mult, to, _) =>
         val keySort   = sortForType(ctx, from)
@@ -563,7 +563,7 @@ object Translator:
 
   private def emitStateTotality(
       ctx: TranslateCtx,
-      sf: state_field_decl_full,
+      sf: state_field_decl,
       mode: StateMode
   ): Unit =
     ctx.state.get(stfName(sf)) match
@@ -578,7 +578,7 @@ object Translator:
         )
       case _ => ()
 
-  private def emitTopLevelInvariant(ctx: TranslateCtx, inv: invariant_decl_full): Unit =
+  private def emitTopLevelInvariant(ctx: TranslateCtx, inv: invariant_decl): Unit =
     val env = mutable.Map.empty[String, Z3Expr]
     ctx.assertions += translateExpr(ctx, invBody(inv), env)
 
@@ -592,7 +592,7 @@ object Translator:
     val out = if pairs.length == 1 then pairs.head else Z3Expr.And(pairs.toList)
     ctx.assertions += out
 
-  private def sortForType(ctx: TranslateCtx, te: type_expr_full): Z3Sort = te match
+  private def sortForType(ctx: TranslateCtx, te: type_expr): Z3Sort = te match
     case NamedTypeF(n, _)      => sortForNamedType(ctx, n)
     case OptionTypeF(inner, _) => Z3Sort.OptionOf(sortForType(ctx, inner))
     case SetTypeF(e, _)        => Z3Sort.SetOf(sortForType(ctx, e))
@@ -626,16 +626,16 @@ object Translator:
             ctx.typeAliases.get(name).map(_.sort)
           }.getOrElse(Z3Sort.Uninterp(name))
 
-  def translateExpr(ctx: TranslateCtx, expr: expr_full, env: mutable.Map[String, Z3Expr]): Z3Expr =
+  def translateExpr(ctx: TranslateCtx, expr: expr, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
-    val out = lower(enums, expr) match
-      case Some(eSubset) => encodeFromSmtTerm(ctx, SpecRestGenerated.translate(eSubset), env)
+    val out = SpecRestGenerated.translate(enums, expr) match
+      case Some(smtTerm) => encodeFromSmtTerm(ctx, smtTerm, env)
       case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)
 
   private def translateExprRaw(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
     case IntLitF(v, _) => Z3Expr.IntLit(v)
@@ -686,9 +686,9 @@ object Translator:
 
   private def translateBinaryOp(
       ctx: TranslateCtx,
-      op: bin_op_full,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      op: bin_op,
+      leftExpr: expr,
+      rightExpr: expr,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     val isEq    = op match { case _: BEq => true; case _ => false }
@@ -745,9 +745,9 @@ object Translator:
 
   private def requireNumericOperands(
       ctx: TranslateCtx,
-      op: bin_op_full,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      op: bin_op,
+      leftExpr: expr,
+      rightExpr: expr,
       left: Z3Expr,
       right: Z3Expr,
       env: mutable.Map[String, Z3Expr]
@@ -760,11 +760,11 @@ object Translator:
 
   private def ensureSetBinOpSorts(
       ctx: TranslateCtx,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      leftExpr: expr,
+      rightExpr: expr,
       left: Z3Expr,
       right: Z3Expr,
-      op: bin_op_full,
+      op: bin_op,
       env: mutable.Map[String, Z3Expr]
   ): Unit =
     val leftSort  = inferSort(ctx, leftExpr, env, Some(left))
@@ -788,11 +788,11 @@ object Translator:
       case _ => ()
 
   private def membership(
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      leftExpr: expr,
+      rightExpr: expr,
       leftZ: Z3Expr,
       ctx: TranslateCtx,
-      op: bin_op_full,
+      op: bin_op,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     val _ = leftExpr
@@ -825,7 +825,7 @@ object Translator:
   private def membershipInSetLiteral(
       ctx: TranslateCtx,
       leftZ: Z3Expr,
-      elements: List[expr_full],
+      elements: List[expr],
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
     if elements.isEmpty then Z3Expr.BoolLit(false)
@@ -934,7 +934,7 @@ object Translator:
 
   private def resolveStateRelationReference(
       ctx: TranslateCtx,
-      expr: expr_full
+      expr: expr
   ): Option[(StateRelationInfo, StateMode)] = expr match
     case IdentifierF(name, _) =>
       ctx.state.get(name) match
@@ -961,8 +961,8 @@ object Translator:
         "powerset operator is not decidable in first-order SMT; narrow the invariant to avoid powerset"
       )
 
-  private def translateCardinality(ctx: TranslateCtx, operand: expr_full): Z3Expr =
-    peelRelationRefFull(operand) match
+  private def translateCardinality(ctx: TranslateCtx, operand: expr): Z3Expr =
+    SpecRestGenerated.peelRelationRef(operand) match
       case Some(name) =>
         val mode = operand match
           case PrimeF(_, _) => StateMode.Post
@@ -1016,12 +1016,12 @@ object Translator:
           Z3Expr.Quantifier(QKind.Exists, bindings.toList, guardedBody)
         )
 
-  private def mapQuantifier(q: quant_kind_full): Either[Unit, QKind] = q match
+  private def mapQuantifier(q: quant_kind): Either[Unit, QKind] = q match
     case QAll()              => Right(QKind.ForAll)
     case QSome() | QExists() => Right(QKind.Exists)
     case QNo()               => Left(())
 
-  private def applyGuards(q: quant_kind_full, guards: List[Z3Expr], body: Z3Expr): Z3Expr =
+  private def applyGuards(q: quant_kind, guards: List[Z3Expr], body: Z3Expr): Z3Expr =
     val isAll = q match { case _: QAll => true; case _ => false }
     guards match
       case Nil => body
@@ -1037,7 +1037,7 @@ object Translator:
 
   private def resolveBindingDomain(
       ctx: TranslateCtx,
-      b: quantifier_binding_full
+      b: quantifier_binding
   ): BindingResolution = qbdCollection(b) match
     case IdentifierF(name, _) =>
       ctx.entities.get(name).map(e => BindingResolution(e.sort, None)).orElse:
@@ -1271,7 +1271,7 @@ object Translator:
 
   private def inferSort(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       env: mutable.Map[String, Z3Expr],
       translated: Option[Z3Expr]
   ): Option[Z3Sort] = expr match
@@ -1347,8 +1347,8 @@ object Translator:
 
   private def tryLowerDomEquality(
       ctx: TranslateCtx,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      leftExpr: expr,
+      rightExpr: expr,
       negate: Boolean
   ): Option[Z3Expr] =
     for
@@ -1373,7 +1373,7 @@ object Translator:
 
   private def asDomOfStateRelation(
       ctx: TranslateCtx,
-      expr: expr_full
+      expr: expr
   ): Option[(StateRelationInfo, StateMode)] = expr match
     case CallF(IdentifierF("dom", _), arg :: Nil, _) =>
       resolveStateRelationReference(ctx, arg)
@@ -1381,11 +1381,11 @@ object Translator:
 
   private def tryLowerSetComprehensionEquality(
       ctx: TranslateCtx,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      leftExpr: expr,
+      rightExpr: expr,
       env: mutable.Map[String, Z3Expr]
   ): Option[Z3Expr] =
-    val pair: Option[(expr_full, SetComprehensionF)] = (leftExpr, rightExpr) match
+    val pair: Option[(expr, SetComprehensionF)] = (leftExpr, rightExpr) match
       case (sc: SetComprehensionF, other) => Some((other, sc))
       case (other, sc: SetComprehensionF) => Some((other, sc))
       case _                              => None
@@ -1394,7 +1394,7 @@ object Translator:
 
   private def translateSetComprehensionEquality(
       ctx: TranslateCtx,
-      setExpr: expr_full,
+      setExpr: expr,
       sc: SetComprehensionF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
@@ -1436,7 +1436,7 @@ object Translator:
 
   private def translateEnsuresClause(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr = expr match
     case BinaryOpF(BEq(), l, r, _) =>
@@ -1445,8 +1445,8 @@ object Translator:
 
   private def tryLowerRelationEquality(
       ctx: TranslateCtx,
-      leftExpr: expr_full,
-      rightExpr: expr_full,
+      leftExpr: expr,
+      rightExpr: expr,
       env: mutable.Map[String, Z3Expr]
   ): Option[Z3Expr] =
     val leftRel  = resolveStateRelationReference(ctx, leftExpr)
@@ -1464,7 +1464,7 @@ object Translator:
 
   private def lowerRelationRhs(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
   ): Option[RelationRhsLowering] =
@@ -1473,7 +1473,7 @@ object Translator:
 
   private def tryLowerSingleInsertRhs(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
   ): Option[RelationRhsLowering] = expr match
@@ -1495,7 +1495,7 @@ object Translator:
 
   private def tryLowerSingleMinusRhs(
       ctx: TranslateCtx,
-      expr: expr_full,
+      expr: expr,
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
   ): Option[RelationRhsLowering] = expr match
@@ -1506,14 +1506,14 @@ object Translator:
             relationDeletionAxiom(ctx, lhsInfo, lhsMode, base._1, base._2, keys, env, targetInfo)
     case _ => None
 
-  final private case class KeyValueEntry(key: expr_full, value: expr_full)
+  final private case class KeyValueEntry(key: expr, value: expr)
 
-  private def extractMapEntries(expr: expr_full): Option[List[KeyValueEntry]] = expr match
+  private def extractMapEntries(expr: expr): Option[List[KeyValueEntry]] = expr match
     case MapLiteralF(entries, _) =>
       Some(entries.map(e => KeyValueEntry(mpeKey(e), mpeValue(e))))
     case _ => None
 
-  private def extractKeySet(expr: expr_full): Option[List[expr_full]] = expr match
+  private def extractKeySet(expr: expr): Option[List[expr]] = expr match
     case SetLiteralF(elements, _) => Some(elements)
     case MapLiteralF(entries, _) =>
       Some(entries.map(mpeKey))
@@ -1589,7 +1589,7 @@ object Translator:
       lhsMode: StateMode,
       base: StateRelationInfo,
       baseMode: StateMode,
-      keyExprs: List[expr_full],
+      keyExprs: List[expr],
       env: mutable.Map[String, Z3Expr],
       targetInfo: StateRelationInfo
   ): Z3Expr =
@@ -1620,8 +1620,8 @@ object Translator:
 
   private def synthesizeFrame(
       ctx: TranslateCtx,
-      state: Option[state_decl_full],
-      op: operation_decl_full,
+      state: Option[state_decl],
+      op: operation_decl,
       env: mutable.Map[String, Z3Expr]
   ): Unit = state match
     case None => ()
@@ -1664,20 +1664,20 @@ object Translator:
   final private case class StateMentionAnalysis(
       touched: Boolean,
       fullyReplaced: Boolean,
-      removedKeys: List[expr_full],
-      fieldUpdatedKeys: List[(expr_full, Set[String])],
+      removedKeys: List[expr],
+      fieldUpdatedKeys: List[(expr, Set[String])],
       hasUnclassifiedMention: Boolean
   )
 
   private def analyzeStateMention(
-      ensures: List[expr_full],
+      ensures: List[expr],
       stateName: String
   ): StateMentionAnalysis =
     var touched                = false
     var fullyReplaced          = false
     var hasUnclassifiedMention = false
-    val removedKeys            = mutable.ArrayBuffer.empty[expr_full]
-    val fieldUpdatedKeys       = mutable.LinkedHashMap.empty[String, (expr_full, mutable.Set[String])]
+    val removedKeys            = mutable.ArrayBuffer.empty[expr]
+    val fieldUpdatedKeys       = mutable.LinkedHashMap.empty[String, (expr, mutable.Set[String])]
 
     for ens <- ensures do
       if exprMentionsPostState(ens, stateName) then
@@ -1706,39 +1706,39 @@ object Translator:
       hasUnclassifiedMention = hasUnclassifiedMention
     )
 
-  private def keyIdentity(expr: expr_full): String = expr.toString
+  private def keyIdentity(expr: expr): String = expr.toString
 
-  private def matchesFullReplacement(expr: expr_full, stateName: String): Boolean = expr match
+  private def matchesFullReplacement(expr: expr, stateName: String): Boolean = expr match
     case BinaryOpF(BEq(), l, r, _) =>
       referencesPrimedRelation(l, stateName) || referencesPrimedRelation(r, stateName)
     case _ => false
 
-  private def matchNotInPrimed(expr: expr_full, stateName: String): Option[expr_full] = expr match
+  private def matchNotInPrimed(expr: expr, stateName: String): Option[expr] = expr match
     case BinaryOpF(BNotIn(), l, r, _) if referencesPrimedRelation(r, stateName) =>
       Some(l)
     case _ => None
 
-  final private case class FieldUpdateMatch(key: expr_full, field: String)
+  final private case class FieldUpdateMatch(key: expr, field: String)
 
-  private def matchFieldUpdatePrimed(expr: expr_full, stateName: String): Option[FieldUpdateMatch] =
+  private def matchFieldUpdatePrimed(expr: expr, stateName: String): Option[FieldUpdateMatch] =
     expr match
       case BinaryOpF(BEq(), l, r, _) =>
         matchFieldUpdateSide(l, stateName).orElse(matchFieldUpdateSide(r, stateName))
       case _ => None
 
-  private def matchFieldUpdateSide(side: expr_full, stateName: String): Option[FieldUpdateMatch] =
+  private def matchFieldUpdateSide(side: expr, stateName: String): Option[FieldUpdateMatch] =
     side match
       case FieldAccessF(IndexF(base, index, _), field, _)
           if referencesPrimedRelation(base, stateName) =>
         Some(FieldUpdateMatch(index, field))
       case _ => None
 
-  private def matchesCardinalityConstraint(expr: expr_full, stateName: String): Boolean = expr match
+  private def matchesCardinalityConstraint(expr: expr, stateName: String): Boolean = expr match
     case BinaryOpF(_, l, r, _) =>
       sideIsPrimeCardinality(l, stateName) || sideIsPrimeCardinality(r, stateName)
     case _ => false
 
-  private def sideIsPrimeCardinality(side: expr_full, stateName: String): Boolean = side match
+  private def sideIsPrimeCardinality(side: expr, stateName: String): Boolean = side match
     case UnaryOpF(UCardinality(), PrimeF(IdentifierF(n, _), _), _) =>
       n == stateName
     case _ => false
@@ -1749,7 +1749,7 @@ object Translator:
       stateName: String,
       analysis: StateMentionAnalysis,
       env: mutable.Map[String, Z3Expr],
-      op: operation_decl_full
+      op: operation_decl
   ): Unit =
     if analysis.hasUnclassifiedMention then return
     val varName         = s"k_pf_$stateName"
@@ -1871,8 +1871,8 @@ object Translator:
 
   private def synthesizeCardinalityAxioms(
       ctx: TranslateCtx,
-      state: Option[state_decl_full],
-      op: operation_decl_full
+      state: Option[state_decl],
+      op: operation_decl
   ): Unit = state match
     case None => ()
     case Some(s) =>
@@ -1897,7 +1897,7 @@ object Translator:
               ctx.assertions += Z3Expr.Cmp(CmpOp.Eq, postRef, rhs)
           case _ => ()
 
-  private def detectCardinalityDelta(op: operation_decl_full, relName: String): Option[Int] =
+  private def detectCardinalityDelta(op: operation_decl, relName: String): Option[Int] =
     val guards = operRequires(op) ++ operEnsures(op)
     operEnsures(op).iterator.flatMap: ens =>
       matchPrimedRelationEquality(ens, relName).toList.flatMap: primeEq =>
@@ -1908,8 +1908,8 @@ object Translator:
     .nextOption()
 
   private def insertDeltaWithSideCond(
-      guards: List[expr_full],
-      rhs: expr_full,
+      guards: List[expr],
+      rhs: expr,
       relName: String
   ): Option[Int] = rhs match
     case BinaryOpF(_: (BAdd | BUnion), left, right, _) =>
@@ -1922,8 +1922,8 @@ object Translator:
     case _ => None
 
   private def deleteDeltaWithSideCond(
-      guards: List[expr_full],
-      rhs: expr_full,
+      guards: List[expr],
+      rhs: expr,
       relName: String
   ): Option[Int] = rhs match
     case BinaryOpF(_: (BSub | BDiff), left, right, _) =>
@@ -1935,34 +1935,34 @@ object Translator:
           else None
     case _ => None
 
-  private def extractInsertKeys(expr: expr_full): Option[List[expr_full]] =
+  private def extractInsertKeys(expr: expr): Option[List[expr]] =
     extractMapEntries(expr).map(_.map(_.key)).orElse(extractKeySet(expr))
 
   private def hasMembershipSideCond(
-      guards: List[expr_full],
-      key: expr_full,
+      guards: List[expr],
+      key: expr,
       relName: String,
-      op: bin_op_full
+      op: bin_op
   ): Boolean =
     guards.exists(g =>
       flattenAnd(g).exists(sub => matchesMembershipSideCond(sub, key, relName, op))
     )
 
   private def matchesMembershipSideCond(
-      expr: expr_full,
-      key: expr_full,
+      expr: expr,
+      key: expr,
       relName: String,
-      op: bin_op_full
+      op: bin_op
   ): Boolean = expr match
     case BinaryOpF(exprOp, l, r, _) if exprOp.getClass.getName == op.getClass.getName =>
       exprStructurallyEqual(l, key) && referencesPreRelation(r, relName)
     case _ => false
 
-  private def exprStructurallyEqual(a: expr_full, b: expr_full): Boolean = a == b
+  private def exprStructurallyEqual(a: expr, b: expr): Boolean = a == b
 
-  final private case class PrimedRelEq(rhs: expr_full)
+  final private case class PrimedRelEq(rhs: expr)
 
-  private def matchPrimedRelationEquality(expr: expr_full, relName: String): Option[PrimedRelEq] =
+  private def matchPrimedRelationEquality(expr: expr, relName: String): Option[PrimedRelEq] =
     expr match
       case BinaryOpF(BEq(), l, r, _) =>
         if referencesPrimedRelation(l, relName) then Some(PrimedRelEq(r))
@@ -1970,13 +1970,13 @@ object Translator:
         else None
       case _ => None
 
-  private def isIdentityRhs(expr: expr_full, relName: String): Boolean =
+  private def isIdentityRhs(expr: expr, relName: String): Boolean =
     referencesPreRelation(expr, relName)
 
-  private def exprMentionsPostState(expr: expr_full, stateName: String): Boolean =
+  private def exprMentionsPostState(expr: expr, stateName: String): Boolean =
     walkMentionsPost(expr, stateName, insidePrime = false)
 
-  private def walkMentionsPost(expr: expr_full, stateName: String, insidePrime: Boolean): Boolean =
+  private def walkMentionsPost(expr: expr, stateName: String, insidePrime: Boolean): Boolean =
     expr match
       case PrimeF(inner, _)  => walkMentionsPost(inner, stateName, insidePrime = true)
       case PreF(inner, _)    => walkMentionsPost(inner, stateName, insidePrime = false)
@@ -2317,6 +2317,13 @@ object Translator:
             if !ctx.funcs.contains(funcName) then
               ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
             Z3Expr.App(funcName, List(strZ))
+      case TUStrPred(name, t) =>
+        val strZ     = encodeFromSmtTerm(ctx, t, env)
+        val s        = inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str)
+        val funcName = s"${name}_${sortNameOf(s)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
+        Z3Expr.App(funcName, List(strZ))
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>

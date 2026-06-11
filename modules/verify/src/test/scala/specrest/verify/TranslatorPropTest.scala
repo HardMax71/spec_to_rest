@@ -35,21 +35,21 @@ object TranslatorPropTest:
     "/"
   )
 
-  def collectFreeIdentifiers(ir: service_ir_full): Set[String] =
+  def collectFreeIdentifiers(ir: service_ir): Set[String] =
     val invs   = svcInvariants(ir)
     val ops    = svcOperations(ir)
     val invIds = invs.flatMap(walkInv).toSet
     val opIds  = ops.flatMap(opIdentifiers).toSet
     invIds ++ opIds
 
-  private def opIdentifiers(op: operation_decl_full): Set[String] =
+  private def opIdentifiers(op: operation_decl): Set[String] =
     val params = (operInputs(op) ++ operOutputs(op)).map(prmName).toSet
     val raw    = (operRequires(op) ++ operEnsures(op)).flatMap(walk).toSet
     raw -- params
 
-  private def walkInv(inv: invariant_decl_full): Set[String] = walk(invBody(inv))
+  private def walkInv(inv: invariant_decl): Set[String] = walk(invBody(inv))
 
-  private def walk(e: expr_full): Set[String] = e match
+  private def walk(e: expr): Set[String] = e match
     case IdentifierF(n, _)     => Set(n)
     case BinaryOpF(_, l, r, _) => walk(l) ++ walk(r)
     case UnaryOpF(_, x, _)     => walk(x)

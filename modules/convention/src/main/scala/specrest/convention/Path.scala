@@ -23,7 +23,7 @@ object Path:
 
   private def deriveEndpoint(
       classification: operation_classification,
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull
   ): EndpointSpec =
     val method        = resolveMethod(classification, svcConventions(ir))
@@ -58,7 +58,7 @@ object Path:
 
   private def resolveMethod(
       c: operation_classification,
-      conv: Option[conventions_decl_full]
+      conv: Option[conventions_decl]
   ): http_method =
     val override_ = getConvention(conv, classificationOperationName(c), "http_method")
       .flatMap(parseHttpMethod)
@@ -66,7 +66,7 @@ object Path:
 
   private def resolvePath(
       c: operation_classification,
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull
   ): String =
     getConvention(svcConventions(ir), operName(op), "http_path")
@@ -74,7 +74,7 @@ object Path:
 
   private def autoDerivePath(
       c: operation_classification,
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull
   ): String =
     val entity  = classificationTargetEntity(c)
@@ -84,7 +84,7 @@ object Path:
     val idOpt   = findIdParam(op, ir)
     derivePathPattern(classificationKind(c), segment, idOpt, action, opKebab)
 
-  private def findIdParam(op: operation_decl_full, ir: ServiceIRFull): Option[String] =
+  private def findIdParam(op: operation_decl, ir: ServiceIRFull): Option[String] =
     SpecRestGenerated.findIdParam(operInputs(op), svcState(ir))
 
   private def extractActionVerb(opName: String, entityName: Option[String]): String =
@@ -97,14 +97,14 @@ object Path:
 
   private def resolveStatus(
       c: operation_classification,
-      conv: Option[conventions_decl_full],
+      conv: Option[conventions_decl],
       effective: http_method
   ): Int =
     val overrideStr = getConvention(conv, classificationOperationName(c), "http_status_success")
     SpecRestGenerated.resolveStatus(overrideStr, effective, classificationKind(c)).toInt
 
   def getConvention(
-      conv: Option[conventions_decl_full],
+      conv: Option[conventions_decl],
       target: String,
       property: String
   ): Option[String] =

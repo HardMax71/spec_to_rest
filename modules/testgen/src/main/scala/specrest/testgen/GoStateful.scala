@@ -173,5 +173,5 @@ object GoStateful:
         |}
         |""".stripMargin
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim

@@ -52,7 +52,7 @@ object Structural:
   // -- Global invariants -----------------------------------------------------
 
   private def checkForGlobalInvariant(
-      inv: invariant_decl_full,
+      inv: invariant_decl,
       idx: Int,
       ir: ServiceIRFull
   ): Option[StructuralCheck] =
@@ -76,7 +76,7 @@ object Structural:
         Some(StructuralCheck(s"_check_invariant_$methodName", sb.toString))
 
   private def checkForGlobalInvariantSkip(
-      inv: invariant_decl_full,
+      inv: invariant_decl,
       idx: Int,
       ir: ServiceIRFull
   ): Option[TestSkip] =
@@ -108,7 +108,7 @@ object Structural:
 
   private def checksForOperation(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull
   ): List[Either[TestSkip, StructuralCheck]] =
     val isCreateLike = pop.kind match
@@ -293,7 +293,7 @@ object Structural:
         |        case.validate_response(response)
         |""".stripMargin
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def escapeDocstring(s: String): String =

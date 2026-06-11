@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object OperationOverlap extends LintPass:
   val code = "L04"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: service_ir): List[LintDiagnostic] =
     val out    = List.newBuilder[LintDiagnostic]
     val ops0   = svcOperations(ir)
     val groups = ops0.groupBy(opSignature).filter(_._2.length >= 2)
@@ -32,17 +32,17 @@ object OperationOverlap extends LintPass:
     out.result()
 
   private def opSignature(
-      op: operation_decl_full
+      op: operation_decl
   ): (List[(String, String)], List[(String, String)]) =
     (
       operInputs(op).map(paramShape),
       operOutputs(op).map(paramShape)
     )
 
-  private def paramShape(p: param_decl_full): (String, String) =
+  private def paramShape(p: param_decl): (String, String) =
     (prmName(p), typeStripSpans(prmType(p)).toString)
 
-  private def normalizedRequires(rs: List[expr_full]): List[String] =
+  private def normalizedRequires(rs: List[expr]): List[String] =
     flattenAndAll(rs)
       .filterNot(isTrueLit)
       .map(e => stripSpans(e).toString)

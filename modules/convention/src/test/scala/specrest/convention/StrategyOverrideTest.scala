@@ -5,18 +5,18 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class StrategyOverrideTest extends CatsEffectSuite:
 
-  private def rule(target: String, property: String, value: expr_full): ConventionRuleFull =
+  private def rule(target: String, property: String, value: expr): ConventionRuleFull =
     ConventionRuleFull(target, property, None, parseConventionValue(property, value), None)
 
   private def stringRule(target: String, property: String, v: String): ConventionRuleFull =
     rule(target, property, StringLitF(v, None))
 
   private def baseIR(
-      operations: List[operation_decl_full] = Nil,
-      entities: List[entity_decl_full] = Nil,
-      typeAliases: List[type_alias_decl_full] = Nil,
-      enums: List[enum_decl_full] = Nil,
-      rules: List[convention_rule_full] = Nil
+      operations: List[operation_decl] = Nil,
+      entities: List[entity_decl] = Nil,
+      typeAliases: List[type_alias_decl] = Nil,
+      enums: List[enum_decl] = Nil,
+      rules: List[convention_rule] = Nil
   ): ServiceIRFull =
     ServiceIRFull(
       a = "Demo",

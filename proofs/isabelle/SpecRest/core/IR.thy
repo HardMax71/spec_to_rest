@@ -28,12 +28,12 @@ datatype (plugins only: code size) span_t = SpanT int int int int
 
 type_synonym option_span = "span_t option"
 
-datatype (plugins only: code size) type_expr =
+datatype (plugins only: code size) schema_type =
     BoolT
   | IntT
   | EnumT "String.literal"
   | EntityT "String.literal"
-  | RelationT "type_expr" "type_expr"
+  | RelationT "schema_type" "schema_type"
 
 datatype (plugins only: code size) bool_bin_op =
     AndOp
@@ -62,84 +62,45 @@ datatype (plugins only: code size) cmp_op =
 
 datatype (plugins only: code size) state_mode = SmPre | SmPost
 
-datatype (plugins only: code size) expr =
-    BoolLit bool "option_span"
-  | IntLit int "option_span"
-  | RealLit rat "option_span"
-  | Ident "String.literal" "option_span"
-  | UnNot "expr" "option_span"
-  | UnNeg "expr" "option_span"
-  | BoolBin "bool_bin_op" "expr" "expr" "option_span"
-  | Arith "arith_op" "expr" "expr" "option_span"
-  | Cmp "cmp_op" "expr" "expr" "option_span"
-  | LetIn "String.literal" "expr" "expr" "option_span"
-  | EnumAccess "String.literal" "String.literal" "option_span"
-  | Member "expr" "String.literal" "option_span"
-  | ForallEnum "String.literal" "String.literal" "expr" "option_span"
-  | ForallRel "String.literal" "String.literal" "expr" "option_span"
-  | ForallSet "String.literal" "expr" "expr" "option_span"
-  | TheRel "String.literal" "String.literal" "expr" "option_span"
-  | EntityBase "String.literal" "option_span"
-  | Prime "expr" "option_span"
-  | Pre "expr" "option_span"
-  | CardRel "String.literal" "option_span"
-  | IndexRel "expr" "expr" "option_span"
-  | FieldAccess "expr" "String.literal" "option_span"
-  | SetEmpty "option_span"
-  | SetInsert "expr" "expr" "option_span"
-  | SetMember "expr" "expr" "option_span"
-  | SetBin "set_op" "expr" "expr" "option_span"
-  | WithRec "expr" "String.literal" "expr" "option_span"
-  | Ite "expr" "expr" "expr" "option_span"
-  | NoneE "option_span"
-  | SomeE "expr" "option_span"
-  | StrLit "String.literal" "option_span"
-  | Matches "expr" "String.literal" "option_span"
-  | SeqEmpty "option_span"
-  | SeqCons "expr" "expr" "option_span"
-  | MapEmpty "option_span"
-  | MapCons "expr" "expr" "expr" "option_span"
-
-text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>Matches\<close>. It is
+text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>MatchesF\<close>. It is
   deliberately \<^emph>\<open>abstract\<close> (no defining equation): formalising the full SMT-LIB
   regular-expression semantics in HOL is out of scope, and the trusted translator
   realises it concretely as Z3's \<open>str.in_re\<close> over the parsed pattern. Keeping it
   abstract is what makes the soundness theorem parametric in the matcher, so any
-  realisation that \<open>eval\<close> and \<open>smtEval\<close> share (here, the same constant) is sound by
-  construction; the (unused) extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters get a
-  serialisation stub in \<open>Codegen\<close>.\<close>
+  realisation that \<open>eval\<close> and \<open>smtEval\<close> share (here, the same constant) is sound
+  by construction; the (unused) extracted reference interpreters get a serialisation
+  stub in \<open>Codegen\<close>.\<close>
 consts string_matches :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
 
-text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
-  relation name to an arbitrary \<open>expr\<close>, so the operation-side
-  \<open>pre(rel)[k]\<close> and \<open>rel'[k]\<close> shapes can lower into the verified subset.
-  The intended bases are \<open>Ident rel\<close>, \<open>Pre (Ident rel)\<close>, and
-  \<open>Prime (Ident rel)\<close>; \<open>peel_relation_ref\<close> recognises exactly those
-  shapes and returns the relation name. Other bases evaluate to \<open>None\<close>
-  in both \<open>eval\<close> and \<open>smtEval\<close>, preserving symmetry for the soundness
-  theorem.\<close>
+text \<open>\<open>str_predicate name s\<close> is the uninterpreted built-in string predicate \<open>name\<close>
+  (e.g.\ \<open>isValidURI\<close>) applied to string \<open>s\<close>. Like \<open>string_matches\<close> it is abstract: the
+  trusted translator emits it as a Z3 uninterpreted boolean function, so the soundness
+  theorem stays parametric in the predicate and any realisation \<open>eval\<close>/\<open>smtEval\<close>
+  share is sound by construction. Verifying an obligation mentioning
+  \<open>str_predicate name\<close> is thus a proof for every interpretation, which soundly
+  over-approximates the intended built-in.\<close>
+consts str_predicate :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
 
-fun identName :: "expr \<Rightarrow> String.literal option" where
-  "identName (Ident rel _) = Some rel"
-| "identName _ = None"
+text \<open>\<open>is_builtin_pred nm\<close> marks \<open>nm\<close> as a reserved built-in string predicate (e.g.\
+  \<open>isValidURI\<close>) - a name the surface language forbids as a user function/predicate. It
+  gates \<open>lower\<close>'s lifting of \<open>CallF (IdentifierF nm) [arg]\<close> to \<open>UStrPred\<close>: only reserved
+  built-ins are lifted, so a user call (which the reference semantics inlines) is never
+  mistaken for an uninterpreted predicate. Soundness uses \<open>is_builtin_pred nm \<Longrightarrow>
+  lookup_callee fs ps nm = None\<close> (reserved names are not user-defined).\<close>
+definition is_builtin_pred :: "String.literal \<Rightarrow> bool" where
+  "is_builtin_pred nm \<longleftrightarrow> nm = STR ''isValidURI'' \<or> nm = STR ''isValidEmail''"
 
-fun peel_relation_ref :: "expr \<Rightarrow> String.literal option" where
-  "peel_relation_ref (Ident rel _) = Some rel"
-| "peel_relation_ref (Pre b _)     = identName b"
-| "peel_relation_ref (Prime b _)   = identName b"
-| "peel_relation_ref _             = None"
-
-record field_decl =
+record schema_field_decl =
   fd_name :: "String.literal"
-  fd_ty   :: "type_expr"
+  fd_ty   :: "schema_type"
   fd_span :: "option_span"
 
-record entity_decl =
+record schema_entity_decl =
   ed_name   :: "String.literal"
-  ed_fields :: "field_decl list"
+  ed_fields :: "schema_field_decl list"
   ed_span   :: "option_span"
 
-record enum_decl =
+record schema_enum_decl =
   enm_name    :: "String.literal"
   enm_members :: "String.literal list"
   enm_span    :: "option_span"
@@ -152,7 +113,7 @@ text \<open>Issue #202: full input-language IR (canonical for Scala consumers).
 
 datatype (plugins only: code size) multiplicity = MultOne | MultLone | MultSome | MultSet
 
-datatype (plugins only: code size) bin_op_full =
+datatype (plugins only: code size) bin_op =
     BAnd | BOr | BImplies | BIff
   | BEq | BNeq
   | BLt | BGt | BLe | BGe
@@ -160,105 +121,105 @@ datatype (plugins only: code size) bin_op_full =
   | BSubset | BUnion | BIntersect | BDiff
   | BAdd | BSub | BMul | BDiv
 
-datatype (plugins only: code size) un_op_full = UNot | UNegate | UCardinality | UPower
+datatype (plugins only: code size) un_op = UNot | UNegate | UCardinality | UPower
 
-datatype (plugins only: code size) quant_kind_full = QAll | QSome | QNo | QExists
+datatype (plugins only: code size) quant_kind = QAll | QSome | QNo | QExists
 
-datatype (plugins only: code size) binding_kind_full = BkIn | BkColon
+datatype (plugins only: code size) binding_kind = BkIn | BkColon
 
-datatype (plugins only: code size) type_expr_full =
+datatype (plugins only: code size) type_expr =
     NamedTypeF "String.literal" option_span
-  | SetTypeF type_expr_full option_span
-  | MapTypeF type_expr_full type_expr_full option_span
-  | SeqTypeF type_expr_full option_span
-  | OptionTypeF type_expr_full option_span
-  | RelationTypeF type_expr_full multiplicity type_expr_full option_span
+  | SetTypeF type_expr option_span
+  | MapTypeF type_expr type_expr option_span
+  | SeqTypeF type_expr option_span
+  | OptionTypeF type_expr option_span
+  | RelationTypeF type_expr multiplicity type_expr option_span
 
-datatype (plugins only: code size) expr_full =
-    BinaryOpF bin_op_full expr_full expr_full option_span
-  | UnaryOpF un_op_full expr_full option_span
-  | QuantifierF quant_kind_full "quantifier_binding_full list" expr_full option_span
-  | SomeWrapF expr_full option_span
-  | TheF "String.literal" expr_full expr_full option_span
-  | FieldAccessF expr_full "String.literal" option_span
-  | EnumAccessF expr_full "String.literal" option_span
-  | IndexF expr_full expr_full option_span
-  | CallF expr_full "expr_full list" option_span
-  | PrimeF expr_full option_span
-  | PreF expr_full option_span
-  | WithF expr_full "field_assign_full list" option_span
-  | IfF expr_full expr_full expr_full option_span
-  | LetF "String.literal" expr_full expr_full option_span
-  | LambdaF "String.literal" expr_full option_span
-  | ConstructorF "String.literal" "field_assign_full list" option_span
-  | SetLiteralF "expr_full list" option_span
-  | MapLiteralF "map_entry_full list" option_span
-  | SetComprehensionF "String.literal" expr_full expr_full option_span
-  | SeqLiteralF "expr_full list" option_span
-  | MatchesF expr_full "String.literal" option_span
+datatype (plugins only: code size) expr =
+    BinaryOpF bin_op expr expr option_span
+  | UnaryOpF un_op expr option_span
+  | QuantifierF quant_kind "quantifier_binding list" expr option_span
+  | SomeWrapF expr option_span
+  | TheF "String.literal" expr expr option_span
+  | FieldAccessF expr "String.literal" option_span
+  | EnumAccessF expr "String.literal" option_span
+  | IndexF expr expr option_span
+  | CallF expr "expr list" option_span
+  | PrimeF expr option_span
+  | PreF expr option_span
+  | WithF expr "field_assign list" option_span
+  | IfF expr expr expr option_span
+  | LetF "String.literal" expr expr option_span
+  | LambdaF "String.literal" expr option_span
+  | ConstructorF "String.literal" "field_assign list" option_span
+  | SetLiteralF "expr list" option_span
+  | MapLiteralF "map_entry list" option_span
+  | SetComprehensionF "String.literal" expr expr option_span
+  | SeqLiteralF "expr list" option_span
+  | MatchesF expr "String.literal" option_span
   | IntLitF int option_span
   | FloatLitF "String.literal" option_span
   | StringLitF "String.literal" option_span
   | BoolLitF bool option_span
   | NoneLitF option_span
   | IdentifierF "String.literal" option_span
-and field_assign_full =
-    FieldAssignFull (fasName: "String.literal") (fasValue: expr_full) (fasSpan: option_span)
-and map_entry_full =
-    MapEntryFull (mpeKey: expr_full) (mpeValue: expr_full) (mpeSpan: option_span)
-and quantifier_binding_full =
-    QuantifierBindingFull (qbdVar: "String.literal") (qbdCollection: expr_full) (qbdKind: binding_kind_full) (qbdSpan: option_span)
+and field_assign =
+    FieldAssignFull (fasName: "String.literal") (fasValue: expr) (fasSpan: option_span)
+and map_entry =
+    MapEntryFull (mpeKey: expr) (mpeValue: expr) (mpeSpan: option_span)
+and quantifier_binding =
+    QuantifierBindingFull (qbdVar: "String.literal") (qbdCollection: expr) (qbdKind: binding_kind) (qbdSpan: option_span)
 
-datatype (plugins only: code size) field_decl_full =
-    FieldDeclFull (fldName: "String.literal") (fldType: type_expr_full) (fldDefault: "expr_full option") (fldSpan: option_span)
+datatype (plugins only: code size) field_decl =
+    FieldDeclFull (fldName: "String.literal") (fldType: type_expr) (fldDefault: "expr option") (fldSpan: option_span)
 
-datatype (plugins only: code size) entity_decl_full =
-    EntityDeclFull (entName: "String.literal") (entParent: "String.literal option") (entFields: "field_decl_full list") (entInvariants: "expr_full list") (entSpan: option_span)
+datatype (plugins only: code size) entity_decl =
+    EntityDeclFull (entName: "String.literal") (entParent: "String.literal option") (entFields: "field_decl list") (entInvariants: "expr list") (entSpan: option_span)
 
-datatype (plugins only: code size) enum_decl_full =
+datatype (plugins only: code size) enum_decl =
     EnumDeclFull (enmName: "String.literal") (enmVariants: "String.literal list") (enmSpan: option_span)
 
-datatype (plugins only: code size) type_alias_decl_full =
-    TypeAliasDeclFull (talName: "String.literal") (talType: type_expr_full) (talConstraint: "expr_full option") (talSpan: option_span)
+datatype (plugins only: code size) type_alias_decl =
+    TypeAliasDeclFull (talName: "String.literal") (talType: type_expr) (talConstraint: "expr option") (talSpan: option_span)
 
-datatype (plugins only: code size) state_field_decl_full =
-    StateFieldDeclFull (stfName: "String.literal") (stfType: type_expr_full) (stfSpan: option_span)
+datatype (plugins only: code size) state_field_decl =
+    StateFieldDeclFull (stfName: "String.literal") (stfType: type_expr) (stfSpan: option_span)
 
-datatype (plugins only: code size) state_decl_full =
-    StateDeclFull (stdFields: "state_field_decl_full list") (stdSpan: option_span)
+datatype (plugins only: code size) state_decl =
+    StateDeclFull (stdFields: "state_field_decl list") (stdSpan: option_span)
 
-datatype (plugins only: code size) param_decl_full =
-    ParamDeclFull (prmName: "String.literal") (prmType: type_expr_full) (prmSpan: option_span)
+datatype (plugins only: code size) param_decl =
+    ParamDeclFull (prmName: "String.literal") (prmType: type_expr) (prmSpan: option_span)
 
-datatype (plugins only: code size) operation_decl_full =
-    OperationDeclFull (operName: "String.literal") (operInputs: "param_decl_full list") (operOutputs: "param_decl_full list") (operRequires: "expr_full list") (operEnsures: "expr_full list") (operSpan: option_span)
+datatype (plugins only: code size) operation_decl =
+    OperationDeclFull (operName: "String.literal") (operInputs: "param_decl list") (operOutputs: "param_decl list") (operRequires: "expr list") (operEnsures: "expr list") (operSpan: option_span)
 
-datatype (plugins only: code size) transition_rule_full =
-    TransitionRuleFull (trlFrom: "String.literal") (trlTo: "String.literal") (trlVia: "String.literal") (trlGuard: "expr_full option") (trlSpan: option_span)
+datatype (plugins only: code size) transition_rule =
+    TransitionRuleFull (trlFrom: "String.literal") (trlTo: "String.literal") (trlVia: "String.literal") (trlGuard: "expr option") (trlSpan: option_span)
 
-datatype (plugins only: code size) transition_decl_full =
-    TransitionDeclFull (trnName: "String.literal") (trnEntity: "String.literal") (trnField: "String.literal") (trnRules: "transition_rule_full list") (trnSpan: option_span)
+datatype (plugins only: code size) transition_decl =
+    TransitionDeclFull (trnName: "String.literal") (trnEntity: "String.literal") (trnField: "String.literal") (trnRules: "transition_rule list") (trnSpan: option_span)
 
-datatype (plugins only: code size) invariant_decl_full =
-    InvariantDeclFull (invName: "String.literal option") (invBody: expr_full) (invSpan: option_span)
+datatype (plugins only: code size) invariant_decl =
+    InvariantDeclFull (invName: "String.literal option") (invBody: expr) (invSpan: option_span)
 
 datatype (plugins only: code size) temporal_body =
-    TbAlways expr_full
-  | TbEventually expr_full
-  | TbFairness expr_full
-  | TbInvalid expr_full
+    TbAlways expr
+  | TbEventually expr
+  | TbFairness expr
+  | TbInvalid expr
 
-datatype (plugins only: code size) temporal_decl_full =
+datatype (plugins only: code size) temporal_decl =
     TemporalDeclFull (tmpName: "String.literal") (tmpBody: temporal_body) (tmpSpan: option_span)
 
-datatype (plugins only: code size) fact_decl_full =
-    FactDeclFull (fctName: "String.literal option") (fctBody: expr_full) (fctSpan: option_span)
+datatype (plugins only: code size) fact_decl =
+    FactDeclFull (fctName: "String.literal option") (fctBody: expr) (fctSpan: option_span)
 
-datatype (plugins only: code size) function_decl_full =
-    FunctionDeclFull (fncName: "String.literal") (fncParams: "param_decl_full list") (fncRetType: type_expr_full) (fncBody: expr_full) (fncSpan: option_span)
+datatype (plugins only: code size) function_decl =
+    FunctionDeclFull (fncName: "String.literal") (fncParams: "param_decl list") (fncRetType: type_expr) (fncBody: expr) (fncSpan: option_span)
 
-datatype (plugins only: code size) predicate_decl_full =
-    PredicateDeclFull (prdName: "String.literal") (prdParams: "param_decl_full list") (prdBody: expr_full) (prdSpan: option_span)
+datatype (plugins only: code size) predicate_decl =
+    PredicateDeclFull (prdName: "String.literal") (prdParams: "param_decl list") (prdBody: expr) (prdSpan: option_span)
 
 text \<open>Convention values: parse-don't-validate shape, streamlined to a small
   fixed set of payload shapes. The parser dispatches on the property name
@@ -267,7 +228,7 @@ text \<open>Convention values: parse-don't-validate shape, streamlined to a smal
     \<open>parsed_value\<close> shapes (string, int, bool, string-pair, or
     runtime-expr for properties like \<open>http_header\<close> that accept
     non-literal expressions). The \<open>pv\<close> carries the validated payload;
-    the property name on the enclosing \<open>convention_rule_full\<close>
+    the property name on the enclosing \<open>convention_rule\<close>
     disambiguates which property it belongs to.
   \<^enum> \<open>CvBad failure\<close> when the parser recognised the property but the
     value was wrong-typed or out-of-range. Validator emits the diagnostic
@@ -294,7 +255,7 @@ datatype (plugins only: code size) parsed_value =
   | PvInt    int
   | PvBool   bool
   | PvStrPair "String.literal" "String.literal"
-  | PvExpr   expr_full
+  | PvExpr   expr
   \<comment> \<open>PvExpr carries an expression verbatim for properties (notably
     \<open>http_header\<close>) that accept runtime-evaluated values like
     \<open>output.url\<close> or bare identifiers — values the parser tolerates
@@ -302,24 +263,24 @@ datatype (plugins only: code size) parsed_value =
 
 datatype (plugins only: code size) convention_value =
     CvOk      parsed_value
-  | CvBad     validation_failure expr_full   \<comment> \<open>why + raw expr (for diagnostics)\<close>
-  | CvUnknown expr_full                       \<comment> \<open>unrecognised property name\<close>
+  | CvBad     validation_failure expr   \<comment> \<open>why + raw expr (for diagnostics)\<close>
+  | CvUnknown expr                       \<comment> \<open>unrecognised property name\<close>
 
-datatype (plugins only: code size) convention_rule_full =
+datatype (plugins only: code size) convention_rule =
     ConventionRuleFull (cvrTarget: "String.literal") (cvrProperty: "String.literal") (cvrQualifier: "String.literal option")
                        (cvrValue: convention_value) (cvrSpan: option_span)
 
-datatype (plugins only: code size) conventions_decl_full =
-    ConventionsDeclFull (cvdRules: "convention_rule_full list") (cvdSpan: option_span)
+datatype (plugins only: code size) conventions_decl =
+    ConventionsDeclFull (cvdRules: "convention_rule list") (cvdSpan: option_span)
 
-datatype (plugins only: code size) service_ir_full =
+datatype (plugins only: code size) service_ir =
     ServiceIRFull (svcName: "String.literal") (svcImports: "String.literal list")
-                  (svcEntities: "entity_decl_full list") (svcEnums: "enum_decl_full list")
-                  (svcTypeAliases: "type_alias_decl_full list") (svcState: "state_decl_full option")
-                  (svcOperations: "operation_decl_full list") (svcTransitions: "transition_decl_full list")
-                  (svcInvariants: "invariant_decl_full list") (svcTemporals: "temporal_decl_full list")
-                  (svcFacts: "fact_decl_full list") (svcFunctions: "function_decl_full list")
-                  (svcPredicates: "predicate_decl_full list") (svcConventions: "conventions_decl_full option")
+                  (svcEntities: "entity_decl list") (svcEnums: "enum_decl list")
+                  (svcTypeAliases: "type_alias_decl list") (svcState: "state_decl option")
+                  (svcOperations: "operation_decl list") (svcTransitions: "transition_decl list")
+                  (svcInvariants: "invariant_decl list") (svcTemporals: "temporal_decl list")
+                  (svcFacts: "fact_decl list") (svcFunctions: "function_decl list")
+                  (svcPredicates: "predicate_decl list") (svcConventions: "conventions_decl option")
                   (svcSpan: option_span)
 
 text \<open>\<open>string_in_list\<close> is the monomorphic membership predicate over
@@ -332,7 +293,7 @@ primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Ri
   "string_in_list y [] = False"
 | "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
 
-fun isLitFull :: "expr_full \<Rightarrow> bool" where
+fun isLitFull :: "expr \<Rightarrow> bool" where
   "isLitFull (BoolLitF _ _)   = True"
 | "isLitFull (IntLitF _ _)    = True"
 | "isLitFull (FloatLitF _ _)  = True"
@@ -341,17 +302,17 @@ fun isLitFull :: "expr_full \<Rightarrow> bool" where
 | "isLitFull _                = False"
 
 text \<open>\<^bold>\<open>Generic tree-walk: \<open>allSubexprs\<close>\<close>. Returns every subterm of
-  an \<open>expr_full\<close> (including the root) as a single list, via structural
+  an \<open>expr\<close> (including the root) as a single list, via structural
   mutual \<open>fun\<close> recursion. Defined alongside \<open>subexprs\<close> (one-step
   children) so every binder-insensitive query / collector across IR /
   IR_Analysis / IR_Helpers / LintAnalysis can compose on it instead of
   re-enumerating the 28 constructors per walker.\<close>
 
-fun allSubexprs :: "expr_full \<Rightarrow> expr_full list"
-and allSubexprs_list :: "expr_full list \<Rightarrow> expr_full list"
-and allSubexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
-and allSubexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
-and allSubexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
+fun allSubexprs :: "expr \<Rightarrow> expr list"
+and allSubexprs_list :: "expr list \<Rightarrow> expr list"
+and allSubexprs_fields :: "field_assign list \<Rightarrow> expr list"
+and allSubexprs_entries :: "map_entry list \<Rightarrow> expr list"
+and allSubexprs_bindings :: "quantifier_binding list \<Rightarrow> expr list"
 where
   "allSubexprs (BinaryOpF op l r sp)        = BinaryOpF op l r sp # allSubexprs l @ allSubexprs r"
 | "allSubexprs (UnaryOpF op e sp)           = UnaryOpF op e sp # allSubexprs e"
@@ -390,7 +351,7 @@ where
 | "allSubexprs_bindings (QuantifierBindingFull n d a sp # bs)   = allSubexprs d @ allSubexprs_bindings bs"
 
 text \<open>Phase 8 (verifier classifier port): \<open>requiresAlloy\<close> identifies
-  \<open>expr_full\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
+  \<open>expr\<close> shapes that contain a \<open>UPower\<close> (set-power) constructor anywhere
   in the expression tree. The verifier routes such checks to the Alloy backend
   (which models set power) instead of Z3.
 
@@ -401,11 +362,11 @@ text \<open>Phase 8 (verifier classifier port): \<open>requiresAlloy\<close> ide
   / per-constructor simp rules that those proofs rely on, so existing
   Soundness theorems continue to discharge without restructuring.\<close>
 
-fun isUPowerUnary :: "expr_full \<Rightarrow> bool" where
+fun isUPowerUnary :: "expr \<Rightarrow> bool" where
   "isUPowerUnary (UnaryOpF UPower _ _) = True"
 | "isUPowerUnary _                     = False"
 
-definition requiresAlloy :: "expr_full \<Rightarrow> bool" where
+definition requiresAlloy :: "expr \<Rightarrow> bool" where
   "requiresAlloy e = list_ex isUPowerUnary (allSubexprs e)"
 
 text \<open>Symmetric helpers over the wrapper-list types: each uses the
@@ -413,16 +374,16 @@ text \<open>Symmetric helpers over the wrapper-list types: each uses the
   fall out by definition unfolding + the \<open>allSubexprs.simps\<close>
   equations (which are already simp by \<open>fun\<close> auto-generation).\<close>
 
-definition requiresAlloy_list :: "expr_full list \<Rightarrow> bool" where
+definition requiresAlloy_list :: "expr list \<Rightarrow> bool" where
   "requiresAlloy_list xs = list_ex isUPowerUnary (allSubexprs_list xs)"
 
-definition requiresAlloy_fields :: "field_assign_full list \<Rightarrow> bool" where
+definition requiresAlloy_fields :: "field_assign list \<Rightarrow> bool" where
   "requiresAlloy_fields fs = list_ex isUPowerUnary (allSubexprs_fields fs)"
 
-definition requiresAlloy_entries :: "map_entry_full list \<Rightarrow> bool" where
+definition requiresAlloy_entries :: "map_entry list \<Rightarrow> bool" where
   "requiresAlloy_entries es = list_ex isUPowerUnary (allSubexprs_entries es)"
 
-definition requiresAlloy_bindings :: "quantifier_binding_full list \<Rightarrow> bool" where
+definition requiresAlloy_bindings :: "quantifier_binding list \<Rightarrow> bool" where
   "requiresAlloy_bindings bs = list_ex isUPowerUnary (allSubexprs_bindings bs)"
 
 text \<open>Derived equations: re-establish the per-constructor / per-cons
@@ -557,15 +518,15 @@ lemma requiresAlloy_IdentifierF [simp]: "requiresAlloy (IdentifierF n sp) = Fals
   by (simp add: requiresAlloy_def)
 
 text \<open>Phase 9a (structural primitives): \<open>subexprs\<close> returns the direct
-  \<open>expr_full\<close> children of an expression. Replaces ad-hoc 27-arm structural
+  \<open>expr\<close> children of an expression. Replaces ad-hoc 27-arm structural
   folds in lint walkers, classifier helpers, narration / diagnostic
   collectors, and per-target translators with one proven primitive. New
   consumers compose: e.g. \<open>def visit(e) = ...; subexprs(e).foreach(visit)\<close>.\<close>
 
-fun subexprs :: "expr_full \<Rightarrow> expr_full list"
-and subexprs_fields :: "field_assign_full list \<Rightarrow> expr_full list"
-and subexprs_entries :: "map_entry_full list \<Rightarrow> expr_full list"
-and subexprs_bindings :: "quantifier_binding_full list \<Rightarrow> expr_full list"
+fun subexprs :: "expr \<Rightarrow> expr list"
+and subexprs_fields :: "field_assign list \<Rightarrow> expr list"
+and subexprs_entries :: "map_entry list \<Rightarrow> expr list"
+and subexprs_bindings :: "quantifier_binding list \<Rightarrow> expr list"
 where
   "subexprs (BinaryOpF _ l r _)             = [l, r]"
 | "subexprs (UnaryOpF _ e _)                = [e]"
@@ -602,20 +563,20 @@ where
 | "subexprs_bindings (QuantifierBindingFull _ d _ _ # bs)      = d # subexprs_bindings bs"
 
 text \<open>Phase 9b (structural primitives): \<open>stripSpans\<close> erases every
-  \<open>option_span\<close> in an \<open>expr_full\<close> tree (and the three child-list-bearing
+  \<open>option_span\<close> in an \<open>expr\<close> tree (and the three child-list-bearing
   companions) to \<open>None\<close>, leaving structure and scalar payloads intact.
-  \<open>typeStripSpans\<close> does the same for \<open>type_expr_full\<close>. Two spans-erased
+  \<open>typeStripSpans\<close> does the same for \<open>type_expr\<close>. Two spans-erased
   values are HOL-equal iff the originals are structurally equal modulo source
   position — so consumers compare span-insensitive shape by extracted
   structural \<open>equals\<close> instead of hand-rolling a 50-arm string fingerprint
-  that must track every \<open>expr_full\<close> constructor by hand (lint L04 operation
+  that must track every \<open>expr\<close> constructor by hand (lint L04 operation
   overlap). Total structural maps; termination is automatic.\<close>
 
-fun stripSpans :: "expr_full \<Rightarrow> expr_full"
-and stripSpans_list :: "expr_full list \<Rightarrow> expr_full list"
-and stripSpans_fields :: "field_assign_full list \<Rightarrow> field_assign_full list"
-and stripSpans_entries :: "map_entry_full list \<Rightarrow> map_entry_full list"
-and stripSpans_bindings :: "quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+fun stripSpans :: "expr \<Rightarrow> expr"
+and stripSpans_list :: "expr list \<Rightarrow> expr list"
+and stripSpans_fields :: "field_assign list \<Rightarrow> field_assign list"
+and stripSpans_entries :: "map_entry list \<Rightarrow> map_entry list"
+and stripSpans_bindings :: "quantifier_binding list \<Rightarrow> quantifier_binding list"
 where
   "stripSpans (BinaryOpF op l r _)        = BinaryOpF op (stripSpans l) (stripSpans r) None"
 | "stripSpans (UnaryOpF op e _)           = UnaryOpF op (stripSpans e) None"
@@ -653,7 +614,7 @@ where
 | "stripSpans_bindings []                                = []"
 | "stripSpans_bindings (QuantifierBindingFull v d k _ # bs) = QuantifierBindingFull v (stripSpans d) k None # stripSpans_bindings bs"
 
-fun typeStripSpans :: "type_expr_full \<Rightarrow> type_expr_full" where
+fun typeStripSpans :: "type_expr \<Rightarrow> type_expr" where
   "typeStripSpans (NamedTypeF n _)        = NamedTypeF n None"
 | "typeStripSpans (SetTypeF t _)          = SetTypeF (typeStripSpans t) None"
 | "typeStripSpans (MapTypeF k v _)        = MapTypeF (typeStripSpans k) (typeStripSpans v) None"
@@ -662,11 +623,11 @@ fun typeStripSpans :: "type_expr_full \<Rightarrow> type_expr_full" where
 | "typeStripSpans (RelationTypeF f m t _) = RelationTypeF (typeStripSpans f) m (typeStripSpans t) None"
 
 text \<open>Phase 9c: \<open>binOpToTs\<close> is the single source of truth for the
-  surface spelling of each \<open>bin_op_full\<close>. Consumed by the verifier's
+  surface spelling of each \<open>bin_op\<close>. Consumed by the verifier's
   diagnostic messages (\<open>z3.Translator\<close>); replaces a hand 20-arm table that
-  had to track every \<open>bin_op_full\<close> constructor by hand.\<close>
+  had to track every \<open>bin_op\<close> constructor by hand.\<close>
 
-fun binOpToTs :: "bin_op_full \<Rightarrow> String.literal" where
+fun binOpToTs :: "bin_op \<Rightarrow> String.literal" where
   "binOpToTs BAnd       = STR ''and''"
 | "binOpToTs BOr        = STR ''or''"
 | "binOpToTs BImplies   = STR ''implies''"
@@ -688,7 +649,7 @@ fun binOpToTs :: "bin_op_full \<Rightarrow> String.literal" where
 | "binOpToTs BMul       = STR ''*''"
 | "binOpToTs BDiv       = STR ''/''"
 
-fun spanOf :: "expr_full \<Rightarrow> option_span" where
+fun spanOf :: "expr \<Rightarrow> option_span" where
   "spanOf (BinaryOpF _ _ _ sp)         = sp"
 | "spanOf (UnaryOpF _ _ sp)            = sp"
 | "spanOf (QuantifierF _ _ _ sp)       = sp"
@@ -717,28 +678,40 @@ fun spanOf :: "expr_full \<Rightarrow> option_span" where
 | "spanOf (NoneLitF sp)                = sp"
 | "spanOf (IdentifierF _ sp)           = sp"
 
-fun flattenAnd :: "expr_full \<Rightarrow> expr_full list" where
+fun flattenAnd :: "expr \<Rightarrow> expr list" where
   "flattenAnd (BinaryOpF BAnd l r _) = flattenAnd l @ flattenAnd r"
 | "flattenAnd e                      = [e]"
 
-fun flattenEnsuresExpr :: "expr_full \<Rightarrow> expr_full list" where
+fun flattenEnsuresExpr :: "expr \<Rightarrow> expr list" where
   "flattenEnsuresExpr (BinaryOpF BAnd l r _) =
      flattenEnsuresExpr l @ flattenEnsuresExpr r"
 | "flattenEnsuresExpr (LetF _ v b _) =
      flattenEnsuresExpr v @ flattenEnsuresExpr b"
 | "flattenEnsuresExpr e = [e]"
 
-definition flattenEnsures :: "expr_full list \<Rightarrow> expr_full list" where
+definition flattenEnsures :: "expr list \<Rightarrow> expr list" where
   "flattenEnsures es \<equiv> List.concat (map flattenEnsuresExpr es)"
 
-definition flattenAndAll :: "expr_full list \<Rightarrow> expr_full list" where
+definition flattenAndAll :: "expr list \<Rightarrow> expr list" where
   "flattenAndAll es \<equiv> List.concat (map flattenAnd es)"
 
-fun rootIdentifier :: "expr_full \<Rightarrow> String.literal option" where
+fun rootIdentifier :: "expr \<Rightarrow> String.literal option" where
   "rootIdentifier (IdentifierF n _)        = Some n"
 | "rootIdentifier (IndexF base _ _)        = rootIdentifier base"
 | "rootIdentifier (FieldAccessF base _ _)  = rootIdentifier base"
 | "rootIdentifier _                        = None"
+
+fun dom_arg :: "expr \<Rightarrow> String.literal option" where
+  "dom_arg (CallF c args _) =
+     (case (c, args) of
+        (IdentifierF d _, [IdentifierF x _]) \<Rightarrow> (if d = STR ''dom'' then Some x else None)
+      | _ \<Rightarrow> None)"
+| "dom_arg _ = None"
+
+lemma dom_arg_SomeD:
+  "dom_arg e = Some x
+     \<Longrightarrow> \<exists>sp1 sp2 sp. e = CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF x sp2] sp"
+  by (erule dom_arg.elims; auto split: expr.splits list.splits if_splits prod.splits)
 
 lemmas allSubexprs_code [code]            = allSubexprs.simps allSubexprs_list.simps
                                              allSubexprs_fields.simps

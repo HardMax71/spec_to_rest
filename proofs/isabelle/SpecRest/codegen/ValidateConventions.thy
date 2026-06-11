@@ -54,15 +54,15 @@ where
 text \<open>Per-shape extractors used by the dispatcher to keep the case-tree
   narrow. Each returns \<open>Some payload\<close> or \<open>None\<close> on shape mismatch.\<close>
 
-fun asStringLit :: "expr_full \<Rightarrow> String.literal option" where
+fun asStringLit :: "expr \<Rightarrow> String.literal option" where
   "asStringLit (StringLitF v _) = Some v"
 | "asStringLit _ = None"
 
-fun asIntLit :: "expr_full \<Rightarrow> int option" where
+fun asIntLit :: "expr \<Rightarrow> int option" where
   "asIntLit (IntLitF n _) = Some n"
 | "asIntLit _ = None"
 
-fun asBoolLit :: "expr_full \<Rightarrow> bool option" where
+fun asBoolLit :: "expr \<Rightarrow> bool option" where
   "asBoolLit (BoolLitF b _) = Some b"
 | "asBoolLit _ = None"
 
@@ -73,31 +73,31 @@ text \<open>Per-property parsers. Each takes the raw expression and returns a
   (just-non-empty string, just-string, just-bool) are handled by short
   inline let-bindings in the dispatcher.\<close>
 
-definition parseHttpMethodPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseHttpMethodPv :: "expr \<Rightarrow> convention_value" where
   "parseHttpMethodPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow> (case parseHttpMethod v of
                     Some _ \<Rightarrow> CvOk (PvString v)
                   | None   \<Rightarrow> CvBad (BadHttpMethod v) e))"
 
-definition parseHttpStatusPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseHttpStatusPv :: "expr \<Rightarrow> convention_value" where
   "parseHttpStatusPv e = (case asIntLit e of
        None \<Rightarrow> CvBad ExpectedInteger e
      | Some n \<Rightarrow> (if 100 \<le> n \<and> n \<le> 599 then CvOk (PvInt n)
                   else CvBad (HttpStatusOutOfRange n) e))"
 
-definition parseHttpPathPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseHttpPathPv :: "expr \<Rightarrow> convention_value" where
   "parseHttpPathPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow> (if literalStartsWithSlash v then CvOk (PvString v)
                   else CvBad HttpPathMissingSlash e))"
 
-definition parseNonEmptyStringPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseNonEmptyStringPv :: "expr \<Rightarrow> convention_value" where
   "parseNonEmptyStringPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow> (if literalIsBlank v then CvBad EmptyString e else CvOk (PvString v)))"
 
-definition parseStringPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseStringPv :: "expr \<Rightarrow> convention_value" where
   "parseStringPv e = (case asStringLit e of
        None   \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow> CvOk (PvString v))"
@@ -107,17 +107,17 @@ text \<open>\<open>http_header\<close> tolerates runtime-evaluated values: a hea
   Non-literal shapes pass through as \<open>PvExpr\<close> so downstream consumers
   see the raw expression; no diagnostic is emitted.\<close>
 
-definition parseHttpHeaderPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseHttpHeaderPv :: "expr \<Rightarrow> convention_value" where
   "parseHttpHeaderPv e = (case asStringLit e of
        Some v \<Rightarrow> CvOk (PvString v)
      | None   \<Rightarrow> CvOk (PvExpr e))"
 
-definition parseBoolPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseBoolPv :: "expr \<Rightarrow> convention_value" where
   "parseBoolPv e = (case asBoolLit e of
        None   \<Rightarrow> CvBad ExpectedBoolean e
      | Some b \<Rightarrow> CvOk (PvBool b))"
 
-definition parseTestStrategyPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseTestStrategyPv :: "expr \<Rightarrow> convention_value" where
   "parseTestStrategyPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow>
@@ -125,7 +125,7 @@ definition parseTestStrategyPv :: "expr_full \<Rightarrow> convention_value" whe
           else if v = STR ''redacted'' then CvOk (PvBool False)
           else CvBad (BadTestStrategy v) e))"
 
-definition parseStrategyPv :: "expr_full \<Rightarrow> convention_value" where
+definition parseStrategyPv :: "expr \<Rightarrow> convention_value" where
   "parseStrategyPv e = (case asStringLit e of
        None \<Rightarrow> CvBad ExpectedString e
      | Some v \<Rightarrow>
@@ -140,7 +140,7 @@ text \<open>Single-dispatch parser. Property-name string \<open>\<longmapsto>\<c
   parser \<open>\<longmapsto>\<close> typed convention_value.\<close>
 
 definition parseConventionValue ::
-  "String.literal \<Rightarrow> expr_full \<Rightarrow> convention_value"
+  "String.literal \<Rightarrow> expr \<Rightarrow> convention_value"
 where
   "parseConventionValue prop e =
      (if prop = STR ''http_method''         then parseHttpMethodPv e
@@ -173,7 +173,7 @@ datatype convention_ir_diagnostic =
           ("operation" / "entity" / "target")\<close>
 
 fun findOperationByName ::
-  "operation_decl_full list \<Rightarrow> String.literal \<Rightarrow> operation_decl_full option"
+  "operation_decl list \<Rightarrow> String.literal \<Rightarrow> operation_decl option"
 where
   "findOperationByName [] _ = None"
 | "findOperationByName (OperationDeclFull n a b c d e # rest) nm =
@@ -181,21 +181,21 @@ where
       else findOperationByName rest nm)"
 
 fun paramListHasName ::
-  "param_decl_full list \<Rightarrow> String.literal \<Rightarrow> bool"
+  "param_decl list \<Rightarrow> String.literal \<Rightarrow> bool"
 where
   "paramListHasName [] _ = False"
 | "paramListHasName (ParamDeclFull pn _ _ # rest) nm =
      (if pn = nm then True else paramListHasName rest nm)"
 
 fun operationHasParamNamed ::
-  "operation_decl_full \<Rightarrow> String.literal \<Rightarrow> bool"
+  "operation_decl \<Rightarrow> String.literal \<Rightarrow> bool"
 where
   "operationHasParamNamed (OperationDeclFull _ inputs _ _ _ _) nm =
      paramListHasName inputs nm"
 
 fun validateIrContextRule ::
-  "convention_rule_full \<Rightarrow> entity_decl_full list \<Rightarrow>
-   operation_decl_full list \<Rightarrow> convention_ir_diagnostic list"
+  "convention_rule \<Rightarrow> entity_decl list \<Rightarrow>
+   operation_decl list \<Rightarrow> convention_ir_diagnostic list"
 where
   "validateIrContextRule (ConventionRuleFull target prop qualOpt _ _) entities ops =
      (case qualOpt of
@@ -256,7 +256,7 @@ text \<open>Per-rule tuple is \<open>(field, target, value)\<close>. The origina
   extracted Scala type for no consumer.\<close>
 
 fun extractTsTuple ::
-  "convention_rule_full \<Rightarrow> String.literal list
+  "convention_rule \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option"
 where
   "extractTsTuple (ConventionRuleFull target prop qualOpt val _) ens =
@@ -272,7 +272,7 @@ where
       else None)"
 
 fun extractTsTuples ::
-  "convention_rule_full list \<Rightarrow> String.literal list
+  "convention_rule list \<Rightarrow> String.literal list
    \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list"
 where
   "extractTsTuples [] _ = []"
@@ -321,7 +321,7 @@ text \<open>Takes precomputed tuples so Scala can call \<open>extractTsTuples\<c
   the rule count.\<close>
 
 definition collisionsForRule ::
-  "convention_rule_full
+  "convention_rule
    \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) list
    \<Rightarrow> String.literal list \<Rightarrow> (String.literal \<times> String.literal) list"
 where
@@ -348,8 +348,8 @@ lemmas targetsOf_code [code] = targetsOf.simps
 lemmas valuesOf_code [code] = valuesOf.simps
 lemmas otherPairsForField_code [code] = otherPairsForField.simps
 text \<open>Inverse of \<open>parseConventionValue\<close>: re-synthesise an
-  \<open>expr_full\<close> from a typed convention value. Used by Scala's
-  \<open>Serialize\<close> to round-trip \<open>convention_rule_full\<close> through JSON.
+  \<open>expr\<close> from a typed convention value. Used by Scala's
+  \<open>Serialize\<close> to round-trip \<open>convention_rule\<close> through JSON.
 
   \<^item> \<open>CvOk pv\<close> emits the canonical literal form of \<open>pv\<close>;
   \<^item> \<open>CvBad _ raw\<close> / \<open>CvUnknown raw\<close> emit the original raw
@@ -358,12 +358,12 @@ text \<open>Inverse of \<open>parseConventionValue\<close>: re-synthesise an
   Mirrors the same pattern as \<open>synthTemporalExpr\<close> (PR #336). Span
   handling differs by branch: freshly-constructed canonical literals
   (\<open>StringLitF\<close> / \<open>IntLitF\<close> / \<open>BoolLitF\<close> for the four primitive
-  payload shapes) use \<open>None\<close> because the outer \<open>convention_rule_full\<close>
+  payload shapes) use \<open>None\<close> because the outer \<open>convention_rule\<close>
   preserves source location; the passthrough branches (\<open>PvExpr\<close>,
   \<open>CvBad\<close>, \<open>CvUnknown\<close>) preserve whatever spans the original
   \<open>raw\<close> expression carried.\<close>
 
-definition synthConventionValue :: "convention_value \<Rightarrow> expr_full" where
+definition synthConventionValue :: "convention_value \<Rightarrow> expr" where
   "synthConventionValue v = (case v of
        CvOk (PvString s)    \<Rightarrow> StringLitF s None
      | CvOk (PvInt n)       \<Rightarrow> IntLitF n None

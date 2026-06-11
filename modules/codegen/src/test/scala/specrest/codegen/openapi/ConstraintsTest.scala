@@ -7,7 +7,7 @@ class ConstraintsTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF = NamedTypeF(t, None)
 
-  private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
+  private def alias(name: String, target: type_expr): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
 
   private def enumD(name: String, values: List[String]): EnumDeclFull =

@@ -1,14 +1,14 @@
 theory Preservation_WellTyped
-  imports Preservation_Lower
+  imports Preservation_Wf
 begin
 
 text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
   H2 arith / cmp / bool fragment lies in the Phase 9j \<open>wf_z3\<close>
-  subset. Composed with \<open>wf_z3_imp_lower_some_expr\<close> this gives
+  subset. Composed with \<open>wf_z3_imp_tfd_some\<close> this gives
   the first half of the progress chain:
-    well-typed e ==> wf_z3 e ==> lower enums e \<noteq> None.
-  The H3 type-safety theorem will then complete the chain via
-  the H1 preservation lemmas on the lowered \<open>expr\<close>.\<close>
+    well-typed e ==> wf_z3 e ==> translate enums e \<noteq> None.
+  \<open>h3_preservation\<close> completes the chain via the H1
+  preservation lemmas against \<open>eval\<close>.\<close>
 
 lemma well_typed_imp_wf_z3:
   "expr_has_ty \<Gamma> e t \<Longrightarrow> wf_z3 e"
@@ -144,10 +144,6 @@ next
   case (T_Forall_QSome_Rel_Cons \<Gamma> dnm tv var b2 rest_bs body sp sp_id m sp_b)
   thus ?case by simp
 qed auto
-
-corollary well_typed_imp_lower_some:
-  "expr_has_ty \<Gamma> e t \<Longrightarrow> lower enums e \<noteq> None"
-  by (rule wf_z3_imp_lower_some_expr) (rule well_typed_imp_wf_z3)
 
 
 end

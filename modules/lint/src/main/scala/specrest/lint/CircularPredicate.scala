@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object CircularPredicate extends LintPass:
   val code = "L06"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: service_ir): List[LintDiagnostic] =
     val predNames = svcPredicates(ir).map(prdName)
     val funcNames = svcFunctions(ir).map(fncName)
     val nodes     = (predNames ++ funcNames).distinct

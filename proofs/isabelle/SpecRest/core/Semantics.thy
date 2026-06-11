@@ -19,16 +19,16 @@ datatype (plugins only: code size) ir_value =
 type_synonym env = "(String.literal \<times> ir_value) list"
 
 record schema =
-  sch_enums    :: "enum_decl list"
-  sch_entities :: "entity_decl list"
+  sch_enums    :: "schema_enum_decl list"
+  sch_entities :: "schema_entity_decl list"
 
 definition schema_empty :: schema where
   "schema_empty \<equiv> \<lparr> sch_enums = [], sch_entities = [] \<rparr>"
 
-definition schema_lookup_enum :: "schema \<Rightarrow> String.literal \<Rightarrow> enum_decl option" where
+definition schema_lookup_enum :: "schema \<Rightarrow> String.literal \<Rightarrow> schema_enum_decl option" where
   "schema_lookup_enum s name \<equiv> find (\<lambda>d. enm_name d = name) (sch_enums s)"
 
-definition schema_lookup_entity :: "schema \<Rightarrow> String.literal \<Rightarrow> entity_decl option" where
+definition schema_lookup_entity :: "schema \<Rightarrow> String.literal \<Rightarrow> schema_entity_decl option" where
   "schema_lookup_entity s name \<equiv> find (\<lambda>d. ed_name d = name) (sch_entities s)"
 
 record state =
@@ -241,13 +241,13 @@ record state_schema =
 record tyctx =
   tc_env       :: tyenv
   tc_schema    :: state_schema
-  tc_entities  :: "entity_decl_full list"
-  tc_relations :: "state_field_decl_full list"
+  tc_entities  :: "entity_decl list"
+  tc_relations :: "state_field_decl list"
   tc_enums     :: "String.literal list"
 
 fun typeExprFullToTy ::
   "String.literal list \<Rightarrow> String.literal list
-     \<Rightarrow> type_expr_full \<Rightarrow> ty option" where
+     \<Rightarrow> type_expr \<Rightarrow> ty option" where
   "typeExprFullToTy enums entities (NamedTypeF n _) =
      (if n = STR ''Bool'' then Some TBool
       else if n = STR ''Int'' then Some TInt
@@ -436,14 +436,14 @@ lemma check_value_has_ty_iff:
   using check_imp_vty vty_imp_check_value_has_ty by blast
 
 text \<open>Phase H2b (schema typing). A partial translation from
-  spec-side \<open>type_expr\<close> (the declared form on fields / state
+  spec-side \<open>schema_type\<close> (the declared form on fields / state
   scalars / relation positions) to the value-side \<open>ty\<close> ADT used
   by \<open>value_has_ty\<close>. Partial: \<open>RelationT\<close> has no direct \<open>ty\<close>
   counterpart (relations are kept structurally separate in this
   fragment); field declarations referring to it map to \<open>None\<close>
   and the field is not typeable via the H3 chain.\<close>
 
-fun typeExprToTy :: "type_expr \<Rightarrow> ty option" where
+fun typeExprToTy :: "schema_type \<Rightarrow> ty option" where
   "typeExprToTy BoolT           = Some TBool"
 | "typeExprToTy IntT            = Some TInt"
 | "typeExprToTy (EnumT n)       = Some (TEnum n)"
@@ -451,7 +451,7 @@ fun typeExprToTy :: "type_expr \<Rightarrow> ty option" where
 | "typeExprToTy (RelationT _ _) = None"
 
 text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
-  String.literal option\<close>, lifted to \<open>expr_full\<close>. Recognises the
+  String.literal option\<close>, lifted to \<open>expr\<close>. Recognises the
   three syntactic shapes \<open>rel_ref_shape\<close> accepts (bare ident,
   pre-ident, prime-ident) and extracts the relation name. Used
   by \<open>T_Index\<close> to bind \<open>rel_name\<close> from the base subterm.
@@ -459,15 +459,15 @@ text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Righta
   \<open>typeExprFullToTy\<close> hoisted up to the \<open>value_has_ty\<close> block since
   \<open>schemaFieldType\<close> (referenced by \<open>vt_entity_with\<close>) depends on it.\<close>
 
-fun identNameFull :: "expr_full \<Rightarrow> String.literal option" where
-  "identNameFull (IdentifierF rel _) = Some rel"
-| "identNameFull _ = None"
+fun identName :: "expr \<Rightarrow> String.literal option" where
+  "identName (IdentifierF rel _) = Some rel"
+| "identName _ = None"
 
-fun peelRelationRefFull :: "expr_full \<Rightarrow> String.literal option" where
-  "peelRelationRefFull (IdentifierF rel _) = Some rel"
-| "peelRelationRefFull (PreF b _)          = identNameFull b"
-| "peelRelationRefFull (PrimeF b _)        = identNameFull b"
-| "peelRelationRefFull _                   = None"
+fun peelRelationRef :: "expr \<Rightarrow> String.literal option" where
+  "peelRelationRef (IdentifierF rel _) = Some rel"
+| "peelRelationRef (PreF b _)          = identName b"
+| "peelRelationRef (PrimeF b _)        = identName b"
+| "peelRelationRef _                   = None"
 
 lemma eval_arith_preservation:
   assumes "eval_arith op x y = Some v"
@@ -493,7 +493,7 @@ text \<open>Phase H2 (start) - typing context and environment agreement.
   runtime environment satisfies the context. This is the lexical
   half of the typing context; state-schema typing (relations /
   entity fields) is the next sub-phase. Together they will support
-  the typing relation \<open>Gamma |- e : t\<close> over \<open>expr_full\<close> and the
+  the typing relation \<open>Gamma |- e : t\<close> over \<open>expr\<close> and the
   rule-induction type-safety theorem.\<close>
 
 definition tyenv_lookup :: "tyenv \<Rightarrow> String.literal \<Rightarrow> ty option" where
@@ -618,7 +618,7 @@ lemma schemaRelationValueType_tc_env_update [simp]:
   "schemaRelationValueType (\<Gamma>\<lparr>tc_env := xs\<rparr>) rel_name
      = schemaRelationValueType \<Gamma> rel_name"
   by (auto simp: schemaRelationValueType_def
-           split: option.splits type_expr_full.splits)
+           split: option.splits type_expr.splits)
 
 lemma entity_field_well_typed_tc_env_update [simp]:
   "entity_field_well_typed (\<Gamma>\<lparr>tc_env := xs\<rparr>) st
@@ -773,19 +773,19 @@ text \<open>\<open>tyctxFromService\<close> bootstraps the schema-typed half of 
   Lexical env + scalar schema stay empty here \<mdash> they're for the H3
   preservation case for binders, set by the verifier at use.\<close>
 
-fun serviceEntities :: "service_ir_full \<Rightarrow> entity_decl_full list" where
+fun serviceEntities :: "service_ir \<Rightarrow> entity_decl list" where
   "serviceEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _) = es"
 
-fun serviceEnums :: "service_ir_full \<Rightarrow> enum_decl_full list" where
+fun serviceEnums :: "service_ir \<Rightarrow> enum_decl list" where
   "serviceEnums (ServiceIRFull _ _ _ en _ _ _ _ _ _ _ _ _ _ _) = en"
 
 fun serviceStateFields ::
-  "service_ir_full \<Rightarrow> state_field_decl_full list" where
+  "service_ir \<Rightarrow> state_field_decl list" where
   "serviceStateFields (ServiceIRFull _ _ _ _ _ st _ _ _ _ _ _ _ _ _) =
      (case st of None \<Rightarrow> []
                | Some (StateDeclFull fs _) \<Rightarrow> fs)"
 
-definition tyctxFromService :: "service_ir_full \<Rightarrow> tyctx" where
+definition tyctxFromService :: "service_ir \<Rightarrow> tyctx" where
   "tyctxFromService ir \<equiv> tyctxEmpty
      \<lparr> tc_entities := serviceEntities ir,
        tc_enums    := map enumNameFull (serviceEnums ir),
@@ -813,7 +813,7 @@ lemma agrees_strict_empty:
 
 text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   centrepiece: an inductive typing judgement \<open>expr_has_ty \<Gamma> e t\<close>
-  over \<open>expr_full\<close>, scoped to the arith/cmp/bool fragment whose
+  over \<open>expr\<close>, scoped to the arith/cmp/bool fragment whose
   per-arm preservation is already proven in H1
   (\<open>eval_arith_preservation\<close>, \<open>eval_cmp_preservation\<close>). Two
   \<open>IdentifierF\<close> rules - lexical-first then state-fallback - encode
@@ -821,7 +821,7 @@ text \<open>Phase H2 (typing relation, arith fragment). The H2 design
   \<open>env_agrees\<close> / \<open>state_agrees_scalars\<close> agreement halves so the
   H3 progress theorem dispatches per-arm to H1.\<close>
 
-inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Rightarrow> bool" where
+inductive expr_has_ty :: "tyctx \<Rightarrow> expr \<Rightarrow> ty \<Rightarrow> bool" where
   T_BoolLit:
     "expr_has_ty \<Gamma> (BoolLitF b sp) TBool"
 | T_IntLit:
@@ -924,7 +924,7 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr_full \<Rightarrow> ty \<Right
        \<Longrightarrow> schemaFieldType \<Gamma> ename fname = Some ft
        \<Longrightarrow> expr_has_ty \<Gamma> (FieldAccessF base fname sp) ft"
 | T_Index:
-    "peelRelationRefFull base = Some rel_name
+    "peelRelationRef base = Some rel_name
        \<Longrightarrow> expr_has_ty \<Gamma> key tk
        \<Longrightarrow> schemaRelationValueType \<Gamma> rel_name = Some tv
        \<Longrightarrow> expr_has_ty \<Gamma> (IndexF base key sp) tv"
@@ -1166,214 +1166,31 @@ lemma eval_set_bin_some_imp_set:
      \<Longrightarrow> (\<exists>l r. x = Some (VSet l) \<and> y = Some (VSet r))"
   by (induction op x y rule: eval_set_bin.induct) auto
 
-function (sequential) eval :: "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> expr \<Rightarrow> ir_value option"
-and eval_forall_enum ::
-  "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> String.literal
-   \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> ir_value option"
-and eval_forall_rel ::
-  "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr \<Rightarrow> ir_value option"
-and eval_the_rel ::
-  "schema \<Rightarrow> state \<Rightarrow> env \<Rightarrow> String.literal \<Rightarrow> ir_value list \<Rightarrow> expr \<Rightarrow> ir_value list option"
-where
-  "eval s st env (BoolLit b _) = Some (VBool b)"
-| "eval s st env (IntLit n _) = Some (VInt n)"
-| "eval s st env (RealLit r _) = Some (VReal r)"
-| "eval s st env (Ident x _) =
-     (case env_lookup env x of
-        Some v \<Rightarrow> Some v
-      | None   \<Rightarrow> state_lookup_scalar st x)"
-| "eval s st env (UnNot e _) =
-     (case eval s st env e of
-        Some (VBool b) \<Rightarrow> Some (VBool (\<not> b))
-      | _              \<Rightarrow> None)"
-| "eval s st env (UnNeg e _) =
-     (case eval s st env e of
-        Some (VInt n) \<Rightarrow> Some (VInt (- n))
-      | Some (VReal r) \<Rightarrow> Some (VReal (- r))
-      | _             \<Rightarrow> None)"
-| "eval s st env (BoolBin op l r _) =
-     (case (eval s st env l, eval s st env r) of
-        (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin op a b))
-      | _ \<Rightarrow> None)"
-| "eval s st env (Arith op l r _) = eval_arith op (eval s st env l) (eval s st env r)"
-| "eval s st env (Cmp op l r _)   = eval_cmp op (eval s st env l) (eval s st env r)"
-| "eval s st env (LetIn x v body _) =
-     (case eval s st env v of
-        Some va \<Rightarrow> eval s st ((x, va) # env) body
-      | None    \<Rightarrow> None)"
-| "eval s st env (EnumAccess en mem _) =
-     (case schema_lookup_enum s en of
-        Some d \<Rightarrow>
-          (if List.member (enm_members d) mem
-             then Some (VEnum en mem)
-             else None)
-      | None \<Rightarrow> None)"
-| "eval s st env (Member elem rel_name _) =
-     (case eval s st env elem of
-        Some v \<Rightarrow>
-          (case state_relation_domain st rel_name of
-             Some rel_dom \<Rightarrow> Some (VBool (contains_value rel_dom v))
-           | None     \<Rightarrow> None)
-      | None \<Rightarrow> None)"
-| "eval s st env (ForallEnum var en body _) =
-     (case schema_lookup_enum s en of
-        Some d \<Rightarrow> eval_forall_enum s st env var en (enm_members d) body
-      | None   \<Rightarrow> None)"
-| "eval s st env (ForallRel var rel_name body _) =
-     (case state_relation_domain st rel_name of
-        Some rel_dom \<Rightarrow> eval_forall_rel s st env var rel_dom body
-      | None     \<Rightarrow> None)"
-| "eval s st env (ForallSet var setE body _) =
-     (case eval s st env setE of
-        Some (VSet elems) \<Rightarrow> eval_forall_rel s st env var elems body
-      | _ \<Rightarrow> None)"
-| "eval s st env (TheRel var rel_name body _) =
-     (case state_relation_domain st rel_name of
-        Some rel_dom \<Rightarrow>
-          (case eval_the_rel s st env var rel_dom body of
-             Some (x # rest) \<Rightarrow> (if list_all (\<lambda>y. y = x) rest then Some x else None)
-           | _               \<Rightarrow> None)
-      | None \<Rightarrow> None)"
-| "eval s st env (EntityBase name _) = Some (VEntity name (STR ''''))"
-| "eval s st env (Prime e _) = eval s st env e"
-| "eval s st env (Pre e _)   = eval s st env e"
-| "eval s st env (CardRel rel_name _) =
-     (case state_relation_domain st rel_name of
-        Some rel_dom \<Rightarrow> Some (VInt (int (length rel_dom)))
-      | None     \<Rightarrow> None)"
-| "eval s st env (IndexRel base key _) =
-     (case (peel_relation_ref base, eval s st env key) of
-        (Some rel, Some kv) \<Rightarrow> state_lookup_key st rel kv
-      | _                   \<Rightarrow> None)"
-| "eval s st env (FieldAccess base fname _) =
-     (case eval s st env base of
-        Some v \<Rightarrow> value_field_lookup st v fname
-      | None   \<Rightarrow> None)"
-| "eval s st env (SetEmpty _) = Some (VSet [])"
-| "eval s st env (SetInsert elem set_e _) =
-     (case (eval s st env elem, eval s st env set_e) of
-        (Some v, Some (VSet members)) \<Rightarrow> Some (VSet (dedupe_values (v # members)))
-      | _ \<Rightarrow> None)"
-| "eval s st env (SetMember elem set_e _) =
-     (case (eval s st env elem, eval s st env set_e) of
-        (Some v, Some (VSet members)) \<Rightarrow> Some (VBool (contains_value members v))
-      | _ \<Rightarrow> None)"
-| "eval s st env (SetBin op l r _) = eval_set_bin op (eval s st env l) (eval s st env r)"
-| "eval s st env (WithRec base fld value_e _) =
-     (case (eval s st env base, eval s st env value_e) of
-        (Some bv, Some v) \<Rightarrow> Some (VEntityWith bv fld v)
-      | _ \<Rightarrow> None)"
-| "eval s st env (Ite c a b _) =
-     (case eval s st env c of
-        Some (VBool True)  \<Rightarrow> eval s st env a
-      | Some (VBool False) \<Rightarrow> eval s st env b
-      | _ \<Rightarrow> None)"
-| "eval s st env (NoneE _)   = Some VNone"
-| "eval s st env (SomeE e _) = map_option VSome (eval s st env e)"
-| "eval s st env (StrLit v _) = Some (VStr v)"
-| "eval s st env (Matches e pat _) =
-     (case eval s st env e of
-        Some (VStr str) \<Rightarrow> Some (VBool (string_matches str pat))
-      | _ \<Rightarrow> None)"
-| "eval s st env (SeqEmpty _) = Some (VSeq [])"
-| "eval s st env (SeqCons e rest _) =
-     (case (eval s st env e, eval s st env rest) of
-        (Some v, Some (VSeq vs)) \<Rightarrow> Some (VSeq (v # vs))
-      | _ \<Rightarrow> None)"
-| "eval s st env (MapEmpty _) = Some (VMap [])"
-| "eval s st env (MapCons k v rest _) =
-     (case (eval s st env k, eval s st env v, eval s st env rest) of
-        (Some kv, Some vv, Some (VMap ps)) \<Rightarrow> Some (VMap ((kv, vv) # ps))
-      | _ \<Rightarrow> None)"
+fun eval_bin :: "bin_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
+  "eval_bin BAnd     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin AndOp a b))     | _ \<Rightarrow> None)"
+| "eval_bin BOr      x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin OrOp a b))      | _ \<Rightarrow> None)"
+| "eval_bin BImplies x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin ImpliesOp a b)) | _ \<Rightarrow> None)"
+| "eval_bin BIff     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin IffOp a b))     | _ \<Rightarrow> None)"
+| "eval_bin BEq  x y = eval_cmp EqOp x y"
+| "eval_bin BNeq x y = eval_cmp NeqOp x y"
+| "eval_bin BLt  x y = eval_cmp LtOp x y"
+| "eval_bin BGt  x y = eval_cmp GtOp x y"
+| "eval_bin BLe  x y = eval_cmp LeOp x y"
+| "eval_bin BGe  x y = eval_cmp GeOp x y"
+| "eval_bin BAdd x y = eval_arith AddOp x y"
+| "eval_bin BSub x y = eval_arith SubOp x y"
+| "eval_bin BMul x y = eval_arith MulOp x y"
+| "eval_bin BDiv x y = eval_arith DivOp x y"
+| "eval_bin _ _ _ = None"
 
-| "eval_forall_enum s st env var en [] body = Some (VBool True)"
-| "eval_forall_enum s st env var en (mem # rest) body =
-     (case eval s st ((var, VEnum en mem) # env) body of
-        Some (VBool b) \<Rightarrow>
-          (case eval_forall_enum s st env var en rest body of
-             Some (VBool acc) \<Rightarrow> Some (VBool (b \<and> acc))
-           | _                \<Rightarrow> None)
-      | _ \<Rightarrow> None)"
-
-| "eval_forall_rel s st env var [] body = Some (VBool True)"
-| "eval_forall_rel s st env var (v # rest) body =
-     (case eval s st ((var, v) # env) body of
-        Some (VBool b) \<Rightarrow>
-          (case eval_forall_rel s st env var rest body of
-             Some (VBool acc) \<Rightarrow> Some (VBool (b \<and> acc))
-           | _                \<Rightarrow> None)
-      | _ \<Rightarrow> None)"
-| "eval_the_rel s st env var [] body = Some []"
-| "eval_the_rel s st env var (v # rest) body =
-     (case eval s st ((var, v) # env) body of
-        Some (VBool b) \<Rightarrow>
-          (case eval_the_rel s st env var rest body of
-             Some matches \<Rightarrow> Some (if b then v # matches else matches)
-           | None         \<Rightarrow> None)
-      | _ \<Rightarrow> None)"
-  by pat_completeness auto
-
-termination
-  by (relation "measures [
-        (\<lambda>p. case p of
-               Inl (Inl (_, _, _, e)) \<Rightarrow> size e
-             | Inl (Inr (_, _, _, _, _, _, body)) \<Rightarrow> size body
-             | Inr (Inl (_, _, _, _, _, body)) \<Rightarrow> size body
-             | Inr (Inr (_, _, _, _, _, body)) \<Rightarrow> size body),
-        (\<lambda>p. case p of
-               Inl (Inl _) \<Rightarrow> 0
-             | Inl (Inr (_, _, _, _, _, members, _)) \<Rightarrow> Suc (length members)
-             | Inr (Inl (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom)
-             | Inr (Inr (_, _, _, _, rel_dom, _)) \<Rightarrow> Suc (length rel_dom))
-       ]")
-     auto
-
-text \<open>Phase H3d helpers (quantifier evaluation). \<open>eval_forall_enum\<close>
-  and \<open>eval_forall_rel\<close> always produce \<open>VBool\<close>-shaped results when
-  defined: the body's evaluation is gated through \<open>(VBool b) #
-  pattern\<close>, the empty case returns \<open>VBool True\<close>, and the cons-step
-  conjoins through \<open>VBool acc\<close>. These extractor lemmas are what
-  the \<open>T_Forall_QAll_Enum\<close> / \<open>T_Forall_QAll_Rel\<close> cases (and the
-  analogous \<open>QNo\<close>/\<open>QExists\<close>/\<open>QSome\<close> variants) use to close on
-  \<open>vt_bool\<close>.\<close>
-
-lemma eval_forall_enum_some_imp_bool:
-  "eval_forall_enum sch st env var en members body = Some v
-     \<Longrightarrow> \<exists>b. v = VBool b"
-  by (induction members arbitrary: v)
-     (auto split: option.splits ir_value.splits)
-
-lemma eval_forall_rel_some_imp_bool:
-  "eval_forall_rel sch st env var rel_dom body = Some v
-     \<Longrightarrow> \<exists>b. v = VBool b"
-  by (induction rel_dom arbitrary: v)
-     (auto split: option.splits ir_value.splits)
-
-fun eval_full_bin :: "bin_op_full \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_full_bin BAnd     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin AndOp a b))     | _ \<Rightarrow> None)"
-| "eval_full_bin BOr      x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin OrOp a b))      | _ \<Rightarrow> None)"
-| "eval_full_bin BImplies x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin ImpliesOp a b)) | _ \<Rightarrow> None)"
-| "eval_full_bin BIff     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin IffOp a b))     | _ \<Rightarrow> None)"
-| "eval_full_bin BEq  x y = eval_cmp EqOp x y"
-| "eval_full_bin BNeq x y = eval_cmp NeqOp x y"
-| "eval_full_bin BLt  x y = eval_cmp LtOp x y"
-| "eval_full_bin BGt  x y = eval_cmp GtOp x y"
-| "eval_full_bin BLe  x y = eval_cmp LeOp x y"
-| "eval_full_bin BGe  x y = eval_cmp GeOp x y"
-| "eval_full_bin BAdd x y = eval_arith AddOp x y"
-| "eval_full_bin BSub x y = eval_arith SubOp x y"
-| "eval_full_bin BMul x y = eval_arith MulOp x y"
-| "eval_full_bin BDiv x y = eval_arith DivOp x y"
-| "eval_full_bin _ _ _ = None"
-
-fun eval_full_un :: "un_op_full \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_full_un UNot    x = (case x of Some (VBool b) \<Rightarrow> Some (VBool (\<not> b)) | _ \<Rightarrow> None)"
-| "eval_full_un UNegate x = (case x of Some (VInt n) \<Rightarrow> Some (VInt (- n)) | Some (VReal r) \<Rightarrow> Some (VReal (- r)) | _ \<Rightarrow> None)"
-| "eval_full_un _ _ = None"
+fun eval_un :: "un_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
+  "eval_un UNot    x = (case x of Some (VBool b) \<Rightarrow> Some (VBool (\<not> b)) | _ \<Rightarrow> None)"
+| "eval_un UNegate x = (case x of Some (VInt n) \<Rightarrow> Some (VInt (- n)) | Some (VReal r) \<Rightarrow> Some (VReal (- r)) | _ \<Rightarrow> None)"
+| "eval_un _ _ = None"
 
 definition lookup_callee ::
-  "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> String.literal
-     \<Rightarrow> (String.literal list \<times> expr_full) option" where
+  "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> String.literal
+     \<Rightarrow> (String.literal list \<times> expr) option" where
   "lookup_callee fs ps nm =
      (case List.find (\<lambda>f. fncName f = nm) fs of
         Some f \<Rightarrow> Some (map prmName (fncParams f), fncBody f)

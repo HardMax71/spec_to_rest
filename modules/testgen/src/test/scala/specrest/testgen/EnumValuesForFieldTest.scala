@@ -7,13 +7,13 @@ class EnumValuesForFieldTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF = NamedTypeF(t, None)
 
-  private def alias(name: String, target: type_expr_full): TypeAliasDeclFull =
+  private def alias(name: String, target: type_expr): TypeAliasDeclFull =
     TypeAliasDeclFull(name, target, None, None)
 
   private def enumD(name: String, values: List[String]): EnumDeclFull =
     EnumDeclFull(name, values, None)
 
-  private def field(name: String, t: type_expr_full): FieldDeclFull =
+  private def field(name: String, t: type_expr): FieldDeclFull =
     FieldDeclFull(name, t, None, None)
 
   test("enumValuesForField resolves directly through an alias chain"):

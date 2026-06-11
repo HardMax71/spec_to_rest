@@ -5,10 +5,10 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ExprToPythonTest extends CatsEffectSuite:
 
-  private def i(n: Int): expr_full        = IntLitF(BigInt(n), None)
-  private def s(t: String): expr_full     = StringLitF(t, None)
-  private def b(v: Boolean): expr_full    = BoolLitF(v, None)
-  private def id(name: String): expr_full = IdentifierF(name, None)
+  private def i(n: Int): expr        = IntLitF(BigInt(n), None)
+  private def s(t: String): expr     = StringLitF(t, None)
+  private def b(v: Boolean): expr    = BoolLitF(v, None)
+  private def id(name: String): expr = IdentifierF(name, None)
 
   private val uriParam = ParamDeclFull("s", NamedTypeF("String", None), None)
   private val uriBody  = MatchesF(id("s"), "^https?:..[^\\s]+", None)
@@ -16,7 +16,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     ParamDeclFull("s", NamedTypeF("String", None), None)
   private val emailBody = MatchesF(id("s"), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", None)
 
-  private val preamblePredicates: Map[String, predicate_decl_full] = Map(
+  private val preamblePredicates: Map[String, predicate_decl] = Map(
     "isValidURI"   -> PredicateDeclFull("isValidURI", List(uriParam), uriBody, None),
     "isValidEmail" -> PredicateDeclFull("isValidEmail", List(emailParam), emailBody, None)
   )
@@ -80,7 +80,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     assertEquals(py(ExprToPython.translate(e, ctx)), "response_data[\"code\"]")
 
   test("BinaryOp: arithmetic + comparison + logical + membership"):
-    val cases: List[(bin_op_full, String)] = List(
+    val cases: List[(bin_op, String)] = List(
       BAdd()       -> "((1) + (2))",
       BSub()       -> "((1) - (2))",
       BMul()       -> "((1) * (2))",
@@ -192,7 +192,7 @@ class ExprToPythonTest extends CatsEffectSuite:
       BinaryOpF(BGt(), id("n"), i(0), None),
       None
     )
-    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl_full]("isPositive" -> fn))
+    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl]("isPositive" -> fn))
     val callE     = CallF(id("isPositive"), List(i(5)), None)
     assertEquals(py(ExprToPython.translate(callE, ctxWithFn)), "is_positive(5)")
 
@@ -227,7 +227,7 @@ class ExprToPythonTest extends CatsEffectSuite:
       BinaryOpF(BGt(), id("n"), i(0), None),
       None
     )
-    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl_full]("isPositive" -> fn))
+    val ctxWithFn = ctx.copy(userFunctions = Map[String, function_decl]("isPositive" -> fn))
     val callE     = CallF(id("isPositive"), List(i(5), i(6)), None)
     val r         = reason(ExprToPython.translate(callE, ctxWithFn))
     assert(r.contains("wrong arity"), s"expected arity-mismatch reason, got: $r")

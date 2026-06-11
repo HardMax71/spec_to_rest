@@ -20,7 +20,7 @@ object AdminModel:
       .map(stfName)
       .toSet
 
-  def projectionFor(f: state_field_decl_full, ir: ServiceIRFull): Option[Projection] =
+  def projectionFor(f: state_field_decl, ir: ServiceIRFull): Option[Projection] =
     stfType(f) match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
@@ -33,8 +33,8 @@ object AdminModel:
       case _ => None
 
   private def inferRelationProjection(
-      k: type_expr_full,
-      v: type_expr_full,
+      k: type_expr,
+      v: type_expr,
       ir: ServiceIRFull
   ): Option[Projection] =
     val kName      = typeName(k)
@@ -67,6 +67,6 @@ object AdminModel:
             )
       case _ => None
 
-  def primaryKeyField(e: entity_decl_full): Option[String] =
+  def primaryKeyField(e: entity_decl): Option[String] =
     val fs = entFields(e)
     fs.find(f => fldName(f) == "id").map(fldName).orElse(fs.headOption.map(fldName))

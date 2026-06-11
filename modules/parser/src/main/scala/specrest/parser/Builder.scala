@@ -94,19 +94,19 @@ final private case class ServiceAcc(
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
-final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
+final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
 
-  override def defaultResult(): BuildResult[expr_full] =
+  override def defaultResult(): BuildResult[expr] =
     Left(VerifyError.Build("IRBuilder: unhandled expression node", None))
 
-  private def expr(ctx: ExprContext): BuildResult[expr_full] = visit(ctx)
+  private def expr(ctx: ExprContext): BuildResult[expr] = visit(ctx)
 
   private def binOp(
       ctx: ParserRuleContext,
       l: ExprContext,
       r: ExprContext,
-      op: bin_op_full
-  ): BuildResult[expr_full] =
+      op: bin_op
+  ): BuildResult[expr] =
     for
       lE <- expr(l)
       rE <- expr(r)
@@ -115,8 +115,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
   private def unaryOp(
       ctx: ParserRuleContext,
       arg: ExprContext,
-      op: un_op_full
-  ): BuildResult[expr_full] =
+      op: un_op
+  ): BuildResult[expr] =
     expr(arg).map(a => UnaryOpF(op, a, sp(ctx)))
 
   def buildService(ctx: ServiceDeclContext): BuildResult[ServiceIRFull] =
@@ -179,7 +179,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     val extendsOpt = if ctx.EXTENDS ne null then Some(idents.get(1).getText) else None
     val members    = ctx.entityMember.asScala.toList
     val parts =
-      members.foldLeft[BuildResult[(List[FieldDeclFull], List[expr_full])]](Right((Nil, Nil))):
+      members.foldLeft[BuildResult[(List[FieldDeclFull], List[expr])]](Right((Nil, Nil))):
         case (accE, member) =>
           accE.flatMap: (fs, invs) =>
             if member.fieldDecl ne null then
@@ -193,7 +193,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
   private def buildField(ctx: FieldDeclContext): BuildResult[FieldDeclFull] =
     val name      = ctx.lowerIdent.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
-    val constraintE: BuildResult[Option[expr_full]] =
+    val constraintE: BuildResult[Option[expr]] =
       if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
       t <- typeExprV
@@ -208,7 +208,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
   private def buildTypeAlias(ctx: TypeAliasContext): BuildResult[TypeAliasDeclFull] =
     val name      = ctx.UPPER_IDENT.getText
     val typeExprV = buildTypeExpr(ctx.typeExpr)
-    val constraintE: BuildResult[Option[expr_full]] =
+    val constraintE: BuildResult[Option[expr]] =
       if ctx.WHERE ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     for
       t <- typeExprV
@@ -229,8 +229,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     val acc0: BuildResult[(
         List[ParamDeclFull],
         List[ParamDeclFull],
-        List[expr_full],
-        List[expr_full]
+        List[expr],
+        List[expr]
     )] =
       Right((Nil, Nil, Nil, Nil))
     val collected = clauses.foldLeft(acc0):
@@ -273,7 +273,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     val from   = idents.get(0).getText
     val to     = idents.get(1).getText
     val via    = idents.get(2).getText
-    val guardE: BuildResult[Option[expr_full]] =
+    val guardE: BuildResult[Option[expr]] =
       if ctx.WHEN ne null then expr(ctx.expr).map(Some(_)) else Right(None)
     guardE.map(g => TransitionRuleFull(from, to, via, g, sp(ctx)))
 
@@ -339,7 +339,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     // variants for the validator pass to surface as diagnostics.
     ConventionRuleFull(target, p, qual, parseConventionValue(p, v), sp(ctx))
 
-  private def buildTypeExpr(ctx: TypeExprContext): BuildResult[type_expr_full] =
+  private def buildTypeExpr(ctx: TypeExprContext): BuildResult[type_expr] =
     val baseTypes = ctx.baseType
     if ctx.ARROW ne null then
       for
@@ -357,7 +357,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       yield RelationTypeF(fromType, mult, toType, sp(ctx))
     else buildBaseType(baseTypes.get(0))
 
-  private def buildBaseType(ctx: BaseTypeContext): BuildResult[type_expr_full] =
+  private def buildBaseType(ctx: BaseTypeContext): BuildResult[type_expr] =
     if ctx.primitiveType ne null then
       Right(NamedTypeF(ctx.primitiveType.getText, sp(ctx)))
     else if ctx.SET ne null then
@@ -373,132 +373,132 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       buildTypeExpr(ctx.typeExpr(0)).map(t => OptionTypeF(t, sp(ctx)))
     else Right(NamedTypeF(ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  override def visitMulExpr(ctx: MulExprContext): BuildResult[expr_full] =
+  override def visitMulExpr(ctx: MulExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BMul())
-  override def visitDivExpr(ctx: DivExprContext): BuildResult[expr_full] =
+  override def visitDivExpr(ctx: DivExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BDiv())
-  override def visitAddExpr(ctx: AddExprContext): BuildResult[expr_full] =
+  override def visitAddExpr(ctx: AddExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BAdd())
-  override def visitSubExpr(ctx: SubExprContext): BuildResult[expr_full] =
+  override def visitSubExpr(ctx: SubExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BSub())
-  override def visitUnionExpr(ctx: UnionExprContext): BuildResult[expr_full] =
+  override def visitUnionExpr(ctx: UnionExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BUnion())
-  override def visitIntersectExpr(ctx: IntersectExprContext): BuildResult[expr_full] =
+  override def visitIntersectExpr(ctx: IntersectExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BIntersect())
-  override def visitMinusExpr(ctx: MinusExprContext): BuildResult[expr_full] =
+  override def visitMinusExpr(ctx: MinusExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BDiff())
-  override def visitEqExpr(ctx: EqExprContext): BuildResult[expr_full] =
+  override def visitEqExpr(ctx: EqExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BEq())
-  override def visitNeqExpr(ctx: NeqExprContext): BuildResult[expr_full] =
+  override def visitNeqExpr(ctx: NeqExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BNeq())
-  override def visitLtExpr(ctx: LtExprContext): BuildResult[expr_full] =
+  override def visitLtExpr(ctx: LtExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BLt())
-  override def visitGtExpr(ctx: GtExprContext): BuildResult[expr_full] =
+  override def visitGtExpr(ctx: GtExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BGt())
-  override def visitLteExpr(ctx: LteExprContext): BuildResult[expr_full] =
+  override def visitLteExpr(ctx: LteExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BLe())
-  override def visitGteExpr(ctx: GteExprContext): BuildResult[expr_full] =
+  override def visitGteExpr(ctx: GteExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BGe())
-  override def visitInExpr(ctx: InExprContext): BuildResult[expr_full] =
+  override def visitInExpr(ctx: InExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BIn())
-  override def visitNotInExpr(ctx: NotInExprContext): BuildResult[expr_full] =
+  override def visitNotInExpr(ctx: NotInExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BNotIn())
-  override def visitSubsetExpr(ctx: SubsetExprContext): BuildResult[expr_full] =
+  override def visitSubsetExpr(ctx: SubsetExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BSubset())
-  override def visitImpliesExpr(ctx: ImpliesExprContext): BuildResult[expr_full] =
+  override def visitImpliesExpr(ctx: ImpliesExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BImplies())
-  override def visitIffExpr(ctx: IffExprContext): BuildResult[expr_full] =
+  override def visitIffExpr(ctx: IffExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BIff())
-  override def visitAndExpr(ctx: AndExprContext): BuildResult[expr_full] =
+  override def visitAndExpr(ctx: AndExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BAnd())
-  override def visitOrExpr(ctx: OrExprContext): BuildResult[expr_full] =
+  override def visitOrExpr(ctx: OrExprContext): BuildResult[expr] =
     binOp(ctx, ctx.expr(0), ctx.expr(1), BOr())
 
-  override def visitCardinalityExpr(ctx: CardinalityExprContext): BuildResult[expr_full] =
+  override def visitCardinalityExpr(ctx: CardinalityExprContext): BuildResult[expr] =
     unaryOp(ctx, ctx.expr, UCardinality())
-  override def visitNegExpr(ctx: NegExprContext): BuildResult[expr_full] =
+  override def visitNegExpr(ctx: NegExprContext): BuildResult[expr] =
     unaryOp(ctx, ctx.expr, UNegate())
-  override def visitPowerExpr(ctx: PowerExprContext): BuildResult[expr_full] =
+  override def visitPowerExpr(ctx: PowerExprContext): BuildResult[expr] =
     unaryOp(ctx, ctx.expr, UPower())
-  override def visitNotExpr(ctx: NotExprContext): BuildResult[expr_full] =
+  override def visitNotExpr(ctx: NotExprContext): BuildResult[expr] =
     unaryOp(ctx, ctx.expr, UNot())
 
-  override def visitPrimeExpr(ctx: PrimeExprContext): BuildResult[expr_full] =
+  override def visitPrimeExpr(ctx: PrimeExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => PrimeF(e, sp(ctx)))
 
-  override def visitFieldAccessExpr(ctx: FieldAccessExprContext): BuildResult[expr_full] =
+  override def visitFieldAccessExpr(ctx: FieldAccessExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => FieldAccessF(e, ctx.lowerIdent.getText, sp(ctx)))
 
-  override def visitEnumAccessExpr(ctx: EnumAccessExprContext): BuildResult[expr_full] =
+  override def visitEnumAccessExpr(ctx: EnumAccessExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => EnumAccessF(e, ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  override def visitIndexExpr(ctx: IndexExprContext): BuildResult[expr_full] =
+  override def visitIndexExpr(ctx: IndexExprContext): BuildResult[expr] =
     for
       a <- expr(ctx.expr(0))
       b <- expr(ctx.expr(1))
     yield IndexF(a, b, sp(ctx))
 
-  override def visitCallExpr(ctx: CallExprContext): BuildResult[expr_full] =
-    val argsE: BuildResult[List[expr_full]] =
+  override def visitCallExpr(ctx: CallExprContext): BuildResult[expr] =
+    val argsE: BuildResult[List[expr]] =
       Option(ctx.argList).map(_.expr.asScala.toList.traverseB(expr)).getOrElse(Right(Nil))
     for
       fn   <- expr(ctx.expr)
       args <- argsE
     yield CallF(fn, args, sp(ctx))
 
-  override def visitWithExpr(ctx: WithExprContext): BuildResult[expr_full] =
+  override def visitWithExpr(ctx: WithExprContext): BuildResult[expr] =
     for
       base    <- expr(ctx.expr)
       updates <- ctx.fieldAssign.asScala.toList.traverseB(buildFieldAssign)
     yield WithF(base, updates, sp(ctx))
 
-  override def visitMatchesExpr(ctx: MatchesExprContext): BuildResult[expr_full] =
+  override def visitMatchesExpr(ctx: MatchesExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => MatchesF(e, unslashRegex(ctx.REGEX_LIT.getText), sp(ctx)))
 
-  override def visitParenExpr(ctx: ParenExprContext): BuildResult[expr_full] = expr(ctx.expr)
-  override def visitQuantExpr(ctx: QuantExprContext): BuildResult[expr_full] =
+  override def visitParenExpr(ctx: ParenExprContext): BuildResult[expr] = expr(ctx.expr)
+  override def visitQuantExpr(ctx: QuantExprContext): BuildResult[expr] =
     buildQuantifier(ctx.quantifierExpr)
-  override def visitSomeWrapE(ctx: SomeWrapEContext): BuildResult[expr_full] =
+  override def visitSomeWrapE(ctx: SomeWrapEContext): BuildResult[expr] =
     buildSomeWrap(ctx.someWrapExpr)
-  override def visitTheE(ctx: TheEContext): BuildResult[expr_full] = buildThe(ctx.theExpr)
-  override def visitIfE(ctx: IfEContext): BuildResult[expr_full]   = buildIf(ctx.ifExpr)
-  override def visitLetE(ctx: LetEContext): BuildResult[expr_full] = buildLet(ctx.letExpr)
-  override def visitLambdaE(ctx: LambdaEContext): BuildResult[expr_full] =
+  override def visitTheE(ctx: TheEContext): BuildResult[expr] = buildThe(ctx.theExpr)
+  override def visitIfE(ctx: IfEContext): BuildResult[expr]   = buildIf(ctx.ifExpr)
+  override def visitLetE(ctx: LetEContext): BuildResult[expr] = buildLet(ctx.letExpr)
+  override def visitLambdaE(ctx: LambdaEContext): BuildResult[expr] =
     buildLambda(ctx.lambdaExpr)
-  override def visitConstructorE(ctx: ConstructorEContext): BuildResult[expr_full] =
+  override def visitConstructorE(ctx: ConstructorEContext): BuildResult[expr] =
     buildConstructor(ctx.constructorExpr)
-  override def visitSetOrMapE(ctx: SetOrMapEContext): BuildResult[expr_full] =
+  override def visitSetOrMapE(ctx: SetOrMapEContext): BuildResult[expr] =
     buildSetOrMap(ctx.setOrMapLiteral)
-  override def visitSeqE(ctx: SeqEContext): BuildResult[expr_full] = buildSeq(ctx.seqLiteral)
+  override def visitSeqE(ctx: SeqEContext): BuildResult[expr] = buildSeq(ctx.seqLiteral)
 
-  override def visitPreExpr(ctx: PreExprContext): BuildResult[expr_full] =
+  override def visitPreExpr(ctx: PreExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => PreF(e, sp(ctx)))
 
-  override def visitIntLitExpr(ctx: IntLitExprContext): BuildResult[expr_full] =
+  override def visitIntLitExpr(ctx: IntLitExprContext): BuildResult[expr] =
     Right(IntLitF(BigInt(ctx.INT_LIT.getText), sp(ctx)))
 
-  override def visitFloatLitExpr(ctx: FloatLitExprContext): BuildResult[expr_full] =
+  override def visitFloatLitExpr(ctx: FloatLitExprContext): BuildResult[expr] =
     Right(FloatLitF(ctx.FLOAT_LIT.getText, sp(ctx)))
 
-  override def visitStringLitExpr(ctx: StringLitExprContext): BuildResult[expr_full] =
+  override def visitStringLitExpr(ctx: StringLitExprContext): BuildResult[expr] =
     Right(StringLitF(unquote(ctx.STRING_LIT.getText), sp(ctx)))
 
-  override def visitTrueLitExpr(ctx: TrueLitExprContext): BuildResult[expr_full] =
+  override def visitTrueLitExpr(ctx: TrueLitExprContext): BuildResult[expr] =
     Right(BoolLitF(true, sp(ctx)))
-  override def visitFalseLitExpr(ctx: FalseLitExprContext): BuildResult[expr_full] =
+  override def visitFalseLitExpr(ctx: FalseLitExprContext): BuildResult[expr] =
     Right(BoolLitF(false, sp(ctx)))
-  override def visitNoneLitExpr(ctx: NoneLitExprContext): BuildResult[expr_full] =
+  override def visitNoneLitExpr(ctx: NoneLitExprContext): BuildResult[expr] =
     Right(NoneLitF(sp(ctx)))
 
-  override def visitUpperIdentExpr(ctx: UpperIdentExprContext): BuildResult[expr_full] =
+  override def visitUpperIdentExpr(ctx: UpperIdentExprContext): BuildResult[expr] =
     Right(IdentifierF(ctx.UPPER_IDENT.getText, sp(ctx)))
 
-  override def visitLowerIdentExpr(ctx: LowerIdentExprContext): BuildResult[expr_full] =
+  override def visitLowerIdentExpr(ctx: LowerIdentExprContext): BuildResult[expr] =
     Right(IdentifierF(ctx.lowerIdent.getText, sp(ctx)))
 
-  private def buildQuantifier(ctx: QuantifierExprContext): BuildResult[expr_full] =
+  private def buildQuantifier(ctx: QuantifierExprContext): BuildResult[expr] =
     val qCtx = ctx.quantifier
-    val quantifier: quant_kind_full =
+    val quantifier: quant_kind =
       if qCtx.ALL ne null then QAll()
       else if qCtx.SOME ne null then QSome()
       else if qCtx.NO ne null then QNo()
@@ -512,17 +512,17 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       body <- expr(ctx.expr)
     yield QuantifierF(quantifier, bs, body, sp(ctx))
 
-  private def buildSomeWrap(ctx: SomeWrapExprContext): BuildResult[expr_full] =
+  private def buildSomeWrap(ctx: SomeWrapExprContext): BuildResult[expr] =
     expr(ctx.expr).map(e => SomeWrapF(e, sp(ctx)))
 
-  private def buildThe(ctx: TheExprContext): BuildResult[expr_full] =
+  private def buildThe(ctx: TheExprContext): BuildResult[expr] =
     val exprs = ctx.expr
     for
       a <- expr(exprs.get(0))
       b <- expr(exprs.get(1))
     yield TheF(ctx.lowerIdent.getText, a, b, sp(ctx))
 
-  private def buildIf(ctx: IfExprContext): BuildResult[expr_full] =
+  private def buildIf(ctx: IfExprContext): BuildResult[expr] =
     val exprs = ctx.expr
     for
       c <- expr(exprs.get(0))
@@ -530,22 +530,22 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
       e <- expr(exprs.get(2))
     yield IfF(c, t, e, sp(ctx))
 
-  private def buildLet(ctx: LetExprContext): BuildResult[expr_full] =
+  private def buildLet(ctx: LetExprContext): BuildResult[expr] =
     val exprs = ctx.expr
     for
       v <- expr(exprs.get(0))
       b <- expr(exprs.get(1))
     yield LetF(ctx.lowerIdent.getText, v, b, sp(ctx))
 
-  private def buildLambda(ctx: LambdaExprContext): BuildResult[expr_full] =
+  private def buildLambda(ctx: LambdaExprContext): BuildResult[expr] =
     expr(ctx.expr).map(b => LambdaF(ctx.lowerIdent.getText, b, sp(ctx)))
 
-  private def buildConstructor(ctx: ConstructorExprContext): BuildResult[expr_full] =
+  private def buildConstructor(ctx: ConstructorExprContext): BuildResult[expr] =
     ctx.fieldAssign.asScala.toList
       .traverseB(buildFieldAssign)
       .map(fs => ConstructorF(ctx.UPPER_IDENT.getText, fs, sp(ctx)))
 
-  private def buildSetOrMap(ctx: SetOrMapLiteralContext): BuildResult[expr_full] =
+  private def buildSetOrMap(ctx: SetOrMapLiteralContext): BuildResult[expr] =
     val exprs = ctx.expr
     val span  = sp(ctx)
     if exprs.isEmpty && (ctx.lowerIdent eq null) then Right(SetLiteralF(Nil, span))
@@ -570,7 +570,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr_full]]:
     else
       exprs.asScala.toList.traverseB(expr).map(es => SetLiteralF(es, span))
 
-  private def buildSeq(ctx: SeqLiteralContext): BuildResult[expr_full] =
+  private def buildSeq(ctx: SeqLiteralContext): BuildResult[expr] =
     ctx.expr.asScala.toList.traverseB(expr).map(es => SeqLiteralF(es, sp(ctx)))
 
   private def buildFieldAssign(ctx: FieldAssignContext): BuildResult[FieldAssignFull] =

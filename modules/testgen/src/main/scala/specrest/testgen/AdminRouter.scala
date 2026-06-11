@@ -96,7 +96,7 @@ object AdminRouter:
        |$stateProjections$seedSection
        |""".stripMargin
 
-  private def seedHandler(entity: entity_decl_full, ir: ServiceIRFull): String =
+  private def seedHandler(entity: entity_decl, ir: ServiceIRFull): String =
     val snake  = Naming.toSnakeCase(entName(entity))
     val pkName = AdminModel.primaryKeyField(entity).getOrElse("id")
     val dtFields = entFields(entity)
@@ -124,9 +124,9 @@ object AdminRouter:
         |""".stripMargin
 
   private def projectionLine(
-      f: state_field_decl_full,
+      f: state_field_decl,
       ir: ServiceIRFull,
-      entities: List[entity_decl_full]
+      entities: List[entity_decl]
   ): String =
     AdminModel.projectionFor(f, ir) match
       case Some(p) =>
