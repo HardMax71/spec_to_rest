@@ -2,7 +2,7 @@ theory DirectSound
   imports
     Soundness_Framework
     Preservation_Wf
-    SpecRest_Core.LowerMeaning
+    SpecRest_Core.Semantics_Reference
     SpecRest_Core.TranslateDirect
 begin
 

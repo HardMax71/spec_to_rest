@@ -1,5 +1,5 @@
 theory Preservation_Wf
-  imports Soundness
+  imports SpecRest_Core.Semantics
 begin
 
 text \<open>Phase 9j (dual of 9i). \<open>requiresAlloy_imp_lower_none\<close> proved the
@@ -31,6 +31,10 @@ fun rel_ref_shape :: "expr_full \<Rightarrow> bool" where
 lemma identNameFull_SomeD:
   "identNameFull e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
   by (cases e rule: identNameFull.cases) auto
+
+lemma peelRelationRefFull_some_imp_rel_ref_shape:
+  "peelRelationRefFull base = Some rel \<Longrightarrow> rel_ref_shape base"
+  by (cases base rule: peelRelationRefFull.cases) (auto dest!: identNameFull_SomeD)
 
 fun wf_z3 :: "expr_full \<Rightarrow> bool"
 and wf_z3_list :: "expr_full list \<Rightarrow> bool"

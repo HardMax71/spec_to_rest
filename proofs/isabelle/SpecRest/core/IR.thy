@@ -62,62 +62,23 @@ datatype (plugins only: code size) cmp_op =
 
 datatype (plugins only: code size) state_mode = SmPre | SmPost
 
-datatype (plugins only: code size) expr =
-    BoolLit bool "option_span"
-  | IntLit int "option_span"
-  | RealLit rat "option_span"
-  | Ident "String.literal" "option_span"
-  | UnNot "expr" "option_span"
-  | UnNeg "expr" "option_span"
-  | BoolBin "bool_bin_op" "expr" "expr" "option_span"
-  | Arith "arith_op" "expr" "expr" "option_span"
-  | Cmp "cmp_op" "expr" "expr" "option_span"
-  | LetIn "String.literal" "expr" "expr" "option_span"
-  | EnumAccess "String.literal" "String.literal" "option_span"
-  | Member "expr" "String.literal" "option_span"
-  | ForallEnum "String.literal" "String.literal" "expr" "option_span"
-  | ForallRel "String.literal" "String.literal" "expr" "option_span"
-  | ForallSet "String.literal" "expr" "expr" "option_span"
-  | TheRel "String.literal" "String.literal" "expr" "option_span"
-  | EntityBase "String.literal" "option_span"
-  | Prime "expr" "option_span"
-  | Pre "expr" "option_span"
-  | CardRel "String.literal" "option_span"
-  | IndexRel "expr" "expr" "option_span"
-  | FieldAccess "expr" "String.literal" "option_span"
-  | SetEmpty "option_span"
-  | SetInsert "expr" "expr" "option_span"
-  | SetMember "expr" "expr" "option_span"
-  | SetBin "set_op" "expr" "expr" "option_span"
-  | WithRec "expr" "String.literal" "expr" "option_span"
-  | Ite "expr" "expr" "expr" "option_span"
-  | NoneE "option_span"
-  | SomeE "expr" "option_span"
-  | StrLit "String.literal" "option_span"
-  | Matches "expr" "String.literal" "option_span"
-  | SeqEmpty "option_span"
-  | SeqCons "expr" "expr" "option_span"
-  | MapEmpty "option_span"
-  | MapCons "expr" "expr" "expr" "option_span"
-  | UStrPred "String.literal" "expr" "option_span"
-
-text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>Matches\<close>. It is
+text \<open>\<open>string_matches s pat\<close> is the regex-match predicate for \<open>MatchesF\<close>. It is
   deliberately \<^emph>\<open>abstract\<close> (no defining equation): formalising the full SMT-LIB
   regular-expression semantics in HOL is out of scope, and the trusted translator
   realises it concretely as Z3's \<open>str.in_re\<close> over the parsed pattern. Keeping it
   abstract is what makes the soundness theorem parametric in the matcher, so any
-  realisation that \<open>eval\<close> and \<open>smtEval\<close> share (here, the same constant) is sound by
-  construction; the (unused) extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters get a
-  serialisation stub in \<open>Codegen\<close>.\<close>
+  realisation that \<open>eval_full\<close> and \<open>smtEval\<close> share (here, the same constant) is sound
+  by construction; the (unused) extracted reference interpreters get a serialisation
+  stub in \<open>Codegen\<close>.\<close>
 consts string_matches :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
 
 text \<open>\<open>str_predicate name s\<close> is the uninterpreted built-in string predicate \<open>name\<close>
   (e.g.\ \<open>isValidURI\<close>) applied to string \<open>s\<close>. Like \<open>string_matches\<close> it is abstract: the
   trusted translator emits it as a Z3 uninterpreted boolean function, so the soundness
-  theorem stays parametric in the predicate and any realisation \<open>eval\<close>/\<open>smtEval\<close> share
-  is sound by construction. Verifying an obligation mentioning \<open>str_predicate name\<close> is
-  thus a proof for every interpretation, which soundly over-approximates the intended
-  built-in.\<close>
+  theorem stays parametric in the predicate and any realisation \<open>eval_full\<close>/\<open>smtEval\<close>
+  share is sound by construction. Verifying an obligation mentioning
+  \<open>str_predicate name\<close> is thus a proof for every interpretation, which soundly
+  over-approximates the intended built-in.\<close>
 consts str_predicate :: "String.literal \<Rightarrow> String.literal \<Rightarrow> bool"
 
 text \<open>\<open>is_builtin_pred nm\<close> marks \<open>nm\<close> as a reserved built-in string predicate (e.g.\
@@ -128,25 +89,6 @@ text \<open>\<open>is_builtin_pred nm\<close> marks \<open>nm\<close> as a reser
   lookup_callee fs ps nm = None\<close> (reserved names are not user-defined).\<close>
 definition is_builtin_pred :: "String.literal \<Rightarrow> bool" where
   "is_builtin_pred nm \<longleftrightarrow> nm = STR ''isValidURI'' \<or> nm = STR ''isValidEmail''"
-
-text \<open>Issue #210 (M_L.4.l): \<open>IndexRel\<close>'s base is widened from a bare
-  relation name to an arbitrary \<open>expr\<close>, so the operation-side
-  \<open>pre(rel)[k]\<close> and \<open>rel'[k]\<close> shapes can lower into the verified subset.
-  The intended bases are \<open>Ident rel\<close>, \<open>Pre (Ident rel)\<close>, and
-  \<open>Prime (Ident rel)\<close>; \<open>peel_relation_ref\<close> recognises exactly those
-  shapes and returns the relation name. Other bases evaluate to \<open>None\<close>
-  in both \<open>eval\<close> and \<open>smtEval\<close>, preserving symmetry for the soundness
-  theorem.\<close>
-
-fun identName :: "expr \<Rightarrow> String.literal option" where
-  "identName (Ident rel _) = Some rel"
-| "identName _ = None"
-
-fun peel_relation_ref :: "expr \<Rightarrow> String.literal option" where
-  "peel_relation_ref (Ident rel _) = Some rel"
-| "peel_relation_ref (Pre b _)     = identName b"
-| "peel_relation_ref (Prime b _)   = identName b"
-| "peel_relation_ref _             = None"
 
 record field_decl =
   fd_name :: "String.literal"

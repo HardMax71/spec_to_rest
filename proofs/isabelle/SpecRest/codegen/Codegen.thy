@@ -1,11 +1,8 @@
 theory Codegen
   imports
-    SpecRest_Core.Translate
     SpecRest_Core.Semantics
     SpecRest_Core.IR_Helpers
     SpecRest_Core.IR_Analysis
-    SpecRest_Core.IR_Lower
-    SpecRest_Core.TranslateFullDef
     SpecRest_Core.TranslateDirect
     TopoSort
     Schema
@@ -126,10 +123,7 @@ code_printing
 | constant str_predicate \<rightharpoonup> (Scala) "((_) == (_))"
 
 export_code
-    translate
-    translate_full
     translate_full_direct
-    eval
     smtEval
     isLitFull
     isTrueLit
@@ -163,8 +157,6 @@ export_code
     extractMapEntries
     isKeyExistsConj
     emptyServiceIrFull
-    lower
-    lowerSetList
     requiresAlloy
     subexprs
     allSubexprs
