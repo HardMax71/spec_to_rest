@@ -5,6 +5,221 @@ theory DirectSound
 begin
 section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 
+lemma binop_noncomp_step:
+  assumes deN: "dom_eq_domains fs ps st bop l r = None"
+      and bcN: "beq_comp bop r = None"
+      and IHl: "\<And>vl lt. eval fs ps fuel s st env l = Some vl
+                  \<Longrightarrow> translate enums l = Some lt
+                  \<Longrightarrow> smtEval (correlate_model s st) (correlate_env env) lt
+                        = Some (value_to_smt vl)"
+      and IHr: "\<And>vr rt. eval fs ps fuel s st env r = Some vr
+                  \<Longrightarrow> translate enums r = Some rt
+                  \<Longrightarrow> smtEval (correlate_model s st) (correlate_env env) rt
+                        = Some (value_to_smt vr)"
+      and ev: "eval fs ps fuel s st env (BinaryOpF bop l r sp) = Some v"
+      and tt: "translate enums (BinaryOpF bop l r sp) = Some t"
+      and br: "builtins_reserved fs ps"
+  shows "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
+proof (cases bop)
+  case BAnd
+  from ev tt deN bcN br BAnd obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+      and efr: "eval fs ps fuel s st env r = Some (VBool b)"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BAnd obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TAnd lt rt"
+    by (auto split: option.splits)
+  show ?thesis using teq ev tt deN bcN br BAnd efl efr
+      IHl[OF efl tl] IHr[OF efr tr] by simp
+next
+  case BOr
+  from ev tt deN bcN br BOr obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+      and efr: "eval fs ps fuel s st env r = Some (VBool b)"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BOr obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TOr lt rt"
+    by (auto split: option.splits)
+  show ?thesis using teq ev tt deN bcN br BOr efl efr
+      IHl[OF efl tl] IHr[OF efr tr] by simp
+next
+  case BImplies
+  from ev tt deN bcN br BImplies obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+      and efr: "eval fs ps fuel s st env r = Some (VBool b)"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BImplies obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TImplies lt rt"
+    by (auto split: option.splits)
+  show ?thesis using teq ev tt deN bcN br BImplies efl efr
+      IHl[OF efl tl] IHr[OF efr tr] by simp
+next
+  case BIff
+  from ev tt deN bcN br BIff obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+      and efr: "eval fs ps fuel s st env r = Some (VBool b)"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BIff obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt"
+      and teq: "t = TAnd (TImplies lt rt) (TImplies rt lt)"
+    by (auto split: option.splits)
+  have veq: "v = VBool (a = b)" using ev BIff deN bcN efl efr by simp
+  show ?thesis using teq veq efl efr ev tt deN bcN br
+      IHl[OF efl tl] IHr[OF efr tr] by auto
+next
+  case BEq
+  from ev deN BEq bcN obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  have rnc: "\<nexists>var dnm s2 p s3. r = SetComprehensionF var (IdentifierF dnm s2) p s3"
+    using efr by (cases r) auto
+  have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
+    using br by (simp add: builtins_reserved_def)
+  have dnone: "dom_arg l = None \<or> dom_arg r = None"
+  proof (rule ccontr)
+    assume "\<not> (dom_arg l = None \<or> dom_arg r = None)"
+    then obtain rx where "dom_arg l = Some rx" by auto
+    then obtain a b c where "l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
+      using dom_arg_SomeD by blast
+    hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
+    thus False using efl by simp
+  qed
+  from tt[unfolded BEq translate_BEq_noncomp[OF rnc dnone]] obtain lt rt
+      where tl: "translate enums l = Some lt"
+        and tr: "translate enums r = Some rt"
+        and teq: "t = TEq lt rt"
+    by (auto split: option.splits)
+  have veq: "v = VBool (ir_val_eq vl vr)"
+    using ev BEq deN bcN efl efr by simp
+  show ?thesis using teq veq ev tt deN bcN br
+      TEq_sound[OF IHl[OF efl tl] IHr[OF efr tr]] by simp
+next
+  case BNeq
+  from ev tt deN bcN br BNeq obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  from ev tt deN bcN br BNeq obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TNot (TEq lt rt)"
+    by (auto split: option.splits)
+  have veq: "v = VBool (\<not> ir_val_eq vl vr)"
+    using ev BNeq deN bcN efl efr by simp
+  show ?thesis using teq veq ev tt deN bcN br
+      TEq_sound[OF IHl[OF efl tl] IHr[OF efr tr]] by simp
+next
+  case BLt
+  from ev tt deN bcN br BLt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  from ev tt deN bcN br BLt obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TLt lt rt"
+    by (auto split: option.splits)
+  have ec: "eval_cmp LtOp (Some vl) (Some vr) = Some v"
+    using ev BLt deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TLt_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BGt
+  from ev tt deN bcN br BGt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  from ev tt deN bcN br BGt obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TLt rt lt"
+    by (auto split: option.splits)
+  have ec: "eval_cmp GtOp (Some vl) (Some vr) = Some v"
+    using ev BGt deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TGt_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BLe
+  from ev tt deN bcN br BLe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  from ev tt deN bcN br BLe obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt"
+      and teq: "t = TOr (TLt lt rt) (TEq lt rt)"
+    by (auto split: option.splits)
+  have ec: "eval_cmp LeOp (Some vl) (Some vr) = Some v"
+    using ev BLe deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TLe_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BGe
+  from ev tt deN bcN br BGe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits)
+  from ev tt deN bcN br BGe obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt"
+      and teq: "t = TOr (TLt rt lt) (TEq lt rt)"
+    by (auto split: option.splits)
+  have ec: "eval_cmp GeOp (Some vl) (Some vr) = Some v"
+    using ev BGe deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TGe_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BAdd
+  from ev tt deN bcN br BAdd obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BAdd obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TAdd lt rt"
+    by (auto split: option.splits)
+  have ec: "eval_arith AddOp (Some vl) (Some vr) = Some v"
+    using ev BAdd deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TArith_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BSub
+  from ev tt deN bcN br BSub obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BSub obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TSub lt rt"
+    by (auto split: option.splits)
+  have ec: "eval_arith SubOp (Some vl) (Some vr) = Some v"
+    using ev BSub deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TArith_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BMul
+  from ev tt deN bcN br BMul obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BMul obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TMul lt rt"
+    by (auto split: option.splits)
+  have ec: "eval_arith MulOp (Some vl) (Some vr) = Some v"
+    using ev BMul deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TArith_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BDiv
+  from ev tt deN bcN br BDiv obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+      and efr: "eval fs ps fuel s st env r = Some vr"
+    by (auto split: option.splits ir_value.splits)
+  from ev tt deN bcN br BDiv obtain lt rt where tl: "translate enums l = Some lt"
+      and tr: "translate enums r = Some rt" and teq: "t = TDiv lt rt"
+    by (auto split: option.splits)
+  have ec: "eval_arith DivOp (Some vl) (Some vr) = Some v"
+    using ev BDiv deN bcN efl efr by simp
+  show ?thesis using teq ev tt deN bcN br
+      TArith_sound[OF IHl[OF efl tl] IHr[OF efr tr] ec] by simp
+next
+  case BUnion
+  with ev tt deN bcN br show ?thesis by simp
+next
+  case BIntersect
+  with ev tt deN bcN br show ?thesis by simp
+next
+  case BDiff
+  with ev tt deN bcN br show ?thesis by simp
+next
+  case BSubset
+  with ev tt deN bcN br show ?thesis by simp
+next
+  case BIn
+  with ev tt deN bcN br show ?thesis by simp
+next
+  case BNotIn
+  with ev tt deN bcN br show ?thesis by simp
+qed
+
+
 lemma direct_soundness:
   "eval fs ps fuel s st env e = Some v \<Longrightarrow> translate enums e = Some t
      \<Longrightarrow> enums_wf s enums \<Longrightarrow> builtins_reserved fs ps
@@ -66,204 +281,10 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     proof (cases "beq_comp bop r")
     case None
     show ?thesis
-    proof (cases bop)
-      case BAnd
-      from "6.prems" BAnd obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BAnd obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TAnd lt rt"
-        by (auto split: option.splits)
-      show ?thesis using teq "6.prems" BAnd efl efr
-          IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
-    next
-      case BOr
-      from "6.prems" BOr obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BOr obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TOr lt rt"
-        by (auto split: option.splits)
-      show ?thesis using teq "6.prems" BOr efl efr
-          IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
-    next
-      case BImplies
-      from "6.prems" BImplies obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BImplies obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TImplies lt rt"
-        by (auto split: option.splits)
-      show ?thesis using teq "6.prems" BImplies efl efr
-          IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
-    next
-      case BIff
-      from "6.prems" BIff obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BIff obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt"
-          and teq: "t = TAnd (TImplies lt rt) (TImplies rt lt)"
-        by (auto split: option.splits)
-      have veq: "v = VBool (a = b)" using "6.prems"(1) BIff deN None efl efr by simp
-      show ?thesis using teq veq efl efr "6.prems"
-          IHl[OF deN None efl tl] IHr[OF deN None efr tr] by auto
-    next
-      case BEq
-      from "6.prems" deN BEq None obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      have rnc: "\<nexists>var dnm s2 p s3. r = SetComprehensionF var (IdentifierF dnm s2) p s3"
-        using efr by (cases r) auto
-      have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
-        using "6.prems"(4) by (simp add: builtins_reserved_def)
-      have dnone: "dom_arg l = None \<or> dom_arg r = None"
-      proof (rule ccontr)
-        assume "\<not> (dom_arg l = None \<or> dom_arg r = None)"
-        then obtain rx where "dom_arg l = Some rx" by auto
-        then obtain a b c where "l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
-          using dom_arg_SomeD by blast
-        hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
-        thus False using efl by simp
-      qed
-      from "6.prems"(2)[unfolded BEq translate_BEq_noncomp[OF rnc dnone]] obtain lt rt
-          where tl: "translate enums l = Some lt"
-            and tr: "translate enums r = Some rt"
-            and teq: "t = TEq lt rt"
-        by (auto split: option.splits)
-      have veq: "v = VBool (ir_val_eq vl vr)"
-        using "6.prems"(1) BEq deN None efl efr by simp
-      show ?thesis using teq veq "6.prems"
-          TEq_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr]] by simp
-    next
-      case BNeq
-      from "6.prems" BNeq obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      from "6.prems" BNeq obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TNot (TEq lt rt)"
-        by (auto split: option.splits)
-      have veq: "v = VBool (\<not> ir_val_eq vl vr)"
-        using "6.prems"(1) BNeq deN None efl efr by simp
-      show ?thesis using teq veq "6.prems"
-          TEq_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr]] by simp
-    next
-      case BLt
-      from "6.prems" BLt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      from "6.prems" BLt obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TLt lt rt"
-        by (auto split: option.splits)
-      have ec: "eval_cmp LtOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BLt deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TLt_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BGt
-      from "6.prems" BGt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      from "6.prems" BGt obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TLt rt lt"
-        by (auto split: option.splits)
-      have ec: "eval_cmp GtOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BGt deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TGt_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BLe
-      from "6.prems" BLe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      from "6.prems" BLe obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt"
-          and teq: "t = TOr (TLt lt rt) (TEq lt rt)"
-        by (auto split: option.splits)
-      have ec: "eval_cmp LeOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BLe deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TLe_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BGe
-      from "6.prems" BGe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits)
-      from "6.prems" BGe obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt"
-          and teq: "t = TOr (TLt rt lt) (TEq lt rt)"
-        by (auto split: option.splits)
-      have ec: "eval_cmp GeOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BGe deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TGe_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BAdd
-      from "6.prems" BAdd obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BAdd obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TAdd lt rt"
-        by (auto split: option.splits)
-      have ec: "eval_arith AddOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BAdd deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BSub
-      from "6.prems" BSub obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BSub obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TSub lt rt"
-        by (auto split: option.splits)
-      have ec: "eval_arith SubOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BSub deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BMul
-      from "6.prems" BMul obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BMul obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TMul lt rt"
-        by (auto split: option.splits)
-      have ec: "eval_arith MulOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BMul deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BDiv
-      from "6.prems" BDiv obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
-          and efr: "eval fs ps fuel s st env r = Some vr"
-        by (auto split: option.splits ir_value.splits)
-      from "6.prems" BDiv obtain lt rt where tl: "translate enums l = Some lt"
-          and tr: "translate enums r = Some rt" and teq: "t = TDiv lt rt"
-        by (auto split: option.splits)
-      have ec: "eval_arith DivOp (Some vl) (Some vr) = Some v"
-        using "6.prems"(1) BDiv deN None efl efr by simp
-      show ?thesis using teq "6.prems"
-          TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
-    next
-      case BUnion
-      with "6.prems" show ?thesis by simp
-    next
-      case BIntersect
-      with "6.prems" show ?thesis by simp
-    next
-      case BDiff
-      with "6.prems" show ?thesis by simp
-    next
-      case BSubset
-      with "6.prems" show ?thesis by simp
-    next
-      case BIn
-      with "6.prems" show ?thesis by simp
-    next
-      case BNotIn
-      with "6.prems" show ?thesis by simp
-    qed
+      by (rule binop_noncomp_step[OF deN None
+            IHl[OF deN None _ _ "6.prems"(3) "6.prems"(4)]
+            IHr[OF deN None _ _ "6.prems"(3) "6.prems"(4)]
+            "6.prems"(1) "6.prems"(2) "6.prems"(4)])
   next
     case (Some tc)
     then obtain var dnm pred where bc: "beq_comp bop r = Some (var, dnm, pred)"
