@@ -249,6 +249,11 @@ lazy val cli = (project in file("modules/cli"))
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
+      // GH-hosted runners have 16 GB; the analysis peak grew past the builder's
+      // auto heap cap (~11.8 GB) with the June 2026 verify-layer lifts, OOMing
+      // every native build (docker, native, native-diag). Halving compilation
+      // parallelism flattens the peak without changing the produced binary.
+      "--parallelism=2",
       // Required by GraalVM 23+ for the -H: options below; on 21 it's
       // accepted as a no-op and silences the "experimental option" warnings.
       "-H:+UnlockExperimentalVMOptions",
