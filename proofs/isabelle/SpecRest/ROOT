@@ -27,6 +27,7 @@ session SpecRest_Soundness in soundness = SpecRest_Core +
     Preservation_WellTyped
     Preservation
     TranslateFull
+    DirectSound
 
 session SpecRest_Codegen in codegen = SpecRest_Core +
   options [document = false, threads = 0]
