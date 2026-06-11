@@ -485,6 +485,44 @@ phase comments: `Preservation_Wf` (120), `Preservation_Lower` (557), `Preservati
 `Preservation` (844, the irreducible `h3_preservation` umbrella - one theorem). Linear import chain,
 so no build-parallelism gain; pure maintainability. Drift-clean (no extracted function changed).
 
+### Soundness session DAG split + binop step-lemma extraction (2026-06-11)
+
+Post-#398 pass on the Soundness session shape. `DirectSound.thy` (1,699 lines) was one theory, and
+the session graph chained everything behind `Preservation_Wf`'s 29 s `wf_z3` definition - even
+though the 1,273-line soundness induction never references `wf_z3` (first use is the totality
+section), and `DirectPreservation`'s only cross-need is `wf_z3_imp_tfd_some`.
+
+**1. Theory split into three independent branches:**
+
+- `DirectSound_Smt` (339) -> `DirectSound_Desugar` (181) -> `DirectSound` (792): the soundness
+  chain, no `Preservation_Wf` import at all.
+- `Preservation_Wf` -> `DirectTotality` (435): the progress half, parallel to the soundness chain.
+- `Preservation_Wf` -> `Preservation_WellTyped` -> `DirectPreservation`: the typing branch, now
+  importing `DirectTotality` instead of the soundness monolith.
+
+`identName_SomeD` (nee `identNameFull_SomeD`) moved from `Preservation_Wf` to `core/Semantics.thy`
+next to `identName` so both branches reach it.
+
+| Metric             | Before | After A | After A+B |
+| ------------------ | ------ | ------- | --------- |
+| Soundness wall     | 1:35   | 1:24    | 1:31      |
+| Parallelism factor | 2.38   | 2.67    | 2.36      |
+
+Wall delta is within run noise; the structural wins are (a) the three branches elaborate
+concurrently in batch builds, (b) in PIDE an induction edit re-checks only `DirectSound` itself -
+the ~30 s of plumbing/desugar/totality stays green, (c) per-theory readability. Note batch
+`isabelle build` still re-elaborates the whole session on any theory edit - the split does NOT make
+the heap incremental.
+
+**2. `binop_noncomp_step` extraction.** The 198-line `proof (cases bop)` block inside
+`direct_soundness` case 6 (all 14 non-comprehension binops) is now a standalone toplevel lemma
+taking the two IHs as \<And>-premises; the induction case dispatches with
+`binop_noncomp_step[OF deN None IHl[OF deN None _ _ ...] ...]` - the `OF`-with-`_` partial
+application converts the guarded induction IH to the lemma's 2-premise shape. The comprehension
+branch (~50 lines) stays inline: its IHs need mid-proof-derived guard facts (`enr'`, `srd`, `etm`),
+so a step-lemma signature would be larger than the body. Same verdict for the remaining cases (each
+<= 56 readable lines): extraction boilerplate would exceed the win.
+
 ## Failed
 
 ### wf_z3 / lower definition cost (mutual `fun`/`function` over `expr_full`) - the levers don't apply

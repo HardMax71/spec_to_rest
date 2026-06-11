@@ -28,13 +28,9 @@ fun rel_ref_shape :: "expr \<Rightarrow> bool" where
 | "rel_ref_shape (PrimeF b _)      = (identName b \<noteq> None)"
 | "rel_ref_shape _                 = False"
 
-lemma identNameFull_SomeD:
-  "identName e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
-  by (cases e rule: identName.cases) auto
-
 lemma peelRelationRefFull_some_imp_rel_ref_shape:
   "peelRelationRef base = Some rel \<Longrightarrow> rel_ref_shape base"
-  by (cases base rule: peelRelationRef.cases) (auto dest!: identNameFull_SomeD)
+  by (cases base rule: peelRelationRef.cases) (auto dest!: identName_SomeD)
 
 fun wf_z3 :: "expr \<Rightarrow> bool"
 and wf_z3_list :: "expr list \<Rightarrow> bool"
