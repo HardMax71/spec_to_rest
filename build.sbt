@@ -249,15 +249,14 @@ lazy val cli = (project in file("modules/cli"))
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
-      // The analysis peak grew past the builder's AUTO heap cap with the June
-      // 2026 verify-layer lifts (May 28: 7.15 GB peak under an 8.3 GB cap;
-      // June 4+: OOM under 11.8 GB). The auto cap also scales DOWN with
-      // --parallelism (50% of RAM at 2 threads), so it cannot be tuned from
-      // here alone: CI sets NATIVE_IMAGE_MAX_HEAP per runner class and adds a
-      // swapfile for headroom; local builds keep the auto policy. Parallelism
-      // stays halved to keep the working set flat - the output binary is
-      // identical either way.
-      "--parallelism=2",
+      // PR #377 (Int/Real lift) added ubiquitous tiny rational/Real helpers;
+      // the builder's pre-analysis inliner (InlineBeforeAnalysis, depth 20)
+      // expands them into every call site of the big extracted match methods
+      // (smtEval alone is ~32 KB bytecode), blowing flow-graph construction
+      // up 13x in time and ~3x in heap - OOMing 16 GB CI runners. Disabling
+      // it restores the pre-#377 profile (analysis 46 s / 4 GB, peak RSS
+      // ~8 GB) with an unchanged-to-slightly-smaller binary.
+      "-H:-InlineBeforeAnalysis",
       // Required by GraalVM 23+ for the -H: options below; on 21 it's
       // accepted as a no-op and silences the "experimental option" warnings.
       "-H:+UnlockExperimentalVMOptions",
@@ -274,7 +273,7 @@ lazy val cli = (project in file("modules/cli"))
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
       "--initialize-at-run-time=com.microsoft.z3.Version"
-    ) ++ sys.env.get("NATIVE_IMAGE_MAX_HEAP").filter(_.nonEmpty).map(m => s"-J-Xmx$m").toSeq
+    )
   )
 
 // Test-only module: depends on every other module so ArchUnit can analyze the whole

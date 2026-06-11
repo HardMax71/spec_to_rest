@@ -35,7 +35,6 @@ jobs:
             platform: linux-amd64
             binary: spec-to-rest
             archive: spec-to-rest-linux-amd64.tar.gz
-            maxheap: 13g
           - os: macos-latest
             platform: macos-arm64
             binary: spec-to-rest
@@ -77,20 +76,8 @@ jobs:
 
       - uses: sbt/setup-sbt@af116cce31c00823d3903ce687f9cda3a4f19f1b # v1.2.1
 
-      - name: Add swap for the native-image builder (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          # /mnt/swapfile already exists and is active on GH ubuntu runners
-          sudo fallocate -l 8G /mnt/swapfile-ni
-          sudo chmod 600 /mnt/swapfile-ni
-          sudo mkswap /mnt/swapfile-ni
-          sudo swapon /mnt/swapfile-ni
-          free -h
-
       - name: Build native image
         shell: bash
-        env:
-          NATIVE_IMAGE_MAX_HEAP: ${{ matrix.maxheap || '' }}
         run: sbt cli/nativeImage
 
       - name: Smoke-test native binary
