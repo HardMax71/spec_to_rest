@@ -50,16 +50,18 @@ object DiagInit:
 
     val callOk: Boolean = if initOk then
       out.println()
-      out.println("--- step C: SpecRestGenerated.lower(Nil, BoolLitF(true, None)) ---")
+      out.println(
+        "--- step C: SpecRestGenerated.translate_full_direct(Nil, BoolLitF(true, None)) ---"
+      )
       try
         import specrest.ir.generated.SpecRestGenerated
         import specrest.ir.generated.SpecRestGenerated.BoolLitF
-        val r = SpecRestGenerated.lower(Nil, BoolLitF(true, None))
+        val r = SpecRestGenerated.translate_full_direct(Nil, BoolLitF(true, None))
         out.println(s"  ok: $r")
         true
       catch
         case t: Throwable =>
-          out.println("  lower(...) threw:")
+          out.println("  translate_full_direct(...) threw:")
           walkCauses(t, out)
           false
     else false

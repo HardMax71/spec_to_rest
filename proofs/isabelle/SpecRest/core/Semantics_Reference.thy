@@ -1508,4 +1508,89 @@ next
   then show ?case using qd' by simp
 qed (auto split: option.splits)
 
+definition enums_wf :: "schema \<Rightarrow> String.literal list \<Rightarrow> bool" where
+  "enums_wf s enums = (\<forall>en. string_in_list en enums = (schema_lookup_enum s en \<noteq> None))"
+
+lemma quant_dom_some_shape:
+  "quant_dom s st k bs = Some (var, dmv) \<Longrightarrow>
+     k = QAll \<and> (\<exists>dnm sp1 dty a. bs = [QuantifierBindingFull var (IdentifierF dnm sp1) dty a] \<and>
+       ((\<exists>d. schema_lookup_enum s dnm = Some d \<and> dmv = map (\<lambda>m. VEnum dnm m) (enm_members d))
+        \<or> (schema_lookup_enum s dnm = None \<and> state_relation_domain st dnm = Some dmv)))"
+  by (erule quant_dom.elims; auto split: option.splits)
+
+lemma sil_enum:
+  "enums_wf s enums \<Longrightarrow> schema_lookup_enum s dnm = Some d \<Longrightarrow> string_in_list dnm enums"
+  unfolding enums_wf_def by auto
+
+lemma sil_none:
+  "enums_wf s enums \<Longrightarrow> schema_lookup_enum s dnm = None \<Longrightarrow> \<not> string_in_list dnm enums"
+  unfolding enums_wf_def by auto
+
+lemma dmrel_enum:
+  "(\<exists>d. schema_lookup_enum s dnm = Some d \<and> dmv = map (\<lambda>m. VEnum dnm m) (enm_members d))
+     \<or> (schema_lookup_enum s dnm = None \<and> state_relation_domain st dnm = Some dmv)
+   \<Longrightarrow> schema_lookup_enum s dnm = Some d
+   \<Longrightarrow> dmv = map (\<lambda>m. VEnum dnm m) (enm_members d)"
+  by auto
+
+lemma dmrel_rel:
+  "(\<exists>d. schema_lookup_enum s dnm = Some d \<and> dmv = map (\<lambda>m. VEnum dnm m) (enm_members d))
+     \<or> (schema_lookup_enum s dnm = None \<and> state_relation_domain st dnm = Some dmv)
+   \<Longrightarrow> schema_lookup_enum s dnm = None
+   \<Longrightarrow> state_relation_domain st dnm = Some dmv"
+  by auto
+
+fun no_cmp_var :: "expr_full \<Rightarrow> bool"
+and no_cmp_var_list :: "expr_full list \<Rightarrow> bool"
+and no_cmp_var_fields :: "field_assign_full list \<Rightarrow> bool"
+and no_cmp_var_entries :: "map_entry_full list \<Rightarrow> bool"
+and no_cmp_var_bindings :: "quantifier_binding_full list \<Rightarrow> bool"
+where
+  "no_cmp_var (IdentifierF n _)           = (n \<noteq> STR ''0cmp'')"
+| "no_cmp_var (BinaryOpF _ l r _)         = (no_cmp_var l \<and> no_cmp_var r)"
+| "no_cmp_var (UnaryOpF _ e _)            = no_cmp_var e"
+| "no_cmp_var (FieldAccessF b _ _)        = no_cmp_var b"
+| "no_cmp_var (EnumAccessF b _ _)         = no_cmp_var b"
+| "no_cmp_var (IndexF b i _)              = (no_cmp_var b \<and> no_cmp_var i)"
+| "no_cmp_var (CallF c args _)            = (no_cmp_var c \<and> no_cmp_var_list args)"
+| "no_cmp_var (PrimeF e _)                = no_cmp_var e"
+| "no_cmp_var (PreF e _)                  = no_cmp_var e"
+| "no_cmp_var (WithF b upds _)            = (no_cmp_var b \<and> no_cmp_var_fields upds)"
+| "no_cmp_var (IfF c t e _)               = (no_cmp_var c \<and> no_cmp_var t \<and> no_cmp_var e)"
+| "no_cmp_var (LetF v val body _)         = (v \<noteq> STR ''0cmp'' \<and> no_cmp_var val \<and> no_cmp_var body)"
+| "no_cmp_var (LambdaF p b _)             = (p \<noteq> STR ''0cmp'' \<and> no_cmp_var b)"
+| "no_cmp_var (ConstructorF _ fs _)       = no_cmp_var_fields fs"
+| "no_cmp_var (SetLiteralF xs _)          = no_cmp_var_list xs"
+| "no_cmp_var (MapLiteralF es _)          = no_cmp_var_entries es"
+| "no_cmp_var (SetComprehensionF v d p _) = (v \<noteq> STR ''0cmp'' \<and> no_cmp_var d \<and> no_cmp_var p)"
+| "no_cmp_var (SeqLiteralF xs _)          = no_cmp_var_list xs"
+| "no_cmp_var (MatchesF x _ _)            = no_cmp_var x"
+| "no_cmp_var (SomeWrapF x _)             = no_cmp_var x"
+| "no_cmp_var (TheF v d b _)              = (v \<noteq> STR ''0cmp'' \<and> no_cmp_var d \<and> no_cmp_var b)"
+| "no_cmp_var (QuantifierF _ bs body _)   =
+     (\<not> string_in_list (STR ''0cmp'') (qb_names bs) \<and> no_cmp_var_bindings bs \<and> no_cmp_var body)"
+| "no_cmp_var (IntLitF _ _)               = True"
+| "no_cmp_var (FloatLitF _ _)             = True"
+| "no_cmp_var (StringLitF _ _)            = True"
+| "no_cmp_var (BoolLitF _ _)              = True"
+| "no_cmp_var (NoneLitF _)                = True"
+| "no_cmp_var_list []                     = True"
+| "no_cmp_var_list (x # xs)               = (no_cmp_var x \<and> no_cmp_var_list xs)"
+| "no_cmp_var_fields []                   = True"
+| "no_cmp_var_fields (FieldAssignFull _ v _ # fs) = (no_cmp_var v \<and> no_cmp_var_fields fs)"
+| "no_cmp_var_entries []                  = True"
+| "no_cmp_var_entries (MapEntryFull k v _ # es)   = (no_cmp_var k \<and> no_cmp_var v \<and> no_cmp_var_entries es)"
+| "no_cmp_var_bindings []                 = True"
+| "no_cmp_var_bindings (QuantifierBindingFull _ d _ _ # bs) = (no_cmp_var d \<and> no_cmp_var_bindings bs)"
+
+lemma no_cmp_var_free_vars:
+  "no_cmp_var e \<longrightarrow> \<not> string_in_list (STR ''0cmp'') (free_vars e)"
+  "no_cmp_var_list es \<longrightarrow> \<not> string_in_list (STR ''0cmp'') (free_vars_list es)"
+  "no_cmp_var_fields fas \<longrightarrow> \<not> string_in_list (STR ''0cmp'') (free_vars_fields fas)"
+  "no_cmp_var_entries ents \<longrightarrow> \<not> string_in_list (STR ''0cmp'') (free_vars_entries ents)"
+  "no_cmp_var_bindings bs \<longrightarrow> \<not> string_in_list (STR ''0cmp'') (free_vars_bindings bs)"
+  by (induction e and es and fas and ents and bs
+      rule: no_cmp_var_no_cmp_var_list_no_cmp_var_fields_no_cmp_var_entries_no_cmp_var_bindings.induct)
+     (auto simp: string_in_list_remove_name string_in_list_remove_names)
+
 end

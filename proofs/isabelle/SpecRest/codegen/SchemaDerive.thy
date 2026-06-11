@@ -1,5 +1,5 @@
 theory SchemaDerive
-  imports Schema MigrationOps SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.IR_Lower SchemaTraversal
+  imports Schema MigrationOps SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SchemaTraversal
 begin
 
 text \<open>Pure utility lifts from \<open>specrest.convention.Schema\<close>. The bulk of

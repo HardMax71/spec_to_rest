@@ -1,5 +1,5 @@
 theory VerifierDispatch
-  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.IR_Lower
+  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.TranslateDirect
 begin
 
 text \<open>Verifier-dispatch and trust classification. Lifts the pure
@@ -10,9 +10,9 @@ text \<open>Verifier-dispatch and trust classification. Lifts the pure
     given formula. A formula goes to Alloy iff it contains any
     Alloy-only construct (\<open>requiresAlloy\<close>, lifted in \<open>IR_Helpers\<close>);
     otherwise Z3.
-  \<^item> \<open>trust_level\<close>: \<open>Sound\<close> iff every formula's verified-subset
-    \<open>lower\<close> succeeds (i.e. the formula is in the soundness-proven
-    fragment); otherwise \<open>BestEffort\<close>.
+  \<^item> \<open>trust_level\<close>: \<open>Sound\<close> iff every formula's direct translation
+    \<open>translate_full_direct\<close> succeeds (i.e. the formula is in the
+    soundness-proven fragment); otherwise \<open>BestEffort\<close>.
 
   Both classifications are folds over a list of \<open>expr_full\<close>s; this
   theory provides the \<open>fold\<close> primitives plus the per-check-shape
@@ -30,13 +30,14 @@ definition foldVerifier :: "expr_full list \<Rightarrow> verifier_tool" where
      (if list_ex requiresAlloy exprs then VtAlloy else VtZ3)"
 
 text \<open>\<open>foldTrust\<close>: every formula in the bundle must successfully
-  \<open>lower\<close> into the verified subset for the result to be \<open>Sound\<close>.\<close>
+  translate directly for the result to be \<open>Sound\<close>. Identical to the
+  historical \<open>lower enums e \<noteq> None\<close> oracle by \<open>translate_full_direct_eq\<close>.\<close>
 
 definition foldTrust ::
   "String.literal list \<Rightarrow> expr_full list \<Rightarrow> trust_level"
 where
   "foldTrust enums exprs =
-     (if list_all (\<lambda>e. lower enums e \<noteq> None) exprs
+     (if list_all (\<lambda>e. translate_full_direct enums e \<noteq> None) exprs
       then TlSound
       else TlBestEffort)"
 
