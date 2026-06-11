@@ -43,7 +43,15 @@ object IrValueDecoder:
       case Z3Sort.Real =>
         expr match
           case r: RatNum =>
-            Some(VReal(Frct((BigInt(r.getBigIntNumerator), BigInt(r.getBigIntDenominator)))))
+            // The extracted rat ops (equal_rat, less_rat) assume the HOL
+            // normal form: coprime pair, positive denominator. Z3's GMP
+            // rationals are canonical in practice, but that is not an API
+            // contract - route through the verified normalizer instead of
+            // assuming it.
+            Some(VReal(Frct(normalize((
+              BigInt(r.getBigIntNumerator),
+              BigInt(r.getBigIntDenominator)
+            )))))
           case _ => None
       case Z3Sort.SetOf(_) =>
         None
