@@ -2773,6 +2773,20 @@ object SpecRestGenerated {
       }
   }
 
+  def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
+    case (y, Nil)     => false
+    case (y, x :: xs) => x == y || string_in_list(y, xs)
+  }
+
+  def fresh_in(n: nat, base: String, avoid: List[String]): String =
+    equal_nat(n, zero_nat) match {
+      case true => base
+      case false => string_in_list(base, avoid) match {
+          case true  => fresh_in(minus_nat(n, one_nat), base + "_", avoid)
+          case false => base
+        }
+    }
+
   def flattenAnd(x0: expr): List[expr] = x0 match {
     case BinaryOpF(BAnd(), l, r, uu)  => flattenAnd(l) ++ flattenAnd(r)
     case BinaryOpF(BOr(), va, vb, vc) => List(BinaryOpF(BOr(), va, vb, vc))
@@ -2893,6 +2907,9 @@ object SpecRestGenerated {
     case (f, Nil)        => Nil
     case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
   }
+
+  def fresh_var(base: String, avoid: List[String]): String =
+    fresh_in(Suc(size_list[String](avoid)), base, avoid)
 
   def allSubexprs_bindings(x0: List[quantifier_binding]): List[expr] = x0 match {
     case Nil => Nil
@@ -3094,6 +3111,55 @@ object SpecRestGenerated {
     case TableSpec(n, uu, uv, uw, ux, uy, uz) => n
   }
 
+  def smt_var_list(x0: smt_term): List[String] = x0 match {
+    case BLit(uu)              => Nil
+    case ILit(uv)              => Nil
+    case RLit(uw)              => Nil
+    case TVar(x)               => List(x)
+    case EnumElemConst(ux, uy) => Nil
+    case TNot(t)               => smt_var_list(t)
+    case TAnd(l, r)            => smt_var_list(l) ++ smt_var_list(r)
+    case TOr(l, r)             => smt_var_list(l) ++ smt_var_list(r)
+    case TImplies(l, r)        => smt_var_list(l) ++ smt_var_list(r)
+    case TEq(l, r)             => smt_var_list(l) ++ smt_var_list(r)
+    case TLt(l, r)             => smt_var_list(l) ++ smt_var_list(r)
+    case TNeg(t)               => smt_var_list(t)
+    case TAdd(l, r)            => smt_var_list(l) ++ smt_var_list(r)
+    case TSub(l, r)            => smt_var_list(l) ++ smt_var_list(r)
+    case TMul(l, r)            => smt_var_list(l) ++ smt_var_list(r)
+    case TDiv(l, r)            => smt_var_list(l) ++ smt_var_list(r)
+    case TInDom(uz, t)         => smt_var_list(t)
+    case TCardRel(va)          => Nil
+    case TLetIn(v, a, b)       => v :: smt_var_list(a) ++ smt_var_list(b)
+    case TForallEnum(v, vb, b) => v :: smt_var_list(b)
+    case TForallRel(v, vc, b)  => v :: smt_var_list(b)
+    case TTheRel(v, vd, b)     => v :: smt_var_list(b)
+    case TEntityBase(ve)       => Nil
+    case TForallSet(v, d, b)   => v :: smt_var_list(d) ++ smt_var_list(b)
+    case TIndexRel(b, k)       => smt_var_list(b) ++ smt_var_list(k)
+    case TFieldAccess(b, vf)   => smt_var_list(b)
+    case TSetEmpty()           => Nil
+    case TSetInsert(e, s)      => smt_var_list(e) ++ smt_var_list(s)
+    case TSetMember(e, s)      => smt_var_list(e) ++ smt_var_list(s)
+    case TSetUnion(l, r)       => smt_var_list(l) ++ smt_var_list(r)
+    case TSetIntersect(l, r)   => smt_var_list(l) ++ smt_var_list(r)
+    case TSetDiff(l, r)        => smt_var_list(l) ++ smt_var_list(r)
+    case TPrime(t)             => smt_var_list(t)
+    case TPre(t)               => smt_var_list(t)
+    case TWithRec(b, vg, v)    => smt_var_list(b) ++ smt_var_list(v)
+    case TIte(c, a, b)         => smt_var_list(c) ++ (smt_var_list(a) ++ smt_var_list(b))
+    case TNone()               => Nil
+    case TSome(t)              => smt_var_list(t)
+    case TStrLit(vh)           => Nil
+    case TMatches(t, vi)       => smt_var_list(t)
+    case TUStrPred(vj, t)      => smt_var_list(t)
+    case TSeqEmpty()           => Nil
+    case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
+    case TMapEmpty()           => Nil
+    case TMapCons(k, v, r) =>
+      smt_var_list(k) ++ (smt_var_list(v) ++ smt_var_list(r))
+  }
+
   def isIntLit(x0: expr): Boolean = x0 match {
     case IntLitF(uu, uv)                  => true
     case BinaryOpF(v, va, vb, vc)         => false
@@ -3209,11 +3275,6 @@ object SpecRestGenerated {
     case StringLitF(v, va)                => None
     case BoolLitF(v, va)                  => None
     case NoneLitF(v)                      => None
-  }
-
-  def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
-    case (y, Nil)     => false
-    case (y, x :: xs) => x == y || string_in_list(y, xs)
   }
 
   def typeStripSpans(x0: type_expr): type_expr = x0 match {
@@ -4245,11 +4306,10 @@ object SpecRestGenerated {
         }
     }
 
-  def translate_dom_eq(xrel: String, yrel: String): smt_term =
-    TAnd(
-      TForallRel("0cmp", xrel, TInDom(yrel, TVar("0cmp"))),
-      TForallRel("0cmp", yrel, TInDom(xrel, TVar("0cmp")))
-    )
+  def translate_dom_eq(xrel: String, yrel: String): smt_term = {
+    val k = fresh_var("x", List(xrel, yrel)): String;
+    TAnd(TForallRel(k, xrel, TInDom(yrel, TVar(k))), TForallRel(k, yrel, TInDom(xrel, TVar(k))))
+  }
 
   def translate_beq_dom_or_none(l: expr, r: expr): Option[smt_term] =
     (dom_arg(l), dom_arg(r)) match {
@@ -4265,7 +4325,8 @@ object SpecRestGenerated {
       setE: smt_term,
       predE: smt_term
   ): smt_term = {
-    val memX = TSetMember(TVar(vara), TVar("0cmp")): smt_term
+    val f    = fresh_var("s", vara :: smt_var_list(predE)): String
+    val memX = TSetMember(TVar(vara), TVar(f)): smt_term
     val memD =
       (string_in_list(dnm, enums) match {
         case true  => BLit(true)
@@ -4276,8 +4337,8 @@ object SpecRestGenerated {
         case true  => TForallEnum(vara, dnm, TImplies(predE, memX))
         case false => TForallRel(vara, dnm, TImplies(predE, memX))
       }): smt_term
-    val dir2 = TForallSet(vara, TVar("0cmp"), TAnd(memD, predE)): smt_term;
-    TLetIn("0cmp", setE, TAnd(dir1, dir2))
+    val dir2 = TForallSet(vara, TVar(f), TAnd(memD, predE)): smt_term;
+    TLetIn(f, setE, TAnd(dir1, dir2))
   }
 
   def identName_smt(x0: smt_term): Option[String] = x0 match {
