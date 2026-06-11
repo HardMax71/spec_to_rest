@@ -34,33 +34,6 @@ lemma contains_smt_val_set [simp]:
   "contains_smt_val xs v = (v \<in> set xs)"
   by (induction xs) auto
 
-lemma no_cmp_var_list_member:
-  "no_cmp_var_list es \<Longrightarrow> x \<in> set es \<Longrightarrow> no_cmp_var x"
-  by (induction es) auto
-
-lemma no_cmp_var_fields_member:
-  "no_cmp_var_fields fas \<Longrightarrow> FieldAssignFull fld v sp3 \<in> set fas \<Longrightarrow> no_cmp_var v"
-proof (induction fas)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons fa fas')
-  obtain f2 v2 s2 where "fa = FieldAssignFull f2 v2 s2" by (cases fa) auto
-  thus ?case using Cons by auto
-qed
-
-lemma no_cmp_var_entries_member:
-  "no_cmp_var_entries ents \<Longrightarrow> MapEntryFull k v sp3 \<in> set ents
-     \<Longrightarrow> no_cmp_var k \<and> no_cmp_var v"
-proof (induction ents)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons en ents')
-  obtain k2 v2 s2 where "en = MapEntryFull k2 v2 s2" by (cases en) auto
-  thus ?case using Cons by auto
-qed
-
 lemma smtEval_forall_enum_eq_rel:
   "smtEval_forall_enum m env var srt members body
      = smtEval_forall_rel m env var (map (SEnumElem srt) members) body"
@@ -358,453 +331,9 @@ lemma smtEval_drop_head_irrelevant:
   using smtEval_drop_irrelevant[where pre = "[(y, yv)]" and x = x and xv = xv and post = env]
   by simp
 
-section \<open>translate introduces no free 0cmp\<close>
-
-lemma translate_forall_step_no_0cmp:
-  assumes "translate_forall_step enums b body = Some t"
-      and "\<not> smt_uses_var (STR ''0cmp'') body"
-  shows "\<not> smt_uses_var (STR ''0cmp'') t"
-proof (cases b)
-  case (QuantifierBindingFull v coll knd sp2)
-  thus ?thesis using assms by (cases coll) (auto split: if_splits)
-qed
-
-lemma translate_forall_bindings_no_0cmp:
-  "translate_forall_bindings enums bs body = Some t
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') body
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') t"
-proof (induction bs arbitrary: t)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons b bs')
-  note IH = Cons.IH
-  show ?case
-  proof (cases bs')
-    case Nil
-    thus ?thesis using Cons.prems translate_forall_step_no_0cmp by simp
-  next
-    case (Cons b2 bs'')
-    from Cons.prems(1) \<open>bs' = b2 # bs''\<close> obtain inner
-      where hi: "translate_forall_bindings enums bs' body = Some inner"
-        and hs: "translate_forall_step enums b inner = Some t"
-      by (auto split: option.splits)
-    have "\<not> smt_uses_var (STR ''0cmp'') inner"
-      using IH[OF hi Cons.prems(2)] .
-    thus ?thesis using translate_forall_step_no_0cmp[OF hs] by simp
-  qed
-qed
-
-lemma translate_dom_eq_no_0cmp [simp]:
-  "\<not> smt_uses_var (STR ''0cmp'') (translate_dom_eq rx ry)"
-  by (simp add: translate_dom_eq_def)
-
-lemma translate_set_comp_eq_no_0cmp:
-  "\<not> smt_uses_var (STR ''0cmp'') lt
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') (translate_set_comp_eq enums var dnm lt pt)"
-  by (simp add: Let_def)
-
-lemma directSetList_no_0cmp:
-  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate enums x = Some tx
-      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> translateSetList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
-proof (induction es arbitrary: ts)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons a es')
-  from Cons.prems(2) obtain at2 st2 where ha: "translate enums a = Some at2"
-      and hs: "translateSetList enums es' = Some st2" and tseq: "ts = TSetInsert at2 st2"
-    by (auto split: option.splits)
-  have na: "\<not> smt_uses_var (STR ''0cmp'') at2" using Cons.prems(1)[of a at2] ha by simp
-  have ns: "\<not> smt_uses_var (STR ''0cmp'') st2"
-  proof (rule Cons.IH[OF _ hs])
-    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate enums x = Some tx
-            \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-      using Cons.prems(1) by auto
-  qed
-  show ?case using tseq na ns by simp
-qed
-
-lemma directSeqList_no_0cmp:
-  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate enums x = Some tx
-      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> translateSeqList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
-proof (induction es arbitrary: ts)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons a es')
-  from Cons.prems(2) obtain at2 st2 where ha: "translate enums a = Some at2"
-      and hs: "translateSeqList enums es' = Some st2" and tseq: "ts = TSeqCons at2 st2"
-    by (auto split: option.splits)
-  have na: "\<not> smt_uses_var (STR ''0cmp'') at2" using Cons.prems(1)[of a at2] ha by simp
-  have ns: "\<not> smt_uses_var (STR ''0cmp'') st2"
-  proof (rule Cons.IH[OF _ hs])
-    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate enums x = Some tx
-            \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-      using Cons.prems(1) by auto
-  qed
-  show ?case using tseq na ns by simp
-qed
-
-lemma directMapEntries_no_0cmp:
-  "(\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate enums k = Some tx
-      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> (\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate enums v = Some tx
-            \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> translateMapEntries enums ents = Some mt \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') mt"
-proof (induction ents arbitrary: mt)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons en ents')
-  obtain k v sp3 where en: "en = MapEntryFull k v sp3" by (cases en) auto
-  from Cons.prems(3) en obtain kt vt mt'
-    where hk: "translate enums k = Some kt"
-      and hv: "translate enums v = Some vt"
-      and hm: "translateMapEntries enums ents' = Some mt'"
-      and meq: "mt = TMapCons kt vt mt'"
-    by (auto split: option.splits)
-  have nk: "\<not> smt_uses_var (STR ''0cmp'') kt" using Cons.prems(1)[of k v sp3 kt] en hk by simp
-  have nv: "\<not> smt_uses_var (STR ''0cmp'') vt" using Cons.prems(2)[of k v sp3 vt] en hv by simp
-  have nm: "\<not> smt_uses_var (STR ''0cmp'') mt'"
-  proof (rule Cons.IH[OF _ _ hm])
-    show "\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> translate enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-      using Cons.prems(1) by auto
-    show "\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> translate enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-      using Cons.prems(2) by auto
-  qed
-  show ?case using meq nk nv nm by simp
-qed
-
-lemma translate_with_assigns_no_0cmp:
-  "(\<And>fld v sp3 tv. FieldAssignFull fld v sp3 \<in> set fas \<Longrightarrow> translate enums v = Some tv
-      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tv)
-     \<Longrightarrow> translate_with_assigns enums fas bt = Some ft
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') bt \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ft"
-proof (induction fas arbitrary: bt ft)
-  case Nil
-  thus ?case by simp
-next
-  case (Cons fa fas')
-  obtain fld v sp3 where fa: "fa = FieldAssignFull fld v sp3" by (cases fa) auto
-  from Cons.prems(2) fa obtain vt
-    where hv: "translate enums v = Some vt"
-      and hrest: "translate_with_assigns enums fas' (TWithRec bt fld vt) = Some ft"
-    by (auto split: option.splits)
-  have nv: "\<not> smt_uses_var (STR ''0cmp'') vt" using Cons.prems(1)[of fld v sp3 vt] fa hv by simp
-  have nb: "\<not> smt_uses_var (STR ''0cmp'') (TWithRec bt fld vt)" using Cons.prems(3) nv by simp
-  show ?case
-  proof (rule Cons.IH[OF _ hrest nb])
-    show "\<And>fld v sp3 tv. FieldAssignFull fld v sp3 \<in> set fas'
-            \<Longrightarrow> translate enums v = Some tv \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tv"
-      using Cons.prems(1) by auto
-  qed
-qed
-
-lemma tfd_no_0cmp:
-  "translate enums e = Some t \<Longrightarrow> no_cmp_var e
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') t"
-proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
-  case (less e)
-  show ?case
-  proof (cases e)
-    case (IdentifierF x sp2)
-    thus ?thesis using less.prems by auto
-  next
-    case (PrimeF c sp2)
-    have s: "size c < size e" using PrimeF by simp
-    show ?thesis using less.prems PrimeF less.IH[OF s] by (auto split: option.splits)
-  next
-    case (PreF c sp2)
-    have s: "size c < size e" using PreF by simp
-    show ?thesis using less.prems PreF less.IH[OF s] by (auto split: option.splits)
-  next
-    case (SomeWrapF c sp2)
-    have s: "size c < size e" using SomeWrapF by simp
-    show ?thesis using less.prems SomeWrapF less.IH[OF s] by (auto split: option.splits)
-  next
-    case (MatchesF c pat sp2)
-    have s: "size c < size e" using MatchesF by simp
-    show ?thesis using less.prems MatchesF less.IH[OF s] by (auto split: option.splits)
-  next
-    case (FieldAccessF c f sp2)
-    have s: "size c < size e" using FieldAccessF by simp
-    show ?thesis using less.prems FieldAccessF less.IH[OF s] by (auto split: option.splits)
-  next
-    case (EnumAccessF base mem sp2)
-    thus ?thesis using less.prems by (cases base) (auto split: option.splits)
-  next
-    case (CallF c args sp2)
-    show ?thesis
-    proof (cases "\<exists>nm sp1 arg. c = IdentifierF nm sp1 \<and> args = [arg] \<and> is_builtin_pred nm")
-      case True
-      then obtain nm sp1 arg where ceq: "c = IdentifierF nm sp1" and aeq: "args = [arg]"
-          and bip: "is_builtin_pred nm" by blast
-      have s: "size arg < size e" using CallF aeq by simp
-      show ?thesis using less.prems CallF ceq aeq bip less.IH[OF s]
-        by (auto split: option.splits)
-    next
-      case False
-      then have "translate enums (CallF c args sp2) = None"
-        by (auto split: expr.splits list.splits if_splits)
-      thus ?thesis using less.prems CallF by simp
-    qed
-  next
-    case (IndexF base key sp2)
-    have sb: "size base < size e" and sk: "size key < size e" using IndexF by simp_all
-    show ?thesis using less.prems IndexF less.IH[OF sb] less.IH[OF sk]
-      by (auto split: option.splits)
-  next
-    case (IfF c a b sp2)
-    have sc: "size c < size e" and sa: "size a < size e" and sb: "size b < size e"
-      using IfF by simp_all
-    show ?thesis using less.prems IfF less.IH[OF sc] less.IH[OF sa] less.IH[OF sb]
-      by (auto split: option.splits)
-  next
-    case (LetF x v body sp2)
-    have sv: "size v < size e" and sb: "size body < size e" using LetF by simp_all
-    show ?thesis using less.prems LetF less.IH[OF sv] less.IH[OF sb]
-      by (auto split: option.splits)
-  next
-    case (TheF var dm body sp2)
-    show ?thesis
-    proof (cases dm)
-      case (IdentifierF rel rsp)
-      have s: "size body < size e" using TheF by simp
-      show ?thesis using less.prems TheF IdentifierF less.IH[OF s]
-        by (auto split: option.splits if_splits)
-    qed (use less.prems TheF in \<open>auto\<close>)
-  next
-    case (UnaryOpF op2 c sp2)
-    have s: "size c < size e" using UnaryOpF by simp
-    show ?thesis using less.prems UnaryOpF less.IH[OF s]
-      by (cases op2) (auto split: option.splits expr.splits)
-  next
-    case (QuantifierF k bs body sp2)
-    have s: "size body < size e" using QuantifierF by simp
-    from less.prems QuantifierF obtain bt where hb: "translate enums body = Some bt"
-      by (auto split: option.splits)
-    have nb: "\<not> smt_uses_var (STR ''0cmp'') bt"
-      using less.IH[OF s hb] less.prems(2) QuantifierF by simp
-    show ?thesis
-    proof (cases k)
-      case QAll
-      with less.prems(1) QuantifierF hb show ?thesis
-        using translate_forall_bindings_no_0cmp[OF _ nb] by (auto split: option.splits)
-    next
-      case QNo
-      with less.prems(1) QuantifierF hb show ?thesis
-        using translate_forall_bindings_no_0cmp nb by (auto split: option.splits)
-    next
-      case QSome
-      with less.prems(1) QuantifierF hb obtain inner
-        where bnd: "translate_forall_bindings enums bs (TNot bt) = Some inner"
-          and teq: "t = TNot inner"
-        by (auto split: option.splits)
-      have "\<not> smt_uses_var (STR ''0cmp'') inner"
-        using translate_forall_bindings_no_0cmp[OF bnd] nb by simp
-      thus ?thesis using teq by simp
-    next
-      case QExists
-      with less.prems(1) QuantifierF hb obtain inner
-        where bnd: "translate_forall_bindings enums bs (TNot bt) = Some inner"
-          and teq: "t = TNot inner"
-        by (auto split: option.splits)
-      have "\<not> smt_uses_var (STR ''0cmp'') inner"
-        using translate_forall_bindings_no_0cmp[OF bnd] nb by simp
-      thus ?thesis using teq by simp
-    qed
-  next
-    case (ConstructorF name fas sp2)
-    have wa: "translate_with_assigns enums fas (TEntityBase name) = Some t"
-      using less.prems(1) ConstructorF by simp
-    show ?thesis
-    proof (rule translate_with_assigns_no_0cmp[OF _ wa])
-      show "\<not> smt_uses_var (STR ''0cmp'') (TEntityBase name)" by simp
-      fix fld v sp3 tv assume m: "FieldAssignFull fld v sp3 \<in> set fas"
-        and hv: "translate enums v = Some tv"
-      have "size v < size e"
-        using ConstructorF size_list_estimation'[OF m order_refl, where f = size] by simp
-      moreover have "no_cmp_var v"
-        using no_cmp_var_fields_member[OF _ m] less.prems(2) ConstructorF by simp
-      ultimately show "\<not> smt_uses_var (STR ''0cmp'') tv" using less.IH hv by blast
-    qed
-  next
-    case (WithF base upds sp2)
-    from less.prems(1) WithF obtain bt
-      where hbase: "translate enums base = Some bt"
-        and hwa: "translate_with_assigns enums upds bt = Some t"
-      by (auto split: option.splits)
-    have sbase: "size base < size e" using WithF by simp
-    have nb: "\<not> smt_uses_var (STR ''0cmp'') bt"
-      using less.IH[OF sbase hbase] less.prems(2) WithF by simp
-    show ?thesis
-    proof (rule translate_with_assigns_no_0cmp[OF _ hwa nb])
-      fix fld v sp3 tv assume m: "FieldAssignFull fld v sp3 \<in> set upds"
-        and hv: "translate enums v = Some tv"
-      have "size v < size e"
-        using WithF size_list_estimation'[OF m order_refl, where f = size] by simp
-      moreover have "no_cmp_var v"
-        using no_cmp_var_fields_member[OF _ m] less.prems(2) WithF by simp
-      ultimately show "\<not> smt_uses_var (STR ''0cmp'') tv" using less.IH hv by blast
-    qed
-  next
-    case (SetLiteralF elems sp2)
-    show ?thesis
-    proof (rule directSetList_no_0cmp)
-      show "translateSetList enums elems = Some t" using less.prems(1) SetLiteralF by simp
-      fix x tx assume m: "x \<in> set elems" and hx: "translate enums x = Some tx"
-      have "size x < size e"
-        using SetLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
-      moreover have "no_cmp_var x"
-        using no_cmp_var_list_member[OF _ m] less.prems(2) SetLiteralF by simp
-      ultimately show "\<not> smt_uses_var (STR ''0cmp'') tx" using less.IH hx by blast
-    qed
-  next
-    case (SeqLiteralF elems sp2)
-    show ?thesis
-    proof (rule directSeqList_no_0cmp)
-      show "translateSeqList enums elems = Some t" using less.prems(1) SeqLiteralF by simp
-      fix x tx assume m: "x \<in> set elems" and hx: "translate enums x = Some tx"
-      have "size x < size e"
-        using SeqLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
-      moreover have "no_cmp_var x"
-        using no_cmp_var_list_member[OF _ m] less.prems(2) SeqLiteralF by simp
-      ultimately show "\<not> smt_uses_var (STR ''0cmp'') tx" using less.IH hx by blast
-    qed
-  next
-    case (MapLiteralF entries sp2)
-    show ?thesis
-    proof (rule directMapEntries_no_0cmp)
-      show "translateMapEntries enums entries = Some t" using less.prems(1) MapLiteralF by simp
-      fix k v sp3 tx assume m: "MapEntryFull k v sp3 \<in> set entries"
-      have sk: "size k < size e" and sv: "size v < size e"
-        using MapLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp_all
-      have nk: "no_cmp_var k" and nv: "no_cmp_var v"
-        using no_cmp_var_entries_member[OF _ m] less.prems(2) MapLiteralF by simp_all
-      show "translate enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-        using less.IH[OF sk _ nk] by blast
-      show "translate enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
-        using less.IH[OF sv _ nv] by blast
-    qed
-  next
-    case (BinaryOpF op2 l2 r2 sp2)
-    have sl: "size l2 < size e" and sr: "size r2 < size e" using BinaryOpF by simp_all
-    have ncl: "no_cmp_var l2" and ncr: "no_cmp_var r2"
-      using less.prems(2) BinaryOpF by simp_all
-    show ?thesis
-    proof (cases op2)
-      case BEq
-      show ?thesis
-      proof (cases "translate_beq_dom_or_none l2 r2")
-        case (Some dt)
-        hence teq: "t = dt" using less.prems(1) BinaryOpF BEq by simp
-        have "\<not> smt_uses_var (STR ''0cmp'') dt"
-          using Some by (auto simp: translate_beq_dom_or_none_def split: option.splits)
-        thus ?thesis using teq by simp
-      next
-        case None
-        show ?thesis
-        proof (cases "\<exists>cvar dnm s2 cpred s3. r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3")
-          case True
-          then obtain cvar dnm s2 cpred s3
-            where req: "r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3" by blast
-          from less.prems(1) BinaryOpF BEq None req obtain lt pt
-            where hl: "translate enums l2 = Some lt"
-              and teq: "t = translate_set_comp_eq enums cvar dnm lt pt"
-            by (auto split: option.splits)
-          have "\<not> smt_uses_var (STR ''0cmp'') lt" using less.IH[OF sl hl ncl] .
-          thus ?thesis using teq translate_set_comp_eq_no_0cmp by simp
-        next
-          case False
-          hence nc: "\<nexists>var dnm sp3 p sp4. r2 = SetComprehensionF var (IdentifierF dnm sp3) p sp4"
-            by blast
-          have dnone: "dom_arg l2 = None \<or> dom_arg r2 = None"
-            using None by (auto simp: translate_beq_dom_or_none_def split: option.splits)
-          from less.prems(1)[unfolded BinaryOpF BEq translate_BEq_noncomp[OF nc dnone]]
-          obtain lt rt where hl: "translate enums l2 = Some lt"
-              and hr: "translate enums r2 = Some rt" and teq: "t = TEq lt rt"
-            by (auto split: option.splits)
-          show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
-        qed
-      qed
-    next
-      case BIn
-      show ?thesis
-      proof (cases "\<exists>cvar dnm s2 cpred s3. r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3")
-        case True
-        then obtain cvar dnm s2 cpred s3
-          where req: "r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3" by blast
-        have spred: "size cpred < size e" using BinaryOpF req by simp
-        have ncp: "no_cmp_var cpred" and cv: "cvar \<noteq> STR ''0cmp''"
-          using ncr req by simp_all
-        from less.prems(1) BinaryOpF BIn req obtain lt pt
-          where hl: "translate enums l2 = Some lt"
-            and hp: "translate enums cpred = Some pt"
-            and teq: "t = TLetIn cvar lt
-                          (if string_in_list dnm enums then pt
-                           else TAnd (TInDom dnm (TVar cvar)) pt)"
-          by (auto split: option.splits)
-        have nl: "\<not> smt_uses_var (STR ''0cmp'') lt" using less.IH[OF sl hl ncl] .
-        have np: "\<not> smt_uses_var (STR ''0cmp'') pt" using less.IH[OF spred hp ncp] .
-        show ?thesis using teq nl np cv by (auto split: if_splits)
-      next
-        case False
-        hence nc: "\<nexists>var dnm sp3 p sp4. r2 = SetComprehensionF var (IdentifierF dnm sp3) p sp4"
-          by blast
-        show ?thesis
-        proof (cases "\<exists>rel rsp. r2 = IdentifierF rel rsp")
-          case True
-          then obtain rel rsp where rid: "r2 = IdentifierF rel rsp" by blast
-          from less.prems(1) BinaryOpF BIn rid obtain lt
-            where hl: "translate enums l2 = Some lt" and teq: "t = TInDom rel lt"
-            by (auto split: option.splits)
-          show ?thesis using less.IH[OF sl hl ncl] teq by simp
-        next
-          case False
-          from less.prems(1)[unfolded BinaryOpF BIn translate_BIn_noncomp[OF nc]
-                              expr_case_no_ident[OF False]]
-          obtain lt rt where hl: "translate enums l2 = Some lt"
-              and hr: "translate enums r2 = Some rt" and teq: "t = TSetMember lt rt"
-            by (auto split: option.splits)
-          show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
-        qed
-      qed
-    next
-      case BNotIn
-      show ?thesis
-      proof (cases "\<exists>rel rsp. r2 = IdentifierF rel rsp")
-        case True
-        then obtain rel rsp where rid: "r2 = IdentifierF rel rsp" by blast
-        from less.prems(1) BinaryOpF BNotIn rid obtain lt
-          where hl: "translate enums l2 = Some lt"
-            and teq: "t = TNot (TInDom rel lt)"
-          by (auto split: option.splits)
-        show ?thesis using less.IH[OF sl hl ncl] teq by simp
-      next
-        case False
-        have beq: "translate enums e
-                     = (case r2 of
-                          IdentifierF rel _ \<Rightarrow>
-                            map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l2)
-                        | _ \<Rightarrow> (case (translate enums l2, translate enums r2) of
-                                  (Some lt, Some rt) \<Rightarrow> Some (TNot (TSetMember lt rt)) | _ \<Rightarrow> None))"
-          using BinaryOpF BNotIn by simp
-        from less.prems(1)[unfolded beq expr_case_no_ident[OF False]]
-        obtain lt rt where hl: "translate enums l2 = Some lt"
-            and hr: "translate enums r2 = Some rt"
-            and teq: "t = TNot (TSetMember lt rt)"
-          by (auto split: option.splits)
-        show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
-      qed
-    qed (use less.prems(1) BinaryOpF less.IH[OF sl] less.IH[OF sr] ncl ncr
-          in \<open>auto split: option.splits\<close>)
-  qed (use less.prems in \<open>auto split: option.splits\<close>)
-qed
+lemma smt_var_list_covers:
+  "x \<notin> set (smt_var_list t) \<Longrightarrow> \<not> smt_uses_var x t"
+  by (induction t) auto
 
 section \<open>The dom-equality term evaluates to the domains' set equality\<close>
 
@@ -830,21 +359,26 @@ lemma translate_dom_eq_sound:
   shows "smtEval (correlate_model s st) ce (translate_dom_eq rx ry)
            = Some (SBool (set dx = set dy))"
 proof -
+  define k where "k = fresh_var (STR ''x'') [rx, ry]"
+  have un: "translate_dom_eq rx ry
+              = TAnd (TForallRel k rx (TInDom ry (TVar k)))
+                     (TForallRel k ry (TInDom rx (TVar k)))"
+    by (simp add: translate_dom_eq_def Let_def k_def)
   have lx: "smt_model_lookup_rel (correlate_model s st) rx = Some (map value_to_smt dx)"
     using dx by simp
   have ly: "smt_model_lookup_rel (correlate_model s st) ry = Some (map value_to_smt dy)"
     using dy by simp
   have d1: "smtEval (correlate_model s st) ce
-              (TForallRel (STR ''0cmp'') rx (TInDom ry (TVar (STR ''0cmp''))))
+              (TForallRel k rx (TInDom ry (TVar k)))
               = Some (SBool (set dx \<subseteq> set dy))"
     using lx ly smtEval_forall_rel_indom[OF ly]
     by (auto simp: list_all_iff subset_iff)
   have d2: "smtEval (correlate_model s st) ce
-              (TForallRel (STR ''0cmp'') ry (TInDom rx (TVar (STR ''0cmp''))))
+              (TForallRel k ry (TInDom rx (TVar k)))
               = Some (SBool (set dy \<subseteq> set dx))"
     using lx ly smtEval_forall_rel_indom[OF lx]
     by (auto simp: list_all_iff subset_iff)
-  show ?thesis using d1 d2 by (simp add: translate_dom_eq_def set_eq_subset)
+  show ?thesis unfolding un using d1 d2 by (simp add: set_eq_subset)
 qed
 
 section \<open>The comprehension-equality term evaluates to set equality\<close>
@@ -867,11 +401,11 @@ lemma smtEval_the_rel_mem:
 
 lemma smt_comp_dir1:
   assumes ethe: "smtEval_the_rel m env var svs pt = Some mst"
-      and dropp: "\<And>d. smtEval m ((var, d) # (STR ''0cmp'', SSet xst) # env) pt
+      and dropp: "\<And>d. smtEval m ((var, d) # (f, SSet xst) # env) pt
                        = smtEval m ((var, d) # env) pt"
-      and vne: "var \<noteq> STR ''0cmp''"
-  shows "smtEval_forall_rel m ((STR ''0cmp'', SSet xst) # env) var svs
-            (TImplies pt (TSetMember (TVar var) (TVar (STR ''0cmp''))))
+      and vne: "var \<noteq> f"
+  shows "smtEval_forall_rel m ((f, SSet xst) # env) var svs
+            (TImplies pt (TSetMember (TVar var) (TVar f)))
            = Some (SBool (set mst \<subseteq> set xst))"
   using ethe
 proof (induction svs arbitrary: mst)
@@ -884,12 +418,12 @@ next
       and mr: "smtEval_the_rel m env var rest pt = Some matches"
       and ms_eq: "mst = (if b then w # matches else matches)"
     by (auto split: option.splits smt_val.splits)
-  have ev: "smtEval m ((var, w) # (STR ''0cmp'', SSet xst) # env)
-              (TImplies pt (TSetMember (TVar var) (TVar (STR ''0cmp''))))
+  have ev: "smtEval m ((var, w) # (f, SSet xst) # env)
+              (TImplies pt (TSetMember (TVar var) (TVar f)))
             = Some (SBool (\<not> b \<or> w \<in> set xst))"
     using wb dropp[of w] vne by (simp add: smt_env_lookup_def)
-  have IH: "smtEval_forall_rel m ((STR ''0cmp'', SSet xst) # env) var rest
-              (TImplies pt (TSetMember (TVar var) (TVar (STR ''0cmp''))))
+  have IH: "smtEval_forall_rel m ((f, SSet xst) # env) var rest
+              (TImplies pt (TSetMember (TVar var) (TVar f)))
             = Some (SBool (set matches \<subseteq> set xst))"
     using Cons.IH[OF mr] .
   show ?case using ev IH ms_eq by auto
@@ -897,12 +431,12 @@ qed
 
 lemma smt_comp_dir2:
   assumes ethe: "smtEval_the_rel m env var svs pt = Some mst"
-      and dropp: "\<And>d. smtEval m ((var, d) # (STR ''0cmp'', SSet xst) # env) pt
+      and dropp: "\<And>d. smtEval m ((var, d) # (f, SSet xst) # env) pt
                        = smtEval m ((var, d) # env) pt"
-      and vne: "var \<noteq> STR ''0cmp''"
+      and vne: "var \<noteq> f"
       and srd: "smt_model_lookup_rel m dnm = Some svs"
       and la: "list_all (\<lambda>x. contains_smt_val svs x) yst"
-  shows "smtEval_forall_rel m ((STR ''0cmp'', SSet xst) # env) var yst
+  shows "smtEval_forall_rel m ((f, SSet xst) # env) var yst
             (TAnd (TInDom dnm (TVar var)) pt)
            = Some (SBool (set yst \<subseteq> set mst))"
   using la
@@ -918,10 +452,10 @@ next
     using smtEval_the_rel_defined[OF ethe xsvs] by blast
   have xms: "(x \<in> set mst) = b"
     using smtEval_the_rel_mem[OF ethe xsvs bx] .
-  have ev: "smtEval m ((var, x) # (STR ''0cmp'', SSet xst) # env)
+  have ev: "smtEval m ((var, x) # (f, SSet xst) # env)
               (TAnd (TInDom dnm (TVar var)) pt) = Some (SBool b)"
     using bx dropp[of x] srd xsvs by (simp add: smt_env_lookup_def)
-  have IH: "smtEval_forall_rel m ((STR ''0cmp'', SSet xst) # env) var rest
+  have IH: "smtEval_forall_rel m ((f, SSet xst) # env) var rest
               (TAnd (TInDom dnm (TVar var)) pt)
             = Some (SBool (set rest \<subseteq> set mst))"
     using Cons.IH[OF larest] .
@@ -933,30 +467,38 @@ lemma smt_comp_assembly:
       and ethe: "smtEval_the_rel m env var svs pt = Some mst"
       and srd: "smt_model_lookup_rel m dnm = Some svs"
       and la: "list_all (\<lambda>x. contains_smt_val svs x) xst"
-      and vne: "var \<noteq> STR ''0cmp''"
-      and fp: "\<not> smt_uses_var (STR ''0cmp'') pt"
       and dne: "\<not> string_in_list dnm enums"
   shows "smtEval m env (translate_set_comp_eq enums var dnm lt pt)
            = Some (SBool (set xst = set mst))"
 proof -
-  have dropp: "\<And>d. smtEval m ((var, d) # (STR ''0cmp'', SSet xst) # env) pt
+  define f where "f = fresh_var (STR ''s'') (var # smt_var_list pt)"
+  have ff: "f \<notin> set (var # smt_var_list pt)"
+    unfolding f_def by (rule fresh_var_fresh)
+  have vne: "var \<noteq> f" using ff by auto
+  have fp: "\<not> smt_uses_var f pt" using ff smt_var_list_covers by auto
+  have un: "translate_set_comp_eq enums var dnm lt pt
+              = TLetIn f lt
+                  (TAnd (TForallRel var dnm
+                           (TImplies pt (TSetMember (TVar var) (TVar f))))
+                        (TForallSet var (TVar f) (TAnd (TInDom dnm (TVar var)) pt)))"
+    using dne by (simp add: Let_def f_def)
+  have dropp: "\<And>d. smtEval m ((var, d) # (f, SSet xst) # env) pt
                     = smtEval m ((var, d) # env) pt"
   proof -
     fix d
-    show "smtEval m ((var, d) # (STR ''0cmp'', SSet xst) # env) pt
+    show "smtEval m ((var, d) # (f, SSet xst) # env) pt
             = smtEval m ((var, d) # env) pt"
       by (rule smtEval_drop_head_irrelevant[OF fp])
   qed
-  have d1: "smtEval m ((STR ''0cmp'', SSet xst) # env)
-              (TForallRel var dnm (TImplies pt (TSetMember (TVar var) (TVar (STR ''0cmp'')))))
+  have d1: "smtEval m ((f, SSet xst) # env)
+              (TForallRel var dnm (TImplies pt (TSetMember (TVar var) (TVar f))))
             = Some (SBool (set mst \<subseteq> set xst))"
     using smt_comp_dir1[OF ethe dropp vne] srd by simp
-  have d2: "smtEval m ((STR ''0cmp'', SSet xst) # env)
-              (TForallSet var (TVar (STR ''0cmp'')) (TAnd (TInDom dnm (TVar var)) pt))
+  have d2: "smtEval m ((f, SSet xst) # env)
+              (TForallSet var (TVar f) (TAnd (TInDom dnm (TVar var)) pt))
             = Some (SBool (set xst \<subseteq> set mst))"
     using smt_comp_dir2[OF ethe dropp vne srd la] by (simp add: smt_env_lookup_def)
-  show ?thesis
-    using elt d1 d2 dne by (auto simp: Let_def set_eq_subset)
+  show ?thesis unfolding un using elt d1 d2 by (auto simp: set_eq_subset conj_commute)
 qed
 
 lemma list_all_contains_map:
@@ -968,31 +510,31 @@ section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 
 lemma direct_soundness:
   "eval fs ps fuel s st env e = Some v \<Longrightarrow> translate enums e = Some t
-     \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var e \<Longrightarrow> builtins_reserved fs ps
+     \<Longrightarrow> enums_wf s enums \<Longrightarrow> builtins_reserved fs ps
      \<Longrightarrow> smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
-  "eval_list fs ps fuel s st env es = Some vs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_list es \<Longrightarrow>
+  "eval_list fs ps fuel s st env es = Some vs \<Longrightarrow> enums_wf s enums \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>t. translateSeqList enums es = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t = Some (SSeq (map value_to_smt vs))) \<and>
      (\<forall>t. translateSetList enums es = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t
           = Some (SSet (map value_to_smt (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))))"
-  "eval_entries fs ps fuel s st env ents = Some mps \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_entries ents \<Longrightarrow>
+  "eval_entries fs ps fuel s st env ents = Some mps \<Longrightarrow> enums_wf s enums \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>t. translateMapEntries enums ents = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t = Some (SMap (value_to_smt_entries mps)))"
-  "eval_fields fs ps fuel s st env fas = Some fvs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_fields fas \<Longrightarrow>
+  "eval_fields fs ps fuel s st env fas = Some fvs \<Longrightarrow> enums_wf s enums \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>bt t bv. smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt bv) \<longrightarrow>
         translate_with_assigns enums fas bt = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t
           = Some (value_to_smt (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs)))"
-  "eval_the fs ps fuel s st env var dmv body = Some tms \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+  "eval_the fs ps fuel s st env var dmv body = Some tms \<Longrightarrow> enums_wf s enums \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>bt. translate enums body = Some bt \<longrightarrow>
         smtEval_the_rel (correlate_model s st) (correlate_env env) var (map value_to_smt dmv) bt
           = Some (map value_to_smt tms))"
-  "eval_forall fs ps fuel s st env var dmv body = Some fr \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+  "eval_forall fs ps fuel s st env var dmv body = Some fr \<Longrightarrow> enums_wf s enums \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>bt. translate enums body = Some bt \<longrightarrow>
         smtEval_forall_rel (correlate_model s st) (correlate_env env) var (map value_to_smt dmv) bt
@@ -1077,7 +619,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
       have rnc: "\<nexists>var dnm s2 p s3. r = SetComprehensionF var (IdentifierF dnm s2) p s3"
         using efr by (cases r) auto
       have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
-        using "6.prems"(5) by (simp add: builtins_reserved_def)
+        using "6.prems"(4) by (simp add: builtins_reserved_def)
       have dnone: "dom_arg l = None \<or> dom_arg r = None"
       proof (rule ccontr)
         assume "\<not> (dom_arg l = None \<or> dom_arg r = None)"
@@ -1243,7 +785,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         and veq: "v = VBool (set xs = set ms)"
       by (auto split: if_splits option.splits ir_value.splits)
     have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
-      using "6.prems"(5) by (simp add: builtins_reserved_def)
+      using "6.prems"(4) by (simp add: builtins_reserved_def)
     have dnone: "dom_arg l = None"
     proof (rule ccontr)
       assume "dom_arg l \<noteq> None"
@@ -1260,26 +802,21 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         and tp: "translate enums pred = Some pt"
         and teq: "t = translate_set_comp_eq enums var dnm lt pt"
       by (auto split: option.splits)
-    have ncl: "no_cmp_var l" using "6.prems"(4) bopeq by simp
-    have ncp: "no_cmp_var pred" using "6.prems"(4) req by simp
-    have vne: "var \<noteq> STR ''0cmp''" using "6.prems"(4) req by simp
     have dne: "\<not> string_in_list dnm enums" by (rule sil_none[OF "6.prems"(3) enr])
-    have fp: "\<not> smt_uses_var (STR ''0cmp'') pt"
-      by (rule tfd_no_0cmp[OF tp ncp])
     have enr': "\<not> schema_lookup_enum s dnm \<noteq> None" using enr by simp
     have etr: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
                  (map value_to_smt dvs) pt = Some (map value_to_smt ms)"
-      using "6.IH"(3)[OF deN bc refl refl enr' srd etm "6.prems"(3) ncp "6.prems"(5)] tp by blast
+      using "6.IH"(3)[OF deN bc refl refl enr' srd etm "6.prems"(3) "6.prems"(4)] tp by blast
     have elt: "smtEval (correlate_model s st) (correlate_env env) lt
                  = Some (SSet (map value_to_smt xs))"
-      using "6.IH"(4)[OF deN bc refl refl enr' srd etm efl tl "6.prems"(3) ncl "6.prems"(5)] by simp
+      using "6.IH"(4)[OF deN bc refl refl enr' srd etm efl tl "6.prems"(3) "6.prems"(4)] by simp
     have srd': "smt_model_lookup_rel (correlate_model s st) dnm = Some (map value_to_smt dvs)"
       using srd by simp
     have la': "list_all (\<lambda>x. contains_smt_val (map value_to_smt dvs) x) (map value_to_smt xs)"
       using la by (auto simp: list_all_iff)
     show ?thesis
       using teq veq
-        smt_comp_assembly[OF elt etr srd' la' vne fp dne]
+        smt_comp_assembly[OF elt etr srd' la' dne]
       by simp
   qed
   qed
@@ -1295,7 +832,7 @@ next
         and teq: "t = TNot et"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) et = Some (SBool b)"
-      using "7.IH"[OF ef te "7.prems"(3)] "7.prems"(4) "7.prems"(5) by simp
+      using "7.IH"[OF ef te "7.prems"(3)] "7.prems"(4) by simp
     then show ?thesis using teq veq by simp
   next
     case UNegate
@@ -1305,7 +842,7 @@ next
         and teq: "t = TNeg et"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v0)"
-      using "7.IH"[OF ef te "7.prems"(3)] "7.prems"(4) "7.prems"(5) by simp
+      using "7.IH"[OF ef te "7.prems"(3)] "7.prems"(4) by simp
     then show ?thesis using teq ef "7.prems" UNegate by (auto split: ir_value.splits)
   next
     case UCardinality
@@ -1323,21 +860,21 @@ next
   from "8.prems" obtain bb where ec: "eval fs ps fuel s st env c = Some (VBool bb)"
     by (auto split: option.splits ir_value.splits)
   have ec': "smtEval (correlate_model s st) (correlate_env env) ct = Some (SBool bb)"
-    using "8.IH"(1)[OF ec tc "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
+    using "8.IH"(1)[OF ec tc "8.prems"(3)] "8.prems"(4) by simp
   show ?case
   proof (cases bb)
     case True
     with ec have cT: "eval fs ps fuel s st env c = Some (VBool True)" by simp
     have ea: "eval fs ps fuel s st env a = Some v" using "8.prems" cT by simp
     have "smtEval (correlate_model s st) (correlate_env env) at2 = Some (value_to_smt v)"
-      using "8.IH"(2)[OF cT refl refl ea ta "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
+      using "8.IH"(2)[OF cT refl refl ea ta "8.prems"(3)] "8.prems"(4) by simp
     then show ?thesis using teq ec' True by simp
   next
     case False
     with ec have cF: "eval fs ps fuel s st env c = Some (VBool False)" by simp
     have eb: "eval fs ps fuel s st env b = Some v" using "8.prems" cF by simp
     have "smtEval (correlate_model s st) (correlate_env env) bt2 = Some (value_to_smt v)"
-      using "8.IH"(3)[OF cF refl refl eb tb "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
+      using "8.IH"(3)[OF cF refl refl eb tb "8.prems"(3)] "8.prems"(4) by simp
     then show ?thesis using teq ec' False by simp
   qed
 next
@@ -1349,9 +886,9 @@ next
       and tbody: "translate enums body = Some bt" and teq: "t = TLetIn x vt bt"
     by (auto split: option.splits)
   have ev': "smtEval (correlate_model s st) (correlate_env env) vt = Some (value_to_smt va)"
-    using "9.IH"(1)[OF eve tve "9.prems"(3)] "9.prems"(4) "9.prems"(5) by simp
+    using "9.IH"(1)[OF eve tve "9.prems"(3)] "9.prems"(4) by simp
   have eb': "smtEval (correlate_model s st) (correlate_env ((x, va) # env)) bt = Some (value_to_smt v)"
-    using "9.IH"(2)[OF eve ebody tbody "9.prems"(3)] "9.prems"(4) "9.prems"(5) by simp
+    using "9.IH"(2)[OF eve ebody tbody "9.prems"(3)] "9.prems"(4) by simp
   show ?case using teq ev' eb' by simp
 next
   case (10 fs ps fuel s st env base f sp v t)
@@ -1362,7 +899,7 @@ next
       and teq: "t = TFieldAccess bt f"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt v0)"
-    using "10.IH"[OF ef tb "10.prems"(3)] "10.prems"(4) "10.prems"(5) by simp
+    using "10.IH"[OF ef tb "10.prems"(3)] "10.prems"(4) by simp
   then show ?case using teq vfl value_field_lookup_correlated[of s st v0 f] by simp
 next
   case (11 fs ps fuel s st env e sp v t)
@@ -1371,7 +908,7 @@ next
       and teq: "t = TPrime et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v)"
-    using "11.IH"[OF ef te "11.prems"(3)] "11.prems"(4) "11.prems"(5) by simp
+    using "11.IH"[OF ef te "11.prems"(3)] "11.prems"(4) by simp
   then show ?case using teq by simp
 next
   case (12 fs ps fuel s st env e sp v t)
@@ -1380,7 +917,7 @@ next
       and teq: "t = TPre et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v)"
-    using "12.IH"[OF ef te "12.prems"(3)] "12.prems"(4) "12.prems"(5) by simp
+    using "12.IH"[OF ef te "12.prems"(3)] "12.prems"(4) by simp
   then show ?case using teq by simp
 next
   case (13 fs ps fuel s st env e sp v t)
@@ -1391,7 +928,7 @@ next
       and teq: "t = TSome et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v0)"
-    using "13.IH"[OF ef te "13.prems"(3)] "13.prems"(4) "13.prems"(5) by simp
+    using "13.IH"[OF ef te "13.prems"(3)] "13.prems"(4) by simp
   then show ?case using teq veq by simp
 next
   case (14 fs ps fuel s st env e pat sp v t)
@@ -1402,7 +939,7 @@ next
       and teq: "t = TMatches et pat"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (SStr str)"
-    using "14.IH"[OF ef te "14.prems"(3)] "14.prems"(4) "14.prems"(5) by simp
+    using "14.IH"[OF ef te "14.prems"(3)] "14.prems"(4) by simp
   then show ?case using teq veq by simp
 next
   case (15 fs ps fuel s st env callee args sp v t)
@@ -1412,14 +949,13 @@ next
       and ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
     by (cases callee; cases args) (auto split: if_splits list.splits option.splits)
   have lc_none: "lookup_callee fs ps nm = None"
-    using "15.prems"(5) bip by (simp add: builtins_reserved_def)
+    using "15.prems"(4) bip by (simp add: builtins_reserved_def)
   from "15.prems"(1) fuel ceq aeq lc_none bip obtain str where
       ea: "eval fs ps fuel s st env arg = Some (VStr str)"
       and veq: "v = VBool (str_predicate nm str)"
     by (auto split: option.splits ir_value.splits if_splits)
-  have ncarg: "no_cmp_var arg" using "15.prems"(4) ceq aeq by simp
   have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
-    using "15.IH" fuel ceq aeq lc_none bip ea ta "15.prems"(3) ncarg "15.prems"(5)
+    using "15.IH" fuel ceq aeq lc_none bip ea ta "15.prems"(3) "15.prems"(4)
     by (auto split: if_splits)
   show ?case using teq veq ev by simp
 next
@@ -1428,21 +964,21 @@ next
       and veq: "v = VSeq vs"
     by (auto split: option.splits)
   from "17.prems"(2) have ls: "translateSeqList enums es = Some t" by simp
-  show ?case using "17.IH"[OF efl "17.prems"(3)] ls veq "17.prems"(4) "17.prems"(5) by fastforce
+  show ?case using "17.IH"[OF efl "17.prems"(3)] ls veq "17.prems"(4) by fastforce
 next
   case (18 fs ps fuel s st env es sp v t)
   from "18.prems"(1) obtain vs where efl: "eval_list fs ps fuel s st env es = Some vs"
       and veq: "v = VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])"
     by (auto split: option.splits)
   from "18.prems"(2) have ls: "translateSetList enums es = Some t" by simp
-  show ?case using "18.IH"[OF efl "18.prems"(3)] ls veq "18.prems"(4) "18.prems"(5) by fastforce
+  show ?case using "18.IH"[OF efl "18.prems"(3)] ls veq "18.prems"(4) by fastforce
 next
   case (19 fs ps fuel s st env entries sp v t)
   from "19.prems"(1) obtain mps where e: "eval_entries fs ps fuel s st env entries = Some mps"
       and veq: "v = VMap mps"
     by (auto split: option.splits)
   from "19.prems"(2) have ls: "translateMapEntries enums entries = Some t" by simp
-  show ?case using "19.IH"[OF e "19.prems"(3)] ls veq "19.prems"(4) "19.prems"(5) by fastforce
+  show ?case using "19.IH"[OF e "19.prems"(3)] ls veq "19.prems"(4) by fastforce
 next
   case (20 fs ps fuel s st env name fas sp v t)
   from "20.prems"(1) obtain fvs where e: "eval_fields fs ps fuel s st env fas = Some fvs"
@@ -1451,7 +987,7 @@ next
   from "20.prems"(2) have lw: "translate_with_assigns enums fas (TEntityBase name) = Some t" by simp
   have eb: "smtEval (correlate_model s st) (correlate_env env) (TEntityBase name)
               = Some (value_to_smt (VEntity name (STR '''')))" by simp
-  show ?case using "20.IH"[OF e "20.prems"(3)] eb lw veq "20.prems"(4) "20.prems"(5) by fastforce
+  show ?case using "20.IH"[OF e "20.prems"(3)] eb lw veq "20.prems"(4) by fastforce
 next
   case (21 fs ps fuel s st env base fas sp v t)
   from "21.prems"(1) obtain bv fvs where eb: "eval fs ps fuel s st env base = Some bv"
@@ -1462,8 +998,8 @@ next
       and lw: "translate_with_assigns enums fas bt = Some t"
     by (auto split: option.splits)
   have eb': "smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt bv)"
-    using "21.IH"(1)[OF eb tb "21.prems"(3)] "21.prems"(4) "21.prems"(5) by simp
-  show ?case using "21.IH"(2)[OF ef "21.prems"(3)] eb' lw veq "21.prems"(4) "21.prems"(5) by fastforce
+    using "21.IH"(1)[OF eb tb "21.prems"(3)] "21.prems"(4) by simp
+  show ?case using "21.IH"(2)[OF ef "21.prems"(3)] eb' lw veq "21.prems"(4) by fastforce
 next
   case (22 fs ps fuel s st env base mem sp v t)
   show ?case
@@ -1486,7 +1022,7 @@ next
     by (auto split: option.splits)
   have pr: "peelSmtRelationRef bt = Some rel" using peelSmt_tfd[OF pk tb] .
   have "smtEval (correlate_model s st) (correlate_env env) kt = Some (value_to_smt kv)"
-    using "23.IH"[OF ek tk "23.prems"(3)] "23.prems"(4) "23.prems"(5) by simp
+    using "23.IH"[OF ek tk "23.prems"(3)] "23.prems"(4) by simp
   then show ?case using teq pr slk correlate_model_lookup_key[of s st rel kv] by simp
 next
   case (24 fs ps fuel s st env var dm body sp v t)
@@ -1502,7 +1038,7 @@ next
       by (auto split: option.splits list.splits if_splits)
     have etr: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
                  (map value_to_smt dmv) bt = Some (map value_to_smt (x # rest))"
-      using "24.IH"[OF IdentifierF srd eft "24.prems"(3)] tb "24.prems"(4) "24.prems"(5) by fastforce
+      using "24.IH"[OF IdentifierF srd eft "24.prems"(3)] tb "24.prems"(4) by fastforce
     have uniq': "list_all (\<lambda>y. y = value_to_smt x) (map value_to_smt rest)"
       using uniq by (induction rest) auto
     show ?thesis using teq srd etr uniq' v_eq by simp
@@ -1530,7 +1066,7 @@ next
       using "25.prems"(2) kq bseq by (auto split: option.splits)
     have ih: "smtEval_forall_rel (correlate_model s st) (correlate_env env) var
                 (map value_to_smt dmv) bt = Some (value_to_smt v)"
-      using "25.IH"[OF Some[unfolded vdeq] refl eff wf] tbody "25.prems"(4) "25.prems"(5) by fastforce
+      using "25.IH"[OF Some[unfolded vdeq] refl eff wf] tbody "25.prems"(4) by fastforce
     show ?thesis
     proof (cases "schema_lookup_enum s dnm")
       case (Some d)
@@ -1572,7 +1108,6 @@ next
   from "28.prems" obtain v0 vs0 where ev0: "eval fs ps fuel s st env e = Some v0"
       and evs0: "eval_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
     by (auto split: option.splits)
-  have nclE: "no_cmp_var_list es" using "28.prems"(3) "28.prems"(4) by simp
   show ?case
   proof (intro conjI allI impI)
     fix t
@@ -1581,10 +1116,10 @@ next
         and ts0: "translateSeqList enums es = Some s0t" and teq: "t = TSeqCons e0t s0t"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) e0t = Some (value_to_smt v0)"
-      using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
+      using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) by simp
     moreover have "smtEval (correlate_model s st) (correlate_env env) s0t
                      = Some (SSeq (map value_to_smt vs0))"
-      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE "28.prems"(4)] ts0 by blast
+      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) "28.prems"(3)] ts0 by blast
     ultimately show "smtEval (correlate_model s st) (correlate_env env) t
                        = Some (SSeq (map value_to_smt vs))" using teq vseq by simp
   next
@@ -1594,10 +1129,10 @@ next
         and ts0: "translateSetList enums es = Some s0t" and teq: "t = TSetInsert e0t s0t"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) e0t = Some (value_to_smt v0)"
-      using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
+      using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) by simp
     moreover have "smtEval (correlate_model s st) (correlate_env env) s0t
                      = Some (SSet (map value_to_smt (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs0 [])))"
-      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) nclE "28.prems"(4)] ts0 by blast
+      using "28.IH"(2)[OF ev0 evs0 "28.prems"(2) "28.prems"(3)] ts0 by blast
     ultimately show "smtEval (correlate_model s st) (correlate_env env) t
                        = Some (SSet (map value_to_smt (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])))"
       using teq vseq
@@ -1621,12 +1156,12 @@ next
         and tm: "translateMapEntries enums rest = Some mt" and teq: "t = TMapCons kt vt mt"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) kt = Some (value_to_smt kv)"
-      using "30.IH"(1)[OF ek tk "30.prems"(2)] "30.prems"(3) "30.prems"(4) by simp
+      using "30.IH"(1)[OF ek tk "30.prems"(2)] "30.prems"(3) by simp
     moreover have "smtEval (correlate_model s st) (correlate_env env) vt = Some (value_to_smt vv)"
-      using "30.IH"(2)[OF ev tv "30.prems"(2)] "30.prems"(3) "30.prems"(4) by simp
+      using "30.IH"(2)[OF ev tv "30.prems"(2)] "30.prems"(3) by simp
     moreover have "smtEval (correlate_model s st) (correlate_env env) mt
                      = Some (SMap (value_to_smt_entries mps0))"
-      using "30.IH"(3)[OF er "30.prems"(2)] tm "30.prems"(3) "30.prems"(4) by fastforce
+      using "30.IH"(3)[OF er "30.prems"(2)] tm "30.prems"(3) by fastforce
     ultimately show "smtEval (correlate_model s st) (correlate_env env) t
                        = Some (SMap (value_to_smt_entries mps))" using teq mpeq by simp
   qed
@@ -1647,13 +1182,13 @@ next
         and dwr: "translate_with_assigns enums rest (TWithRec bt fld vt) = Some t"
       by (auto split: option.splits)
     have ev': "smtEval (correlate_model s st) (correlate_env env) vt = Some (value_to_smt fv)"
-      using "32.IH"(1)[OF ev tv "32.prems"(2)] "32.prems"(3) "32.prems"(4) by simp
+      using "32.IH"(1)[OF ev tv "32.prems"(2)] "32.prems"(3) by simp
     have ebw: "smtEval (correlate_model s st) (correlate_env env) (TWithRec bt fld vt)
                  = Some (value_to_smt (VEntityWith bv fld fv))"
       using sb ev' by simp
     have "smtEval (correlate_model s st) (correlate_env env) t
             = Some (value_to_smt (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) (VEntityWith bv fld fv) fvs0))"
-      using "32.IH"(2)[OF er "32.prems"(2)] ebw dwr "32.prems"(3) "32.prems"(4) by fastforce
+      using "32.IH"(2)[OF er "32.prems"(2)] ebw dwr "32.prems"(3) by fastforce
     then show "smtEval (correlate_model s st) (correlate_env env) t
                  = Some (value_to_smt (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs))"
       using fveq by simp
@@ -1684,10 +1219,10 @@ next
           using "34.prems" evb by (auto split: option.splits)
         have eb: "smtEval (correlate_model s st) ((var, value_to_smt v) # correlate_env env) bt
                     = Some (SBool b)"
-          using "34.IH"(1)[OF evb tb "34.prems"(2)] "34.prems"(3) "34.prems"(4) by simp
+          using "34.IH"(1)[OF evb tb "34.prems"(2)] "34.prems"(3) by simp
         have er: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
                     (map value_to_smt rest) bt = Some (map value_to_smt matches)"
-          using "34.IH"(2)[OF Some VBool mr "34.prems"(2)] tb "34.prems"(3) "34.prems"(4) by fastforce
+          using "34.IH"(2)[OF Some VBool mr "34.prems"(2)] tb "34.prems"(3) by fastforce
         show ?thesis using eb er tms_eq by (cases b) auto
       qed (use "34.prems" Some in simp_all)
     qed
@@ -1718,10 +1253,10 @@ next
           using "36.prems" evb by (auto split: option.splits ir_value.splits)
         have eb: "smtEval (correlate_model s st) ((var, value_to_smt v) # correlate_env env) bt
                     = Some (SBool b)"
-          using "36.IH"(1)[OF evb tb "36.prems"(2)] "36.prems"(3) "36.prems"(4) by simp
+          using "36.IH"(1)[OF evb tb "36.prems"(2)] "36.prems"(3) by simp
         have er: "smtEval_forall_rel (correlate_model s st) (correlate_env env) var
                     (map value_to_smt rest) bt = Some (SBool acc)"
-          using "36.IH"(2)[OF Some VBool mr "36.prems"(2)] tb "36.prems"(3) "36.prems"(4) by fastforce
+          using "36.IH"(2)[OF Some VBool mr "36.prems"(2)] tb "36.prems"(3) by fastforce
         show ?thesis using eb er fr_eq by simp
       qed (use "36.prems" Some in simp_all)
     qed
@@ -1732,7 +1267,6 @@ theorem translate_soundness_standalone:
   assumes "eval fs ps fuel s st env e = Some v"
       and "translate enums e = Some t"
       and "enums_wf s enums"
-      and "no_cmp_var e"
       and "builtins_reserved fs ps"
   shows "smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
   by (rule direct_soundness(1)[OF assms])

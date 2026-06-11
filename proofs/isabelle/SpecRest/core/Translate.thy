@@ -36,18 +36,20 @@ fun translate_set_comp_eq ::
        \<Rightarrow> smt_term \<Rightarrow> smt_term \<Rightarrow> smt_term"
 where
   "translate_set_comp_eq enums var dnm setE predE =
-     (let memX = TSetMember (TVar var) (TVar (STR ''0cmp''));
+     (let f = fresh_var (STR ''s'') (var # smt_var_list predE);
+          memX = TSetMember (TVar var) (TVar f);
           memD = (if string_in_list dnm enums then BLit True else TInDom dnm (TVar var));
           dir1 = (if string_in_list dnm enums
                     then TForallEnum var dnm (TImplies predE memX)
                     else TForallRel var dnm (TImplies predE memX));
-          dir2 = TForallSet var (TVar (STR ''0cmp'')) (TAnd memD predE)
-      in TLetIn (STR ''0cmp'') setE (TAnd dir1 dir2))"
+          dir2 = TForallSet var (TVar f) (TAnd memD predE)
+      in TLetIn f setE (TAnd dir1 dir2))"
 
 definition translate_dom_eq :: "String.literal \<Rightarrow> String.literal \<Rightarrow> smt_term" where
   "translate_dom_eq xrel yrel =
-     TAnd (TForallRel (STR ''0cmp'') xrel (TInDom yrel (TVar (STR ''0cmp''))))
-          (TForallRel (STR ''0cmp'') yrel (TInDom xrel (TVar (STR ''0cmp''))))"
+     (let k = fresh_var (STR ''x'') [xrel, yrel]
+      in TAnd (TForallRel k xrel (TInDom yrel (TVar k)))
+              (TForallRel k yrel (TInDom xrel (TVar k))))"
 
 definition translate_beq_dom_or_none :: "expr \<Rightarrow> expr \<Rightarrow> smt_term option" where
   "translate_beq_dom_or_none l r =

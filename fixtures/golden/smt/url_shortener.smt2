@@ -28,6 +28,6 @@
 (assert (forall ((self_UrlMapping UrlMapping)) (>= (UrlMapping_click_count self_UrlMapping) 0)))
 (assert (forall ((self_UrlMapping UrlMapping)) (isValidURI_LongURL (UrlMapping_url self_UrlMapping))))
 (assert (forall ((c ShortCode)) (=> (store_dom c) (isValidURI_LongURL (store_map c)))))
-(assert (and (forall ((|0cmp| ShortCode)) (=> (store_dom |0cmp|) (metadata_dom |0cmp|))) (forall ((|0cmp| ShortCode)) (=> (metadata_dom |0cmp|) (store_dom |0cmp|)))))
+(assert (and (forall ((x ShortCode)) (=> (store_dom x) (metadata_dom x))) (forall ((x ShortCode)) (=> (metadata_dom x) (store_dom x)))))
 (assert (forall ((c ShortCode)) (=> (metadata_dom c) (>= (UrlMapping_click_count (metadata_map c)) 0))))
 (check-sat)
