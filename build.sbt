@@ -249,6 +249,14 @@ lazy val cli = (project in file("modules/cli"))
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
+      // PR #377 (Int/Real lift) added ubiquitous tiny rational/Real helpers;
+      // the builder's pre-analysis inliner (InlineBeforeAnalysis, depth 20)
+      // expands them into every call site of the big extracted match methods
+      // (smtEval alone is ~32 KB bytecode), blowing flow-graph construction
+      // up 13x in time and ~3x in heap - OOMing 16 GB CI runners. Disabling
+      // it restores the pre-#377 profile (analysis 46 s / 4 GB, peak RSS
+      // ~8 GB) with an unchanged-to-slightly-smaller binary.
+      "-H:-InlineBeforeAnalysis",
       // Required by GraalVM 23+ for the -H: options below; on 21 it's
       // accepted as a no-op and silences the "experimental option" warnings.
       "-H:+UnlockExperimentalVMOptions",
