@@ -463,6 +463,10 @@ fun identName :: "expr \<Rightarrow> String.literal option" where
   "identName (IdentifierF rel _) = Some rel"
 | "identName _ = None"
 
+lemma identName_SomeD:
+  "identName e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
+  by (cases e rule: identName.cases) auto
+
 fun peelRelationRef :: "expr \<Rightarrow> String.literal option" where
   "peelRelationRef (IdentifierF rel _) = Some rel"
 | "peelRelationRef (PreF b _)          = identName b"

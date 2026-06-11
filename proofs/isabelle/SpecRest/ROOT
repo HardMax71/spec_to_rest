@@ -17,7 +17,10 @@ session SpecRest_Soundness in soundness = SpecRest_Core +
     Soundness_Framework
     Preservation_Wf
     Preservation_WellTyped
+    DirectSound_Smt
+    DirectSound_Desugar
     DirectSound
+    DirectTotality
     DirectPreservation
 
 session SpecRest_Codegen in codegen = SpecRest_Core +
