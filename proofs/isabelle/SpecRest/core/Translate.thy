@@ -15,11 +15,13 @@ fun peel_relation_ref_smt :: "smt_term \<Rightarrow> String.literal option" wher
 fun translate_forall_step ::
     "String.literal list \<Rightarrow> quantifier_binding \<Rightarrow> smt_term \<Rightarrow> smt_term option"
 where
-  "translate_forall_step enums (QuantifierBindingFull v (IdentifierF dnm _) _ _) body =
-     (if string_in_list dnm enums
-        then Some (TForallEnum v dnm body)
-        else Some (TForallRel v dnm body))"
-| "translate_forall_step _ _ _ = None"
+  "translate_forall_step enums (QuantifierBindingFull v d _ _) body =
+     (case d of
+        IdentifierF dnm _ \<Rightarrow>
+          (if string_in_list dnm enums
+             then Some (TForallEnum v dnm body)
+             else Some (TForallRel v dnm body))
+      | _ \<Rightarrow> None)"
 
 fun translate_forall_bindings ::
     "String.literal list \<Rightarrow> quantifier_binding list \<Rightarrow> smt_term \<Rightarrow> smt_term option"

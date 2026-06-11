@@ -1160,15 +1160,19 @@ lemma set_diff_values_preserves_value_ty:
 
 fun eval_set_bin ::
   "set_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
-  "eval_set_bin UnionOp     (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_union_values l r))"
-| "eval_set_bin IntersectOp (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_intersect_values l r))"
-| "eval_set_bin DiffOp      (Some (VSet l)) (Some (VSet r)) = Some (VSet (set_diff_values l r))"
-| "eval_set_bin _ _ _ = None"
+  "eval_set_bin op x y =
+     (case (x, y) of
+        (Some (VSet l), Some (VSet r)) \<Rightarrow>
+          (case op of
+             UnionOp     \<Rightarrow> Some (VSet (set_union_values l r))
+           | IntersectOp \<Rightarrow> Some (VSet (set_intersect_values l r))
+           | DiffOp      \<Rightarrow> Some (VSet (set_diff_values l r)))
+      | _ \<Rightarrow> None)"
 
 lemma eval_set_bin_some_imp_set:
   "eval_set_bin op x y = Some v
      \<Longrightarrow> (\<exists>l r. x = Some (VSet l) \<and> y = Some (VSet r))"
-  by (induction op x y rule: eval_set_bin.induct) auto
+  by (auto split: option.splits ir_value.splits)
 
 fun eval_bin :: "bin_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_bin BAnd     x y = (case (x, y) of (Some (VBool a), Some (VBool b)) \<Rightarrow> Some (VBool (eval_bool_bin AndOp a b))     | _ \<Rightarrow> None)"
