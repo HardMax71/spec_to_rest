@@ -3,7 +3,7 @@ theory DirectSound
     Soundness_Framework
     Preservation_Wf
     SpecRest_Core.Semantics_Reference
-    SpecRest_Core.TranslateDirect
+    SpecRest_Core.Translate
 begin
 
 section \<open>Plumbing: smt-side analogues of the eval-side helpers\<close>
@@ -17,9 +17,9 @@ lemma peel_relation_ref_smt_eq:
   by (cases t) auto
 
 lemma peelSmt_tfd:
-  "peelRelationRefFull base = Some rel \<Longrightarrow> translate_full_direct enums base = Some bt
+  "peelRelationRef base = Some rel \<Longrightarrow> translate enums base = Some bt
      \<Longrightarrow> peelSmtRelationRef bt = Some rel"
-  by (cases base rule: peelRelationRefFull.cases) (auto dest!: identNameFull_SomeD)
+  by (cases base rule: peelRelationRef.cases) (auto dest!: identNameFull_SomeD)
 
 lemma expr_case_no_ident:
   "\<nexists>rel rsp. r = IdentifierF rel rsp
@@ -358,10 +358,10 @@ lemma smtEval_drop_head_irrelevant:
   using smtEval_drop_irrelevant[where pre = "[(y, yv)]" and x = x and xv = xv and post = env]
   by simp
 
-section \<open>translate_full_direct introduces no free 0cmp\<close>
+section \<open>translate introduces no free 0cmp\<close>
 
-lemma direct_forall_step_no_0cmp:
-  assumes "direct_forall_step enums b body = Some t"
+lemma translate_forall_step_no_0cmp:
+  assumes "translate_forall_step enums b body = Some t"
       and "\<not> smt_uses_var (STR ''0cmp'') body"
   shows "\<not> smt_uses_var (STR ''0cmp'') t"
 proof (cases b)
@@ -369,8 +369,8 @@ proof (cases b)
   thus ?thesis using assms by (cases coll) (auto split: if_splits)
 qed
 
-lemma direct_forall_bindings_no_0cmp:
-  "direct_forall_bindings enums bs body = Some t
+lemma translate_forall_bindings_no_0cmp:
+  "translate_forall_bindings enums bs body = Some t
      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') body
      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') t"
 proof (induction bs arbitrary: t)
@@ -382,44 +382,44 @@ next
   show ?case
   proof (cases bs')
     case Nil
-    thus ?thesis using Cons.prems direct_forall_step_no_0cmp by simp
+    thus ?thesis using Cons.prems translate_forall_step_no_0cmp by simp
   next
     case (Cons b2 bs'')
     from Cons.prems(1) \<open>bs' = b2 # bs''\<close> obtain inner
-      where hi: "direct_forall_bindings enums bs' body = Some inner"
-        and hs: "direct_forall_step enums b inner = Some t"
+      where hi: "translate_forall_bindings enums bs' body = Some inner"
+        and hs: "translate_forall_step enums b inner = Some t"
       by (auto split: option.splits)
     have "\<not> smt_uses_var (STR ''0cmp'') inner"
       using IH[OF hi Cons.prems(2)] .
-    thus ?thesis using direct_forall_step_no_0cmp[OF hs] by simp
+    thus ?thesis using translate_forall_step_no_0cmp[OF hs] by simp
   qed
 qed
 
-lemma direct_dom_eq_no_0cmp [simp]:
-  "\<not> smt_uses_var (STR ''0cmp'') (direct_dom_eq rx ry)"
-  by (simp add: direct_dom_eq_def)
+lemma translate_dom_eq_no_0cmp [simp]:
+  "\<not> smt_uses_var (STR ''0cmp'') (translate_dom_eq rx ry)"
+  by (simp add: translate_dom_eq_def)
 
-lemma direct_set_comp_eq_no_0cmp:
+lemma translate_set_comp_eq_no_0cmp:
   "\<not> smt_uses_var (STR ''0cmp'') lt
-     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') (direct_set_comp_eq enums var dnm lt pt)"
+     \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') (translate_set_comp_eq enums var dnm lt pt)"
   by (simp add: Let_def)
 
 lemma directSetList_no_0cmp:
-  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate_full_direct enums x = Some tx
+  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate enums x = Some tx
       \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> directSetList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
+     \<Longrightarrow> translateSetList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
 proof (induction es arbitrary: ts)
   case Nil
   thus ?case by simp
 next
   case (Cons a es')
-  from Cons.prems(2) obtain at2 st2 where ha: "translate_full_direct enums a = Some at2"
-      and hs: "directSetList enums es' = Some st2" and tseq: "ts = TSetInsert at2 st2"
+  from Cons.prems(2) obtain at2 st2 where ha: "translate enums a = Some at2"
+      and hs: "translateSetList enums es' = Some st2" and tseq: "ts = TSetInsert at2 st2"
     by (auto split: option.splits)
   have na: "\<not> smt_uses_var (STR ''0cmp'') at2" using Cons.prems(1)[of a at2] ha by simp
   have ns: "\<not> smt_uses_var (STR ''0cmp'') st2"
   proof (rule Cons.IH[OF _ hs])
-    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate_full_direct enums x = Some tx
+    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate enums x = Some tx
             \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
       using Cons.prems(1) by auto
   qed
@@ -427,21 +427,21 @@ next
 qed
 
 lemma directSeqList_no_0cmp:
-  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate_full_direct enums x = Some tx
+  "(\<And>x tx. x \<in> set es \<Longrightarrow> translate enums x = Some tx
       \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> directSeqList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
+     \<Longrightarrow> translateSeqList enums es = Some ts \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ts"
 proof (induction es arbitrary: ts)
   case Nil
   thus ?case by simp
 next
   case (Cons a es')
-  from Cons.prems(2) obtain at2 st2 where ha: "translate_full_direct enums a = Some at2"
-      and hs: "directSeqList enums es' = Some st2" and tseq: "ts = TSeqCons at2 st2"
+  from Cons.prems(2) obtain at2 st2 where ha: "translate enums a = Some at2"
+      and hs: "translateSeqList enums es' = Some st2" and tseq: "ts = TSeqCons at2 st2"
     by (auto split: option.splits)
   have na: "\<not> smt_uses_var (STR ''0cmp'') at2" using Cons.prems(1)[of a at2] ha by simp
   have ns: "\<not> smt_uses_var (STR ''0cmp'') st2"
   proof (rule Cons.IH[OF _ hs])
-    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate_full_direct enums x = Some tx
+    show "\<And>x tx. x \<in> set es' \<Longrightarrow> translate enums x = Some tx
             \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
       using Cons.prems(1) by auto
   qed
@@ -449,11 +449,11 @@ next
 qed
 
 lemma directMapEntries_no_0cmp:
-  "(\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate_full_direct enums k = Some tx
+  "(\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate enums k = Some tx
       \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> (\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate_full_direct enums v = Some tx
+     \<Longrightarrow> (\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> translate enums v = Some tx
             \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx)
-     \<Longrightarrow> directMapEntries enums ents = Some mt \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') mt"
+     \<Longrightarrow> translateMapEntries enums ents = Some mt \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') mt"
 proof (induction ents arbitrary: mt)
   case Nil
   thus ?case by simp
@@ -461,9 +461,9 @@ next
   case (Cons en ents')
   obtain k v sp3 where en: "en = MapEntryFull k v sp3" by (cases en) auto
   from Cons.prems(3) en obtain kt vt mt'
-    where hk: "translate_full_direct enums k = Some kt"
-      and hv: "translate_full_direct enums v = Some vt"
-      and hm: "directMapEntries enums ents' = Some mt'"
+    where hk: "translate enums k = Some kt"
+      and hv: "translate enums v = Some vt"
+      and hm: "translateMapEntries enums ents' = Some mt'"
       and meq: "mt = TMapCons kt vt mt'"
     by (auto split: option.splits)
   have nk: "\<not> smt_uses_var (STR ''0cmp'') kt" using Cons.prems(1)[of k v sp3 kt] en hk by simp
@@ -471,19 +471,19 @@ next
   have nm: "\<not> smt_uses_var (STR ''0cmp'') mt'"
   proof (rule Cons.IH[OF _ _ hm])
     show "\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> translate_full_direct enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
+            \<Longrightarrow> translate enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
       using Cons.prems(1) by auto
     show "\<And>k v sp3 tx. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> translate_full_direct enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
+            \<Longrightarrow> translate enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
       using Cons.prems(2) by auto
   qed
   show ?case using meq nk nv nm by simp
 qed
 
-lemma direct_with_assigns_no_0cmp:
-  "(\<And>fld v sp3 tv. FieldAssignFull fld v sp3 \<in> set fas \<Longrightarrow> translate_full_direct enums v = Some tv
+lemma translate_with_assigns_no_0cmp:
+  "(\<And>fld v sp3 tv. FieldAssignFull fld v sp3 \<in> set fas \<Longrightarrow> translate enums v = Some tv
       \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tv)
-     \<Longrightarrow> direct_with_assigns enums fas bt = Some ft
+     \<Longrightarrow> translate_with_assigns enums fas bt = Some ft
      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') bt \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') ft"
 proof (induction fas arbitrary: bt ft)
   case Nil
@@ -492,21 +492,21 @@ next
   case (Cons fa fas')
   obtain fld v sp3 where fa: "fa = FieldAssignFull fld v sp3" by (cases fa) auto
   from Cons.prems(2) fa obtain vt
-    where hv: "translate_full_direct enums v = Some vt"
-      and hrest: "direct_with_assigns enums fas' (TWithRec bt fld vt) = Some ft"
+    where hv: "translate enums v = Some vt"
+      and hrest: "translate_with_assigns enums fas' (TWithRec bt fld vt) = Some ft"
     by (auto split: option.splits)
   have nv: "\<not> smt_uses_var (STR ''0cmp'') vt" using Cons.prems(1)[of fld v sp3 vt] fa hv by simp
   have nb: "\<not> smt_uses_var (STR ''0cmp'') (TWithRec bt fld vt)" using Cons.prems(3) nv by simp
   show ?case
   proof (rule Cons.IH[OF _ hrest nb])
     show "\<And>fld v sp3 tv. FieldAssignFull fld v sp3 \<in> set fas'
-            \<Longrightarrow> translate_full_direct enums v = Some tv \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tv"
+            \<Longrightarrow> translate enums v = Some tv \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tv"
       using Cons.prems(1) by auto
   qed
 qed
 
 lemma tfd_no_0cmp:
-  "translate_full_direct enums e = Some t \<Longrightarrow> no_cmp_var e
+  "translate enums e = Some t \<Longrightarrow> no_cmp_var e
      \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') t"
 proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
   case (less e)
@@ -549,8 +549,8 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
         by (auto split: option.splits)
     next
       case False
-      then have "translate_full_direct enums (CallF c args sp2) = None"
-        by (auto split: expr_full.splits list.splits if_splits)
+      then have "translate enums (CallF c args sp2) = None"
+        by (auto split: expr.splits list.splits if_splits)
       thus ?thesis using less.prems CallF by simp
     qed
   next
@@ -582,11 +582,11 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     case (UnaryOpF op2 c sp2)
     have s: "size c < size e" using UnaryOpF by simp
     show ?thesis using less.prems UnaryOpF less.IH[OF s]
-      by (cases op2) (auto split: option.splits expr_full.splits)
+      by (cases op2) (auto split: option.splits expr.splits)
   next
     case (QuantifierF k bs body sp2)
     have s: "size body < size e" using QuantifierF by simp
-    from less.prems QuantifierF obtain bt where hb: "translate_full_direct enums body = Some bt"
+    from less.prems QuantifierF obtain bt where hb: "translate enums body = Some bt"
       by (auto split: option.splits)
     have nb: "\<not> smt_uses_var (STR ''0cmp'') bt"
       using less.IH[OF s hb] less.prems(2) QuantifierF by simp
@@ -594,39 +594,39 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     proof (cases k)
       case QAll
       with less.prems(1) QuantifierF hb show ?thesis
-        using direct_forall_bindings_no_0cmp[OF _ nb] by (auto split: option.splits)
+        using translate_forall_bindings_no_0cmp[OF _ nb] by (auto split: option.splits)
     next
       case QNo
       with less.prems(1) QuantifierF hb show ?thesis
-        using direct_forall_bindings_no_0cmp nb by (auto split: option.splits)
+        using translate_forall_bindings_no_0cmp nb by (auto split: option.splits)
     next
       case QSome
       with less.prems(1) QuantifierF hb obtain inner
-        where bnd: "direct_forall_bindings enums bs (TNot bt) = Some inner"
+        where bnd: "translate_forall_bindings enums bs (TNot bt) = Some inner"
           and teq: "t = TNot inner"
         by (auto split: option.splits)
       have "\<not> smt_uses_var (STR ''0cmp'') inner"
-        using direct_forall_bindings_no_0cmp[OF bnd] nb by simp
+        using translate_forall_bindings_no_0cmp[OF bnd] nb by simp
       thus ?thesis using teq by simp
     next
       case QExists
       with less.prems(1) QuantifierF hb obtain inner
-        where bnd: "direct_forall_bindings enums bs (TNot bt) = Some inner"
+        where bnd: "translate_forall_bindings enums bs (TNot bt) = Some inner"
           and teq: "t = TNot inner"
         by (auto split: option.splits)
       have "\<not> smt_uses_var (STR ''0cmp'') inner"
-        using direct_forall_bindings_no_0cmp[OF bnd] nb by simp
+        using translate_forall_bindings_no_0cmp[OF bnd] nb by simp
       thus ?thesis using teq by simp
     qed
   next
     case (ConstructorF name fas sp2)
-    have wa: "direct_with_assigns enums fas (TEntityBase name) = Some t"
+    have wa: "translate_with_assigns enums fas (TEntityBase name) = Some t"
       using less.prems(1) ConstructorF by simp
     show ?thesis
-    proof (rule direct_with_assigns_no_0cmp[OF _ wa])
+    proof (rule translate_with_assigns_no_0cmp[OF _ wa])
       show "\<not> smt_uses_var (STR ''0cmp'') (TEntityBase name)" by simp
       fix fld v sp3 tv assume m: "FieldAssignFull fld v sp3 \<in> set fas"
-        and hv: "translate_full_direct enums v = Some tv"
+        and hv: "translate enums v = Some tv"
       have "size v < size e"
         using ConstructorF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "no_cmp_var v"
@@ -636,16 +636,16 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
   next
     case (WithF base upds sp2)
     from less.prems(1) WithF obtain bt
-      where hbase: "translate_full_direct enums base = Some bt"
-        and hwa: "direct_with_assigns enums upds bt = Some t"
+      where hbase: "translate enums base = Some bt"
+        and hwa: "translate_with_assigns enums upds bt = Some t"
       by (auto split: option.splits)
     have sbase: "size base < size e" using WithF by simp
     have nb: "\<not> smt_uses_var (STR ''0cmp'') bt"
       using less.IH[OF sbase hbase] less.prems(2) WithF by simp
     show ?thesis
-    proof (rule direct_with_assigns_no_0cmp[OF _ hwa nb])
+    proof (rule translate_with_assigns_no_0cmp[OF _ hwa nb])
       fix fld v sp3 tv assume m: "FieldAssignFull fld v sp3 \<in> set upds"
-        and hv: "translate_full_direct enums v = Some tv"
+        and hv: "translate enums v = Some tv"
       have "size v < size e"
         using WithF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "no_cmp_var v"
@@ -656,8 +656,8 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     case (SetLiteralF elems sp2)
     show ?thesis
     proof (rule directSetList_no_0cmp)
-      show "directSetList enums elems = Some t" using less.prems(1) SetLiteralF by simp
-      fix x tx assume m: "x \<in> set elems" and hx: "translate_full_direct enums x = Some tx"
+      show "translateSetList enums elems = Some t" using less.prems(1) SetLiteralF by simp
+      fix x tx assume m: "x \<in> set elems" and hx: "translate enums x = Some tx"
       have "size x < size e"
         using SetLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "no_cmp_var x"
@@ -668,8 +668,8 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     case (SeqLiteralF elems sp2)
     show ?thesis
     proof (rule directSeqList_no_0cmp)
-      show "directSeqList enums elems = Some t" using less.prems(1) SeqLiteralF by simp
-      fix x tx assume m: "x \<in> set elems" and hx: "translate_full_direct enums x = Some tx"
+      show "translateSeqList enums elems = Some t" using less.prems(1) SeqLiteralF by simp
+      fix x tx assume m: "x \<in> set elems" and hx: "translate enums x = Some tx"
       have "size x < size e"
         using SeqLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "no_cmp_var x"
@@ -680,15 +680,15 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     case (MapLiteralF entries sp2)
     show ?thesis
     proof (rule directMapEntries_no_0cmp)
-      show "directMapEntries enums entries = Some t" using less.prems(1) MapLiteralF by simp
+      show "translateMapEntries enums entries = Some t" using less.prems(1) MapLiteralF by simp
       fix k v sp3 tx assume m: "MapEntryFull k v sp3 \<in> set entries"
       have sk: "size k < size e" and sv: "size v < size e"
         using MapLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp_all
       have nk: "no_cmp_var k" and nv: "no_cmp_var v"
         using no_cmp_var_entries_member[OF _ m] less.prems(2) MapLiteralF by simp_all
-      show "translate_full_direct enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
+      show "translate enums k = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
         using less.IH[OF sk _ nk] by blast
-      show "translate_full_direct enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
+      show "translate enums v = Some tx \<Longrightarrow> \<not> smt_uses_var (STR ''0cmp'') tx"
         using less.IH[OF sv _ nv] by blast
     qed
   next
@@ -700,11 +700,11 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
     proof (cases op2)
       case BEq
       show ?thesis
-      proof (cases "direct_beq_dom_or_none l2 r2")
+      proof (cases "translate_beq_dom_or_none l2 r2")
         case (Some dt)
         hence teq: "t = dt" using less.prems(1) BinaryOpF BEq by simp
         have "\<not> smt_uses_var (STR ''0cmp'') dt"
-          using Some by (auto simp: direct_beq_dom_or_none_def split: option.splits)
+          using Some by (auto simp: translate_beq_dom_or_none_def split: option.splits)
         thus ?thesis using teq by simp
       next
         case None
@@ -714,20 +714,20 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
           then obtain cvar dnm s2 cpred s3
             where req: "r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3" by blast
           from less.prems(1) BinaryOpF BEq None req obtain lt pt
-            where hl: "translate_full_direct enums l2 = Some lt"
-              and teq: "t = direct_set_comp_eq enums cvar dnm lt pt"
+            where hl: "translate enums l2 = Some lt"
+              and teq: "t = translate_set_comp_eq enums cvar dnm lt pt"
             by (auto split: option.splits)
           have "\<not> smt_uses_var (STR ''0cmp'') lt" using less.IH[OF sl hl ncl] .
-          thus ?thesis using teq direct_set_comp_eq_no_0cmp by simp
+          thus ?thesis using teq translate_set_comp_eq_no_0cmp by simp
         next
           case False
           hence nc: "\<nexists>var dnm sp3 p sp4. r2 = SetComprehensionF var (IdentifierF dnm sp3) p sp4"
             by blast
           have dnone: "dom_arg l2 = None \<or> dom_arg r2 = None"
-            using None by (auto simp: direct_beq_dom_or_none_def split: option.splits)
-          from less.prems(1)[unfolded BinaryOpF BEq direct_BEq_noncomp[OF nc dnone]]
-          obtain lt rt where hl: "translate_full_direct enums l2 = Some lt"
-              and hr: "translate_full_direct enums r2 = Some rt" and teq: "t = TEq lt rt"
+            using None by (auto simp: translate_beq_dom_or_none_def split: option.splits)
+          from less.prems(1)[unfolded BinaryOpF BEq translate_BEq_noncomp[OF nc dnone]]
+          obtain lt rt where hl: "translate enums l2 = Some lt"
+              and hr: "translate enums r2 = Some rt" and teq: "t = TEq lt rt"
             by (auto split: option.splits)
           show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
         qed
@@ -743,8 +743,8 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
         have ncp: "no_cmp_var cpred" and cv: "cvar \<noteq> STR ''0cmp''"
           using ncr req by simp_all
         from less.prems(1) BinaryOpF BIn req obtain lt pt
-          where hl: "translate_full_direct enums l2 = Some lt"
-            and hp: "translate_full_direct enums cpred = Some pt"
+          where hl: "translate enums l2 = Some lt"
+            and hp: "translate enums cpred = Some pt"
             and teq: "t = TLetIn cvar lt
                           (if string_in_list dnm enums then pt
                            else TAnd (TInDom dnm (TVar cvar)) pt)"
@@ -761,15 +761,15 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
           case True
           then obtain rel rsp where rid: "r2 = IdentifierF rel rsp" by blast
           from less.prems(1) BinaryOpF BIn rid obtain lt
-            where hl: "translate_full_direct enums l2 = Some lt" and teq: "t = TInDom rel lt"
+            where hl: "translate enums l2 = Some lt" and teq: "t = TInDom rel lt"
             by (auto split: option.splits)
           show ?thesis using less.IH[OF sl hl ncl] teq by simp
         next
           case False
-          from less.prems(1)[unfolded BinaryOpF BIn direct_BIn_noncomp[OF nc]
+          from less.prems(1)[unfolded BinaryOpF BIn translate_BIn_noncomp[OF nc]
                               expr_case_no_ident[OF False]]
-          obtain lt rt where hl: "translate_full_direct enums l2 = Some lt"
-              and hr: "translate_full_direct enums r2 = Some rt" and teq: "t = TSetMember lt rt"
+          obtain lt rt where hl: "translate enums l2 = Some lt"
+              and hr: "translate enums r2 = Some rt" and teq: "t = TSetMember lt rt"
             by (auto split: option.splits)
           show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
         qed
@@ -781,22 +781,22 @@ proof (induction e arbitrary: t rule: measure_induct_rule[where f = size])
         case True
         then obtain rel rsp where rid: "r2 = IdentifierF rel rsp" by blast
         from less.prems(1) BinaryOpF BNotIn rid obtain lt
-          where hl: "translate_full_direct enums l2 = Some lt"
+          where hl: "translate enums l2 = Some lt"
             and teq: "t = TNot (TInDom rel lt)"
           by (auto split: option.splits)
         show ?thesis using less.IH[OF sl hl ncl] teq by simp
       next
         case False
-        have beq: "translate_full_direct enums e
+        have beq: "translate enums e
                      = (case r2 of
                           IdentifierF rel _ \<Rightarrow>
-                            map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate_full_direct enums l2)
-                        | _ \<Rightarrow> (case (translate_full_direct enums l2, translate_full_direct enums r2) of
+                            map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l2)
+                        | _ \<Rightarrow> (case (translate enums l2, translate enums r2) of
                                   (Some lt, Some rt) \<Rightarrow> Some (TNot (TSetMember lt rt)) | _ \<Rightarrow> None))"
           using BinaryOpF BNotIn by simp
         from less.prems(1)[unfolded beq expr_case_no_ident[OF False]]
-        obtain lt rt where hl: "translate_full_direct enums l2 = Some lt"
-            and hr: "translate_full_direct enums r2 = Some rt"
+        obtain lt rt where hl: "translate enums l2 = Some lt"
+            and hr: "translate enums r2 = Some rt"
             and teq: "t = TNot (TSetMember lt rt)"
           by (auto split: option.splits)
         show ?thesis using less.IH[OF sl hl ncl] less.IH[OF sr hr ncr] teq by simp
@@ -824,10 +824,10 @@ next
   thus ?case by (auto simp: smt_env_lookup_def)
 qed
 
-lemma direct_dom_eq_sound:
+lemma translate_dom_eq_sound:
   assumes dx: "state_relation_domain st rx = Some dx"
       and dy: "state_relation_domain st ry = Some dy"
-  shows "smtEval (correlate_model s st) ce (direct_dom_eq rx ry)
+  shows "smtEval (correlate_model s st) ce (translate_dom_eq rx ry)
            = Some (SBool (set dx = set dy))"
 proof -
   have lx: "smt_model_lookup_rel (correlate_model s st) rx = Some (map value_to_smt dx)"
@@ -844,7 +844,7 @@ proof -
               = Some (SBool (set dy \<subseteq> set dx))"
     using lx ly smtEval_forall_rel_indom[OF lx]
     by (auto simp: list_all_iff subset_iff)
-  show ?thesis using d1 d2 by (simp add: direct_dom_eq_def set_eq_subset)
+  show ?thesis using d1 d2 by (simp add: translate_dom_eq_def set_eq_subset)
 qed
 
 section \<open>The comprehension-equality term evaluates to set equality\<close>
@@ -936,7 +936,7 @@ lemma smt_comp_assembly:
       and vne: "var \<noteq> STR ''0cmp''"
       and fp: "\<not> smt_uses_var (STR ''0cmp'') pt"
       and dne: "\<not> string_in_list dnm enums"
-  shows "smtEval m env (direct_set_comp_eq enums var dnm lt pt)
+  shows "smtEval m env (translate_set_comp_eq enums var dnm lt pt)
            = Some (SBool (set xst = set mst))"
 proof -
   have dropp: "\<And>d. smtEval m ((var, d) # (STR ''0cmp'', SSet xst) # env) pt
@@ -964,44 +964,44 @@ lemma list_all_contains_map:
      = list_all (\<lambda>x. contains_value svs x) xs"
   by (induction xs) auto
 
-section \<open>Direct soundness: eval_full agrees with smtEval of translate_full_direct\<close>
+section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 
 lemma direct_soundness:
-  "eval_full fs ps fuel s st env e = Some v \<Longrightarrow> translate_full_direct enums e = Some t
+  "eval fs ps fuel s st env e = Some v \<Longrightarrow> translate enums e = Some t
      \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var e \<Longrightarrow> builtins_reserved fs ps
      \<Longrightarrow> smtEval (correlate_model s st) (correlate_env env) t = Some (value_to_smt v)"
-  "eval_full_list fs ps fuel s st env es = Some vs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_list es \<Longrightarrow>
+  "eval_list fs ps fuel s st env es = Some vs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_list es \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
-     (\<forall>t. directSeqList enums es = Some t \<longrightarrow>
+     (\<forall>t. translateSeqList enums es = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t = Some (SSeq (map value_to_smt vs))) \<and>
-     (\<forall>t. directSetList enums es = Some t \<longrightarrow>
+     (\<forall>t. translateSetList enums es = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t
           = Some (SSet (map value_to_smt (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs []))))"
-  "eval_full_entries fs ps fuel s st env ents = Some mps \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_entries ents \<Longrightarrow>
+  "eval_entries fs ps fuel s st env ents = Some mps \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_entries ents \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
-     (\<forall>t. directMapEntries enums ents = Some t \<longrightarrow>
+     (\<forall>t. translateMapEntries enums ents = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t = Some (SMap (value_to_smt_entries mps)))"
-  "eval_full_fields fs ps fuel s st env fas = Some fvs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_fields fas \<Longrightarrow>
+  "eval_fields fs ps fuel s st env fas = Some fvs \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var_fields fas \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
      (\<forall>bt t bv. smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt bv) \<longrightarrow>
-        direct_with_assigns enums fas bt = Some t \<longrightarrow>
+        translate_with_assigns enums fas bt = Some t \<longrightarrow>
         smtEval (correlate_model s st) (correlate_env env) t
           = Some (value_to_smt (foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs)))"
-  "eval_full_the fs ps fuel s st env var dmv body = Some tms \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+  "eval_the fs ps fuel s st env var dmv body = Some tms \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
-     (\<forall>bt. translate_full_direct enums body = Some bt \<longrightarrow>
+     (\<forall>bt. translate enums body = Some bt \<longrightarrow>
         smtEval_the_rel (correlate_model s st) (correlate_env env) var (map value_to_smt dmv) bt
           = Some (map value_to_smt tms))"
-  "eval_full_forall fs ps fuel s st env var dmv body = Some fr \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
+  "eval_forall fs ps fuel s st env var dmv body = Some fr \<Longrightarrow> enums_wf s enums \<Longrightarrow> no_cmp_var body \<Longrightarrow>
      builtins_reserved fs ps \<Longrightarrow>
-     (\<forall>bt. translate_full_direct enums body = Some bt \<longrightarrow>
+     (\<forall>bt. translate enums body = Some bt \<longrightarrow>
         smtEval_forall_rel (correlate_model s st) (correlate_env env) var (map value_to_smt dmv) bt
           = Some (value_to_smt fr))"
 proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel s st env ents
         and fs ps fuel s st env fas and fs ps fuel s st env var dmv body
         and fs ps fuel s st env var dmv body
         arbitrary: v t and vs and mps and fvs and tms and fr
-        rule: eval_full_eval_full_list_eval_full_entries_eval_full_fields_eval_full_the_eval_full_forall.induct)
+        rule: eval_eval_list_eval_entries_eval_fields_eval_the_eval_forall.induct)
   case (6 fs ps fuel s st env bop l r sp v t)
   note IHl = "6.IH"(1) and IHr = "6.IH"(2)
   show ?case
@@ -1015,11 +1015,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     then obtain rx ry where f2: "dom_arg l = Some rx" and f2d: "state_relation_domain st rx = Some dx"
         and f3: "dom_arg r = Some ry" and f3d: "state_relation_domain st ry = Some dy" by auto
     have veq: "v = VBool (set dx = set dy)"
-      using "6.prems"(1)[unfolded eval_full_dom_eq[OF de]] by simp
-    have teq: "t = direct_dom_eq rx ry"
+      using "6.prems"(1)[unfolded eval_dom_eq[OF de]] by simp
+    have teq: "t = translate_dom_eq rx ry"
       using "6.prems"(2)[unfolded f0] f2 f3
-      by (simp add: direct_beq_dom_or_none_def)
-    show ?thesis using teq veq direct_dom_eq_sound[OF f2d f3d] by simp
+      by (simp add: translate_beq_dom_or_none_def)
+    show ?thesis using teq veq translate_dom_eq_sound[OF f2d f3d] by simp
   next
     case None
     note deN = this
@@ -1029,41 +1029,41 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     show ?thesis
     proof (cases bop)
       case BAnd
-      from "6.prems" BAnd obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval_full fs ps fuel s st env r = Some (VBool b)"
+      from "6.prems" BAnd obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BAnd obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TAnd lt rt"
+      from "6.prems" BAnd obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TAnd lt rt"
         by (auto split: option.splits)
       show ?thesis using teq "6.prems" BAnd efl efr
           IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
     next
       case BOr
-      from "6.prems" BOr obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval_full fs ps fuel s st env r = Some (VBool b)"
+      from "6.prems" BOr obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BOr obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TOr lt rt"
+      from "6.prems" BOr obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TOr lt rt"
         by (auto split: option.splits)
       show ?thesis using teq "6.prems" BOr efl efr
           IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
     next
       case BImplies
-      from "6.prems" BImplies obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval_full fs ps fuel s st env r = Some (VBool b)"
+      from "6.prems" BImplies obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BImplies obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TImplies lt rt"
+      from "6.prems" BImplies obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TImplies lt rt"
         by (auto split: option.splits)
       show ?thesis using teq "6.prems" BImplies efl efr
           IHl[OF deN None efl tl] IHr[OF deN None efr tr] by simp
     next
       case BIff
-      from "6.prems" BIff obtain a b where efl: "eval_full fs ps fuel s st env l = Some (VBool a)"
-          and efr: "eval_full fs ps fuel s st env r = Some (VBool b)"
+      from "6.prems" BIff obtain a b where efl: "eval fs ps fuel s st env l = Some (VBool a)"
+          and efr: "eval fs ps fuel s st env r = Some (VBool b)"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BIff obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt"
+      from "6.prems" BIff obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt"
           and teq: "t = TAnd (TImplies lt rt) (TImplies rt lt)"
         by (auto split: option.splits)
       have veq: "v = VBool (a = b)" using "6.prems"(1) BIff deN None efl efr by simp
@@ -1071,8 +1071,8 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           IHl[OF deN None efl tl] IHr[OF deN None efr tr] by auto
     next
       case BEq
-      from "6.prems" deN BEq None obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" deN BEq None obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
       have rnc: "\<nexists>var dnm s2 p s3. r = SetComprehensionF var (IdentifierF dnm s2) p s3"
         using efr by (cases r) auto
@@ -1084,12 +1084,12 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         then obtain rx where "dom_arg l = Some rx" by auto
         then obtain a b c where "l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
           using dom_arg_SomeD by blast
-        hence "eval_full fs ps fuel s st env l = None" using eval_full_dom_CallF[OF lcdom] by simp
+        hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
         thus False using efl by simp
       qed
-      from "6.prems"(2)[unfolded BEq direct_BEq_noncomp[OF rnc dnone]] obtain lt rt
-          where tl: "translate_full_direct enums l = Some lt"
-            and tr: "translate_full_direct enums r = Some rt"
+      from "6.prems"(2)[unfolded BEq translate_BEq_noncomp[OF rnc dnone]] obtain lt rt
+          where tl: "translate enums l = Some lt"
+            and tr: "translate enums r = Some rt"
             and teq: "t = TEq lt rt"
         by (auto split: option.splits)
       have veq: "v = VBool (ir_val_eq vl vr)"
@@ -1098,11 +1098,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TEq_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr]] by simp
     next
       case BNeq
-      from "6.prems" BNeq obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BNeq obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
-      from "6.prems" BNeq obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TNot (TEq lt rt)"
+      from "6.prems" BNeq obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TNot (TEq lt rt)"
         by (auto split: option.splits)
       have veq: "v = VBool (\<not> ir_val_eq vl vr)"
         using "6.prems"(1) BNeq deN None efl efr by simp
@@ -1110,11 +1110,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TEq_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr]] by simp
     next
       case BLt
-      from "6.prems" BLt obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BLt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
-      from "6.prems" BLt obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TLt lt rt"
+      from "6.prems" BLt obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TLt lt rt"
         by (auto split: option.splits)
       have ec: "eval_cmp LtOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BLt deN None efl efr by simp
@@ -1122,11 +1122,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TLt_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BGt
-      from "6.prems" BGt obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BGt obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
-      from "6.prems" BGt obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TLt rt lt"
+      from "6.prems" BGt obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TLt rt lt"
         by (auto split: option.splits)
       have ec: "eval_cmp GtOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BGt deN None efl efr by simp
@@ -1134,11 +1134,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TGt_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BLe
-      from "6.prems" BLe obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BLe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
-      from "6.prems" BLe obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt"
+      from "6.prems" BLe obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt"
           and teq: "t = TOr (TLt lt rt) (TEq lt rt)"
         by (auto split: option.splits)
       have ec: "eval_cmp LeOp (Some vl) (Some vr) = Some v"
@@ -1147,11 +1147,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TLe_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BGe
-      from "6.prems" BGe obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BGe obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits)
-      from "6.prems" BGe obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt"
+      from "6.prems" BGe obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt"
           and teq: "t = TOr (TLt rt lt) (TEq lt rt)"
         by (auto split: option.splits)
       have ec: "eval_cmp GeOp (Some vl) (Some vr) = Some v"
@@ -1160,11 +1160,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TGe_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BAdd
-      from "6.prems" BAdd obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BAdd obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BAdd obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TAdd lt rt"
+      from "6.prems" BAdd obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TAdd lt rt"
         by (auto split: option.splits)
       have ec: "eval_arith AddOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BAdd deN None efl efr by simp
@@ -1172,11 +1172,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BSub
-      from "6.prems" BSub obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BSub obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BSub obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TSub lt rt"
+      from "6.prems" BSub obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TSub lt rt"
         by (auto split: option.splits)
       have ec: "eval_arith SubOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BSub deN None efl efr by simp
@@ -1184,11 +1184,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BMul
-      from "6.prems" BMul obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BMul obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BMul obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TMul lt rt"
+      from "6.prems" BMul obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TMul lt rt"
         by (auto split: option.splits)
       have ec: "eval_arith MulOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BMul deN None efl efr by simp
@@ -1196,11 +1196,11 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
           TArith_sound[OF IHl[OF deN None efl tl] IHr[OF deN None efr tr] ec] by simp
     next
       case BDiv
-      from "6.prems" BDiv obtain vl vr where efl: "eval_full fs ps fuel s st env l = Some vl"
-          and efr: "eval_full fs ps fuel s st env r = Some vr"
+      from "6.prems" BDiv obtain vl vr where efl: "eval fs ps fuel s st env l = Some vl"
+          and efr: "eval fs ps fuel s st env r = Some vr"
         by (auto split: option.splits ir_value.splits)
-      from "6.prems" BDiv obtain lt rt where tl: "translate_full_direct enums l = Some lt"
-          and tr: "translate_full_direct enums r = Some rt" and teq: "t = TDiv lt rt"
+      from "6.prems" BDiv obtain lt rt where tl: "translate enums l = Some lt"
+          and tr: "translate enums r = Some rt" and teq: "t = TDiv lt rt"
         by (auto split: option.splits)
       have ec: "eval_arith DivOp (Some vl) (Some vr) = Some v"
         using "6.prems"(1) BDiv deN None efl efr by simp
@@ -1231,15 +1231,15 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
       by (cases tc) auto
     have bopeq: "bop = BEq" using bc by (cases bop) auto
     from bc bopeq obtain s2 s3 where req: "r = SetComprehensionF var (IdentifierF dnm s2) pred s3"
-      by (cases r) (auto split: expr_full.splits)
+      by (cases r) (auto split: expr.splits)
     from "6.prems"(1) deN bc obtain dvs xs where
         enr: "schema_lookup_enum s dnm = None"
         and srd: "state_relation_domain st dnm = Some dvs"
-        and efl: "eval_full fs ps fuel s st env l = Some (VSet xs)"
+        and efl: "eval fs ps fuel s st env l = Some (VSet xs)"
         and la: "list_all (\<lambda>x. contains_value dvs x) xs"
       by (fastforce split: if_splits option.splits ir_value.splits)
     from "6.prems"(1) deN bc enr srd efl obtain ms where
-        etm: "eval_full_the fs ps fuel s st env var dvs pred = Some ms"
+        etm: "eval_the fs ps fuel s st env var dvs pred = Some ms"
         and veq: "v = VBool (set xs = set ms)"
       by (auto split: if_splits option.splits ir_value.splits)
     have lcdom: "lookup_callee fs ps (STR ''dom'') = None"
@@ -1250,15 +1250,15 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
       then obtain rx where "dom_arg l = Some rx" by auto
       then obtain a b c where "l = CallF (IdentifierF (STR ''dom'') a) [IdentifierF rx b] c"
         using dom_arg_SomeD by blast
-      hence "eval_full fs ps fuel s st env l = None" using eval_full_dom_CallF[OF lcdom] by simp
+      hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
       thus False using efl by simp
     qed
-    have bn: "direct_beq_dom_or_none l r = None"
-      using dnone by (auto simp: direct_beq_dom_or_none_def split: option.splits)
+    have bn: "translate_beq_dom_or_none l r = None"
+      using dnone by (auto simp: translate_beq_dom_or_none_def split: option.splits)
     from "6.prems"(2) bopeq req bn obtain lt pt where
-        tl: "translate_full_direct enums l = Some lt"
-        and tp: "translate_full_direct enums pred = Some pt"
-        and teq: "t = direct_set_comp_eq enums var dnm lt pt"
+        tl: "translate enums l = Some lt"
+        and tp: "translate enums pred = Some pt"
+        and teq: "t = translate_set_comp_eq enums var dnm lt pt"
       by (auto split: option.splits)
     have ncl: "no_cmp_var l" using "6.prems"(4) bopeq by simp
     have ncp: "no_cmp_var pred" using "6.prems"(4) req by simp
@@ -1288,10 +1288,10 @@ next
   show ?case
   proof (cases uop)
     case UNot
-    from "7.prems" UNot obtain b where ef: "eval_full fs ps fuel s st env e = Some (VBool b)"
+    from "7.prems" UNot obtain b where ef: "eval fs ps fuel s st env e = Some (VBool b)"
         and veq: "v = VBool (\<not> b)"
       by (auto split: option.splits ir_value.splits)
-    from "7.prems" UNot obtain et where te: "translate_full_direct enums e = Some et"
+    from "7.prems" UNot obtain et where te: "translate enums e = Some et"
         and teq: "t = TNot et"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) et = Some (SBool b)"
@@ -1299,9 +1299,9 @@ next
     then show ?thesis using teq veq by simp
   next
     case UNegate
-    from "7.prems" UNegate obtain v0 where ef: "eval_full fs ps fuel s st env e = Some v0"
+    from "7.prems" UNegate obtain v0 where ef: "eval fs ps fuel s st env e = Some v0"
       by (auto split: option.splits)
-    from "7.prems" UNegate obtain et where te: "translate_full_direct enums e = Some et"
+    from "7.prems" UNegate obtain et where te: "translate enums e = Some et"
         and teq: "t = TNeg et"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v0)"
@@ -1316,37 +1316,37 @@ next
   qed
 next
   case (8 fs ps fuel s st env c a b sp v t)
-  from "8.prems" obtain ct at2 bt2 where tc: "translate_full_direct enums c = Some ct"
-      and ta: "translate_full_direct enums a = Some at2" and tb: "translate_full_direct enums b = Some bt2"
+  from "8.prems" obtain ct at2 bt2 where tc: "translate enums c = Some ct"
+      and ta: "translate enums a = Some at2" and tb: "translate enums b = Some bt2"
       and teq: "t = TIte ct at2 bt2"
     by (auto split: option.splits)
-  from "8.prems" obtain bb where ec: "eval_full fs ps fuel s st env c = Some (VBool bb)"
+  from "8.prems" obtain bb where ec: "eval fs ps fuel s st env c = Some (VBool bb)"
     by (auto split: option.splits ir_value.splits)
   have ec': "smtEval (correlate_model s st) (correlate_env env) ct = Some (SBool bb)"
     using "8.IH"(1)[OF ec tc "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
   show ?case
   proof (cases bb)
     case True
-    with ec have cT: "eval_full fs ps fuel s st env c = Some (VBool True)" by simp
-    have ea: "eval_full fs ps fuel s st env a = Some v" using "8.prems" cT by simp
+    with ec have cT: "eval fs ps fuel s st env c = Some (VBool True)" by simp
+    have ea: "eval fs ps fuel s st env a = Some v" using "8.prems" cT by simp
     have "smtEval (correlate_model s st) (correlate_env env) at2 = Some (value_to_smt v)"
       using "8.IH"(2)[OF cT refl refl ea ta "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
     then show ?thesis using teq ec' True by simp
   next
     case False
-    with ec have cF: "eval_full fs ps fuel s st env c = Some (VBool False)" by simp
-    have eb: "eval_full fs ps fuel s st env b = Some v" using "8.prems" cF by simp
+    with ec have cF: "eval fs ps fuel s st env c = Some (VBool False)" by simp
+    have eb: "eval fs ps fuel s st env b = Some v" using "8.prems" cF by simp
     have "smtEval (correlate_model s st) (correlate_env env) bt2 = Some (value_to_smt v)"
       using "8.IH"(3)[OF cF refl refl eb tb "8.prems"(3)] "8.prems"(4) "8.prems"(5) by simp
     then show ?thesis using teq ec' False by simp
   qed
 next
   case (9 fs ps fuel s st env x ve body sp v t)
-  from "9.prems" obtain va where eve: "eval_full fs ps fuel s st env ve = Some va"
-      and ebody: "eval_full fs ps fuel s st ((x, va) # env) body = Some v"
+  from "9.prems" obtain va where eve: "eval fs ps fuel s st env ve = Some va"
+      and ebody: "eval fs ps fuel s st ((x, va) # env) body = Some v"
     by (auto split: option.splits)
-  from "9.prems" obtain vt bt where tve: "translate_full_direct enums ve = Some vt"
-      and tbody: "translate_full_direct enums body = Some bt" and teq: "t = TLetIn x vt bt"
+  from "9.prems" obtain vt bt where tve: "translate enums ve = Some vt"
+      and tbody: "translate enums body = Some bt" and teq: "t = TLetIn x vt bt"
     by (auto split: option.splits)
   have ev': "smtEval (correlate_model s st) (correlate_env env) vt = Some (value_to_smt va)"
     using "9.IH"(1)[OF eve tve "9.prems"(3)] "9.prems"(4) "9.prems"(5) by simp
@@ -1355,10 +1355,10 @@ next
   show ?case using teq ev' eb' by simp
 next
   case (10 fs ps fuel s st env base f sp v t)
-  from "10.prems" obtain v0 where ef: "eval_full fs ps fuel s st env base = Some v0"
+  from "10.prems" obtain v0 where ef: "eval fs ps fuel s st env base = Some v0"
       and vfl: "value_field_lookup st v0 f = Some v"
     by (auto split: option.splits)
-  from "10.prems" obtain bt where tb: "translate_full_direct enums base = Some bt"
+  from "10.prems" obtain bt where tb: "translate enums base = Some bt"
       and teq: "t = TFieldAccess bt f"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt v0)"
@@ -1366,8 +1366,8 @@ next
   then show ?case using teq vfl value_field_lookup_correlated[of s st v0 f] by simp
 next
   case (11 fs ps fuel s st env e sp v t)
-  from "11.prems" have ef: "eval_full fs ps fuel s st env e = Some v" by simp
-  from "11.prems" obtain et where te: "translate_full_direct enums e = Some et"
+  from "11.prems" have ef: "eval fs ps fuel s st env e = Some v" by simp
+  from "11.prems" obtain et where te: "translate enums e = Some et"
       and teq: "t = TPrime et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v)"
@@ -1375,8 +1375,8 @@ next
   then show ?case using teq by simp
 next
   case (12 fs ps fuel s st env e sp v t)
-  from "12.prems" have ef: "eval_full fs ps fuel s st env e = Some v" by simp
-  from "12.prems" obtain et where te: "translate_full_direct enums e = Some et"
+  from "12.prems" have ef: "eval fs ps fuel s st env e = Some v" by simp
+  from "12.prems" obtain et where te: "translate enums e = Some et"
       and teq: "t = TPre et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v)"
@@ -1384,10 +1384,10 @@ next
   then show ?case using teq by simp
 next
   case (13 fs ps fuel s st env e sp v t)
-  from "13.prems" obtain v0 where ef: "eval_full fs ps fuel s st env e = Some v0"
+  from "13.prems" obtain v0 where ef: "eval fs ps fuel s st env e = Some v0"
       and veq: "v = VSome v0"
     by (auto split: option.splits)
-  from "13.prems" obtain et where te: "translate_full_direct enums e = Some et"
+  from "13.prems" obtain et where te: "translate enums e = Some et"
       and teq: "t = TSome et"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (value_to_smt v0)"
@@ -1395,10 +1395,10 @@ next
   then show ?case using teq veq by simp
 next
   case (14 fs ps fuel s st env e pat sp v t)
-  from "14.prems" obtain str where ef: "eval_full fs ps fuel s st env e = Some (VStr str)"
+  from "14.prems" obtain str where ef: "eval fs ps fuel s st env e = Some (VStr str)"
       and veq: "v = VBool (string_matches str pat)"
     by (auto split: option.splits ir_value.splits)
-  from "14.prems" obtain et where te: "translate_full_direct enums e = Some et"
+  from "14.prems" obtain et where te: "translate enums e = Some et"
       and teq: "t = TMatches et pat"
     by (auto split: option.splits)
   have "smtEval (correlate_model s st) (correlate_env env) et = Some (SStr str)"
@@ -1409,12 +1409,12 @@ next
   obtain fuel' where fuel: "fuel = Suc fuel'" using "15.prems"(1) by (cases fuel) auto
   from "15.prems"(2) obtain nm sp1 arg argt where
       ceq: "callee = IdentifierF nm sp1" and aeq: "args = [arg]" and bip: "is_builtin_pred nm"
-      and ta: "translate_full_direct enums arg = Some argt" and teq: "t = TUStrPred nm argt"
+      and ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
     by (cases callee; cases args) (auto split: if_splits list.splits option.splits)
   have lc_none: "lookup_callee fs ps nm = None"
     using "15.prems"(5) bip by (simp add: builtins_reserved_def)
   from "15.prems"(1) fuel ceq aeq lc_none bip obtain str where
-      ea: "eval_full fs ps fuel s st env arg = Some (VStr str)"
+      ea: "eval fs ps fuel s st env arg = Some (VStr str)"
       and veq: "v = VBool (str_predicate nm str)"
     by (auto split: option.splits ir_value.splits if_splits)
   have ncarg: "no_cmp_var arg" using "15.prems"(4) ceq aeq by simp
@@ -1424,42 +1424,42 @@ next
   show ?case using teq veq ev by simp
 next
   case (17 fs ps fuel s st env es sp v t)
-  from "17.prems"(1) obtain vs where efl: "eval_full_list fs ps fuel s st env es = Some vs"
+  from "17.prems"(1) obtain vs where efl: "eval_list fs ps fuel s st env es = Some vs"
       and veq: "v = VSeq vs"
     by (auto split: option.splits)
-  from "17.prems"(2) have ls: "directSeqList enums es = Some t" by simp
+  from "17.prems"(2) have ls: "translateSeqList enums es = Some t" by simp
   show ?case using "17.IH"[OF efl "17.prems"(3)] ls veq "17.prems"(4) "17.prems"(5) by fastforce
 next
   case (18 fs ps fuel s st env es sp v t)
-  from "18.prems"(1) obtain vs where efl: "eval_full_list fs ps fuel s st env es = Some vs"
+  from "18.prems"(1) obtain vs where efl: "eval_list fs ps fuel s st env es = Some vs"
       and veq: "v = VSet (foldr (\<lambda>v acc. dedupe_values (v # acc)) vs [])"
     by (auto split: option.splits)
-  from "18.prems"(2) have ls: "directSetList enums es = Some t" by simp
+  from "18.prems"(2) have ls: "translateSetList enums es = Some t" by simp
   show ?case using "18.IH"[OF efl "18.prems"(3)] ls veq "18.prems"(4) "18.prems"(5) by fastforce
 next
   case (19 fs ps fuel s st env entries sp v t)
-  from "19.prems"(1) obtain mps where e: "eval_full_entries fs ps fuel s st env entries = Some mps"
+  from "19.prems"(1) obtain mps where e: "eval_entries fs ps fuel s st env entries = Some mps"
       and veq: "v = VMap mps"
     by (auto split: option.splits)
-  from "19.prems"(2) have ls: "directMapEntries enums entries = Some t" by simp
+  from "19.prems"(2) have ls: "translateMapEntries enums entries = Some t" by simp
   show ?case using "19.IH"[OF e "19.prems"(3)] ls veq "19.prems"(4) "19.prems"(5) by fastforce
 next
   case (20 fs ps fuel s st env name fas sp v t)
-  from "20.prems"(1) obtain fvs where e: "eval_full_fields fs ps fuel s st env fas = Some fvs"
+  from "20.prems"(1) obtain fvs where e: "eval_fields fs ps fuel s st env fas = Some fvs"
       and veq: "v = foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) (VEntity name (STR '''')) fvs"
     by (auto split: option.splits)
-  from "20.prems"(2) have lw: "direct_with_assigns enums fas (TEntityBase name) = Some t" by simp
+  from "20.prems"(2) have lw: "translate_with_assigns enums fas (TEntityBase name) = Some t" by simp
   have eb: "smtEval (correlate_model s st) (correlate_env env) (TEntityBase name)
               = Some (value_to_smt (VEntity name (STR '''')))" by simp
   show ?case using "20.IH"[OF e "20.prems"(3)] eb lw veq "20.prems"(4) "20.prems"(5) by fastforce
 next
   case (21 fs ps fuel s st env base fas sp v t)
-  from "21.prems"(1) obtain bv fvs where eb: "eval_full fs ps fuel s st env base = Some bv"
-      and ef: "eval_full_fields fs ps fuel s st env fas = Some fvs"
+  from "21.prems"(1) obtain bv fvs where eb: "eval fs ps fuel s st env base = Some bv"
+      and ef: "eval_fields fs ps fuel s st env fas = Some fvs"
       and veq: "v = foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs"
     by (auto split: option.splits)
-  from "21.prems"(2) obtain bt where tb: "translate_full_direct enums base = Some bt"
-      and lw: "direct_with_assigns enums fas bt = Some t"
+  from "21.prems"(2) obtain bt where tb: "translate enums base = Some bt"
+      and lw: "translate_with_assigns enums fas bt = Some t"
     by (auto split: option.splits)
   have eb': "smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt bv)"
     using "21.IH"(1)[OF eb tb "21.prems"(3)] "21.prems"(4) "21.prems"(5) by simp
@@ -1477,12 +1477,12 @@ next
   qed (use "22.prems" in simp_all)
 next
   case (23 fs ps fuel s st env base key sp v t)
-  from "23.prems"(1) obtain rel kv where pk: "peelRelationRefFull base = Some rel"
-      and ek: "eval_full fs ps fuel s st env key = Some kv"
+  from "23.prems"(1) obtain rel kv where pk: "peelRelationRef base = Some rel"
+      and ek: "eval fs ps fuel s st env key = Some kv"
       and slk: "state_lookup_key st rel kv = Some v"
     by (auto split: option.splits)
-  from "23.prems"(2) obtain bt kt where tb: "translate_full_direct enums base = Some bt"
-      and tk: "translate_full_direct enums key = Some kt" and teq: "t = TIndexRel bt kt"
+  from "23.prems"(2) obtain bt kt where tb: "translate enums base = Some bt"
+      and tk: "translate enums key = Some kt" and teq: "t = TIndexRel bt kt"
     by (auto split: option.splits)
   have pr: "peelSmtRelationRef bt = Some rel" using peelSmt_tfd[OF pk tb] .
   have "smtEval (correlate_model s st) (correlate_env env) kt = Some (value_to_smt kv)"
@@ -1493,11 +1493,11 @@ next
   show ?case
   proof (cases dm)
     case (IdentifierF rel sp')
-    from "24.prems"(2) IdentifierF obtain bt where tb: "translate_full_direct enums body = Some bt"
+    from "24.prems"(2) IdentifierF obtain bt where tb: "translate enums body = Some bt"
         and teq: "t = TTheRel var rel bt"
       by (auto split: if_splits option.splits)
     from "24.prems"(1) IdentifierF obtain dmv x rest where srd: "state_relation_domain st rel = Some dmv"
-        and eft: "eval_full_the fs ps fuel s st env var dmv body = Some (x # rest)"
+        and eft: "eval_the fs ps fuel s st env var dmv body = Some (x # rest)"
         and uniq: "list_all (\<lambda>y. y = x) rest" and v_eq: "v = x"
       by (auto split: option.splits list.splits if_splits)
     have etr: "smtEval_the_rel (correlate_model s st) (correlate_env env) var
@@ -1518,7 +1518,7 @@ next
     case (Some vd)
     obtain var dmv where vdeq: "vd = (var, dmv)" by (cases vd) auto
     have qd: "quant_dom s st k bs = Some (var, dmv)" using Some vdeq by simp
-    have eff: "eval_full_forall fs ps fuel s st env var dmv body = Some v"
+    have eff: "eval_forall fs ps fuel s st env var dmv body = Some v"
       using "25.prems"(1) qd by simp
     from quant_dom_some_shape[OF qd] obtain dnm sp1 dty a where
         kq: "k = QAll"
@@ -1526,7 +1526,7 @@ next
         and dmrel: "(\<exists>d. schema_lookup_enum s dnm = Some d \<and> dmv = map (\<lambda>m. VEnum dnm m) (enm_members d))
                      \<or> (schema_lookup_enum s dnm = None \<and> state_relation_domain st dnm = Some dmv)"
       by blast
-    obtain bt where tbody: "translate_full_direct enums body = Some bt"
+    obtain bt where tbody: "translate enums body = Some bt"
       using "25.prems"(2) kq bseq by (auto split: option.splits)
     have ih: "smtEval_forall_rel (correlate_model s st) (correlate_env env) var
                 (map value_to_smt dmv) bt = Some (value_to_smt v)"
@@ -1569,16 +1569,16 @@ next
   then show ?case by (auto split: option.splits)
 next
   case (28 fs ps fuel s st env e es vs)
-  from "28.prems" obtain v0 vs0 where ev0: "eval_full fs ps fuel s st env e = Some v0"
-      and evs0: "eval_full_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
+  from "28.prems" obtain v0 vs0 where ev0: "eval fs ps fuel s st env e = Some v0"
+      and evs0: "eval_list fs ps fuel s st env es = Some vs0" and vseq: "vs = v0 # vs0"
     by (auto split: option.splits)
   have nclE: "no_cmp_var_list es" using "28.prems"(3) "28.prems"(4) by simp
   show ?case
   proof (intro conjI allI impI)
     fix t
-    assume lse: "directSeqList enums (e # es) = Some t"
-    from lse obtain e0t s0t where te0: "translate_full_direct enums e = Some e0t"
-        and ts0: "directSeqList enums es = Some s0t" and teq: "t = TSeqCons e0t s0t"
+    assume lse: "translateSeqList enums (e # es) = Some t"
+    from lse obtain e0t s0t where te0: "translate enums e = Some e0t"
+        and ts0: "translateSeqList enums es = Some s0t" and teq: "t = TSeqCons e0t s0t"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) e0t = Some (value_to_smt v0)"
       using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
@@ -1589,9 +1589,9 @@ next
                        = Some (SSeq (map value_to_smt vs))" using teq vseq by simp
   next
     fix t
-    assume lse: "directSetList enums (e # es) = Some t"
-    from lse obtain e0t s0t where te0: "translate_full_direct enums e = Some e0t"
-        and ts0: "directSetList enums es = Some s0t" and teq: "t = TSetInsert e0t s0t"
+    assume lse: "translateSetList enums (e # es) = Some t"
+    from lse obtain e0t s0t where te0: "translate enums e = Some e0t"
+        and ts0: "translateSetList enums es = Some s0t" and teq: "t = TSetInsert e0t s0t"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) e0t = Some (value_to_smt v0)"
       using "28.IH"(1)[OF ev0 te0 "28.prems"(2)] "28.prems"(3) "28.prems"(4) by simp
@@ -1608,17 +1608,17 @@ next
   then show ?case by (auto split: option.splits)
 next
   case (30 fs ps fuel s st env k v msp rest mps)
-  from "30.prems" obtain kv vv mps0 where ek: "eval_full fs ps fuel s st env k = Some kv"
-      and ev: "eval_full fs ps fuel s st env v = Some vv"
-      and er: "eval_full_entries fs ps fuel s st env rest = Some mps0" and mpeq: "mps = (kv, vv) # mps0"
+  from "30.prems" obtain kv vv mps0 where ek: "eval fs ps fuel s st env k = Some kv"
+      and ev: "eval fs ps fuel s st env v = Some vv"
+      and er: "eval_entries fs ps fuel s st env rest = Some mps0" and mpeq: "mps = (kv, vv) # mps0"
     by (auto split: option.splits)
   show ?case
   proof (intro allI impI)
     fix t
-    assume lme: "directMapEntries enums (MapEntryFull k v msp # rest) = Some t"
-    from lme obtain kt vt mt where tk: "translate_full_direct enums k = Some kt"
-        and tv: "translate_full_direct enums v = Some vt"
-        and tm: "directMapEntries enums rest = Some mt" and teq: "t = TMapCons kt vt mt"
+    assume lme: "translateMapEntries enums (MapEntryFull k v msp # rest) = Some t"
+    from lme obtain kt vt mt where tk: "translate enums k = Some kt"
+        and tv: "translate enums v = Some vt"
+        and tm: "translateMapEntries enums rest = Some mt" and teq: "t = TMapCons kt vt mt"
       by (auto split: option.splits)
     have "smtEval (correlate_model s st) (correlate_env env) kt = Some (value_to_smt kv)"
       using "30.IH"(1)[OF ek tk "30.prems"(2)] "30.prems"(3) "30.prems"(4) by simp
@@ -1635,16 +1635,16 @@ next
   then show ?case by (auto split: option.splits)
 next
   case (32 fs ps fuel s st env fld v fsp rest fvs)
-  from "32.prems" obtain fv fvs0 where ev: "eval_full fs ps fuel s st env v = Some fv"
-      and er: "eval_full_fields fs ps fuel s st env rest = Some fvs0" and fveq: "fvs = (fld, fv) # fvs0"
+  from "32.prems" obtain fv fvs0 where ev: "eval fs ps fuel s st env v = Some fv"
+      and er: "eval_fields fs ps fuel s st env rest = Some fvs0" and fveq: "fvs = (fld, fv) # fvs0"
     by (auto split: option.splits)
   show ?case
   proof (intro allI impI)
     fix bt t bv
     assume sb: "smtEval (correlate_model s st) (correlate_env env) bt = Some (value_to_smt bv)"
-    assume dw: "direct_with_assigns enums (FieldAssignFull fld v fsp # rest) bt = Some t"
-    from dw obtain vt where tv: "translate_full_direct enums v = Some vt"
-        and dwr: "direct_with_assigns enums rest (TWithRec bt fld vt) = Some t"
+    assume dw: "translate_with_assigns enums (FieldAssignFull fld v fsp # rest) bt = Some t"
+    from dw obtain vt where tv: "translate enums v = Some vt"
+        and dwr: "translate_with_assigns enums rest (TWithRec bt fld vt) = Some t"
       by (auto split: option.splits)
     have ev': "smtEval (correlate_model s st) (correlate_env env) vt = Some (value_to_smt fv)"
       using "32.IH"(1)[OF ev tv "32.prems"(2)] "32.prems"(3) "32.prems"(4) by simp
@@ -1666,10 +1666,10 @@ next
   show ?case
   proof (intro allI impI)
     fix bt
-    assume tb: "translate_full_direct enums body = Some bt"
+    assume tb: "translate enums body = Some bt"
     show "smtEval_the_rel (correlate_model s st) (correlate_env env) var
             (map value_to_smt (v # rest)) bt = Some (map value_to_smt tms)"
-    proof (cases "eval_full fs ps fuel s st ((var, v) # env) body")
+    proof (cases "eval fs ps fuel s st ((var, v) # env) body")
       case None
       then show ?thesis using "34.prems" by simp
     next
@@ -1677,9 +1677,9 @@ next
       show ?thesis
       proof (cases bv)
         case (VBool b)
-        have evb: "eval_full fs ps fuel s st ((var, v) # env) body = Some (VBool b)"
+        have evb: "eval fs ps fuel s st ((var, v) # env) body = Some (VBool b)"
           using Some VBool by simp
-        obtain matches where mr: "eval_full_the fs ps fuel s st env var rest body = Some matches"
+        obtain matches where mr: "eval_the fs ps fuel s st env var rest body = Some matches"
             and tms_eq: "tms = (if b then v # matches else matches)"
           using "34.prems" evb by (auto split: option.splits)
         have eb: "smtEval (correlate_model s st) ((var, value_to_smt v) # correlate_env env) bt
@@ -1700,10 +1700,10 @@ next
   show ?case
   proof (intro allI impI)
     fix bt
-    assume tb: "translate_full_direct enums body = Some bt"
+    assume tb: "translate enums body = Some bt"
     show "smtEval_forall_rel (correlate_model s st) (correlate_env env) var
             (map value_to_smt (v # rest)) bt = Some (value_to_smt fr)"
-    proof (cases "eval_full fs ps fuel s st ((var, v) # env) body")
+    proof (cases "eval fs ps fuel s st ((var, v) # env) body")
       case None
       then show ?thesis using "36.prems" by simp
     next
@@ -1711,9 +1711,9 @@ next
       show ?thesis
       proof (cases bv)
         case (VBool b)
-        have evb: "eval_full fs ps fuel s st ((var, v) # env) body = Some (VBool b)"
+        have evb: "eval fs ps fuel s st ((var, v) # env) body = Some (VBool b)"
           using Some VBool by simp
-        obtain acc where mr: "eval_full_forall fs ps fuel s st env var rest body = Some (VBool acc)"
+        obtain acc where mr: "eval_forall fs ps fuel s st env var rest body = Some (VBool acc)"
             and fr_eq: "fr = VBool (b \<and> acc)"
           using "36.prems" evb by (auto split: option.splits ir_value.splits)
         have eb: "smtEval (correlate_model s st) ((var, value_to_smt v) # correlate_env env) bt
@@ -1728,9 +1728,9 @@ next
   qed
 qed (auto split: option.splits ir_value.splits)
 
-theorem translate_full_direct_soundness_standalone:
-  assumes "eval_full fs ps fuel s st env e = Some v"
-      and "translate_full_direct enums e = Some t"
+theorem translate_soundness_standalone:
+  assumes "eval fs ps fuel s st env e = Some v"
+      and "translate enums e = Some t"
       and "enums_wf s enums"
       and "no_cmp_var e"
       and "builtins_reserved fs ps"
@@ -1754,12 +1754,12 @@ next
   thus ?case using Cons by auto
 qed
 
-lemma direct_forall_step_some:
-  "is_ident_dom b \<Longrightarrow> \<exists>t. direct_forall_step enums b body = Some t"
+lemma translate_forall_step_some:
+  "is_ident_dom b \<Longrightarrow> \<exists>t. translate_forall_step enums b body = Some t"
   by (cases b rule: is_ident_dom.cases) auto
 
 lemma dfb_some_of_wf:
-  "wf_z3_bindings bs \<Longrightarrow> \<exists>r. direct_forall_bindings enums bs body = Some r"
+  "wf_z3_bindings bs \<Longrightarrow> \<exists>r. translate_forall_bindings enums bs body = Some r"
 proof (induction bs)
   case Nil
   thus ?case by simp
@@ -1768,107 +1768,107 @@ next
   show ?case
   proof (cases bs')
     case Nil
-    thus ?thesis using Cons.prems direct_forall_step_some by auto
+    thus ?thesis using Cons.prems translate_forall_step_some by auto
   next
     case (Cons b2 bs'')
     hence ib: "is_ident_dom b" and wr: "wf_z3_bindings bs'"
       using Cons.prems by auto
-    obtain inner where hi: "direct_forall_bindings enums bs' body = Some inner"
+    obtain inner where hi: "translate_forall_bindings enums bs' body = Some inner"
       using Cons.IH[OF wr] by blast
-    obtain t where "direct_forall_step enums b inner = Some t"
-      using direct_forall_step_some[OF ib] by blast
+    obtain t where "translate_forall_step enums b inner = Some t"
+      using translate_forall_step_some[OF ib] by blast
     thus ?thesis using \<open>bs' = b2 # bs''\<close> hi by auto
   qed
 qed
 
 lemma directSetList_some:
-  "(\<And>x. x \<in> set es \<Longrightarrow> \<exists>tx. translate_full_direct enums x = Some tx)
-     \<Longrightarrow> \<exists>ts. directSetList enums es = Some ts"
+  "(\<And>x. x \<in> set es \<Longrightarrow> \<exists>tx. translate enums x = Some tx)
+     \<Longrightarrow> \<exists>ts. translateSetList enums es = Some ts"
 proof (induction es)
   case Nil
   thus ?case by simp
 next
   case (Cons a es')
-  obtain at2 where ha: "translate_full_direct enums a = Some at2"
+  obtain at2 where ha: "translate enums a = Some at2"
     using Cons.prems[of a] by auto
-  have "\<exists>ts. directSetList enums es' = Some ts"
+  have "\<exists>ts. translateSetList enums es' = Some ts"
   proof (rule Cons.IH)
-    show "\<And>x. x \<in> set es' \<Longrightarrow> \<exists>tx. translate_full_direct enums x = Some tx"
+    show "\<And>x. x \<in> set es' \<Longrightarrow> \<exists>tx. translate enums x = Some tx"
       using Cons.prems by auto
   qed
-  then obtain st2 where hs: "directSetList enums es' = Some st2" by blast
+  then obtain st2 where hs: "translateSetList enums es' = Some st2" by blast
   show ?case using ha hs by simp
 qed
 
 lemma directSeqList_some:
-  "(\<And>x. x \<in> set es \<Longrightarrow> \<exists>tx. translate_full_direct enums x = Some tx)
-     \<Longrightarrow> \<exists>ts. directSeqList enums es = Some ts"
+  "(\<And>x. x \<in> set es \<Longrightarrow> \<exists>tx. translate enums x = Some tx)
+     \<Longrightarrow> \<exists>ts. translateSeqList enums es = Some ts"
 proof (induction es)
   case Nil
   thus ?case by simp
 next
   case (Cons a es')
-  obtain at2 where ha: "translate_full_direct enums a = Some at2"
+  obtain at2 where ha: "translate enums a = Some at2"
     using Cons.prems[of a] by auto
-  have "\<exists>ts. directSeqList enums es' = Some ts"
+  have "\<exists>ts. translateSeqList enums es' = Some ts"
   proof (rule Cons.IH)
-    show "\<And>x. x \<in> set es' \<Longrightarrow> \<exists>tx. translate_full_direct enums x = Some tx"
+    show "\<And>x. x \<in> set es' \<Longrightarrow> \<exists>tx. translate enums x = Some tx"
       using Cons.prems by auto
   qed
-  then obtain st2 where hs: "directSeqList enums es' = Some st2" by blast
+  then obtain st2 where hs: "translateSeqList enums es' = Some st2" by blast
   show ?case using ha hs by simp
 qed
 
 lemma directMapEntries_some:
-  "(\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> \<exists>tk. translate_full_direct enums k = Some tk)
-     \<Longrightarrow> (\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> \<exists>tv. translate_full_direct enums v = Some tv)
-     \<Longrightarrow> \<exists>mt. directMapEntries enums ents = Some mt"
+  "(\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> \<exists>tk. translate enums k = Some tk)
+     \<Longrightarrow> (\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents \<Longrightarrow> \<exists>tv. translate enums v = Some tv)
+     \<Longrightarrow> \<exists>mt. translateMapEntries enums ents = Some mt"
 proof (induction ents)
   case Nil
   thus ?case by simp
 next
   case (Cons en ents')
   obtain k v sp3 where en: "en = MapEntryFull k v sp3" by (cases en) auto
-  obtain kt where hk: "translate_full_direct enums k = Some kt"
+  obtain kt where hk: "translate enums k = Some kt"
     using Cons.prems(1)[of k v sp3] en by auto
-  obtain vt where hv: "translate_full_direct enums v = Some vt"
+  obtain vt where hv: "translate enums v = Some vt"
     using Cons.prems(2)[of k v sp3] en by auto
-  have "\<exists>mt. directMapEntries enums ents' = Some mt"
+  have "\<exists>mt. translateMapEntries enums ents' = Some mt"
   proof (rule Cons.IH)
     show "\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> \<exists>tk. translate_full_direct enums k = Some tk"
+            \<Longrightarrow> \<exists>tk. translate enums k = Some tk"
       using Cons.prems(1) by auto
     show "\<And>k v sp3. MapEntryFull k v sp3 \<in> set ents'
-            \<Longrightarrow> \<exists>tv. translate_full_direct enums v = Some tv"
+            \<Longrightarrow> \<exists>tv. translate enums v = Some tv"
       using Cons.prems(2) by auto
   qed
-  then obtain mt where hm: "directMapEntries enums ents' = Some mt" by blast
+  then obtain mt where hm: "translateMapEntries enums ents' = Some mt" by blast
   show ?case using en hk hv hm by simp
 qed
 
-lemma direct_with_assigns_some:
+lemma translate_with_assigns_some:
   "(\<And>fld v sp3. FieldAssignFull fld v sp3 \<in> set fas
-      \<Longrightarrow> \<exists>tv. translate_full_direct enums v = Some tv)
-     \<Longrightarrow> \<exists>ft. direct_with_assigns enums fas bt = Some ft"
+      \<Longrightarrow> \<exists>tv. translate enums v = Some tv)
+     \<Longrightarrow> \<exists>ft. translate_with_assigns enums fas bt = Some ft"
 proof (induction fas arbitrary: bt)
   case Nil
   thus ?case by simp
 next
   case (Cons fa fas')
   obtain fld v sp3 where fa: "fa = FieldAssignFull fld v sp3" by (cases fa) auto
-  obtain vt where hv: "translate_full_direct enums v = Some vt"
+  obtain vt where hv: "translate enums v = Some vt"
     using Cons.prems[of fld v sp3] fa by auto
-  have "\<exists>ft. direct_with_assigns enums fas' (TWithRec bt fld vt) = Some ft"
+  have "\<exists>ft. translate_with_assigns enums fas' (TWithRec bt fld vt) = Some ft"
   proof (rule Cons.IH)
     show "\<And>fld v sp3. FieldAssignFull fld v sp3 \<in> set fas'
-            \<Longrightarrow> \<exists>tv. translate_full_direct enums v = Some tv"
+            \<Longrightarrow> \<exists>tv. translate enums v = Some tv"
       using Cons.prems by auto
   qed
   thus ?case using fa hv by auto
 qed
 
 lemma wf_z3_imp_tfd_some:
-  "wf_z3 e \<Longrightarrow> \<exists>t. translate_full_direct enums e = Some t"
+  "wf_z3 e \<Longrightarrow> \<exists>t. translate enums e = Some t"
 proof (induction e rule: measure_induct_rule[where f = size])
   case (less e)
   show ?case
@@ -1903,7 +1903,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have sk: "size key < size e" using IndexF by simp
     have rrs: "rel_ref_shape base" and wk: "wf_z3 key"
       using less.prems IndexF by simp_all
-    obtain kt where hk: "translate_full_direct enums key = Some kt"
+    obtain kt where hk: "translate enums key = Some kt"
       using less.IH[OF sk wk] by blast
     show ?thesis
     proof (cases base)
@@ -1912,31 +1912,31 @@ proof (induction e rule: measure_induct_rule[where f = size])
     next
       case (PreF b sp3)
       then obtain x sp4 where "b = IdentifierF x sp4"
-        using rrs by (cases "identNameFull b") (auto dest!: identNameFull_SomeD)
+        using rrs by (cases "identName b") (auto dest!: identNameFull_SomeD)
       thus ?thesis using IndexF hk PreF by auto
     next
       case (PrimeF b sp3)
       then obtain x sp4 where "b = IdentifierF x sp4"
-        using rrs by (cases "identNameFull b") (auto dest!: identNameFull_SomeD)
+        using rrs by (cases "identName b") (auto dest!: identNameFull_SomeD)
       thus ?thesis using IndexF hk PrimeF by auto
     qed (use IndexF rrs in auto)
   next
     case (IfF c a b sp2)
     have sc: "size c < size e" and sa: "size a < size e" and sb: "size b < size e"
       using IfF by simp_all
-    obtain ct where "translate_full_direct enums c = Some ct"
+    obtain ct where "translate enums c = Some ct"
       using less.IH[OF sc] less.prems IfF by auto
-    moreover obtain at2 where "translate_full_direct enums a = Some at2"
+    moreover obtain at2 where "translate enums a = Some at2"
       using less.IH[OF sa] less.prems IfF by auto
-    moreover obtain bt2 where "translate_full_direct enums b = Some bt2"
+    moreover obtain bt2 where "translate enums b = Some bt2"
       using less.IH[OF sb] less.prems IfF by auto
     ultimately show ?thesis using IfF by auto
   next
     case (LetF x v body sp2)
     have sv: "size v < size e" and sb: "size body < size e" using LetF by simp_all
-    obtain vt where "translate_full_direct enums v = Some vt"
+    obtain vt where "translate enums v = Some vt"
       using less.IH[OF sv] less.prems LetF by auto
-    moreover obtain bt where "translate_full_direct enums body = Some bt"
+    moreover obtain bt where "translate enums body = Some bt"
       using less.IH[OF sb] less.prems LetF by auto
     ultimately show ?thesis using LetF by auto
   next
@@ -1962,7 +1962,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
     have s: "size body < size e" using QuantifierF by simp
     have wb: "wf_z3_bindings bs" and wbody: "wf_z3 body"
       using less.prems QuantifierF by simp_all
-    obtain bt where hb: "translate_full_direct enums body = Some bt"
+    obtain bt where hb: "translate enums body = Some bt"
       using less.IH[OF s wbody] by blast
     show ?thesis
     proof (cases k)
@@ -1980,71 +1980,71 @@ proof (induction e rule: measure_induct_rule[where f = size])
     qed
   next
     case (ConstructorF name fas sp2)
-    have "\<exists>ft. direct_with_assigns enums fas (TEntityBase name) = Some ft"
-    proof (rule direct_with_assigns_some)
+    have "\<exists>ft. translate_with_assigns enums fas (TEntityBase name) = Some ft"
+    proof (rule translate_with_assigns_some)
       fix fld v sp3 assume m: "FieldAssignFull fld v sp3 \<in> set fas"
       have "size v < size e"
         using ConstructorF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "wf_z3 v"
         using less.prems ConstructorF m by (fastforce simp: wf_z3_fields_iff)
-      ultimately show "\<exists>tv. translate_full_direct enums v = Some tv"
+      ultimately show "\<exists>tv. translate enums v = Some tv"
         using less.IH by blast
     qed
     thus ?thesis using ConstructorF by simp
   next
     case (WithF base upds sp2)
     have sbase: "size base < size e" using WithF by simp
-    obtain bt where hb: "translate_full_direct enums base = Some bt"
+    obtain bt where hb: "translate enums base = Some bt"
       using less.IH[OF sbase] less.prems WithF by auto
-    have "\<exists>ft. direct_with_assigns enums upds bt = Some ft"
-    proof (rule direct_with_assigns_some)
+    have "\<exists>ft. translate_with_assigns enums upds bt = Some ft"
+    proof (rule translate_with_assigns_some)
       fix fld v sp3 assume m: "FieldAssignFull fld v sp3 \<in> set upds"
       have "size v < size e"
         using WithF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "wf_z3 v"
         using less.prems WithF m by (fastforce simp: wf_z3_fields_iff)
-      ultimately show "\<exists>tv. translate_full_direct enums v = Some tv"
+      ultimately show "\<exists>tv. translate enums v = Some tv"
         using less.IH by blast
     qed
     thus ?thesis using WithF hb by auto
   next
     case (SetLiteralF elems sp2)
-    have "\<exists>ts. directSetList enums elems = Some ts"
+    have "\<exists>ts. translateSetList enums elems = Some ts"
     proof (rule directSetList_some)
       fix x assume m: "x \<in> set elems"
       have "size x < size e"
         using SetLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "wf_z3 x"
         using wf_z3_list_member less.prems SetLiteralF m by simp
-      ultimately show "\<exists>tx. translate_full_direct enums x = Some tx"
+      ultimately show "\<exists>tx. translate enums x = Some tx"
         using less.IH by blast
     qed
     thus ?thesis using SetLiteralF by simp
   next
     case (SeqLiteralF elems sp2)
-    have "\<exists>ts. directSeqList enums elems = Some ts"
+    have "\<exists>ts. translateSeqList enums elems = Some ts"
     proof (rule directSeqList_some)
       fix x assume m: "x \<in> set elems"
       have "size x < size e"
         using SeqLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp
       moreover have "wf_z3 x"
         using wf_z3_list_member less.prems SeqLiteralF m by simp
-      ultimately show "\<exists>tx. translate_full_direct enums x = Some tx"
+      ultimately show "\<exists>tx. translate enums x = Some tx"
         using less.IH by blast
     qed
     thus ?thesis using SeqLiteralF by simp
   next
     case (MapLiteralF entries sp2)
-    have "\<exists>mt. directMapEntries enums entries = Some mt"
+    have "\<exists>mt. translateMapEntries enums entries = Some mt"
     proof (rule directMapEntries_some)
       fix k v sp3 assume m: "MapEntryFull k v sp3 \<in> set entries"
       have sk: "size k < size e" and sv: "size v < size e"
         using MapLiteralF size_list_estimation'[OF m order_refl, where f = size] by simp_all
       have wk: "wf_z3 k" and wv: "wf_z3 v"
         using wf_z3_entries_member[OF _ m] less.prems MapLiteralF by simp_all
-      show "\<exists>tk. translate_full_direct enums k = Some tk"
+      show "\<exists>tk. translate enums k = Some tk"
         using less.IH[OF sk wk] by blast
-      show "\<exists>tv. translate_full_direct enums v = Some tv"
+      show "\<exists>tv. translate enums v = Some tv"
         using less.IH[OF sv wv] by blast
     qed
     thus ?thesis using MapLiteralF by simp
@@ -2055,13 +2055,13 @@ proof (induction e rule: measure_induct_rule[where f = size])
     proof (cases op2)
       case BEq
       show ?thesis
-      proof (cases "direct_beq_dom_or_none l2 r2")
+      proof (cases "translate_beq_dom_or_none l2 r2")
         case (Some dt)
         thus ?thesis using BinaryOpF BEq by auto
       next
         case None
         have dnone: "dom_arg l2 = None \<or> dom_arg r2 = None"
-          using None by (auto simp: direct_beq_dom_or_none_def split: option.splits)
+          using None by (auto simp: translate_beq_dom_or_none_def split: option.splits)
         show ?thesis
         proof (cases "\<exists>cvar dnm s2 cpred s3. r2 = SetComprehensionF cvar (IdentifierF dnm s2) cpred s3")
           case True
@@ -2070,9 +2070,9 @@ proof (induction e rule: measure_induct_rule[where f = size])
           have spred: "size cpred < size e" using BinaryOpF req by simp
           have wl: "wf_z3 l2" and wp: "wf_z3 cpred"
             using less.prems BinaryOpF BEq req by simp_all
-          obtain lt where hl: "translate_full_direct enums l2 = Some lt"
+          obtain lt where hl: "translate enums l2 = Some lt"
             using less.IH[OF sl wl] by blast
-          obtain pt where hp: "translate_full_direct enums cpred = Some pt"
+          obtain pt where hp: "translate enums cpred = Some pt"
             using less.IH[OF spred wp] by blast
           show ?thesis using BinaryOpF BEq None req hl hp by auto
         next
@@ -2081,12 +2081,12 @@ proof (induction e rule: measure_induct_rule[where f = size])
             by blast
           have wl: "wf_z3 l2" and wr: "wf_z3 r2"
             using less.prems BinaryOpF BEq wf_z3_BEq_noncomp[OF nc] by simp_all
-          obtain lt where hl: "translate_full_direct enums l2 = Some lt"
+          obtain lt where hl: "translate enums l2 = Some lt"
             using less.IH[OF sl wl] by blast
-          obtain rt where hr: "translate_full_direct enums r2 = Some rt"
+          obtain rt where hr: "translate enums r2 = Some rt"
             using less.IH[OF sr wr] by blast
           show ?thesis
-            using BinaryOpF BEq direct_BEq_noncomp[OF nc dnone] hl hr by auto
+            using BinaryOpF BEq translate_BEq_noncomp[OF nc dnone] hl hr by auto
         qed
       qed
     next
@@ -2099,9 +2099,9 @@ proof (induction e rule: measure_induct_rule[where f = size])
         have spred: "size cpred < size e" using BinaryOpF req by simp
         have wl: "wf_z3 l2" and wp: "wf_z3 cpred"
           using less.prems BinaryOpF BIn req by simp_all
-        obtain lt where hl: "translate_full_direct enums l2 = Some lt"
+        obtain lt where hl: "translate enums l2 = Some lt"
           using less.IH[OF sl wl] by blast
-        obtain pt where hp: "translate_full_direct enums cpred = Some pt"
+        obtain pt where hp: "translate enums cpred = Some pt"
           using less.IH[OF spred wp] by blast
         show ?thesis using BinaryOpF BIn req hl hp by auto
       next
@@ -2110,7 +2110,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
           by blast
         have wl: "wf_z3 l2"
           using less.prems BinaryOpF BIn wf_z3_BIn_noncomp[OF nc] by simp
-        obtain lt where hl: "translate_full_direct enums l2 = Some lt"
+        obtain lt where hl: "translate enums l2 = Some lt"
           using less.IH[OF sl wl] by blast
         show ?thesis
         proof (cases "\<exists>rel rsp. r2 = IdentifierF rel rsp")
@@ -2120,25 +2120,25 @@ proof (induction e rule: measure_induct_rule[where f = size])
           case False
           have wr: "wf_z3 r2"
             using less.prems BinaryOpF BIn wf_z3_BIn_noncomp[OF nc] False by auto
-          obtain rt where hr: "translate_full_direct enums r2 = Some rt"
+          obtain rt where hr: "translate enums r2 = Some rt"
             using less.IH[OF sr wr] by blast
           show ?thesis
-            using hl hr direct_BIn_noncomp[OF nc]
+            using hl hr translate_BIn_noncomp[OF nc]
             by (cases r2)
-               (auto simp: BinaryOpF BIn del: translate_full_direct.simps split: option.splits)
+               (auto simp: BinaryOpF BIn del: translate.simps split: option.splits)
         qed
       qed
     next
       case BNotIn
-      have beq: "translate_full_direct enums e
+      have beq: "translate enums e
                    = (case r2 of
                         IdentifierF rel _ \<Rightarrow>
-                          map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate_full_direct enums l2)
-                      | _ \<Rightarrow> (case (translate_full_direct enums l2, translate_full_direct enums r2) of
+                          map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l2)
+                      | _ \<Rightarrow> (case (translate enums l2, translate enums r2) of
                                 (Some lt, Some rt) \<Rightarrow> Some (TNot (TSetMember lt rt)) | _ \<Rightarrow> None))"
         using BinaryOpF BNotIn by simp
       have wl: "wf_z3 l2" using less.prems BinaryOpF BNotIn by simp
-      obtain lt where hl: "translate_full_direct enums l2 = Some lt"
+      obtain lt where hl: "translate enums l2 = Some lt"
         using less.IH[OF sl wl] by blast
       show ?thesis
       proof (cases "\<exists>rel rsp. r2 = IdentifierF rel rsp")
@@ -2147,19 +2147,19 @@ proof (induction e rule: measure_induct_rule[where f = size])
       next
         case False
         have wr: "wf_z3 r2" using less.prems BinaryOpF BNotIn False by auto
-        obtain rt where hr: "translate_full_direct enums r2 = Some rt"
+        obtain rt where hr: "translate enums r2 = Some rt"
           using less.IH[OF sr wr] by blast
         show ?thesis using hl hr unfolding beq
-          by (cases r2) (auto del: translate_full_direct.simps split: option.splits)
+          by (cases r2) (auto del: translate.simps split: option.splits)
       qed
     qed (use less.prems BinaryOpF less.IH[OF sl] less.IH[OF sr] in
           \<open>auto split: option.splits\<close>)
   qed (use less.prems in auto)
 qed
 
-theorem translate_full_direct_wf_some_standalone:
+theorem translate_wf_some_standalone:
   assumes "wf_z3 e"
-  shows "\<exists>t. translate_full_direct enums e = Some t"
+  shows "\<exists>t. translate enums e = Some t"
   by (rule wf_z3_imp_tfd_some[OF assms])
 
 end

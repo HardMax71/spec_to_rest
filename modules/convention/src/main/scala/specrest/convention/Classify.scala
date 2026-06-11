@@ -8,7 +8,7 @@ object Classify:
   def classifyOperations(ir: ServiceIRFull): List[operation_classification] =
     svcOperations(ir).map(op => classifyOperation(op, ir))
 
-  def classifyOperation(op: operation_decl_full, ir: ServiceIRFull): operation_classification =
+  def classifyOperation(op: operation_decl, ir: ServiceIRFull): operation_classification =
     val stateFieldNames = svcState(ir) match
       case Some(sd) => stdFields(sd).map(stfName).toSet
       case None     => Set.empty[String]
@@ -27,7 +27,7 @@ object Classify:
     )
 
   private def analyze(
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull,
       stateFieldNames: Set[String]
   ): analysis_signals =
@@ -69,9 +69,9 @@ object Classify:
     )
 
   private def resolveTargetEntity(
-      op: operation_decl_full,
+      op: operation_decl,
       ir: ServiceIRFull,
-      entityMap: Map[String, entity_decl_full]
+      entityMap: Map[String, entity_decl]
   ): Option[String] =
     svcState(ir) match
       case None => None

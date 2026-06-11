@@ -60,7 +60,7 @@ text \<open>A walk result pairs the accumulated constraint with the list of skip
 type_synonym int_walk_result    = "int_constraint \<times> String.literal list"
 type_synonym string_walk_result = "string_constraint \<times> String.literal list"
 
-definition intAtom :: "expr_full \<Rightarrow> int_walk_result" where
+definition intAtom :: "expr \<Rightarrow> int_walk_result" where
   "intAtom atom = (case decomposeAtom atom of
        RaValueCmp op n \<Rightarrow>
          (case op of
@@ -72,7 +72,7 @@ definition intAtom :: "expr_full \<Rightarrow> int_walk_result" where
           | _   \<Rightarrow> (emptyIntConstraint, [STR ''unsupported int comparison'']))
      | _ \<Rightarrow> (emptyIntConstraint, [STR ''unhandled int constraint'']))"
 
-definition walkIntConstraint :: "expr_full \<Rightarrow> int_walk_result" where
+definition walkIntConstraint :: "expr \<Rightarrow> int_walk_result" where
   "walkIntConstraint e =
      foldl
        (\<lambda>acc atom.
@@ -88,7 +88,7 @@ text \<open>String-constraint walker. Predicate-name lookups (predicate helpers,
   emits \<open>RaPredCall name\<close> as an unhandled-skip naming the predicate so the
   Scala post-processor can resolve it.\<close>
 
-definition stringAtom :: "expr_full \<Rightarrow> string_walk_result" where
+definition stringAtom :: "expr \<Rightarrow> string_walk_result" where
   "stringAtom atom = (case decomposeAtom atom of
        RaLenCmp op n \<Rightarrow>
          (case op of
@@ -102,7 +102,7 @@ definition stringAtom :: "expr_full \<Rightarrow> string_walk_result" where
      | RaPredCall name \<Rightarrow> (emptyStringConstraint, [name])
      | _ \<Rightarrow> (emptyStringConstraint, [STR ''unhandled string constraint'']))"
 
-definition walkStringConstraint :: "expr_full \<Rightarrow> string_walk_result" where
+definition walkStringConstraint :: "expr \<Rightarrow> string_walk_result" where
   "walkStringConstraint e =
      foldl
        (\<lambda>acc atom.

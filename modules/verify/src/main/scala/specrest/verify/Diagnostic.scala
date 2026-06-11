@@ -45,9 +45,9 @@ object Diagnostic:
   private val MaxSuggestionLength = 200
 
   final case class SuggestionContext(
-      ir: service_ir_full,
-      op: Option[operation_decl_full],
-      invariantDecl: Option[invariant_decl_full],
+      ir: service_ir,
+      op: Option[operation_decl],
+      invariantDecl: Option[invariant_decl],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -163,7 +163,7 @@ object Diagnostic:
       s"Solver timed out on '${ctx.checkId}' after ${ctx.timeoutMs}ms. Increase --timeout$invClause, or split a heavy quantifier into smaller predicates."
     )
 
-  private def invariantDisplayNames(ir: service_ir_full): List[String] =
+  private def invariantDisplayNames(ir: service_ir): List[String] =
     svcInvariants(ir).zipWithIndex.map: (inv, i) =>
       invName(inv).getOrElse(s"inv_$i")
 
@@ -176,9 +176,9 @@ object Diagnostic:
     if s.length <= MaxSuggestionLength then s
     else s.take(MaxSuggestionLength - 1) + "…"
 
-  private def featureSummary(e: expr_full): List[String] =
+  private def featureSummary(e: expr): List[String] =
     val out = List.newBuilder[String]
-    def walk(x: expr_full, depthQuant: Int): Unit = x match
+    def walk(x: expr, depthQuant: Int): Unit = x match
       case QuantifierF(_, bs, body, _) =>
         if depthQuant >= 1 then out += "nested quantifiers"
         bs.foreach(b => walk(qbdCollection(b), depthQuant))

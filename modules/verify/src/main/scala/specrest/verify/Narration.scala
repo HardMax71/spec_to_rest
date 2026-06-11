@@ -10,9 +10,9 @@ object Narration:
   private val Truncated: String = "(narration truncated; see counterexample above for full state)"
 
   final case class Context(
-      ir: service_ir_full,
-      op: Option[operation_decl_full],
-      invariantDecl: Option[invariant_decl_full],
+      ir: service_ir,
+      op: Option[operation_decl],
+      invariantDecl: Option[invariant_decl],
       operationName: Option[String],
       invariantName: Option[String],
       counterexample: Option[DecodedCounterExample],
@@ -101,14 +101,14 @@ object Narration:
         lines += "     (Run with --explain to see the contributing clauses.)"
       lines.result().mkString("\n")
 
-  private def contributingField(e: expr_full, ir: service_ir_full): Option[String] =
+  private def contributingField(e: expr, ir: service_ir): Option[String] =
     collectFieldAccessNames(e).headOption.orElse:
       val stateFieldNames = irStateFieldNames(ir).toSet
       collectIdentifierNames(e).find(stateFieldNames.contains)
 
   private def describePreInputs(
       ce: DecodedCounterExample,
-      op: operation_decl_full,
+      op: operation_decl,
       field: String
   ): Option[String] =
     val parts         = List.newBuilder[String]
@@ -135,7 +135,7 @@ object Narration:
 
   private def describePost(
       ce: DecodedCounterExample,
-      op: operation_decl_full,
+      op: operation_decl,
       field: String
   ): Option[String] =
     val inputDisplays =
@@ -161,7 +161,7 @@ object Narration:
       .find(e => inputDisplays.contains(e.key.display))
       .orElse(rel.entries.sortBy(_.key.display).headOption)
 
-  private def rangePairConflict(invs: List[invariant_decl_full]): Option[String] =
+  private def rangePairConflict(invs: List[invariant_decl]): Option[String] =
     val ranges = invs.flatMap(d => rangeOf(invBody(d)).map(r => (d, r)))
     ranges.combinations(2).collectFirst:
       case List((aDecl, (aIdent, (aOp, aBound))), (bDecl, (bIdent, (bOp, bBound))))

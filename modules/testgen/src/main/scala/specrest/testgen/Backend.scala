@@ -4,7 +4,7 @@ import specrest.codegen.EmittedFile
 import specrest.ir.generated.SpecRestGenerated.IntConstraint
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.StringConstraint
-import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.expr
 import specrest.ir.generated.SpecRestGenerated.int_constraint
 import specrest.ir.generated.SpecRestGenerated.span_t
 import specrest.ir.generated.SpecRestGenerated.string_constraint
@@ -15,7 +15,7 @@ import specrest.profile.ProfiledService
 // `.every`/`.map` or Go loops — over the shared Translated result ADT and TestCtx.
 // `stringLiteral` renders a Scala string as a target string literal.
 trait ExprBackend:
-  def translate(expr: expr_full, ctx: TestCtx): Translated
+  def translate(expr: expr, ctx: TestCtx): Translated
   def stringLiteral(s: String): String
 
 // The language-specific scaffold + path layout. `scaffoldFiles` returns the

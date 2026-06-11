@@ -6,13 +6,13 @@ text \<open>Phase 9ww: per-clause matchers lifted off Scala
   \<open>convention.ExprAnalysis\<close>. \<open>flattenEnsures\<close> already breaks \<open>\<and>\<close>-chains
   so each matcher pattern-matches the top-level clause head and returns
   hits; the consumer composes \<open>concat (map matcher (flattenEnsures es))\<close>.
-  No expr_full walker needed (Scala keeps the AST walk for the few
+  No expr walker needed (Scala keeps the AST walk for the few
   callers that need it — \<open>collectPrimedIdentifiers\<close>,
   \<open>collectWithFields\<close>, \<open>collectFieldAccessNames\<close> — to avoid a
   polymorphic-HOF walker that blows up Isabelle build wall-time).\<close>
 
 definition preservedRelationOf ::
-  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list" where
   "preservedRelationOf stateFields e \<equiv>
      (case e of
         BinaryOpF BEq (PrimeF (IdentifierF l _) _) (IdentifierF r _) _ \<Rightarrow>
@@ -20,19 +20,19 @@ definition preservedRelationOf ::
       | _ \<Rightarrow> [])"
 
 definition collectPreservedRelations ::
-  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
   "collectPreservedRelations es stateFields \<equiv>
      remdups (List.concat (map (preservedRelationOf stateFields) (flattenEnsures es)))"
 
 fun containsPreInPlusChain ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "containsPreInPlusChain (PreF (IdentifierF n _) _) field = (n = field)"
 | "containsPreInPlusChain (BinaryOpF BAdd l r _) field =
      (containsPreInPlusChain l field \<or> containsPreInPlusChain r field)"
 | "containsPreInPlusChain _ _ = False"
 
 definition createPatternOf ::
-  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list" where
   "createPatternOf stateFields e \<equiv>
      (case e of
         BinaryOpF BEq (PrimeF (IdentifierF name _) _) rhs _ \<Rightarrow>
@@ -45,14 +45,14 @@ definition createPatternOf ::
       | _ \<Rightarrow> [])"
 
 definition detectCreatePattern ::
-  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+  "expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
   "detectCreatePattern es stateFields \<equiv>
      (case List.concat (map (createPatternOf stateFields) (flattenEnsures es)) of
         []       \<Rightarrow> None
       | (x # _)  \<Rightarrow> Some x)"
 
 definition deletePatternOf ::
-  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list" where
   "deletePatternOf stateFields e \<equiv>
      (case e of
         BinaryOpF BNotIn _ (PrimeF (IdentifierF n _) _) _ \<Rightarrow>
@@ -60,14 +60,14 @@ definition deletePatternOf ::
       | _ \<Rightarrow> [])"
 
 definition detectDeletePattern ::
-  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+  "expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
   "detectDeletePattern es stateFields \<equiv>
      (case List.concat (map (deletePatternOf stateFields) (flattenEnsures es)) of
         []       \<Rightarrow> None
       | (x # _)  \<Rightarrow> Some x)"
 
 definition keyExistsInRequiresOf ::
-  "String.literal list \<Rightarrow> expr_full \<Rightarrow> String.literal list" where
+  "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list" where
   "keyExistsInRequiresOf stateFields e \<equiv>
      (case e of
         BinaryOpF BIn _ (IdentifierF n _) _ \<Rightarrow>
@@ -75,12 +75,12 @@ definition keyExistsInRequiresOf ::
       | _ \<Rightarrow> [])"
 
 definition detectKeyExistsInRequires ::
-  "expr_full list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
   "detectKeyExistsInRequires requires stateFields \<equiv>
      remdups (List.concat
        (map (keyExistsInRequiresOf stateFields) (flattenEnsures requires)))"
 
-fun resolveWithBase :: "expr_full \<Rightarrow> String.literal option" where
+fun resolveWithBase :: "expr \<Rightarrow> String.literal option" where
   "resolveWithBase e =
      (case e of
         IdentifierF _ _ \<Rightarrow> None
@@ -94,19 +94,19 @@ fun resolveWithBase :: "expr_full \<Rightarrow> String.literal option" where
            | _ \<Rightarrow> rootIdentifier base)
       | _ \<Rightarrow> rootIdentifier e)"
 
-fun fieldAssignName :: "field_assign_full \<Rightarrow> String.literal" where
+fun fieldAssignName :: "field_assign \<Rightarrow> String.literal" where
   "fieldAssignName (FieldAssignFull n _ _) = n"
 
-datatype (plugins only: code size) with_info_full =
+datatype (plugins only: code size) with_info =
   WithInfoFull "String.literal list" "String.literal option"
 
-fun withInfoFieldNames :: "with_info_full \<Rightarrow> String.literal list" where
+fun withInfoFieldNames :: "with_info \<Rightarrow> String.literal list" where
   "withInfoFieldNames (WithInfoFull fs _) = fs"
 
-fun withInfoBaseIdentifier :: "with_info_full \<Rightarrow> String.literal option" where
+fun withInfoBaseIdentifier :: "with_info \<Rightarrow> String.literal option" where
   "withInfoBaseIdentifier (WithInfoFull _ b) = b"
 
-text \<open>Phase 9ww: \<open>collectExprInfo\<close> is the unified expr_full walker
+text \<open>Phase 9ww: \<open>collectExprInfo\<close> is the unified expr walker
   that collects, in a single pass, every datum the classifier /
   diagnostic layers need from an AST: primed identifiers, field-access
   names, and with-clause info. Returning a tuple lets three logically
@@ -125,61 +125,61 @@ text \<open>Streamlined: previously this section had a 5-way mutual \<open>fun\<
   a one-line composition over the shared \<open>allSubexprs\<close> enumeration
   with a tiny per-node selector.\<close>
 
-fun primedIdSelect :: "expr_full \<Rightarrow> String.literal list" where
+fun primedIdSelect :: "expr \<Rightarrow> String.literal list" where
   "primedIdSelect (PrimeF inner _) =
      (case rootIdentifier inner of None \<Rightarrow> [] | Some n \<Rightarrow> [n])"
 | "primedIdSelect _ = []"
 
-fun fieldAccessNameSelect :: "expr_full \<Rightarrow> String.literal list" where
+fun fieldAccessNameSelect :: "expr \<Rightarrow> String.literal list" where
   "fieldAccessNameSelect (FieldAccessF _ n _) = [n]"
 | "fieldAccessNameSelect _ = []"
 
-fun identifierNameSelect :: "expr_full \<Rightarrow> String.literal list" where
+fun identifierNameSelect :: "expr \<Rightarrow> String.literal list" where
   "identifierNameSelect (IdentifierF n _) = [n]"
 | "identifierNameSelect _ = []"
 
-fun withInfoSelect :: "expr_full \<Rightarrow> with_info_full list" where
+fun withInfoSelect :: "expr \<Rightarrow> with_info list" where
   "withInfoSelect (WithF base ups _) =
      [WithInfoFull (map fieldAssignName ups) (resolveWithBase base)]"
 | "withInfoSelect _ = []"
 
 definition collectPrimedIdentifiers ::
-  "expr_full list \<Rightarrow> String.literal list" where
+  "expr list \<Rightarrow> String.literal list" where
   "collectPrimedIdentifiers es =
      remdups (concat (map (\<lambda>e. concat (map primedIdSelect (allSubexprs e))) es))"
 
-definition collectFieldAccessNames :: "expr_full \<Rightarrow> String.literal list" where
+definition collectFieldAccessNames :: "expr \<Rightarrow> String.literal list" where
   "collectFieldAccessNames e =
      remdups (concat (map fieldAccessNameSelect (allSubexprs e)))"
 
-definition collectIdentifierNames :: "expr_full \<Rightarrow> String.literal list" where
+definition collectIdentifierNames :: "expr \<Rightarrow> String.literal list" where
   "collectIdentifierNames e =
      remdups (concat (map identifierNameSelect (allSubexprs e)))"
 
 definition collectWithFields ::
-  "expr_full list \<Rightarrow> with_info_full option" where
+  "expr list \<Rightarrow> with_info option" where
   "collectWithFields es =
      (case concat (map (\<lambda>e. concat (map withInfoSelect (allSubexprs e))) es) of
         []      \<Rightarrow> None
       | (x # _) \<Rightarrow> Some x)"
 
-fun isInputCollectionType :: "type_expr_full \<Rightarrow> bool" where
+fun isInputCollectionType :: "type_expr \<Rightarrow> bool" where
   "isInputCollectionType (SetTypeF _ _)   = True"
 | "isInputCollectionType (SeqTypeF _ _)   = True"
 | "isInputCollectionType (MapTypeF _ _ _) = True"
 | "isInputCollectionType _                = False"
 
-fun paramTypeFull :: "param_decl_full \<Rightarrow> type_expr_full" where
+fun paramTypeFull :: "param_decl \<Rightarrow> type_expr" where
   "paramTypeFull (ParamDeclFull _ t _) = t"
 
-definition countFilterParams :: "param_decl_full list \<Rightarrow> nat" where
+definition countFilterParams :: "param_decl list \<Rightarrow> nat" where
   "countFilterParams ps \<equiv>
      length (filter (\<lambda>p. case paramTypeFull p of OptionTypeF _ _ \<Rightarrow> True | _ \<Rightarrow> False) ps)"
 
-definition hasCollectionInput :: "param_decl_full list \<Rightarrow> bool" where
+definition hasCollectionInput :: "param_decl list \<Rightarrow> bool" where
   "hasCollectionInput ps \<equiv> list_ex (\<lambda>p. isInputCollectionType (paramTypeFull p)) ps"
 
-fun typeName :: "type_expr_full \<Rightarrow> String.literal option" where
+fun typeName :: "type_expr \<Rightarrow> String.literal option" where
   "typeName (NamedTypeF n _) = Some n"
 | "typeName _                = None"
 
@@ -197,40 +197,40 @@ text \<open>Phase 9e: \<open>flattenInheritance\<close> resolves \<open>entity C
   \<open>fun\<close>'s structural-termination obligation. This is the canonical
   replacement for the hand \<open>parser.Builder.flattenInheritance\<close>.\<close>
 
-fun enumNameFull :: "enum_decl_full \<Rightarrow> String.literal" where
+fun enumNameFull :: "enum_decl \<Rightarrow> String.literal" where
   "enumNameFull (EnumDeclFull n _ _) = n"
 
-fun entityNameFull :: "entity_decl_full \<Rightarrow> String.literal" where
+fun entityNameFull :: "entity_decl \<Rightarrow> String.literal" where
   "entityNameFull (EntityDeclFull n _ _ _ _) = n"
 
-fun entityParentFull :: "entity_decl_full \<Rightarrow> String.literal option" where
+fun entityParentFull :: "entity_decl \<Rightarrow> String.literal option" where
   "entityParentFull (EntityDeclFull _ p _ _ _) = p"
 
-fun entityFieldsFull :: "entity_decl_full \<Rightarrow> field_decl_full list" where
+fun entityFieldsFull :: "entity_decl \<Rightarrow> field_decl list" where
   "entityFieldsFull (EntityDeclFull _ _ fs _ _) = fs"
 
-fun entityInvsFull :: "entity_decl_full \<Rightarrow> expr_full list" where
+fun entityInvsFull :: "entity_decl \<Rightarrow> expr list" where
   "entityInvsFull (EntityDeclFull _ _ _ iv _) = iv"
 
-fun fieldNameFull :: "field_decl_full \<Rightarrow> String.literal" where
+fun fieldNameFull :: "field_decl \<Rightarrow> String.literal" where
   "fieldNameFull (FieldDeclFull n _ _ _) = n"
 
-fun fieldTypeFull :: "field_decl_full \<Rightarrow> type_expr_full" where
+fun fieldTypeFull :: "field_decl \<Rightarrow> type_expr" where
   "fieldTypeFull (FieldDeclFull _ t _ _) = t"
 
-fun state_fieldNameFull :: "state_field_decl_full \<Rightarrow> String.literal" where
+fun state_fieldNameFull :: "state_field_decl \<Rightarrow> String.literal" where
   "state_fieldNameFull (StateFieldDeclFull n _ _) = n"
 
-fun state_fieldTypeFull :: "state_field_decl_full \<Rightarrow> type_expr_full" where
+fun state_fieldTypeFull :: "state_field_decl \<Rightarrow> type_expr" where
   "state_fieldTypeFull (StateFieldDeclFull _ t _) = t"
 
-fun enumValuesFull :: "enum_decl_full \<Rightarrow> String.literal list" where
+fun enumValuesFull :: "enum_decl \<Rightarrow> String.literal list" where
   "enumValuesFull (EnumDeclFull _ vs _) = vs"
 
-fun typeAliasName :: "type_alias_decl_full \<Rightarrow> String.literal" where
+fun typeAliasName :: "type_alias_decl \<Rightarrow> String.literal" where
   "typeAliasName (TypeAliasDeclFull n _ _ _) = n"
 
-fun typeAliasType :: "type_alias_decl_full \<Rightarrow> type_expr_full" where
+fun typeAliasType :: "type_alias_decl \<Rightarrow> type_expr" where
   "typeAliasType (TypeAliasDeclFull _ t _ _) = t"
 
 text \<open>\<open>enumValuesForType\<close> resolves a named type to its enum values,
@@ -243,8 +243,8 @@ text \<open>\<open>enumValuesForType\<close> resolves a named type to its enum v
   cycle guard \<rightarrow> could non-terminate on \<open>type A = B; type B = A\<close>).\<close>
 
 function enumValuesForType ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> enum_decl_full list \<Rightarrow>
-   type_alias_decl_full list \<Rightarrow> String.literal list option" where
+  "nat \<Rightarrow> type_expr \<Rightarrow> enum_decl list \<Rightarrow>
+   type_alias_decl list \<Rightarrow> String.literal list option" where
   "enumValuesForType fuel t enums aliases =
      (if fuel = 0 then None
       else case t of
@@ -262,69 +262,69 @@ termination
   by (relation "measure (\<lambda>(fuel, _, _, _). fuel)") auto
 
 definition enumValuesForField ::
-  "field_decl_full \<Rightarrow> enum_decl_full list \<Rightarrow>
-   type_alias_decl_full list \<Rightarrow> String.literal list option" where
+  "field_decl \<Rightarrow> enum_decl list \<Rightarrow>
+   type_alias_decl list \<Rightarrow> String.literal list option" where
   "enumValuesForField f enums aliases \<equiv>
      enumValuesForType (Suc (length aliases)) (fieldTypeFull f) enums aliases"
 
 definition entityByName ::
-  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> entity_decl_full option" where
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> entity_decl option" where
   "entityByName es nm =
      map_of (map (\<lambda>e. (entityNameFull e, e)) (rev es)) nm"
 
 definition findFieldDeclFull ::
-  "field_decl_full list \<Rightarrow> String.literal \<Rightarrow> field_decl_full option" where
+  "field_decl list \<Rightarrow> String.literal \<Rightarrow> field_decl option" where
   "findFieldDeclFull fs nm \<equiv>
      List.find (\<lambda>fd. fieldNameFull fd = nm) fs"
 
 definition entityFieldDeclLookup ::
-  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal
-     \<Rightarrow> field_decl_full option" where
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal
+     \<Rightarrow> field_decl option" where
   "entityFieldDeclLookup es ename fname \<equiv>
      case entityByName es ename of
        None    \<Rightarrow> None
      | Some ed \<Rightarrow> findFieldDeclFull (entityFieldsFull ed) fname"
 
 definition entityHasField ::
-  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
   "entityHasField es ename fname \<equiv>
      (case entityByName es ename of
         None    \<Rightarrow> False
       | Some ed \<Rightarrow> list_ex (\<lambda>fd. fieldNameFull fd = fname) (entityFieldsFull ed))"
 
 definition entityFieldNames ::
-  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal list" where
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal list" where
   "entityFieldNames es ename \<equiv>
      (case entityByName es ename of
         None    \<Rightarrow> []
       | Some ed \<Rightarrow> map fieldNameFull (entityFieldsFull ed))"
 
 definition irStateFields ::
-  "service_ir_full \<Rightarrow> state_field_decl_full list" where
+  "service_ir \<Rightarrow> state_field_decl list" where
   "irStateFields ir \<equiv>
      (case svcState ir of
         None   \<Rightarrow> []
       | Some s \<Rightarrow> stdFields s)"
 
 definition irStateFieldNames ::
-  "service_ir_full \<Rightarrow> String.literal list" where
+  "service_ir \<Rightarrow> String.literal list" where
   "irStateFieldNames ir \<equiv> map stfName (irStateFields ir)"
 
 definition irConventionRules ::
-  "service_ir_full \<Rightarrow> convention_rule_full list" where
+  "service_ir \<Rightarrow> convention_rule list" where
   "irConventionRules ir \<equiv>
      (case svcConventions ir of
         None   \<Rightarrow> []
       | Some c \<Rightarrow> cvdRules c)"
 
 definition entityNameInList ::
-  "entity_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "entity_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
   "entityNameInList es nm \<equiv>
      (case entityByName es nm of
         None    \<Rightarrow> None
       | Some _  \<Rightarrow> Some nm)"
 
-fun isCollectionType :: "type_expr_full \<Rightarrow> bool" where
+fun isCollectionType :: "type_expr \<Rightarrow> bool" where
   "isCollectionType (SetTypeF _ _)          = True"
 | "isCollectionType (SeqTypeF _ _)          = True"
 | "isCollectionType (MapTypeF _ _ _)        = True"
@@ -332,7 +332,7 @@ fun isCollectionType :: "type_expr_full \<Rightarrow> bool" where
 | "isCollectionType _                       = False"
 
 fun assignsField ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "assignsField (FieldAccessF _ f _) field = (f = field)"
 | "assignsField (IdentifierF n _)    field = (n = field)"
 | "assignsField (PrimeF inner _)     field = assignsField inner field"
@@ -348,7 +348,7 @@ text \<open>Narration counterexample helpers: \<open>extractFieldAssignRhs\<clos
   \<open>verify.Narration\<close>.\<close>
 
 fun extractFieldAssignRhs ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> expr_full list" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> expr list" where
   "extractFieldAssignRhs (BinaryOpF BEq lhs rhs _) field =
      (if assignsField lhs field then [rhs] else [])"
 | "extractFieldAssignRhs (BinaryOpF BAnd l r _) field =
@@ -356,14 +356,14 @@ fun extractFieldAssignRhs ::
 | "extractFieldAssignRhs _ _ = []"
 
 definition ensuresRhsForField ::
-  "expr_full list \<Rightarrow> String.literal \<Rightarrow> expr_full option" where
+  "expr list \<Rightarrow> String.literal \<Rightarrow> expr option" where
   "ensuresRhsForField ensures field \<equiv>
      (case concat (map (\<lambda>e. extractFieldAssignRhs e field) ensures) of
         [r] \<Rightarrow> Some r
       | _   \<Rightarrow> None)"
 
 fun entityNameFromType ::
-  "type_expr_full \<Rightarrow> String.literal option" where
+  "type_expr \<Rightarrow> String.literal option" where
   "entityNameFromType (RelationTypeF _ _ to _) = typeName to"
 | "entityNameFromType (NamedTypeF n _)         = Some n"
 | "entityNameFromType (SetTypeF inner _)       = entityNameFromType inner"
@@ -372,26 +372,26 @@ fun entityNameFromType ::
 | "entityNameFromType (MapTypeF _ v _)         = entityNameFromType v"
 
 fun relationTargetEntityName ::
-  "type_expr_full \<Rightarrow> String.literal option" where
+  "type_expr \<Rightarrow> String.literal option" where
   "relationTargetEntityName
      (RelationTypeF _ _ (NamedTypeF n _) _) = Some n"
 | "relationTargetEntityName (NamedTypeF n _) = Some n"
 | "relationTargetEntityName _ = None"
 
 fun referencesPrimedRelation ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "referencesPrimedRelation (PrimeF (IdentifierF n _) _) rel = (n = rel)"
 | "referencesPrimedRelation _ _ = False"
 
 fun referencesPreRelation ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "referencesPreRelation (PreF (IdentifierF n _) _) rel = (n = rel)"
 | "referencesPreRelation (IdentifierF n _) rel = (n = rel)"
 | "referencesPreRelation _ _ = False"
 
 fun chain_up ::
-  "entity_decl_full list \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> String.literal list
-     \<Rightarrow> entity_decl_full list" where
+  "entity_decl list \<Rightarrow> nat \<Rightarrow> String.literal \<Rightarrow> String.literal list
+     \<Rightarrow> entity_decl list" where
   "chain_up _ 0 _ _ = []"
 | "chain_up es (Suc f) name seen =
      (case entityByName es name of
@@ -404,14 +404,14 @@ fun chain_up ::
                 else chain_up es f parent (name # seen) @ [e])))"
 
 fun upsert_field ::
-  "field_decl_full list \<Rightarrow> field_decl_full \<Rightarrow> field_decl_full list" where
+  "field_decl list \<Rightarrow> field_decl \<Rightarrow> field_decl list" where
   "upsert_field acc fd =
      (if list_ex (\<lambda>g. fieldNameFull g = fieldNameFull fd) acc
       then map (\<lambda>g. if fieldNameFull g = fieldNameFull fd then fd else g) acc
       else acc @ [fd])"
 
 fun flatten_entity ::
-  "entity_decl_full list \<Rightarrow> entity_decl_full \<Rightarrow> entity_decl_full" where
+  "entity_decl list \<Rightarrow> entity_decl \<Rightarrow> entity_decl" where
   "flatten_entity es (EntityDeclFull nm pa fs iv sp) =
      (case pa of
         None \<Rightarrow> EntityDeclFull nm pa fs iv sp
@@ -424,7 +424,7 @@ fun flatten_entity ::
                      (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
-fun flattenInheritance :: "service_ir_full \<Rightarrow> service_ir_full" where
+fun flattenInheritance :: "service_ir \<Rightarrow> service_ir" where
   "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
      ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n p"
 
@@ -497,7 +497,7 @@ text \<open>Phase 9k — hardened inheritance flattening.
   these proofs.\<close>
 
 fun flatten_entity2 ::
-  "entity_decl_full list \<Rightarrow> entity_decl_full \<Rightarrow> entity_decl_full" where
+  "entity_decl list \<Rightarrow> entity_decl \<Rightarrow> entity_decl" where
   "flatten_entity2 es (EntityDeclFull nm pa fs iv sp) =
      (case pa of
         None \<Rightarrow> EntityDeclFull nm None fs iv sp
@@ -510,7 +510,7 @@ fun flatten_entity2 ::
                      (concat (map entityInvsFull anc) @ iv)
                      sp))"
 
-fun flattenInheritance2 :: "service_ir_full \<Rightarrow> service_ir_full" where
+fun flattenInheritance2 :: "service_ir \<Rightarrow> service_ir" where
   "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n p) =
      ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n p"
 
@@ -550,11 +550,11 @@ proof -
   from a b show ?thesis by simp
 qed
 
-definition emptyServiceIrFull :: "String.literal \<Rightarrow> service_ir_full" where
+definition emptyServiceIrFull :: "String.literal \<Rightarrow> service_ir" where
   "emptyServiceIrFull nm =
      ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
 
-text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full\<close> onto the
+text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr\<close> onto the
   verified-subset \<open>expr\<close>. Out-of-subset constructors return \<open>None\<close>. Span
   field preserved.
 
@@ -573,7 +573,7 @@ text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr_full
 
   \<open>lower_soundness\<close> in \<open>Soundness.thy\<close> remains a thin corollary of
   \<open>soundness\<close>: every \<open>e :: expr\<close> produced by \<open>lower\<close> falls under the
-  universal soundness theorem regardless of which \<open>expr_full\<close> shape it came
+  universal soundness theorem regardless of which \<open>expr\<close> shape it came
   from. No per-case \<open>lower_*_step\<close> proofs are needed.\<close>
 
 end

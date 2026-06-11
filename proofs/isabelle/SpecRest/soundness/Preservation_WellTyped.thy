@@ -6,9 +6,9 @@ text \<open>Phase H2 -> 9j bridge. Every well-typed expression in the
   H2 arith / cmp / bool fragment lies in the Phase 9j \<open>wf_z3\<close>
   subset. Composed with \<open>wf_z3_imp_tfd_some\<close> this gives
   the first half of the progress chain:
-    well-typed e ==> wf_z3 e ==> translate_full_direct enums e \<noteq> None.
-  \<open>h3_full_preservation\<close> completes the chain via the H1
-  preservation lemmas against \<open>eval_full\<close>.\<close>
+    well-typed e ==> wf_z3 e ==> translate enums e \<noteq> None.
+  \<open>h3_preservation\<close> completes the chain via the H1
+  preservation lemmas against \<open>eval\<close>.\<close>
 
 lemma well_typed_imp_wf_z3:
   "expr_has_ty \<Gamma> e t \<Longrightarrow> wf_z3 e"

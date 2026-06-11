@@ -9,8 +9,8 @@ text \<open>Lifted Alloy signature builder. Mirrors
   already-lifted \<open>alloyFieldTypeOf\<close> (\<open>AlloyTypes\<close>) for per-field
   shape classification.
 
-  No \<open>expr_full\<close> recursion, so the build stays fast — pattern
-  completeness on the \<open>entity_decl_full\<close>/\<open>field_decl_full\<close>
+  No \<open>expr\<close> recursion, so the build stays fast — pattern
+  completeness on the \<open>entity_decl\<close>/\<open>field_decl\<close>
   datatypes is shallow.
 
   The lifted function returns \<open>None\<close> when any field type is
@@ -29,26 +29,26 @@ datatype alloy_sig = AlloySigLifted
   "String.literal option"           \<comment> \<open>extends parent (e.g. Bool/enum)\<close>
   "alloy_field list"                \<comment> \<open>fields\<close>
 
-fun fieldDeclTypeOf :: "field_decl_full \<Rightarrow> type_expr_full" where
+fun fieldDeclTypeOf :: "field_decl \<Rightarrow> type_expr" where
   "fieldDeclTypeOf (FieldDeclFull _ t _ _) = t"
 
-fun fieldDeclNameOf :: "field_decl_full \<Rightarrow> String.literal" where
+fun fieldDeclNameOf :: "field_decl \<Rightarrow> String.literal" where
   "fieldDeclNameOf (FieldDeclFull n _ _ _) = n"
 
-fun entityDeclNameOf :: "entity_decl_full \<Rightarrow> String.literal" where
+fun entityDeclNameOf :: "entity_decl \<Rightarrow> String.literal" where
   "entityDeclNameOf (EntityDeclFull n _ _ _ _) = n"
 
-fun entityDeclFieldsOf :: "entity_decl_full \<Rightarrow> field_decl_full list" where
+fun entityDeclFieldsOf :: "entity_decl \<Rightarrow> field_decl list" where
   "entityDeclFieldsOf (EntityDeclFull _ _ fs _ _) = fs"
 
-fun enumDeclNameOf :: "enum_decl_full \<Rightarrow> String.literal" where
+fun enumDeclNameOf :: "enum_decl \<Rightarrow> String.literal" where
   "enumDeclNameOf (EnumDeclFull n _ _) = n"
 
-fun enumDeclValuesOf :: "enum_decl_full \<Rightarrow> String.literal list" where
+fun enumDeclValuesOf :: "enum_decl \<Rightarrow> String.literal list" where
   "enumDeclValuesOf (EnumDeclFull _ vs _) = vs"
 
 definition fieldDeclToAlloyField ::
-  "field_decl_full \<Rightarrow> alloy_field option"
+  "field_decl \<Rightarrow> alloy_field option"
 where
   "fieldDeclToAlloyField fd =
      (case alloyFieldTypeOf (fieldDeclTypeOf fd) of
@@ -57,7 +57,7 @@ where
           Some (AlloyFieldLifted (fieldDeclNameOf fd) (fst mn) (snd mn)))"
 
 fun fieldDeclsToAlloyFields ::
-  "field_decl_full list \<Rightarrow> alloy_field list option"
+  "field_decl list \<Rightarrow> alloy_field list option"
 where
   "fieldDeclsToAlloyFields [] = Some []"
 | "fieldDeclsToAlloyFields (fd # rest) =
@@ -69,7 +69,7 @@ where
            | Some fs \<Rightarrow> Some (f # fs)))"
 
 fun typedNamesToAlloyFields ::
-  "(String.literal \<times> type_expr_full) list \<Rightarrow> alloy_field list option"
+  "(String.literal \<times> type_expr) list \<Rightarrow> alloy_field list option"
 where
   "typedNamesToAlloyFields [] = Some []"
 | "typedNamesToAlloyFields ((name, t) # rest) =
@@ -88,7 +88,7 @@ definition boolSigs :: "alloy_sig list" where
    ]"
 
 definition entityToAlloySig ::
-  "entity_decl_full \<Rightarrow> alloy_sig option"
+  "entity_decl \<Rightarrow> alloy_sig option"
 where
   "entityToAlloySig e =
      (case fieldDeclsToAlloyFields (entityDeclFieldsOf e) of
@@ -97,7 +97,7 @@ where
           Some (AlloySigLifted (entityDeclNameOf e) False False None fs))"
 
 fun entitiesToAlloySigs ::
-  "entity_decl_full list \<Rightarrow> alloy_sig list option"
+  "entity_decl list \<Rightarrow> alloy_sig list option"
 where
   "entitiesToAlloySigs [] = Some []"
 | "entitiesToAlloySigs (e # rest) =
@@ -117,14 +117,14 @@ where
        # enumMembersToSigs parent rest"
 
 definition enumToAlloySigs ::
-  "enum_decl_full \<Rightarrow> alloy_sig list"
+  "enum_decl \<Rightarrow> alloy_sig list"
 where
   "enumToAlloySigs e =
      AlloySigLifted (enumDeclNameOf e) True False None []
        # enumMembersToSigs (enumDeclNameOf e) (enumDeclValuesOf e)"
 
 fun enumsToAlloySigs ::
-  "enum_decl_full list \<Rightarrow> alloy_sig list"
+  "enum_decl list \<Rightarrow> alloy_sig list"
 where
   "enumsToAlloySigs [] = []"
 | "enumsToAlloySigs (e # rest) =
@@ -138,7 +138,7 @@ text \<open>Single helper for State / Inputs / StatePost sig construction.
   "no-sig-needed" carrier and extracts cleanly.\<close>
 
 definition stateOrInputSig ::
-  "String.literal \<Rightarrow> (String.literal \<times> type_expr_full) list
+  "String.literal \<Rightarrow> (String.literal \<times> type_expr) list
    \<Rightarrow> alloy_sig list option"
 where
   "stateOrInputSig sigName fs =
@@ -170,10 +170,10 @@ text \<open>Main lifted builder. Concatenates the five sig groups via
 
 definition buildAlloySigs ::
   "bool                                       \<comment> \<open>needsBool\<close>
-   \<Rightarrow> entity_decl_full list                    \<comment> \<open>ir.c\<close>
-   \<Rightarrow> enum_decl_full list                      \<comment> \<open>ir.d\<close>
-   \<Rightarrow> (String.literal \<times> type_expr_full) list   \<comment> \<open>stateFields\<close>
-   \<Rightarrow> (String.literal \<times> type_expr_full) list   \<comment> \<open>inputFields\<close>
+   \<Rightarrow> entity_decl list                    \<comment> \<open>ir.c\<close>
+   \<Rightarrow> enum_decl list                      \<comment> \<open>ir.d\<close>
+   \<Rightarrow> (String.literal \<times> type_expr) list   \<comment> \<open>stateFields\<close>
+   \<Rightarrow> (String.literal \<times> type_expr) list   \<comment> \<open>inputFields\<close>
    \<Rightarrow> bool                                     \<comment> \<open>includeStatePost\<close>
    \<Rightarrow> alloy_sig list option"
 where

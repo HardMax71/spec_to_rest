@@ -7,11 +7,11 @@ class A8RoundTripOracleTest extends FunSuite:
 
   private val enumNames: List[String] = List("Color", "Status")
 
-  test("A8: extracted translate_full_direct projects every in-subset probe to a non-empty term"):
+  test("A8: extracted translate projects every in-subset probe to a non-empty term"):
     var translated = 0
     var skipped    = 0
     SpecRestGeneratedTestProbes.allProbes.foreach: (shape, e) =>
-      translate_full_direct(enumNames, e) match
+      translate(enumNames, e) match
         case Some(smtTerm) =>
           assert(smtTerm.toString.nonEmpty, s"$shape: translate produced empty term")
           translated += 1
@@ -21,7 +21,7 @@ class A8RoundTripOracleTest extends FunSuite:
     println(s"[A8 oracle] translated=$translated  skipped(direct punt)=$skipped")
 
   test("A8: extracted translate produces shape-correct SmtTerm headers"):
-    val cases: List[(expr_full, String)] = List(
+    val cases: List[(expr, String)] = List(
       BoolLitF(true, None)                                                 -> "BLit(true)",
       IntLitF(BigInt(7), None)                                             -> "ILit(",
       IdentifierF("foo", None)                                             -> "TVar(foo)",
@@ -42,7 +42,7 @@ class A8RoundTripOracleTest extends FunSuite:
     )
     cases.foreach: (e, expectedPrefix) =>
       val out =
-        translate_full_direct(enumNames, e).getOrElse(fail(s"translation failed on $e")).toString
+        translate(enumNames, e).getOrElse(fail(s"translation failed on $e")).toString
       assert(out.startsWith(expectedPrefix), s"shape: expected prefix $expectedPrefix; got $out")
 
   test("A8: direct translation covers QuantifierF QAll over both enum and relation domains"):
@@ -58,10 +58,10 @@ class A8RoundTripOracleTest extends FunSuite:
       BoolLitF(true, None),
       None
     )
-    translate_full_direct(enumNames, enumQ) match
+    translate(enumNames, enumQ) match
       case Some(TForallEnum("c", "Color", _)) => ()
       case other                              => fail(s"expected TForallEnum; got $other")
-    translate_full_direct(enumNames, relQ) match
+    translate(enumNames, relQ) match
       case Some(TForallRel("u", "users", _)) => ()
       case other                             => fail(s"expected TForallRel; got $other")
 
@@ -72,13 +72,13 @@ class A8RoundTripOracleTest extends FunSuite:
       BoolLitF(true, None),
       None
     )
-    translate_full_direct(enumNames, colonQ) match
+    translate(enumNames, colonQ) match
       case Some(TForallEnum("c", "Color", _)) => ()
       case other                              => fail(s"expected TForallEnum (BkColon); got $other")
 
 object SpecRestGeneratedTestProbes:
 
-  val allProbes: List[(String, expr_full)] = List(
+  val allProbes: List[(String, expr)] = List(
     "BoolLit"             -> BoolLitF(true, None),
     "IntLit"              -> IntLitF(BigInt(42), None),
     "Identifier"          -> IdentifierF("x", None),

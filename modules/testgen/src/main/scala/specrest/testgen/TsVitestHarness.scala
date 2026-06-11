@@ -4,15 +4,15 @@ import specrest.codegen.EmittedFile
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.enmName
 import specrest.ir.generated.SpecRestGenerated.enmVariants
-import specrest.ir.generated.SpecRestGenerated.expr_full
+import specrest.ir.generated.SpecRestGenerated.expr
 import specrest.ir.generated.SpecRestGenerated.fncBody
 import specrest.ir.generated.SpecRestGenerated.fncName
 import specrest.ir.generated.SpecRestGenerated.fncParams
-import specrest.ir.generated.SpecRestGenerated.function_decl_full
+import specrest.ir.generated.SpecRestGenerated.function_decl
 import specrest.ir.generated.SpecRestGenerated.prdBody
 import specrest.ir.generated.SpecRestGenerated.prdName
 import specrest.ir.generated.SpecRestGenerated.prdParams
-import specrest.ir.generated.SpecRestGenerated.predicate_decl_full
+import specrest.ir.generated.SpecRestGenerated.predicate_decl
 import specrest.ir.generated.SpecRestGenerated.prmName
 import specrest.ir.generated.SpecRestGenerated.svcEnums
 import specrest.ir.generated.SpecRestGenerated.svcFunctions
@@ -81,16 +81,16 @@ object TsVitestHarness extends HarnessTemplates:
       svcPredicates(ir).map(renderPredicate(_, ir))
     parts.mkString("")
 
-  private def renderFunction(fn: function_decl_full, ir: ServiceIRFull): String =
+  private def renderFunction(fn: function_decl, ir: ServiceIRFull): String =
     renderUserDef(fncName(fn), fncParams(fn).map(prmName), fncBody(fn), ir)
 
-  private def renderPredicate(pr: predicate_decl_full, ir: ServiceIRFull): String =
+  private def renderPredicate(pr: predicate_decl, ir: ServiceIRFull): String =
     renderUserDef(prdName(pr), prdParams(pr).map(prmName), prdBody(pr), ir)
 
   private def renderUserDef(
       specName: String,
       paramNames: List[String],
-      body: expr_full,
+      body: expr,
       ir: ServiceIRFull
   ): String =
     val sigParams    = paramNames.map(p => s"$p: any").mkString(", ")

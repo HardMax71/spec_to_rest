@@ -3,16 +3,16 @@ theory DirectPreservation
 begin
 
 text \<open>Typing preservation re-targeted at the surface semantics (#391 Stage 5d):
-  \<open>h3_full_preservation\<close> states that any \<open>eval_full\<close>-defined result of a
+  \<open>h3_preservation\<close> states that any \<open>eval\<close>-defined result of a
   well-typed expression carries the declared type, with no detour through the
   \<open>lower\<close>/\<open>eval\<close> verified-subset pipeline. Many typing rules are vacuous here
-  because \<open>eval_full\<close> does not yet model their constructs (set operations,
+  because \<open>eval\<close> does not yet model their constructs (set operations,
   cardinality, membership, non-QAll and multi-binding quantifiers all evaluate
   to \<open>None\<close>); the substantial cases reuse the value-level H1 lemmas
   (\<open>eval_arith_preservation\<close>, \<open>eval_cmp_preservation\<close>) unchanged. The capstone
   \<open>cat_h_progress_and_preservation_direct\<close> replaces the lower-based original:
-  progress through \<open>translate_full_direct\<close>, preservation through
-  \<open>eval_full\<close>.\<close>
+  progress through \<open>translate\<close>, preservation through
+  \<open>eval\<close>.\<close>
 
 lemma not_expr_has_ty_CallF:
   "expr_has_ty \<Gamma> (CallF c args sp) t \<Longrightarrow> False"
@@ -32,8 +32,8 @@ lemma typed_beq_comp_None:
   by (cases "beq_comp op r")
      (auto dest!: beq_comp_SetComp not_expr_has_ty_set_comp)
 
-lemma eval_full_forall_VBool:
-  "eval_full_forall fs ps fuel s st env var dmv body = Some v \<Longrightarrow> \<exists>b. v = VBool b"
+lemma eval_forall_VBool:
+  "eval_forall fs ps fuel s st env var dmv body = Some v \<Longrightarrow> \<exists>b. v = VBool b"
 proof (induction dmv arbitrary: v)
   case Nil
   thus ?case by auto
@@ -42,10 +42,10 @@ next
   thus ?case by (auto split: option.splits ir_value.splits)
 qed
 
-lemma eval_full_fields_typed:
-  "eval_full_fields fs ps fuel sch st env fas = Some fvs
+lemma eval_fields_typed:
+  "eval_fields fs ps fuel sch st env fas = Some fvs
      \<Longrightarrow> (\<And>fld vexp sp' vv. FieldAssignFull fld vexp sp' \<in> set fas
-            \<Longrightarrow> eval_full fs ps fuel sch st env vexp = Some vv
+            \<Longrightarrow> eval fs ps fuel sch st env vexp = Some vv
             \<Longrightarrow> \<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> vv ft)
      \<Longrightarrow> \<forall>(fld, fv) \<in> set fvs.
            \<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> fv ft"
@@ -56,8 +56,8 @@ next
   case (Cons fa fas')
   obtain fld vexp sp' where fa: "fa = FieldAssignFull fld vexp sp'" by (cases fa) auto
   from Cons.prems(1) fa obtain fv fvs0
-    where ev: "eval_full fs ps fuel sch st env vexp = Some fv"
-      and er: "eval_full_fields fs ps fuel sch st env fas' = Some fvs0"
+    where ev: "eval fs ps fuel sch st env vexp = Some fv"
+      and er: "eval_fields fs ps fuel sch st env fas' = Some fvs0"
       and fvseq: "fvs = (fld, fv) # fvs0"
     by (auto split: option.splits)
   have hd_ty: "\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> fv ft"
@@ -66,7 +66,7 @@ next
                    \<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> fv ft"
   proof (rule Cons.IH[OF er])
     fix fld vexp sp' vv assume m: "FieldAssignFull fld vexp sp' \<in> set fas'"
-      and ev2: "eval_full fs ps fuel sch st env vexp = Some vv"
+      and ev2: "eval fs ps fuel sch st env vexp = Some vv"
     show "\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> vv ft"
       using Cons.prems(2)[of fld vexp sp' vv] m ev2 by simp
   qed
@@ -93,10 +93,10 @@ next
   show ?case using Cons.IH[OF step] Cons.prems(2) peq by simp
 qed
 
-theorem h3_full_preservation:
+theorem h3_preservation:
   assumes "expr_has_ty \<Gamma> e t"
       and "agrees_strict env st \<Gamma>"
-      and "eval_full fs ps fuel sch st env e = Some v"
+      and "eval fs ps fuel sch st env e = Some v"
   shows "value_has_ty \<Gamma> v t"
   using assms
 proof (induction arbitrary: v env rule: expr_has_ty.induct)
@@ -128,20 +128,20 @@ next
     by (rule typed_dom_eq_domains_None[OF T_Arith.hyps(1)])
   have bcN: "beq_comp op r = None"
     by (rule typed_beq_comp_None[OF T_Arith.hyps(2)])
-  have ev: "eval_full_bin op (eval_full fs ps fuel sch st env l)
-              (eval_full fs ps fuel sch st env r) = Some v"
+  have ev: "eval_bin op (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
     using T_Arith.prems(2) deN bcN by simp
   have eva: "eval_arith (case op of BAdd \<Rightarrow> AddOp | BSub \<Rightarrow> SubOp
                            | BMul \<Rightarrow> MulOp | BDiv \<Rightarrow> DivOp)
-               (eval_full fs ps fuel sch st env l)
-               (eval_full fs ps fuel sch st env r) = Some v"
+               (eval fs ps fuel sch st env l)
+               (eval fs ps fuel sch st env r) = Some v"
     using ev T_Arith.hyps(5) by (cases op) auto
   show ?case
   proof (rule eval_arith_preservation[OF eva _ _ T_Arith.hyps(3) T_Arith.hyps(4)])
-    fix a assume "eval_full fs ps fuel sch st env l = Some a"
+    fix a assume "eval fs ps fuel sch st env l = Some a"
     thus "value_has_ty \<Gamma> a t1" using T_Arith.IH(1)[OF T_Arith.prems(1)] by blast
   next
-    fix b assume "eval_full fs ps fuel sch st env r = Some b"
+    fix b assume "eval fs ps fuel sch st env r = Some b"
     thus "value_has_ty \<Gamma> b t2" using T_Arith.IH(2)[OF T_Arith.prems(1)] by blast
   qed
 next
@@ -150,12 +150,12 @@ next
     by (rule typed_dom_eq_domains_None[OF T_Cmp_Eq.hyps(1)])
   have bcN: "beq_comp op r = None"
     by (rule typed_beq_comp_None[OF T_Cmp_Eq.hyps(2)])
-  have ev: "eval_full_bin op (eval_full fs ps fuel sch st env l)
-              (eval_full fs ps fuel sch st env r) = Some v"
+  have ev: "eval_bin op (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
     using T_Cmp_Eq.prems(2) deN bcN by simp
   have evc: "eval_cmp (case op of BEq \<Rightarrow> EqOp | BNeq \<Rightarrow> NeqOp)
-               (eval_full fs ps fuel sch st env l)
-               (eval_full fs ps fuel sch st env r) = Some v"
+               (eval fs ps fuel sch st env l)
+               (eval fs ps fuel sch st env r) = Some v"
     using ev T_Cmp_Eq.hyps(4) by (cases op) auto
   from eval_cmp_preservation[OF evc] show ?case .
 next
@@ -164,13 +164,13 @@ next
     by (rule typed_dom_eq_domains_None[OF T_Cmp_Ord.hyps(1)])
   have bcN: "beq_comp op r = None"
     by (rule typed_beq_comp_None[OF T_Cmp_Ord.hyps(2)])
-  have ev: "eval_full_bin op (eval_full fs ps fuel sch st env l)
-              (eval_full fs ps fuel sch st env r) = Some v"
+  have ev: "eval_bin op (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
     using T_Cmp_Ord.prems(2) deN bcN by simp
   have evc: "eval_cmp (case op of BLt \<Rightarrow> LtOp | BLe \<Rightarrow> LeOp
                          | BGt \<Rightarrow> GtOp | BGe \<Rightarrow> GeOp)
-               (eval_full fs ps fuel sch st env l)
-               (eval_full fs ps fuel sch st env r) = Some v"
+               (eval fs ps fuel sch st env l)
+               (eval fs ps fuel sch st env r) = Some v"
     using ev T_Cmp_Ord.hyps(5) by (cases op) auto
   from eval_cmp_preservation[OF evc] show ?case .
 next
@@ -179,8 +179,8 @@ next
     by (rule typed_dom_eq_domains_None[OF T_Bool_Bin.hyps(1)])
   have bcN: "beq_comp op r = None"
     by (rule typed_beq_comp_None[OF T_Bool_Bin.hyps(2)])
-  have ev: "eval_full_bin op (eval_full fs ps fuel sch st env l)
-              (eval_full fs ps fuel sch st env r) = Some v"
+  have ev: "eval_bin op (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
     using T_Bool_Bin.prems(2) deN bcN by simp
   hence "\<exists>b. v = VBool b"
     using T_Bool_Bin.hyps(3)
@@ -189,13 +189,13 @@ next
 next
   case (T_Not \<Gamma> e sp)
   from T_Not.prems(2) obtain b where "v = VBool b"
-    by (cases "eval_full fs ps fuel sch st env e") (auto split: ir_value.splits)
+    by (cases "eval fs ps fuel sch st env e") (auto split: ir_value.splits)
   thus ?case by simp
 next
   case (T_Neg \<Gamma> e t sp)
   from T_Neg.prems(2) obtain a where
-      ea: "eval_full fs ps fuel sch st env e = Some a"
-    by (cases "eval_full fs ps fuel sch st env e") auto
+      ea: "eval fs ps fuel sch st env e = Some a"
+    by (cases "eval fs ps fuel sch st env e") auto
   have at: "value_has_ty \<Gamma> a t" using T_Neg.IH[OF T_Neg.prems(1) ea] .
   from T_Neg.hyps(2) have "t = TInt \<or> t = TReal" by (simp add: numeric_ty_def)
   then show ?case
@@ -213,8 +213,8 @@ next
 next
   case (T_Let \<Gamma> vexp t1 x body t2 sp)
   from T_Let.prems(2) obtain va where
-      ev_v: "eval_full fs ps fuel sch st env vexp = Some va"
-      and ev_body: "eval_full fs ps fuel sch st ((x, va) # env) body = Some v"
+      ev_v: "eval fs ps fuel sch st env vexp = Some va"
+      and ev_body: "eval fs ps fuel sch st ((x, va) # env) body = Some v"
     by (auto split: option.splits)
   have va_ty: "value_has_ty \<Gamma> va t1"
     using T_Let.IH(1)[OF T_Let.prems(1) ev_v] .
@@ -249,14 +249,14 @@ next
 next
   case (T_SetLit_Cons \<Gamma> e t rest sp)
   from T_SetLit_Cons.prems(2) obtain va rest_vs where
-      ev_e: "eval_full fs ps fuel sch st env e = Some va"
-      and ev_rest: "eval_full_list fs ps fuel sch st env rest = Some rest_vs"
+      ev_e: "eval fs ps fuel sch st env e = Some va"
+      and ev_rest: "eval_list fs ps fuel sch st env rest = Some rest_vs"
       and v_eq: "v = VSet (dedupe_values
                     (va # foldr (\<lambda>w acc. dedupe_values (w # acc)) rest_vs []))"
     by (auto split: option.splits)
   have va_ty: "value_has_ty \<Gamma> va t"
     using T_SetLit_Cons.IH(1)[OF T_SetLit_Cons.prems(1) ev_e] .
-  have ev_rest_set: "eval_full fs ps fuel sch st env (SetLiteralF rest sp)
+  have ev_rest_set: "eval fs ps fuel sch st env (SetLiteralF rest sp)
                        = Some (VSet (foldr (\<lambda>w acc. dedupe_values (w # acc)) rest_vs []))"
     using ev_rest by simp
   have rest_ty: "value_has_ty \<Gamma>
@@ -296,7 +296,7 @@ next
 next
   case (T_FieldAccess \<Gamma> base ename fname ft sp)
   from T_FieldAccess.prems(2) obtain vb where
-      ev_base: "eval_full fs ps fuel sch st env base = Some vb"
+      ev_base: "eval fs ps fuel sch st env base = Some vb"
       and v_eq: "value_field_lookup st vb fname = Some v"
     by (auto split: option.splits)
   have vb_ty: "value_has_ty \<Gamma> vb (TEntity ename)"
@@ -315,20 +315,20 @@ next
 next
   case (T_With \<Gamma> base ename updates sp)
   from T_With.prems(2) obtain bv fvs where
-      ev_base: "eval_full fs ps fuel sch st env base = Some bv"
-      and ev_fields: "eval_full_fields fs ps fuel sch st env updates = Some fvs"
+      ev_base: "eval fs ps fuel sch st env base = Some bv"
+      and ev_fields: "eval_fields fs ps fuel sch st env updates = Some fvs"
       and v_eq: "v = foldl (\<lambda>acc (fld, fv). VEntityWith acc fld fv) bv fvs"
     by (auto split: option.splits)
   have bv_ty: "value_has_ty \<Gamma> bv (TEntity ename)"
     using T_With.IH(1)[OF T_With.prems(1) ev_base] .
   have fvs_ty: "\<forall>(fld, fv) \<in> set fvs.
                   \<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> fv ft"
-  proof (rule eval_full_fields_typed[OF ev_fields])
+  proof (rule eval_fields_typed[OF ev_fields])
     fix fld vexp sp' vv assume m: "FieldAssignFull fld vexp sp' \<in> set updates"
-      and ev: "eval_full fs ps fuel sch st env vexp = Some vv"
+      and ev: "eval fs ps fuel sch st env vexp = Some vv"
     obtain ft where ftl: "schemaFieldType \<Gamma> ename fld = Some ft"
         and vt: "\<forall>v env. agrees_strict env st \<Gamma>
-                   \<longrightarrow> eval_full fs ps fuel sch st env vexp = Some v
+                   \<longrightarrow> eval fs ps fuel sch st env vexp = Some v
                    \<longrightarrow> value_has_ty \<Gamma> v ft"
       using T_With.IH(2) m by blast
     show "\<exists>ft. schemaFieldType \<Gamma> ename fld = Some ft \<and> value_has_ty \<Gamma> vv ft"
@@ -338,15 +338,15 @@ next
 next
   case (T_Forall_QAll_Enum dnm \<Gamma> var body sp_id m sp_b sp)
   from T_Forall_QAll_Enum.prems(2) obtain var' dmv where
-      eff: "eval_full_forall fs ps fuel sch st env var' dmv body = Some v"
+      eff: "eval_forall fs ps fuel sch st env var' dmv body = Some v"
     by (auto split: option.splits)
-  from eval_full_forall_VBool[OF eff] show ?case by auto
+  from eval_forall_VBool[OF eff] show ?case by auto
 next
   case (T_Forall_QAll_Rel dnm \<Gamma> tv var body sp_id m sp_b sp)
   from T_Forall_QAll_Rel.prems(2) obtain var' dmv where
-      eff: "eval_full_forall fs ps fuel sch st env var' dmv body = Some v"
+      eff: "eval_forall fs ps fuel sch st env var' dmv body = Some v"
     by (auto split: option.splits)
-  from eval_full_forall_VBool[OF eff] show ?case by auto
+  from eval_forall_VBool[OF eff] show ?case by auto
 next
   case (T_Forall_QAll_Enum_Cons dnm \<Gamma> var b2 rest_bs body sp sp_id m sp_b)
   thus ?case by simp
@@ -394,19 +394,19 @@ qed
 theorem cat_h_progress_and_preservation_direct:
   assumes "expr_has_ty \<Gamma> e t"
       and "agrees_strict env st \<Gamma>"
-  shows "\<exists>tm. translate_full_direct enums e = Some tm
-              \<and> (\<forall>fs ps fuel sch v. eval_full fs ps fuel sch st env e = Some v
+  shows "\<exists>tm. translate enums e = Some tm
+              \<and> (\<forall>fs ps fuel sch v. eval fs ps fuel sch st env e = Some v
                    \<longrightarrow> value_has_ty \<Gamma> v t)"
 proof -
-  obtain tm where tm: "translate_full_direct enums e = Some tm"
+  obtain tm where tm: "translate enums e = Some tm"
     using wf_z3_imp_tfd_some[OF well_typed_imp_wf_z3[OF assms(1)]] by blast
   show ?thesis
   proof (intro exI conjI allI impI)
-    show "translate_full_direct enums e = Some tm" by (rule tm)
+    show "translate enums e = Some tm" by (rule tm)
   next
-    fix fs ps fuel sch v assume "eval_full fs ps fuel sch st env e = Some v"
+    fix fs ps fuel sch v assume "eval fs ps fuel sch st env e = Some v"
     thus "value_has_ty \<Gamma> v t"
-      using h3_full_preservation[OF assms(1) assms(2)] by blast
+      using h3_preservation[OF assms(1) assms(2)] by blast
   qed
 qed
 

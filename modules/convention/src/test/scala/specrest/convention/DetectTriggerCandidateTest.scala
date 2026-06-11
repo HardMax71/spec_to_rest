@@ -7,12 +7,12 @@ class DetectTriggerCandidateTest extends CatsEffectSuite:
 
   private def named(t: String): NamedTypeF = NamedTypeF(t, None)
 
-  private def fieldD(name: String, ty: type_expr_full): FieldDeclFull =
+  private def fieldD(name: String, ty: type_expr): FieldDeclFull =
     FieldDeclFull(name, ty, None, None)
 
   private def entityD(
       name: String,
-      fields: List[field_decl_full]
+      fields: List[field_decl]
   ): EntityDeclFull =
     EntityDeclFull(name, None, fields, Nil, None)
 

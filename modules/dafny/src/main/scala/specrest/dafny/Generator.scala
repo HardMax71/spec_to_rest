@@ -33,12 +33,12 @@ final private case class ExternInfo(kind: ExternKind, arity: Int)
 
 final private case class Ctx(
     ir: ServiceIRFull,
-    stateFields: ListMap[String, type_expr_full],
+    stateFields: ListMap[String, type_expr],
     aliasesWithWhere: Set[String],
     externs: ListMap[String, ExternInfo],
     matchPatterns: List[String],
-    inputTypes: ListMap[String, type_expr_full] = ListMap.empty,
-    outputTypes: ListMap[String, type_expr_full] = ListMap.empty,
+    inputTypes: ListMap[String, type_expr] = ListMap.empty,
+    outputTypes: ListMap[String, type_expr] = ListMap.empty,
     boundVars: Set[String] = Set.empty,
     stateMode: StateMode = StateMode.Direct
 ):
@@ -52,7 +52,7 @@ object Generator:
       val stateFields = svcState(ir) match
         case Some(sd) =>
           stdFields(sd).map(sf => stfName(sf) -> stfType(sf)).to(ListMap)
-        case None => ListMap.empty[String, type_expr_full]
+        case None => ListMap.empty[String, type_expr]
       val aliasesWithWhere =
         svcTypeAliases(ir).filter(a => talConstraint(a).isDefined).map(talName).toSet
       val (externs, matchPatterns) = classifyExterns(ir)
@@ -128,14 +128,14 @@ object Generator:
       "  var k :| k in m && p(k); k\n" +
       "}\n"
 
-  private def renderEnums(decls: List[enum_decl_full])(using DafnyLabel): String =
+  private def renderEnums(decls: List[enum_decl])(using DafnyLabel): String =
     val parts = decls.map { d =>
       val ctors = enmVariants(d).mkString(" | ")
       s"datatype ${enmName(d)} = $ctors\n"
     }
     parts.mkString
 
-  private def renderTypeAliases(ctx: Ctx, decls: List[type_alias_decl_full])(using
+  private def renderTypeAliases(ctx: Ctx, decls: List[type_alias_decl])(using
       DafnyLabel
   ): String =
     val sb = new StringBuilder
@@ -152,7 +152,7 @@ object Generator:
         sb ++= "}\n"
     sb.toString
 
-  private def renderEntities(ctx: Ctx, decls: List[entity_decl_full])(using DafnyLabel): String =
+  private def renderEntities(ctx: Ctx, decls: List[entity_decl])(using DafnyLabel): String =
     val sb = new StringBuilder
     decls.foreach: d =>
       val name       = entName(d)
@@ -185,7 +185,7 @@ object Generator:
         sb ++= "}\n"
     sb.toString
 
-  private def renderEntityInvariant(ctx: Ctx, expr: expr_full, entityName: String)(using
+  private def renderEntityInvariant(ctx: Ctx, expr: expr, entityName: String)(using
       DafnyLabel
   ): String =
     val rewritten =
@@ -203,7 +203,7 @@ object Generator:
       sb ++= "}\n"
       Some(sb.toString)
 
-  private def renderInvariantPredicate(ctx: Ctx, invs: List[invariant_decl_full])(using
+  private def renderInvariantPredicate(ctx: Ctx, invs: List[invariant_decl])(using
       DafnyLabel
   ): Option[String] =
     if invs.isEmpty || ctx.stateFields.isEmpty then None
@@ -221,7 +221,7 @@ object Generator:
 
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
-  private def renderMethod(ctx: Ctx, op: operation_decl_full)(using DafnyLabel): RenderedMethod =
+  private def renderMethod(ctx: Ctx, op: operation_decl)(using DafnyLabel): RenderedMethod =
     val inputs  = operInputs(op)
     val outputs = operOutputs(op)
     val inputTypes = inputs
@@ -305,14 +305,14 @@ object Generator:
       )
     )
 
-  private def aliasWhereCall(ctx: Ctx, paramName: String, t: type_expr_full): Option[String] =
+  private def aliasWhereCall(ctx: Ctx, paramName: String, t: type_expr): Option[String] =
     t match
       case NamedTypeF(name, _) if ctx.aliasesWithWhere.contains(name) =>
         Some(s"${name}Where($paramName)")
       case _ => None
 
   private def classifyExterns(ir: ServiceIRFull): (ListMap[String, ExternInfo], List[String]) =
-    def items(e: expr_full): List[extern_item] =
+    def items(e: expr): List[extern_item] =
       specrest.ir.generated.SpecRestGenerated.collectExternItems(EkPredicate(), e)
     val all: List[extern_item] =
       svcInvariants(ir).map(invBody).flatMap(items) :::
@@ -338,7 +338,7 @@ object Generator:
         case _: EkIntFunction => ExternKind.IntFunction
       ExternInfo(kind, arity.toInt)
 
-  private def primedStateFields(ensures: List[expr_full]): Set[String] =
+  private def primedStateFields(ensures: List[expr]): Set[String] =
     collectPrimedIdentifiers(ensures).toSet
 
   private def renderExterns(ctx: Ctx): String =
@@ -377,7 +377,7 @@ object Generator:
   private def matchPredicateName(pattern: String): String =
     "matches_" + pattern.flatMap(c => if c.isLetterOrDigit then c.toString else "_")
 
-  private def renderType(ctx: Ctx, t: type_expr_full)(using DafnyLabel): String = t match
+  private def renderType(ctx: Ctx, t: type_expr)(using DafnyLabel): String = t match
     case NamedTypeF(name, _)   => mapPrimitiveType(name)
     case SetTypeF(inner, _)    => s"set<${renderType(ctx, inner)}>"
     case SeqTypeF(inner, _)    => s"seq<${renderType(ctx, inner)}>"
@@ -405,7 +405,7 @@ object Generator:
     case "Bytes"    => "seq<int>"
     case other      => other
 
-  private def renderExpr(ctx: Ctx, e: expr_full)(using DafnyLabel): String = e match
+  private def renderExpr(ctx: Ctx, e: expr)(using DafnyLabel): String = e match
     case IntLitF(v, _)    => v.toString
     case BoolLitF(v, _)   => v.toString
     case StringLitF(s, _) => "\"" + escapeString(s) + "\""
@@ -508,14 +508,14 @@ object Generator:
       val inner = ctx.copy(boundVars = ctx.boundVars + p)
       s"(($p: int) => ${renderExpr(inner, body)})"
 
-  private def isMapDomain(ctx: Ctx, dom: expr_full): Boolean =
-    peelRelationRefFull(dom).exists(isMapStateField(ctx, _))
+  private def isMapDomain(ctx: Ctx, dom: expr): Boolean =
+    peelRelationRef(dom).exists(isMapStateField(ctx, _))
 
   // Extract the key type of the map/relation `dom` refers to, so the lambda passed
   // to TheBy is fully type-annotated (Dafny cannot infer the parameter type through
   // a generic call).
-  private def theByKeyType(ctx: Ctx, dom: expr_full)(using DafnyLabel): String =
-    peelRelationRefFull(dom).flatMap(ctx.stateFields.get) match
+  private def theByKeyType(ctx: Ctx, dom: expr)(using DafnyLabel): String =
+    peelRelationRef(dom).flatMap(ctx.stateFields.get) match
       case Some(MapTypeF(k, _, _))            => renderType(ctx, k)
       case Some(RelationTypeF(from, _, _, _)) => renderType(ctx, from)
       case _ =>
@@ -532,9 +532,9 @@ object Generator:
   private def orderConstructorArgs(
       ctx: Ctx,
       entityName: String,
-      assigns: List[field_assign_full],
+      assigns: List[field_assign],
       sp: Option[span_t]
-  )(using DafnyLabel): List[expr_full] =
+  )(using DafnyLabel): List[expr] =
     val entity = entityByName(svcEntities(ctx.ir), entityName)
     entity match
       case Some(e) =>
@@ -548,8 +548,8 @@ object Generator:
       case None =>
         failDafny(s"constructor references unknown entity $entityName", sp)
 
-  private def isStateMapRef(ctx: Ctx, e: expr_full): Boolean =
-    peelRelationRefFull(e).exists(ctx.stateFields.contains)
+  private def isStateMapRef(ctx: Ctx, e: expr): Boolean =
+    peelRelationRef(e).exists(ctx.stateFields.contains)
 
   // Auto-emit Dafny well-formedness guards for partial-map accesses in spec
   // ensures. The Python/TS/Go backends model `m[k].field` with partial-access
@@ -559,14 +559,14 @@ object Generator:
   // resolves to a state-map field. Bindings inside quantifiers / `the` /
   // set-comprehensions are skipped because their `k in dom` is already
   // implicit in the binder.
-  private def injectWFGuards(e: expr_full, ctx: Ctx): expr_full =
-    def go(node: expr_full): expr_full = node match
+  private def injectWFGuards(e: expr, ctx: Ctx): expr =
+    def go(node: expr): expr = node match
       case LetF(v, value, body, sp) =>
         // Guards from the let-VALUE are lifted OUT (the value isn't a boolean
         // conjunct — can't AND `k in m` to it). Guards from the BODY stay
         // inside because they may reference the let-bound `v`.
         val valueGuards = collectWFGuards(value, ctx)
-        val newLet      = LetF(v, value, go(body), sp): expr_full
+        val newLet      = LetF(v, value, go(body), sp): expr
         valueGuards.foldRight(newLet)((g, acc) => BinaryOpF(BAnd(), g, acc, None))
       case BinaryOpF(BAnd(), l, r, sp) =>
         BinaryOpF(BAnd(), go(l), go(r), sp)
@@ -576,16 +576,16 @@ object Generator:
         else guards.foldRight(other)((g, acc) => BinaryOpF(BAnd(), g, acc, None))
     go(e)
 
-  private def collectWFGuards(e: expr_full, ctx: Ctx): List[expr_full] =
-    val acc  = scala.collection.mutable.ListBuffer.empty[expr_full]
+  private def collectWFGuards(e: expr, ctx: Ctx): List[expr] =
+    val acc  = scala.collection.mutable.ListBuffer.empty[expr]
     val seen = scala.collection.mutable.HashSet.empty[String]
-    def add(key: expr_full, mref: expr_full, sp: Option[span_t]): Unit =
+    def add(key: expr, mref: expr, sp: Option[span_t]): Unit =
       val guard = BinaryOpF(BIn(), key, mref, sp)
       val sig   = structuralSig(guard)
       if !seen.contains(sig) then
         seen += sig
         acc += guard
-    def walk(node: expr_full): Unit = node match
+    def walk(node: expr): Unit = node match
       case IndexF(m, k, sp) if isStateMapRef(ctx, m) =>
         walk(m); walk(k); add(k, m, sp)
       case BinaryOpF(_, l, r, _) => walk(l); walk(r)
@@ -614,7 +614,7 @@ object Generator:
     acc.toList
 
   // Span-agnostic structural signature for dedup of generated guards.
-  private def structuralSig(e: expr_full): String = e match
+  private def structuralSig(e: expr): String = e match
     case IdentifierF(n, _) => s"I($n)"
     case BinaryOpF(op, l, r, _) =>
       s"B(${op.getClass.getSimpleName},${structuralSig(l)},${structuralSig(r)})"
@@ -633,7 +633,7 @@ object Generator:
     case StateMode.Direct => s"st.$name"
     case StateMode.Old    => s"old(st.$name)"
 
-  private def renderBinary(ctx: Ctx, op: bin_op_full, l: expr_full, r: expr_full)(using
+  private def renderBinary(ctx: Ctx, op: bin_op, l: expr, r: expr)(using
       DafnyLabel
   ): String =
     val lr = renderExpr(ctx, l)
@@ -660,7 +660,7 @@ object Generator:
       case BMul()       => s"$lr * $rr"
       case BDiv()       => s"$lr / $rr"
 
-  private def renderUnary(ctx: Ctx, op: un_op_full, x: expr_full)(using DafnyLabel): String =
+  private def renderUnary(ctx: Ctx, op: un_op, x: expr)(using DafnyLabel): String =
     op match
       case _: UNot         => s"!(${renderExpr(ctx, x)})"
       case _: UNegate      => s"-(${renderExpr(ctx, x)})"

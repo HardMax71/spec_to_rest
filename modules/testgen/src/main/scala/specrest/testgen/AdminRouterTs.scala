@@ -3,7 +3,7 @@ package specrest.testgen
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.entFields
 import specrest.ir.generated.SpecRestGenerated.entName
-import specrest.ir.generated.SpecRestGenerated.entity_decl_full
+import specrest.ir.generated.SpecRestGenerated.entity_decl
 import specrest.ir.generated.SpecRestGenerated.fldName
 import specrest.ir.generated.SpecRestGenerated.fldType
 import specrest.ir.generated.SpecRestGenerated.irStateFields
@@ -23,7 +23,7 @@ object AdminRouterTs:
     val ir       = profiled.ir
     val entities = svcEntities(ir)
 
-    def colsOf(e: entity_decl_full): List[Col] =
+    def colsOf(e: entity_decl): List[Col] =
       entFields(e).map: f =>
         Col(
           tsField = Naming.toCamelCase(fldName(f)),
@@ -31,7 +31,7 @@ object AdminRouterTs:
           isDate = isDateTimeType(svcTypeAliases(ir), fldType(f))
         )
 
-    def accessor(e: entity_decl_full): String = Naming.toCamelCase(entName(e))
+    def accessor(e: entity_decl): String = Naming.toCamelCase(entName(e))
 
     val rowToDictFns = entities
       .map: e =>

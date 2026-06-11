@@ -14,16 +14,16 @@ text \<open>Lift of \<open>convention.dafny.Generator.rewriteEntityFieldRefs\<cl
   without recursing on it.\<close>
 
 fun rewriteFieldRefsAux ::
-    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr_full \<Rightarrow> expr_full"
+    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr"
   and rewriteFieldRefsList ::
-    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
+    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr list \<Rightarrow> expr list"
   and rewriteFieldRefsFields ::
-    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> field_assign_full list \<Rightarrow> field_assign_full list"
+    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> field_assign list \<Rightarrow> field_assign list"
   and rewriteFieldRefsEntries ::
-    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> map_entry_full list \<Rightarrow> map_entry_full list"
+    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> map_entry list \<Rightarrow> map_entry list"
   and rewriteFieldRefsBindings ::
-    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding_full list
-      \<Rightarrow> quantifier_binding_full list"
+    "String.literal list \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding list
+      \<Rightarrow> quantifier_binding list"
 where
   "rewriteFieldRefsAux flds bound (IdentifierF n sp) =
      (if string_in_list n flds \<and> \<not> string_in_list n bound
@@ -94,7 +94,7 @@ where
      QuantifierBindingFull a (rewriteFieldRefsAux flds bound d) kk sp
        # rewriteFieldRefsBindings flds bound bs"
 
-definition rewriteEntityFieldRefs :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+definition rewriteEntityFieldRefs :: "String.literal list \<Rightarrow> expr \<Rightarrow> expr" where
   "rewriteEntityFieldRefs flds e = rewriteFieldRefsAux flds [] e"
 
 lemmas rewriteEntityFieldRefs_code [code] = rewriteEntityFieldRefs_def
@@ -110,20 +110,20 @@ text \<open>Lift of \<open>convention.dafny.Generator.desugarOptionGuards\<close
   the original tree; \<open>length (allSubexprs e) + 100\<close> bounds the node count and the fuel
   never runs out on any real ensures clause — same output as the Scala.\<close>
 
-definition neqNoneName :: "expr_full \<Rightarrow> String.literal option" where
+definition neqNoneName :: "expr \<Rightarrow> String.literal option" where
   "neqNoneName e =
      (case e of BinaryOpF BNeq (IdentifierF p _) (NoneLitF _) _ \<Rightarrow> Some p | _ \<Rightarrow> None)"
 
-definition eqNoneName :: "expr_full \<Rightarrow> String.literal option" where
+definition eqNoneName :: "expr \<Rightarrow> String.literal option" where
   "eqNoneName e =
      (case e of BinaryOpF BEq (IdentifierF p _) (NoneLitF _) _ \<Rightarrow> Some p | _ \<Rightarrow> None)"
 
-definition substValue :: "String.literal \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+definition substValue :: "String.literal \<Rightarrow> expr \<Rightarrow> expr" where
   "substValue p body = subst p (FieldAccessF (IdentifierF p None) (STR ''value'') None) body"
 
-function (sequential) desugarGo :: "nat \<Rightarrow> String.literal list \<Rightarrow> expr_full \<Rightarrow> expr_full"
+function (sequential) desugarGo :: "nat \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr"
   and desugarBindings ::
-    "nat \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+    "nat \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
 where
   "desugarGo 0 _ e = e"
 | "desugarGo (Suc fuel) opts e =
@@ -167,7 +167,7 @@ where
 termination
   by (relation "measure (\<lambda>p. case p of Inl (fuel, _, _) \<Rightarrow> fuel | Inr (fuel, _, _) \<Rightarrow> fuel)") auto
 
-definition desugarOptionGuards :: "String.literal list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+definition desugarOptionGuards :: "String.literal list \<Rightarrow> expr \<Rightarrow> expr" where
   "desugarOptionGuards opts e = desugarGo (length (allSubexprs e) + 100) opts e"
 
 lemmas neqNoneName_code [code]         = neqNoneName_def
@@ -198,11 +198,11 @@ datatype extern_item = EiExtern String.literal int extern_kind | EiPattern Strin
 definition knownBuiltinNames :: "String.literal list" where
   "knownBuiltinNames = [STR ''len'', STR ''dom'', STR ''ran'']"
 
-fun collectExternItems :: "extern_kind \<Rightarrow> expr_full \<Rightarrow> extern_item list"
-  and collectExternItemsArgs :: "expr_full list \<Rightarrow> extern_item list"
-  and collectExternItemsFields :: "field_assign_full list \<Rightarrow> extern_item list"
-  and collectExternItemsEntries :: "map_entry_full list \<Rightarrow> extern_item list"
-  and collectExternItemsBindings :: "quantifier_binding_full list \<Rightarrow> extern_item list"
+fun collectExternItems :: "extern_kind \<Rightarrow> expr \<Rightarrow> extern_item list"
+  and collectExternItemsArgs :: "expr list \<Rightarrow> extern_item list"
+  and collectExternItemsFields :: "field_assign list \<Rightarrow> extern_item list"
+  and collectExternItemsEntries :: "map_entry list \<Rightarrow> extern_item list"
+  and collectExternItemsBindings :: "quantifier_binding list \<Rightarrow> extern_item list"
 where
   "collectExternItems expected (CallF c args sp) =
      (case c of

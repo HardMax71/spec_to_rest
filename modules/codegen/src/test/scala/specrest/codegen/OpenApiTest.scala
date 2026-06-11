@@ -126,8 +126,8 @@ class OpenApiTest extends CatsEffectSuite:
       )
 
   private def serviceIRWith(
-      invariants: List[invariant_decl_full],
-      temporals: List[temporal_decl_full]
+      invariants: List[invariant_decl],
+      temporals: List[temporal_decl]
   ): ServiceIRFull =
     ServiceIRFull(
       a = "DupSvc",

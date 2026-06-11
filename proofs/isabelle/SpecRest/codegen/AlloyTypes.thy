@@ -6,7 +6,7 @@ text \<open>Type-to-sig mapping kernel for the Alloy translator. Lifts the pure
   per-type classification helpers \<open>alloyFieldTypeOf\<close>, \<open>typeToSigName\<close>,
   and \<open>fieldElementSigName\<close> from
   \<open>specrest.verify.alloy.Translator\<close>, which classify a spec
-  \<open>type_expr_full\<close> into an Alloy field shape (multiplicity tag +
+  \<open>type_expr\<close> into an Alloy field shape (multiplicity tag +
   element sig name).
 
   Field-multiplicity tags mirror Alloy's keyword set (\<open>one\<close>, \<open>lone\<close>,
@@ -39,7 +39,7 @@ text \<open>\<open>typeToSigName\<close>: extract the Alloy sig name for a type 
   used in an element position (set member, option content). Only
   \<open>NamedTypeF\<close> is supported in v1; anything else returns \<open>None\<close>.\<close>
 
-fun typeToSigNameAlloy :: "type_expr_full \<Rightarrow> String.literal option" where
+fun typeToSigNameAlloy :: "type_expr \<Rightarrow> String.literal option" where
   "typeToSigNameAlloy (NamedTypeF name _) = Some (mapAlloyPrimitive name)"
 | "typeToSigNameAlloy _                   = None"
 
@@ -49,7 +49,7 @@ text \<open>\<open>alloyFieldTypeOf\<close>: classify a field-type's Alloy shape
   matching diagnostic on \<open>None\<close>.\<close>
 
 fun alloyFieldTypeOf ::
-  "type_expr_full \<Rightarrow> (alloy_field_multiplicity \<times> String.literal) option"
+  "type_expr \<Rightarrow> (alloy_field_multiplicity \<times> String.literal) option"
 where
   "alloyFieldTypeOf (NamedTypeF name _) = Some (AfmOne, mapAlloyPrimitive name)"
 | "alloyFieldTypeOf (SetTypeF inner _) =
@@ -67,7 +67,7 @@ text \<open>\<open>fieldElementSigName\<close>: extract the Alloy sig name from 
   three shapes (\<open>NamedTypeF\<close>, \<open>SetTypeF (NamedTypeF _ _) _\<close>,
   \<open>OptionTypeF (NamedTypeF _ _) _\<close>); other shapes are unsupported.\<close>
 
-fun fieldElementSigNameAlloy :: "type_expr_full \<Rightarrow> String.literal option" where
+fun fieldElementSigNameAlloy :: "type_expr \<Rightarrow> String.literal option" where
   "fieldElementSigNameAlloy (NamedTypeF name _) = Some (mapAlloyPrimitive name)"
 | "fieldElementSigNameAlloy (SetTypeF (NamedTypeF name _) _) = Some (mapAlloyPrimitive name)"
 | "fieldElementSigNameAlloy (OptionTypeF (NamedTypeF name _) _) = Some (mapAlloyPrimitive name)"
@@ -79,33 +79,33 @@ text \<open>\<open>needsBoolSig\<close>: predicate deciding whether the Alloy mo
   pre/postcondition references the \<open>Bool\<close> type or a \<open>BoolLitF\<close>.
 
   Takes the IR plus the materialised state-/input-field type lists (as
-  alists of \<open>name \<times> type_expr_full\<close>) because the Scala caller has
+  alists of \<open>name \<times> type_expr\<close>) because the Scala caller has
   already extracted those into \<open>Ctx\<close>. State fields are extracted from
-  \<open>state_decl_full\<close>; input fields are operation-specific (different
+  \<open>state_decl\<close>; input fields are operation-specific (different
   Ctx per operation in the preservation/enabled flows).\<close>
 
-fun fieldTypeHasBool :: "field_decl_full \<Rightarrow> bool" where
+fun fieldTypeHasBool :: "field_decl \<Rightarrow> bool" where
   "fieldTypeHasBool (FieldDeclFull _ t _ _) = typeContainsNamed (STR ''Bool'') t"
 
-fun entityHasBoolField :: "entity_decl_full \<Rightarrow> bool" where
+fun entityHasBoolField :: "entity_decl \<Rightarrow> bool" where
   "entityHasBoolField (EntityDeclFull _ _ fs _ _) =
      (\<exists>f \<in> set fs. fieldTypeHasBool f)"
 
-fun operationHasBoolLit :: "operation_decl_full \<Rightarrow> bool" where
+fun operationHasBoolLit :: "operation_decl \<Rightarrow> bool" where
   "operationHasBoolLit (OperationDeclFull _ _ _ requires ensures _) =
      ((\<exists>e \<in> set requires. exprContainsBoolLit e) \<or>
       (\<exists>e \<in> set ensures. exprContainsBoolLit e))"
 
-fun invariantHasBoolLit :: "invariant_decl_full \<Rightarrow> bool" where
+fun invariantHasBoolLit :: "invariant_decl \<Rightarrow> bool" where
   "invariantHasBoolLit (InvariantDeclFull _ body _) = exprContainsBoolLit body"
 
-fun temporalHasBoolLit :: "temporal_decl_full \<Rightarrow> bool" where
+fun temporalHasBoolLit :: "temporal_decl \<Rightarrow> bool" where
   "temporalHasBoolLit (TemporalDeclFull _ tb _) = exprContainsBoolLit (temporalArg tb)"
 
 fun needsBoolSig ::
-  "service_ir_full
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
+  "service_ir
+   \<Rightarrow> (String.literal \<times> type_expr) list
+   \<Rightarrow> (String.literal \<times> type_expr) list
    \<Rightarrow> bool"
 where
   "needsBoolSig
@@ -138,7 +138,7 @@ datatype alloy_binop_shape =
   | AbsInfix "String.literal"
   | AbsPrefixCall "String.literal"
 
-fun alloyBinopShape :: "bin_op_full \<Rightarrow> alloy_binop_shape" where
+fun alloyBinopShape :: "bin_op \<Rightarrow> alloy_binop_shape" where
   "alloyBinopShape BAnd       = AbsLogical (STR ''and'')"
 | "alloyBinopShape BOr        = AbsLogical (STR ''or'')"
 | "alloyBinopShape BImplies   = AbsLogical (STR ''implies'')"
@@ -170,7 +170,7 @@ datatype alloy_unop_shape =
   | AusMinusZero     \<comment> \<open>\<open>minus[0, X]\<close>\<close>
   | AusUnsupported   \<comment> \<open>standalone power — Scala caller fails the translation\<close>
 
-fun alloyUnopShape :: "un_op_full \<Rightarrow> alloy_unop_shape" where
+fun alloyUnopShape :: "un_op \<Rightarrow> alloy_unop_shape" where
   "alloyUnopShape UNot         = AusNot"
 | "alloyUnopShape UCardinality = AusCardinality"
 | "alloyUnopShape UNegate      = AusMinusZero"
@@ -191,8 +191,8 @@ datatype alloy_identifier_kind =
 definition classifyAlloyIdentifier ::
   "String.literal
    \<Rightarrow> String.literal list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> (String.literal \<times> type_expr) list
+   \<Rightarrow> (String.literal \<times> type_expr) list
    \<Rightarrow> alloy_identifier_kind"
 where
   "classifyAlloyIdentifier name boundVars stateFields inputFields = (
@@ -211,7 +211,7 @@ datatype alloy_quantifier_class =
   | AqExists
   | AqNo
 
-fun alloyQuantifierClass :: "quant_kind_full \<Rightarrow> alloy_quantifier_class" where
+fun alloyQuantifierClass :: "quant_kind \<Rightarrow> alloy_quantifier_class" where
   "alloyQuantifierClass QAll    = AqAll"
 | "alloyQuantifierClass QSome   = AqSome"
 | "alloyQuantifierClass QExists = AqExists"
@@ -228,7 +228,7 @@ text \<open>Helpers: lookup a name in the enum-decl list (mirrors the Scala
   pattern used in two places). Returns the enum's name unchanged on
   match, matching the Scala selector.\<close>
 
-fun enumNameInList :: "enum_decl_full list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+fun enumNameInList :: "enum_decl list \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
   "enumNameInList []                          _ = None"
 | "enumNameInList (EnumDeclFull en _ _ # es)  n =
      (if en = n then Some en else enumNameInList es n)"
@@ -247,11 +247,11 @@ text \<open>\<open>domainSigName\<close>: extract the Alloy sig name for a quant
   → entity sig name → enum sig name → bare name fallthrough.\<close>
 
 definition domainSigNameAlloy ::
-  "expr_full
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
-   \<Rightarrow> entity_decl_full list
-   \<Rightarrow> enum_decl_full list
+  "expr
+   \<Rightarrow> (String.literal \<times> type_expr) list
+   \<Rightarrow> (String.literal \<times> type_expr) list
+   \<Rightarrow> entity_decl list
+   \<Rightarrow> enum_decl list
    \<Rightarrow> String.literal option"
 where
   "domainSigNameAlloy e stateFields inputFields entities enums = (
@@ -291,10 +291,10 @@ datatype alloy_binding_identifier_resolution =
 
 definition classifyAlloyBindingIdentifier ::
   "String.literal
-   \<Rightarrow> entity_decl_full list
-   \<Rightarrow> enum_decl_full list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
-   \<Rightarrow> (String.literal \<times> type_expr_full) list
+   \<Rightarrow> entity_decl list
+   \<Rightarrow> enum_decl list
+   \<Rightarrow> (String.literal \<times> type_expr) list
+   \<Rightarrow> (String.literal \<times> type_expr) list
    \<Rightarrow> alloy_binding_identifier_resolution"
 where
   "classifyAlloyBindingIdentifier name entities enums stateFields inputFields = (

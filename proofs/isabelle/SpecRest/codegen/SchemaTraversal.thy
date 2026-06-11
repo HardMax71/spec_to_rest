@@ -19,8 +19,8 @@ text \<open>Pure IR traversals lifted from \<open>specrest.convention.Schema\<cl
   underlying lookup from O(n) \<open>map_of\<close> to O(log n) red-black tree, with
   no change to the walker signatures.\<close>
 
-type_synonym alias_map = "(String.literal \<times> type_alias_decl_full) list"
-type_synonym enum_map  = "(String.literal \<times> enum_decl_full) list"
+type_synonym alias_map = "(String.literal \<times> type_alias_decl) list"
+type_synonym enum_map  = "(String.literal \<times> enum_decl) list"
 
 text \<open>Fuel-bounded traversal: the visited set monotonically grows by one
   on each \<open>NamedTypeF\<close> hop and bounds the recursion depth, so we cap by
@@ -32,12 +32,12 @@ text \<open>\<open>stripOptions\<close> strips any leading \<open>OptionTypeF\<c
   alias-chain fuel is only consumed by genuine alias hops; Option-nesting
   depth cannot truncate the traversal.\<close>
 
-fun stripOptions :: "type_expr_full \<Rightarrow> type_expr_full" where
+fun stripOptions :: "type_expr \<Rightarrow> type_expr" where
   "stripOptions (OptionTypeF inner _) = stripOptions inner"
 | "stripOptions ty = ty"
 
 fun aliasRefinementsAux ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> alias_map \<Rightarrow> String.literal list \<Rightarrow> expr_full list"
+  "nat \<Rightarrow> type_expr \<Rightarrow> alias_map \<Rightarrow> String.literal list \<Rightarrow> expr list"
 where
   "aliasRefinementsAux 0 _ _ _ = []"
 | "aliasRefinementsAux (Suc fuel) ty am seen = (case stripOptions ty of
@@ -50,17 +50,17 @@ where
                      aliasRefinementsAux fuel base am (name # seen))
      | _ \<Rightarrow> [])"
 
-definition aliasRefinements :: "type_expr_full \<Rightarrow> alias_map \<Rightarrow> expr_full list" where
+definition aliasRefinements :: "type_expr \<Rightarrow> alias_map \<Rightarrow> expr list" where
   "aliasRefinements ty am = aliasRefinementsAux (Suc (length am)) ty am []"
 
 text \<open>\<open>findEnumValuesInType\<close> walks the same alias chain as
-  \<open>aliasRefinements\<close>; if any hop lands on an \<open>enum_decl_full\<close> the
+  \<open>aliasRefinements\<close>; if any hop lands on an \<open>enum_decl\<close> the
   enum's value list is returned. Used by OpenAPI schema emission to attach
   \<open>enum:\<close> annotations to fields whose effective type resolves to an enum
   (directly or through aliases).\<close>
 
 fun findEnumValuesInTypeAux ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
+  "nat \<Rightarrow> type_expr \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list
     \<Rightarrow> String.literal list option"
 where
   "findEnumValuesInTypeAux 0 _ _ _ _ = None"
@@ -77,7 +77,7 @@ where
      | _ \<Rightarrow> None)"
 
 definition findEnumValuesInType ::
-  "type_expr_full \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list option"
+  "type_expr \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list option"
 where
   "findEnumValuesInType ty am em =
      findEnumValuesInTypeAux (Suc (length am)) ty am em []"
@@ -125,7 +125,7 @@ datatype openapi_named_kind =
     OntPrimitive openapi_primitive_def
   | OntEnum "String.literal list"
   | OntEntityRef String.literal
-  | OntAliasToType type_expr_full
+  | OntAliasToType type_expr
   | OntUnknown
 
 fun classifyOpenApiNamedTypeAux ::

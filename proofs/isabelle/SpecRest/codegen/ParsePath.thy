@@ -24,7 +24,7 @@ text \<open>State-relation key types: the named types reachable by following
   in the URL path.\<close>
 
 primrec stateRelationKeyTypeNamesAux ::
-  "state_field_decl_full list \<Rightarrow> String.literal list"
+  "state_field_decl list \<Rightarrow> String.literal list"
 where
   "stateRelationKeyTypeNamesAux [] = []"
 | "stateRelationKeyTypeNamesAux (sf # rest) = (case sf of
@@ -35,7 +35,7 @@ where
      | _ \<Rightarrow> stateRelationKeyTypeNamesAux rest)"
 
 definition stateRelationKeyTypeNames ::
-  "state_decl_full option \<Rightarrow> String.literal list"
+  "state_decl option \<Rightarrow> String.literal list"
 where
   "stateRelationKeyTypeNames stateOpt = (case stateOpt of
        None \<Rightarrow> []
@@ -49,7 +49,7 @@ text \<open>A parameter "looks like" an integer id when its type is the bare
   earlier param's \<open>Int id\<close> heuristic match can preempt a later param's
   state-relation match — this is intentional, not a regression.)\<close>
 
-fun paramTypeIsInt :: "type_expr_full \<Rightarrow> bool" where
+fun paramTypeIsInt :: "type_expr \<Rightarrow> bool" where
   "paramTypeIsInt (NamedTypeF n _) = (n = STR ''Int'')"
 | "paramTypeIsInt _ = False"
 
@@ -58,7 +58,7 @@ definition paramNameLooksLikeId :: "String.literal \<Rightarrow> bool" where
      (name = STR ''id'' \<or> literalEndsWith (STR ''_id'') name)"
 
 fun findIdParamAux ::
-  "String.literal list \<Rightarrow> param_decl_full list \<Rightarrow> String.literal option"
+  "String.literal list \<Rightarrow> param_decl list \<Rightarrow> String.literal option"
 where
   "findIdParamAux _ [] = None"
 | "findIdParamAux keys (ParamDeclFull name ty _ # rest) =
@@ -76,7 +76,7 @@ text \<open>Operations with no \<open>state\<close> block declared can never hav
   the original Scala's \<open>ir.f match \<dots> case None \<Rightarrow> None\<close>.\<close>
 
 definition findIdParam ::
-  "param_decl_full list \<Rightarrow> state_decl_full option \<Rightarrow> String.literal option"
+  "param_decl list \<Rightarrow> state_decl option \<Rightarrow> String.literal option"
 where
   "findIdParam params stateOpt = (case stateOpt of
        None \<Rightarrow> None

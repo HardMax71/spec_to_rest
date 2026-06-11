@@ -9,10 +9,10 @@ class FlattenInheritanceTest extends CatsEffectSuite:
     flattenInheritance(s) match
       case sv: ServiceIRFull => sv
 
-  private def childInvs(s: ServiceIRFull): List[expr_full] =
+  private def childInvs(s: ServiceIRFull): List[expr] =
     svcEntities(s).filter(e => entName(e) == "C").map(entInvariants).head
 
-  private def identCount(invs: List[expr_full], name: String): Int =
+  private def identCount(invs: List[expr], name: String): Int =
     invs.count { case IdentifierF(n, _) => n == name; case _ => false }
 
   private val base  = EntityDeclFull("P", None, Nil, List(IdentifierF("p_inv", None)), None)

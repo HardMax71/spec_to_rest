@@ -9,7 +9,7 @@ session SpecRest_Core in core = HOL +
     Smt
     Semantics
     Semantics_Reference
-    TranslateDirect
+    Translate
 
 session SpecRest_Soundness in soundness = SpecRest_Core +
   options [document = false, threads = 0]

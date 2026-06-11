@@ -20,13 +20,13 @@ class TemplatesTest extends CatsEffectSuite:
   private def ident(n: String): IdentifierF = IdentifierF(n, None)
   private def intL(n: Int): IntLitF         = IntLitF(BigInt(n), None)
   private def boolL(b: Boolean): BoolLitF   = BoolLitF(b, None)
-  private def paramD(name: String, t: type_expr_full): ParamDeclFull =
+  private def paramD(name: String, t: type_expr): ParamDeclFull =
     ParamDeclFull(name, t, None)
 
   private def serviceIR(
       name: String = "Demo",
-      functions: List[function_decl_full] = Nil,
-      predicates: List[predicate_decl_full] = Nil
+      functions: List[function_decl] = Nil,
+      predicates: List[predicate_decl] = Nil
   ): ServiceIRFull =
     ServiceIRFull(
       a = name,

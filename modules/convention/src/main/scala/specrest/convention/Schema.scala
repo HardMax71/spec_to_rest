@@ -22,8 +22,8 @@ object Schema:
   )
 
   final private case class ClassifierCtx(
-      aliasAList: List[(String, type_alias_decl_full)],
-      enumAList: List[(String, enum_decl_full)],
+      aliasAList: List[(String, type_alias_decl)],
+      enumAList: List[(String, enum_decl)],
       entityNamesList: List[String]
   )
 
@@ -78,7 +78,7 @@ object Schema:
     }.toMap
 
   private def deriveTable(
-      entity: entity_decl_full,
+      entity: entity_decl,
       ir: ServiceIRFull,
       entityNames: Set[String],
       cctx: ClassifierCtx,
@@ -168,7 +168,7 @@ object Schema:
     )
 
   private def deriveJunctionTable(
-      stateField: state_field_decl_full,
+      stateField: state_field_decl,
       entityNames: Set[String]
   ): Option[table_spec] =
     stfType(stateField) match
@@ -211,7 +211,7 @@ object Schema:
       case _ => None
 
   private def mapFieldToColumn(
-      field: field_decl_full,
+      field: field_decl,
       cctx: ClassifierCtx,
       entityRefs: Map[String, EntityRef]
   ): MappedField =
@@ -238,7 +238,7 @@ object Schema:
 
   private def mapTypeToColumn(
       colName: String,
-      typeExpr: type_expr_full,
+      typeExpr: type_expr,
       cctx: ClassifierCtx
   ): MappedField =
     val classified =
@@ -274,7 +274,7 @@ object Schema:
 
   private def escapeSqlString(s: String): String = s.replace("'", "''")
 
-  private def extractChecks(colName: String, constraint: expr_full): List[String] =
+  private def extractChecks(colName: String, constraint: expr): List[String] =
     flattenAnd(constraint).flatMap: atom =>
       classifyColumnCheckAtom(atom) match
         case _: CcSkip => Nil
@@ -289,15 +289,15 @@ object Schema:
         case CcValueLitCompare(op, rhs) =>
           sqlOp(op).toList.map(o => s"$colName $o ${literalValue(rhs)}")
 
-  private def literalValue(e: expr_full): String = e match
+  private def literalValue(e: expr): String = e match
     case IntLitF(v, _)    => v.toString
     case FloatLitF(v, _)  => v
     case StringLitF(v, _) => s"'${escapeSqlString(v)}'"
     case _                => "NULL"
 
   private def extractInvariantChecks(
-      inv: expr_full,
-      @annotation.unused fields: List[field_decl_full]
+      inv: expr,
+      @annotation.unused fields: List[field_decl]
   ): List[String] =
     flattenAnd(inv).flatMap: atom =>
       classifyInvariantAtom(atom) match
@@ -323,8 +323,8 @@ object Schema:
 
   private def applyPartialIndexConventions(
       tables: List[table_spec],
-      entities: List[entity_decl_full],
-      conv: Option[conventions_decl_full]
+      entities: List[entity_decl],
+      conv: Option[conventions_decl]
   ): List[table_spec] =
     val rules = extractPartialIndexRules(conv)
     if rules.isEmpty then tables
@@ -350,7 +350,7 @@ object Schema:
           case Some(colFilters) => appendPartialIndexes(t, colFilters)
 
   private def detectAggregateTriggers(
-      entities: List[entity_decl_full],
+      entities: List[entity_decl],
       tables: List[table_spec]
   ): List[trigger_spec] =
     val tablesByEntity = tables.map(t => tableEntityName(t) -> t).toMap

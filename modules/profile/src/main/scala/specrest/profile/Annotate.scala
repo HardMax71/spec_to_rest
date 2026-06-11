@@ -72,7 +72,7 @@ object Annotate:
   private def profileEntity(
       entityName: String,
       tableName: String,
-      fields: List[field_decl_full],
+      fields: List[field_decl],
       profile: DeploymentProfile,
       ctx: TypeContext,
       hasTable: Boolean
@@ -96,7 +96,7 @@ object Annotate:
 
   private def profileField(
       fieldName: String,
-      typeExpr: type_expr_full,
+      typeExpr: type_expr,
       profile: DeploymentProfile,
       ctx: TypeContext
   ): ProfiledField =
@@ -118,7 +118,7 @@ object Annotate:
     )
 
   private def resolveColumnType(
-      typeExpr: type_expr_full,
+      typeExpr: type_expr,
       profile: DeploymentProfile,
       ctx: TypeContext
   ): String =
@@ -156,7 +156,7 @@ object Annotate:
         case _    => Python
 
   private def profileOperation(
-      op: operation_decl_full,
+      op: operation_decl,
       kind: operation_kind,
       targetEntity: Option[String],
       endpoint: EndpointSpec,

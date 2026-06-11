@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object UnusedEntity extends LintPass:
   val code = "L05"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: service_ir): List[LintDiagnostic] =
     val refs = referencedNames(ir)
     svcEntities(ir).flatMap { e =>
       val name = entName(e)
@@ -25,11 +25,11 @@ object UnusedEntity extends LintPass:
   // bounded by the number of distinct names. Matches the original
   // walker shape — avoids materialising duplicate-heavy intermediate
   // Lists per IR slot before deduplication.
-  private def referencedNames(ir: service_ir_full): Set[String] =
+  private def referencedNames(ir: service_ir): Set[String] =
     val acc = scala.collection.mutable.Set.empty[String]
 
-    def addExpr(e: expr_full): Unit      = acc ++= collectExprNames(e)
-    def addType(t: type_expr_full): Unit = acc ++= collectTypeNames(t)
+    def addExpr(e: expr): Unit      = acc ++= collectExprNames(e)
+    def addType(t: type_expr): Unit = acc ++= collectTypeNames(t)
 
     irStateFields(ir).foreach(sf => addType(stfType(sf)))
 

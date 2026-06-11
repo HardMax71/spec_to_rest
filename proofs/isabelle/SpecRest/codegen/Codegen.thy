@@ -3,7 +3,7 @@ theory Codegen
     SpecRest_Core.Semantics
     SpecRest_Core.IR_Helpers
     SpecRest_Core.IR_Analysis
-    SpecRest_Core.TranslateDirect
+    SpecRest_Core.Translate
     TopoSort
     Schema
     MigrationOps
@@ -30,14 +30,14 @@ theory Codegen
     "HOL-Library.Code_Target_Numeral"
 begin
 
-text \<open>Productionized Scala extraction. The full-language IR (\<open>expr_full\<close>,
-  \<open>type_expr_full\<close>, the 18 \<open>*_full\<close> declaration types) is plain datatypes.
+text \<open>Productionized Scala extraction. The full-language IR (\<open>expr\<close>,
+  \<open>type_expr\<close>, the 18 \<open>*_full\<close> declaration types) is plain datatypes.
   Code_Target_Scala emits flat case classes with positional fields — no
   \<open>_ext[A]\<close> polymorphic record-scheme machinery, no post-processing step.
   The export at this theory's bottom is the canonical Scala consumer-facing
   artifact; consumers \<open>import\<close> it directly.
 
-  Verified-subset records (\<open>field_decl\<close>, …) extract as polymorphic scheme
+  Verified-subset records (\<open>schema_field_decl\<close>, …) extract as polymorphic scheme
   types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smtEval\<close>
   output the verified-subset \<open>expr\<close> datatype which is flat.\<close>
 
@@ -123,7 +123,7 @@ code_printing
 | constant str_predicate \<rightharpoonup> (Scala) "((_) == (_))"
 
 export_code
-    translate_full_direct
+    translate
     smtEval
     isLitFull
     isTrueLit
@@ -164,7 +164,7 @@ export_code
     stripSpans
     typeStripSpans
     peelSmtRelationRef
-    peelRelationRefFull
+    peelRelationRef
     typeExprToTy
     typeExprFullToTy
     schemaFieldType

@@ -5,7 +5,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 object MissingEnsures extends LintPass:
   val code = "L03"
 
-  def run(ir: service_ir_full): List[LintDiagnostic] =
+  def run(ir: service_ir): List[LintDiagnostic] =
     svcOperations(ir).flatMap { op =>
       if operationMissingEnsures(op) then
         List(

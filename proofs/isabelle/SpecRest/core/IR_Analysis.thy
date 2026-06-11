@@ -9,27 +9,27 @@ text \<open>Phase 9\<alpha> (small recognizers): \<open>isTrueLit\<close> matche
   \<open>enumLiteralFor\<close> walkers in \<open>testgen.Behavioral\<close> /
   \<open>testgen.Stateful\<close>.\<close>
 
-fun isTrueLit :: "expr_full \<Rightarrow> bool" where
+fun isTrueLit :: "expr \<Rightarrow> bool" where
   "isTrueLit (BoolLitF True _) = True"
 | "isTrueLit _                 = False"
 
-fun enumLiteralOf :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
+fun enumLiteralOf :: "expr \<Rightarrow> String.literal list \<Rightarrow> String.literal option" where
   "enumLiteralOf (EnumAccessF _ m _) ms = (if string_in_list m ms then Some m else None)"
 | "enumLiteralOf (IdentifierF n _)   ms = (if string_in_list n ms then Some n else None)"
 | "enumLiteralOf _                   _  = None"
 
-text \<open>Phase 9\<alpha> (\<open>combineAnd\<close>): folds an \<open>expr_full list\<close> into a single
+text \<open>Phase 9\<alpha> (\<open>combineAnd\<close>): folds an \<open>expr list\<close> into a single
   left-associated AND-chain, with \<open>BoolLitF True None\<close> as the unit.
   Inverse of \<open>flattenAndAll\<close> modulo \<open>true\<close> identity. Replaces
   \<open>verify.Narration.combineConjuncts\<close> (which used \<open>foldLeft\<close> —
   left-associativity preserves byte-identical pretty-printed output). Uses
   a monomorphic accumulator to make the extracted Scala tail-recursive.\<close>
 
-fun combineAnd_acc :: "expr_full \<Rightarrow> expr_full list \<Rightarrow> expr_full" where
+fun combineAnd_acc :: "expr \<Rightarrow> expr list \<Rightarrow> expr" where
   "combineAnd_acc acc []         = acc"
 | "combineAnd_acc acc (x # rest) = combineAnd_acc (BinaryOpF BAnd acc x None) rest"
 
-fun combineAnd :: "expr_full list \<Rightarrow> expr_full" where
+fun combineAnd :: "expr list \<Rightarrow> expr" where
   "combineAnd []          = BoolLitF True None"
 | "combineAnd (x # rest)  = combineAnd_acc x rest"
 
@@ -41,23 +41,23 @@ text \<open>Phase 9\<beta> (\<open>decomposeAtom\<close>): canonical recognizer 
   \<open>flattenAnd\<close> to traverse \<open>BAnd\<close>-chains.\<close>
 
 datatype (plugins only: code size) refinement_atom =
-    RaLenCmp bin_op_full int
-  | RaValueCmp bin_op_full int
+    RaLenCmp bin_op int
+  | RaValueCmp bin_op int
   | RaMatches "String.literal"
   | RaMatchesIdent "String.literal" "String.literal"
   | RaPredCall "String.literal"
-  | RaUnknown expr_full
+  | RaUnknown expr
 
-fun isValueRef :: "expr_full \<Rightarrow> bool" where
+fun isValueRef :: "expr \<Rightarrow> bool" where
   "isValueRef (IdentifierF n _) = (n = STR ''value'')"
 | "isValueRef _                  = False"
 
-fun isLenOfValue :: "expr_full \<Rightarrow> bool" where
+fun isLenOfValue :: "expr \<Rightarrow> bool" where
   "isLenOfValue (CallF (IdentifierF n _) [arg] _) =
      (n = STR ''len'' \<and> isValueRef arg)"
 | "isLenOfValue _ = False"
 
-fun isRefinementCmp :: "bin_op_full \<Rightarrow> bool" where
+fun isRefinementCmp :: "bin_op \<Rightarrow> bool" where
   "isRefinementCmp BGe  = True"
 | "isRefinementCmp BGt  = True"
 | "isRefinementCmp BLe  = True"
@@ -66,7 +66,7 @@ fun isRefinementCmp :: "bin_op_full \<Rightarrow> bool" where
 | "isRefinementCmp BNeq = True"
 | "isRefinementCmp _    = False"
 
-definition decomposeAtom :: "expr_full \<Rightarrow> refinement_atom" where
+definition decomposeAtom :: "expr \<Rightarrow> refinement_atom" where
   "decomposeAtom e \<equiv>
      (case e of
         MatchesF inner pat _ \<Rightarrow>
@@ -94,7 +94,7 @@ text \<open>Phase 9\<gamma> (free-var helpers): monomorphic \<open>qb_names\<clo
   HOFs that blow up Isabelle build wall-time when used inside large mutual
   \<open>fun\<close> declarations.\<close>
 
-fun qb_names :: "quantifier_binding_full list \<Rightarrow> String.literal list" where
+fun qb_names :: "quantifier_binding list \<Rightarrow> String.literal list" where
   "qb_names [] = []"
 | "qb_names (QuantifierBindingFull n _ _ _ # bs) = n # qb_names bs"
 
@@ -108,15 +108,15 @@ fun remove_names :: "String.literal list \<Rightarrow> String.literal list \<Rig
 | "remove_names (n # ns) xs = remove_name n (remove_names ns xs)"
 
 text \<open>Phase 9\<gamma> (\<open>free_vars\<close>): collects the names of all free identifiers
-  in an \<open>expr_full\<close>, respecting binders (\<open>LetF\<close>, \<open>LambdaF\<close>,
+  in an \<open>expr\<close>, respecting binders (\<open>LetF\<close>, \<open>LambdaF\<close>,
   \<open>SetComprehensionF\<close>, \<open>TheF\<close>, \<open>QuantifierF\<close>). Replaces the 60-line
   hand-rolled walker \<open>testgen.Behavioral.containsStateRefIn\<close>.\<close>
 
-fun free_vars :: "expr_full \<Rightarrow> String.literal list"
-and free_vars_list :: "expr_full list \<Rightarrow> String.literal list"
-and free_vars_fields :: "field_assign_full list \<Rightarrow> String.literal list"
-and free_vars_entries :: "map_entry_full list \<Rightarrow> String.literal list"
-and free_vars_bindings :: "quantifier_binding_full list \<Rightarrow> String.literal list"
+fun free_vars :: "expr \<Rightarrow> String.literal list"
+and free_vars_list :: "expr list \<Rightarrow> String.literal list"
+and free_vars_fields :: "field_assign list \<Rightarrow> String.literal list"
+and free_vars_entries :: "map_entry list \<Rightarrow> String.literal list"
+and free_vars_bindings :: "quantifier_binding list \<Rightarrow> String.literal list"
 where
   "free_vars (IdentifierF n _)           = [n]"
 | "free_vars (BinaryOpF _ l r _)         = free_vars l @ free_vars r"
@@ -160,12 +160,12 @@ text \<open>Phase 9\<gamma> (\<open>hasPrePrime\<close>): true iff the expressio
   to express the \<open>testgen.Behavioral.containsStateRef\<close> predicate as a
   one-liner.\<close>
 
-fun isPrePrime :: "expr_full \<Rightarrow> bool" where
+fun isPrePrime :: "expr \<Rightarrow> bool" where
   "isPrePrime (PrimeF _ _) = True"
 | "isPrePrime (PreF _ _)   = True"
 | "isPrePrime _            = False"
 
-definition hasPrePrime :: "expr_full \<Rightarrow> bool" where
+definition hasPrePrime :: "expr \<Rightarrow> bool" where
   "hasPrePrime e = list_ex isPrePrime (allSubexprs e)"
 
 text \<open>Phase 9\<gamma> (\<open>subst\<close>): structural substitution of a free identifier
@@ -177,11 +177,11 @@ text \<open>Phase 9\<gamma> (\<open>subst\<close>): structural substitution of a
   \<open>FieldAccessF (IdentifierF p None) STR ''value'' None\<close> where \<open>p\<close> is not
   bound anywhere relevant).\<close>
 
-fun subst :: "String.literal \<Rightarrow> expr_full \<Rightarrow> expr_full \<Rightarrow> expr_full"
-and subst_list :: "String.literal \<Rightarrow> expr_full \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
-and subst_fields :: "String.literal \<Rightarrow> expr_full \<Rightarrow> field_assign_full list \<Rightarrow> field_assign_full list"
-and subst_entries :: "String.literal \<Rightarrow> expr_full \<Rightarrow> map_entry_full list \<Rightarrow> map_entry_full list"
-and subst_bindings :: "String.literal \<Rightarrow> expr_full \<Rightarrow> quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+fun subst :: "String.literal \<Rightarrow> expr \<Rightarrow> expr \<Rightarrow> expr"
+and subst_list :: "String.literal \<Rightarrow> expr \<Rightarrow> expr list \<Rightarrow> expr list"
+and subst_fields :: "String.literal \<Rightarrow> expr \<Rightarrow> field_assign list \<Rightarrow> field_assign list"
+and subst_entries :: "String.literal \<Rightarrow> expr \<Rightarrow> map_entry list \<Rightarrow> map_entry list"
+and subst_bindings :: "String.literal \<Rightarrow> expr \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
 where
   "subst x r (IdentifierF n sp)              = (if n = x then r else IdentifierF n sp)"
 | "subst x r (BinaryOpF op l rr sp)          = BinaryOpF op (subst x r l) (subst x r rr) sp"
@@ -228,17 +228,17 @@ where
 | "subst_bindings x r (QuantifierBindingFull n d kk sp # bs) =
      QuantifierBindingFull n (subst x r d) kk sp # subst_bindings x r bs"
 
-fun is_binder_full :: "expr_full \<Rightarrow> bool" where
-  "is_binder_full (LetF _ _ _ _)               = True"
-| "is_binder_full (QuantifierF _ _ _ _)        = True"
-| "is_binder_full (LambdaF _ _ _)              = True"
-| "is_binder_full (SetComprehensionF _ _ _ _)  = True"
-| "is_binder_full (TheF _ _ _ _)               = True"
-| "is_binder_full _                            = False"
+fun is_binder :: "expr \<Rightarrow> bool" where
+  "is_binder (LetF _ _ _ _)               = True"
+| "is_binder (QuantifierF _ _ _ _)        = True"
+| "is_binder (LambdaF _ _ _)              = True"
+| "is_binder (SetComprehensionF _ _ _ _)  = True"
+| "is_binder (TheF _ _ _ _)               = True"
+| "is_binder _                            = False"
 
-fun is_call_full :: "expr_full \<Rightarrow> bool" where
-  "is_call_full (CallF _ _ _) = True"
-| "is_call_full _             = False"
+fun is_call :: "expr \<Rightarrow> bool" where
+  "is_call (CallF _ _ _) = True"
+| "is_call _             = False"
 
 text \<open>\<open>inline_calls\<close> is a pre-\<open>lower\<close> desugar that beta-reduces a call to a user
   function/predicate, substituting its arguments for the parameters in the body.
@@ -249,27 +249,27 @@ text \<open>\<open>inline_calls\<close> is a pre-\<open>lower\<close> desugar th
   mentions a parameter, so the sequential per-parameter substitution behaves
   simultaneously. Otherwise the \<open>CallF\<close> is left in place, falls outside \<open>lower\<close>, and
   the check routes best-effort. Under these conditions \<open>inline_calls\<close> preserves the
-  reference semantics \<open>eval_full\<close> (lemma \<open>inline_calls_eval_full\<close>, theory \<open>Semantics_Reference\<close>).
+  reference semantics \<open>eval\<close> (lemma \<open>inline_calls_eval\<close>, theory \<open>Semantics_Reference\<close>).
   It inlines one level; the Scala driver iterates to a fixpoint (capped), so nested
   non-recursive calls resolve and recursive ones stop.\<close>
 
-definition capture_safe :: "expr_full \<Rightarrow> String.literal list \<Rightarrow> expr_full list \<Rightarrow> bool" where
+definition capture_safe :: "expr \<Rightarrow> String.literal list \<Rightarrow> expr list \<Rightarrow> bool" where
   "capture_safe body params args \<equiv>
      distinct params
-       \<and> (\<not> list_ex is_binder_full (allSubexprs body))
-       \<and> (\<not> list_ex is_call_full (allSubexprs body))
+       \<and> (\<not> list_ex is_binder (allSubexprs body))
+       \<and> (\<not> list_ex is_call (allSubexprs body))
        \<and> list_all (\<lambda>x. string_in_list x params) (free_vars body)
        \<and> list_all (\<lambda>a. list_all (\<lambda>p. \<not> string_in_list p (free_vars a)) params) args"
 
-fun bind_params :: "String.literal list \<Rightarrow> expr_full list \<Rightarrow> expr_full \<Rightarrow> expr_full" where
+fun bind_params :: "String.literal list \<Rightarrow> expr list \<Rightarrow> expr \<Rightarrow> expr" where
   "bind_params (p # ps) (a # args) body = LetF p a (bind_params ps args body) None"
 | "bind_params _ _ body = body"
 
-fun inline_calls :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full \<Rightarrow> expr_full"
-and inline_calls_list :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> expr_full list \<Rightarrow> expr_full list"
-and inline_calls_fields :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> field_assign_full list \<Rightarrow> field_assign_full list"
-and inline_calls_entries :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> map_entry_full list \<Rightarrow> map_entry_full list"
-and inline_calls_bindings :: "function_decl_full list \<Rightarrow> predicate_decl_full list \<Rightarrow> quantifier_binding_full list \<Rightarrow> quantifier_binding_full list"
+fun inline_calls :: "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> expr \<Rightarrow> expr"
+and inline_calls_list :: "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> expr list \<Rightarrow> expr list"
+and inline_calls_fields :: "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> field_assign list \<Rightarrow> field_assign list"
+and inline_calls_entries :: "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> map_entry list \<Rightarrow> map_entry list"
+and inline_calls_bindings :: "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
 where
   "inline_calls fs ps (CallF callee args sp) =
      (let args' = inline_calls_list fs ps args
@@ -330,7 +330,7 @@ where
 
 text \<open>Phase 9\<delta> (lint TypeMismatch / L01): \<open>lit_class\<close> classifies an
   expression literal into a small ADT; \<open>litClass\<close> recognises which class
-  (if any) an \<open>expr_full\<close> belongs to; \<open>binOpName\<close> renders a binary
+  (if any) an \<open>expr\<close> belongs to; \<open>binOpName\<close> renders a binary
   operator's user-facing name (used in diagnostic messages).
   \<open>describeLitClass\<close> renders the class as a noun for diagnostics.
   Replaces \<open>lint.TypeMismatch.LitClass\<close>, \<open>litClass\<close>, \<open>describe\<close>, and
@@ -339,7 +339,7 @@ text \<open>Phase 9\<delta> (lint TypeMismatch / L01): \<open>lit_class\<close> 
 datatype (plugins only: code size) lit_class =
     LcNumeric | LcBool | LcStringLike | LcCollection | LcNone
 
-fun litClass :: "expr_full \<Rightarrow> lit_class option" where
+fun litClass :: "expr \<Rightarrow> lit_class option" where
   "litClass (IntLitF _ _)     = Some LcNumeric"
 | "litClass (FloatLitF _ _)   = Some LcNumeric"
 | "litClass (BoolLitF _ _)    = Some LcBool"
@@ -357,7 +357,7 @@ fun describeLitClass :: "lit_class \<Rightarrow> String.literal" where
 | "describeLitClass LcCollection = STR ''collection''"
 | "describeLitClass LcNone       = STR ''none''"
 
-fun binOpName :: "bin_op_full \<Rightarrow> String.literal" where
+fun binOpName :: "bin_op \<Rightarrow> String.literal" where
   "binOpName BAdd       = STR ''+''"
 | "binOpName BSub       = STR ''-''"
 | "binOpName BMul       = STR ''*''"
@@ -381,58 +381,58 @@ fun binOpName :: "bin_op_full \<Rightarrow> String.literal" where
 
 text \<open>Phase 9\<delta> (\<open>typeContainsNamed\<close>, \<open>exprContainsBoolLit\<close>): two
   structural predicates lifted from \<open>verify.alloy.Translator\<close>. The first
-  asks whether a \<open>type_expr_full\<close> mentions a given named type anywhere
+  asks whether a \<open>type_expr\<close> mentions a given named type anywhere
   in its structural unfolding (only descending into \<open>SetTypeF\<close> and
   \<open>OptionTypeF\<close>, matching the original walker's narrow scope). The
   second is a structural fold returning \<open>True\<close> iff a \<open>BoolLitF\<close> appears
   anywhere in the expression tree.\<close>
 
-fun typeContainsNamed :: "String.literal \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+fun typeContainsNamed :: "String.literal \<Rightarrow> type_expr \<Rightarrow> bool" where
   "typeContainsNamed n (NamedTypeF m _)      = (n = m)"
 | "typeContainsNamed n (SetTypeF inner _)    = typeContainsNamed n inner"
 | "typeContainsNamed n (OptionTypeF inner _) = typeContainsNamed n inner"
 | "typeContainsNamed _ _                     = False"
 
-fun isBoolLit :: "expr_full \<Rightarrow> bool" where
+fun isBoolLit :: "expr \<Rightarrow> bool" where
   "isBoolLit (BoolLitF _ _) = True"
 | "isBoolLit _              = False"
 
-definition exprContainsBoolLit :: "expr_full \<Rightarrow> bool" where
+definition exprContainsBoolLit :: "expr \<Rightarrow> bool" where
   "exprContainsBoolLit e = list_ex isBoolLit (allSubexprs e)"
 
 text \<open>Phase 9\<delta> (Narration conflict helpers): pure pattern matches lifted
   from \<open>verify.Narration\<close>. \<open>isComp\<close>/\<open>isLowBound\<close>/\<open>isStrictBound\<close> classify
-  a \<open>bin_op_full\<close>; \<open>mirrorBinOp\<close> swaps a comparison's direction (for the
+  a \<open>bin_op\<close>; \<open>mirrorBinOp\<close> swaps a comparison's direction (for the
   \<open>IntLit cmp Identifier\<close> case); \<open>rangeOf\<close> extracts a
   \<open>(name, op, bound)\<close> triple from a comparison-against-literal shape;
   \<open>conflicts\<close> detects whether two bounds on the same identifier carve out
   disjoint ranges. Used by the contradictory-invariants diagnostic.\<close>
 
-fun isComp :: "bin_op_full \<Rightarrow> bool" where
+fun isComp :: "bin_op \<Rightarrow> bool" where
   "isComp BGe = True"
 | "isComp BGt = True"
 | "isComp BLe = True"
 | "isComp BLt = True"
 | "isComp _   = False"
 
-fun isLowBound :: "bin_op_full \<Rightarrow> bool" where
+fun isLowBound :: "bin_op \<Rightarrow> bool" where
   "isLowBound BGe = True"
 | "isLowBound BGt = True"
 | "isLowBound _   = False"
 
-fun isStrictBound :: "bin_op_full \<Rightarrow> bool" where
+fun isStrictBound :: "bin_op \<Rightarrow> bool" where
   "isStrictBound BGt = True"
 | "isStrictBound BLt = True"
 | "isStrictBound _   = False"
 
-fun mirrorBinOp :: "bin_op_full \<Rightarrow> bin_op_full" where
+fun mirrorBinOp :: "bin_op \<Rightarrow> bin_op" where
   "mirrorBinOp BGe    = BLe"
 | "mirrorBinOp BLe    = BGe"
 | "mirrorBinOp BGt    = BLt"
 | "mirrorBinOp BLt    = BGt"
 | "mirrorBinOp other  = other"
 
-definition rangeOf :: "expr_full \<Rightarrow> (String.literal \<times> bin_op_full \<times> int) option" where
+definition rangeOf :: "expr \<Rightarrow> (String.literal \<times> bin_op \<times> int) option" where
   "rangeOf e \<equiv>
      (case e of
         BinaryOpF op l r _ \<Rightarrow>
@@ -450,15 +450,15 @@ text \<open>Integer-discrete bound normalization: \<open>x > 3\<close> is satisf
   catches contradictions like \<open>x > 3 \<and> x < 4\<close> (no integer satisfies both)
   that a dense-order check would miss.\<close>
 
-fun lowBoundEffective :: "bin_op_full \<Rightarrow> int \<Rightarrow> int" where
+fun lowBoundEffective :: "bin_op \<Rightarrow> int \<Rightarrow> int" where
   "lowBoundEffective BGt n = n + 1"
 | "lowBoundEffective _   n = n"
 
-fun highBoundEffective :: "bin_op_full \<Rightarrow> int \<Rightarrow> int" where
+fun highBoundEffective :: "bin_op \<Rightarrow> int \<Rightarrow> int" where
   "highBoundEffective BLt n = n - 1"
 | "highBoundEffective _   n = n"
 
-fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Rightarrow> int \<Rightarrow> bool" where
+fun conflicts :: "bin_op \<Rightarrow> int \<Rightarrow> bin_op \<Rightarrow> int \<Rightarrow> bool" where
   "conflicts aOp aB bOp bB =
      (if isLowBound aOp \<and> \<not> isLowBound bOp
       then lowBoundEffective aOp aB > highBoundEffective bOp bB
@@ -468,27 +468,27 @@ fun conflicts :: "bin_op_full \<Rightarrow> int \<Rightarrow> bin_op_full \<Righ
 
 text \<open>Phase 9\<delta> (lint TypeMismatch / L01 \<open>typeMismatchDiagnostics\<close>): full
   per-node classifier for type-mismatch diagnostics. Classify each
-  \<open>expr_full\<close> independently into an optional \<open>type_mismatch_kind\<close>
+  \<open>expr\<close> independently into an optional \<open>type_mismatch_kind\<close>
   (\<open>typeMismatchAt\<close>); compose with the shared \<open>allSubexprs\<close> enumeration
   to collect all diagnostics for a top-level expression
   (\<open>typeMismatchDiagnostics\<close>). Reuses \<open>isComp\<close> (Narration helper above)
   for comparison classification. Message rendering stays Scala-side.\<close>
 
-fun isArithBin :: "bin_op_full \<Rightarrow> bool" where
+fun isArithBin :: "bin_op \<Rightarrow> bool" where
   "isArithBin BAdd = True"
 | "isArithBin BSub = True"
 | "isArithBin BMul = True"
 | "isArithBin BDiv = True"
 | "isArithBin _    = False"
 
-fun isLogicalBin :: "bin_op_full \<Rightarrow> bool" where
+fun isLogicalBin :: "bin_op \<Rightarrow> bool" where
   "isLogicalBin BAnd     = True"
 | "isLogicalBin BOr      = True"
 | "isLogicalBin BImplies = True"
 | "isLogicalBin BIff     = True"
 | "isLogicalBin _        = False"
 
-fun isMembershipBin :: "bin_op_full \<Rightarrow> bool" where
+fun isMembershipBin :: "bin_op \<Rightarrow> bool" where
   "isMembershipBin BIn    = True"
 | "isMembershipBin BNotIn = True"
 | "isMembershipBin _      = False"
@@ -496,17 +496,17 @@ fun isMembershipBin :: "bin_op_full \<Rightarrow> bool" where
 datatype (plugins only: code size) type_mismatch_kind =
     TmUnaryNotOnNonBool lit_class
   | TmUnaryNegOnNonNumeric lit_class
-  | TmArithLitMisuse bin_op_full lit_class
-  | TmCompareLitMisuse bin_op_full lit_class
-  | TmLogicalLitMisuse bin_op_full lit_class
-  | TmMembershipLitMisuse bin_op_full lit_class
+  | TmArithLitMisuse bin_op lit_class
+  | TmCompareLitMisuse bin_op lit_class
+  | TmLogicalLitMisuse bin_op lit_class
+  | TmMembershipLitMisuse bin_op lit_class
 
 text \<open>\<open>(lc ++ rc).find(p)\<close> in Scala on \<open>Option[lit_class]\<close> pair flattens
   to a list (left-first) and finds the first matching class. In Isabelle:
   \<open>List.find p (List.map_filter id [lc, rc])\<close>.\<close>
 
 definition typeMismatchAt ::
-  "expr_full \<Rightarrow> (type_mismatch_kind \<times> span_t option) option" where
+  "expr \<Rightarrow> (type_mismatch_kind \<times> span_t option) option" where
   "typeMismatchAt e \<equiv>
      (case e of
         UnaryOpF UNot inner sp \<Rightarrow>
@@ -539,7 +539,7 @@ definition typeMismatchAt ::
       | _ \<Rightarrow> None)"
 
 definition typeMismatchDiagnostics ::
-  "expr_full \<Rightarrow> (type_mismatch_kind \<times> span_t option) list" where
+  "expr \<Rightarrow> (type_mismatch_kind \<times> span_t option) list" where
   "typeMismatchDiagnostics e = List.map_filter typeMismatchAt (allSubexprs e)"
 
 text \<open>Phase 9\<epsilon> (small recognizers, scattered consumers):
@@ -554,7 +554,7 @@ text \<open>Phase 9\<epsilon> (small recognizers, scattered consumers):
   \<open>isMapType\<close>, \<open>isEntityType\<close>, \<open>sameNamedType\<close> — trivial
   type-shape predicates.\<close>
 
-definition negate :: "expr_full \<Rightarrow> expr_full option" where
+definition negate :: "expr \<Rightarrow> expr option" where
   "negate e \<equiv>
      (case e of
         UnaryOpF UNot inner _    \<Rightarrow> Some inner
@@ -569,7 +569,7 @@ definition negate :: "expr_full \<Rightarrow> expr_full option" where
            | _    \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
-definition isLenOrCardOf :: "expr_full \<Rightarrow> String.literal option" where
+definition isLenOrCardOf :: "expr \<Rightarrow> String.literal option" where
   "isLenOrCardOf e \<equiv>
      (case e of
         UnaryOpF UCardinality (IdentifierF n _) _ \<Rightarrow> Some n
@@ -577,32 +577,32 @@ definition isLenOrCardOf :: "expr_full \<Rightarrow> String.literal option" wher
           (if f = STR ''len'' then Some n else None)
       | _ \<Rightarrow> None)"
 
-fun isLiteral :: "expr_full \<Rightarrow> bool" where
+fun isLiteral :: "expr \<Rightarrow> bool" where
   "isLiteral (IntLitF _ _)    = True"
 | "isLiteral (FloatLitF _ _)  = True"
 | "isLiteral (StringLitF _ _) = True"
 | "isLiteral _                = False"
 
-fun extractFieldName :: "expr_full \<Rightarrow> String.literal option" where
+fun extractFieldName :: "expr \<Rightarrow> String.literal option" where
   "extractFieldName (FieldAccessF (IdentifierF s _) name _) =
      (if s = STR ''self'' then Some name else None)"
 | "extractFieldName (IdentifierF name _) = Some name"
 | "extractFieldName _ = None"
 
-fun enumLitName :: "expr_full \<Rightarrow> String.literal option" where
+fun enumLitName :: "expr \<Rightarrow> String.literal option" where
   "enumLitName (EnumAccessF _ m _) = Some m"
 | "enumLitName (IdentifierF n _)   = Some n"
 | "enumLitName _                   = None"
 
-fun isMapType :: "type_expr_full \<Rightarrow> bool" where
+fun isMapType :: "type_expr \<Rightarrow> bool" where
   "isMapType (MapTypeF _ _ _) = True"
 | "isMapType _                = False"
 
-fun isEntityType :: "type_expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+fun isEntityType :: "type_expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "isEntityType (NamedTypeF n _) name = (n = name)"
 | "isEntityType _ _                   = False"
 
-fun sameNamedType :: "type_expr_full \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+fun sameNamedType :: "type_expr \<Rightarrow> type_expr \<Rightarrow> bool" where
   "sameNamedType (NamedTypeF a _) (NamedTypeF b _) = (a = b)"
 | "sameNamedType _ _                                = False"
 
@@ -618,7 +618,7 @@ text \<open>Phase 9\<zeta> (semantic classifiers from \<open>convention.Classify
   \<open>extractKeySet\<close> / \<open>extractMapEntries\<close> — set / map literal extractors
   used by the Z3 frame translator.\<close>
 
-fun isLeafValue :: "expr_full \<Rightarrow> bool" where
+fun isLeafValue :: "expr \<Rightarrow> bool" where
   "isLeafValue (IntLitF _ _)      = True"
 | "isLeafValue (FloatLitF _ _)    = True"
 | "isLeafValue (StringLitF _ _)   = True"
@@ -628,31 +628,31 @@ fun isLeafValue :: "expr_full \<Rightarrow> bool" where
 | "isLeafValue (EnumAccessF _ _ _) = True"
 | "isLeafValue _                  = False"
 
-fun (sequential) isPureRead :: "expr_full \<Rightarrow> bool" where
+fun (sequential) isPureRead :: "expr \<Rightarrow> bool" where
   "isPureRead (PreF inner _)          = isPureRead inner"
 | "isPureRead (IndexF base idx _)     = (isPureRead base \<and> isPureRead idx)"
 | "isPureRead (FieldAccessF base _ _) = isPureRead base"
 | "isPureRead e                       = isLeafValue e"
 
-fun relationTargetsEntity :: "type_expr_full \<Rightarrow> String.literal \<Rightarrow> bool" where
+fun relationTargetsEntity :: "type_expr \<Rightarrow> String.literal \<Rightarrow> bool" where
   "relationTargetsEntity (RelationTypeF _ _ (NamedTypeF n _) _) entity = (n = entity)"
 | "relationTargetsEntity (NamedTypeF n _) entity                       = (n = entity)"
 | "relationTargetsEntity _ _                                            = False"
 
-fun extractKeySetEntries :: "map_entry_full list \<Rightarrow> expr_full list" where
+fun extractKeySetEntries :: "map_entry list \<Rightarrow> expr list" where
   "extractKeySetEntries []                          = []"
 | "extractKeySetEntries (MapEntryFull k _ _ # rest) = k # extractKeySetEntries rest"
 
-fun extractKeySet :: "expr_full \<Rightarrow> expr_full list option" where
+fun extractKeySet :: "expr \<Rightarrow> expr list option" where
   "extractKeySet (SetLiteralF elements _) = Some elements"
 | "extractKeySet (MapLiteralF entries _)  = Some (extractKeySetEntries entries)"
 | "extractKeySet _                        = None"
 
-fun extractMapEntriesPairs :: "map_entry_full list \<Rightarrow> (expr_full \<times> expr_full) list" where
+fun extractMapEntriesPairs :: "map_entry list \<Rightarrow> (expr \<times> expr) list" where
   "extractMapEntriesPairs []                          = []"
 | "extractMapEntriesPairs (MapEntryFull k v _ # rest) = (k, v) # extractMapEntriesPairs rest"
 
-fun extractMapEntries :: "expr_full \<Rightarrow> (expr_full \<times> expr_full) list option" where
+fun extractMapEntries :: "expr \<Rightarrow> (expr \<times> expr) list option" where
   "extractMapEntries (MapLiteralF entries _) = Some (extractMapEntriesPairs entries)"
 | "extractMapEntries _                       = None"
 
@@ -672,7 +672,7 @@ text \<open>Phase 9\<eta> (key-existence recognizer): \<open>isKeyExistsConj\<cl
   \<open>convention.Classify\<close>.)\<close>
 
 definition isKeyExistsConj ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> bool" where
   "isKeyExistsConj c inputName stateName \<equiv>
      (case c of
         BinaryOpF op l r _ \<Rightarrow>
@@ -694,7 +694,7 @@ text \<open>Phase 9\<iota> (\<open>keyExistencePair\<close>): extractor variant 
   one specific arm plus a single wildcard, not a 100-arm cross product.\<close>
 
 fun keyExistencePair ::
-  "expr_full \<Rightarrow> (String.literal \<times> String.literal) option" where
+  "expr \<Rightarrow> (String.literal \<times> String.literal) option" where
   "keyExistencePair e =
      (case e of
         BinaryOpF op lhs rhs _ \<Rightarrow>
@@ -721,7 +721,7 @@ text \<open>\<open>fieldNameIfStateIndex\<close>: recognises an expression of sh
   trigger.\<close>
 
 definition fieldNameIfStateIndex ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
   "fieldNameIfStateIndex e inputName stateName \<equiv>
      (case e of
         FieldAccessF base fname _ \<Rightarrow>
@@ -753,7 +753,7 @@ datatype (plugins only: code size) structural_ineligibility =
   | SceReferencesNoOutput
 
 definition structuralIneligibility ::
-  "expr_full \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow>
+  "expr \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow>
    structural_ineligibility option" where
   "structuralIneligibility e outputs stateFields \<equiv>
      (let fvs = free_vars e in
@@ -773,7 +773,7 @@ text \<open>Phase 9\<iota> (\<open>desiredSize\<close>): given a size-comparison
   fixing the original's negative-result edge case (\<open>BGt (-5)\<close> used to
   return \<open>-4\<close>; now returns \<open>0\<close>).\<close>
 
-fun desiredSize :: "bin_op_full \<Rightarrow> int \<Rightarrow> int option" where
+fun desiredSize :: "bin_op \<Rightarrow> int \<Rightarrow> int option" where
   "desiredSize BGt n = Some (max 0 (n + 1))"
 | "desiredSize BGe n = Some (max 0 n)"
 | "desiredSize BEq n = (if n \<ge> 0 then Some n else None)"
@@ -788,7 +788,7 @@ text \<open>Phase 9\<theta> (\<open>matchesIdentityShape\<close>): recognises an
   a regex match (so a strategy filter can inline the pattern directly).\<close>
 
 fun matchesIdentityShape ::
-  "expr_full \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
+  "expr \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
   "matchesIdentityShape (MatchesF (IdentifierF p _) pattern _) name =
      (if p = name then Some pattern else None)"
 | "matchesIdentityShape _ _ = None"

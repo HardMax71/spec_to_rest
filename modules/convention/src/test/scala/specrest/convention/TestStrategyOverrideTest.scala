@@ -9,7 +9,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       target: String,
       property: String,
       qualifier: Option[String],
-      value: expr_full
+      value: expr
   ): ConventionRuleFull =
     ConventionRuleFull(target, property, qualifier, parseConventionValue(property, value), None)
 
@@ -22,10 +22,10 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
     rule(target, property, qualifier, StringLitF(v, None))
 
   private def baseIR(
-      operations: List[operation_decl_full] = Nil,
-      entities: List[entity_decl_full] = Nil,
-      rules: List[convention_rule_full] = Nil,
-      typeAliases: List[type_alias_decl_full] = Nil
+      operations: List[operation_decl] = Nil,
+      entities: List[entity_decl] = Nil,
+      rules: List[convention_rule] = Nil,
+      typeAliases: List[type_alias_decl] = Nil
   ): ServiceIRFull =
     ServiceIRFull(
       a = "Demo",

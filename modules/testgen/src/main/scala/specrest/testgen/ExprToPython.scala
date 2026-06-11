@@ -47,7 +47,7 @@ object ExprToPython extends ExprBackend:
 
   def stringLiteral(s: String): String = pyString(s)
 
-  def translate(expr: expr_full, ctx: TestCtx): Translated = expr match
+  def translate(expr: expr, ctx: TestCtx): Translated = expr match
     case BoolLitF(v, _)   => Translated.Emit(if v then "True" else "False")
     case IntLitF(n, _)    => Translated.Emit(n.toString)
     case FloatLitF(d, _)  => Translated.Emit(d.toString)
@@ -161,7 +161,7 @@ object ExprToPython extends ExprBackend:
       case _: IcEnumValue => Translated.Emit(pyString(name))
       case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
 
-  private def binOpText(op: bin_op_full, l: String, r: String): Translated =
+  private def binOpText(op: bin_op, l: String, r: String): Translated =
     op match
       case BAnd()       => Translated.Emit(s"(($l) and ($r))")
       case BOr()        => Translated.Emit(s"(($l) or ($r))")
@@ -184,15 +184,15 @@ object ExprToPython extends ExprBackend:
       case BDiff()      => Translated.Emit(s"(($l) - ($r))")
       case BSubset()    => Translated.Emit(s"(($l) <= ($r))")
 
-  private def unOpText(op: un_op_full, x: String): Translated = op match
+  private def unOpText(op: un_op, x: String): Translated = op match
     case UNot()         => Translated.Emit(s"(not ($x))")
     case UNegate()      => Translated.Emit(s"(-($x))")
     case UCardinality() => Translated.Emit(s"len($x)")
     case UPower()       => Translated.Emit(s"_powerset($x)")
 
   private def callExpr(
-      callee: expr_full,
-      args: List[expr_full],
+      callee: expr,
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -205,7 +205,7 @@ object ExprToPython extends ExprBackend:
 
   private def identifierCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -219,7 +219,7 @@ object ExprToPython extends ExprBackend:
 
   private def recognizedCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -227,7 +227,7 @@ object ExprToPython extends ExprBackend:
 
   private def userDefinedCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -245,7 +245,7 @@ object ExprToPython extends ExprBackend:
         liftAll(parts, span)(ps => Translated.Emit(s"$pyName(${ps.mkString(", ")})"))
 
   private def mapLiteral(
-      entries: List[map_entry_full],
+      entries: List[map_entry],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -259,7 +259,7 @@ object ExprToPython extends ExprBackend:
       liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
 
   private def constructorLiteral(
-      fields: List[field_assign_full],
+      fields: List[field_assign],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -271,8 +271,8 @@ object ExprToPython extends ExprBackend:
       liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
 
   private def withUpdate(
-      base: expr_full,
-      updates: List[field_assign_full],
+      base: expr,
+      updates: List[field_assign],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -285,8 +285,8 @@ object ExprToPython extends ExprBackend:
 
   private def setComprehension(
       v: String,
-      dom: expr_full,
-      pred: expr_full,
+      dom: expr,
+      pred: expr,
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -296,15 +296,15 @@ object ExprToPython extends ExprBackend:
       val innerCtx    = ctx.withBound(List(v))
       val domPy       = translate(dom, ctx)
       val predPy      = translate(pred, innerCtx)
-      val isMapDomain = peelRelationRefFull(dom).exists(ctx.mapStateFields.contains)
+      val isMapDomain = peelRelationRef(dom).exists(ctx.mapStateFields.contains)
       lift2(domPy, predPy): (d, p) =>
         val iter = if isMapDomain then s"($d).values()" else s"($d)"
         Translated.Emit(s"{$v for $v in $iter if ($p)}")
 
   private def quantifier(
-      kind: quant_kind_full,
-      bindings: List[quantifier_binding_full],
-      body: expr_full,
+      kind: quant_kind,
+      bindings: List[quantifier_binding],
+      body: expr,
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =

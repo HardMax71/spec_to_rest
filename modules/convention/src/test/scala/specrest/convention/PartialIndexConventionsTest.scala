@@ -8,12 +8,12 @@ object PartialIndexConventionsTest:
       target: String,
       prop: String,
       col: Option[String],
-      v: expr_full
+      v: expr
   ): ConventionRuleFull =
     ConventionRuleFull(target, prop, col, parseConventionValue(prop, v), None)
   private def stringL(s: String): StringLitF = StringLitF(s, None)
   private def intL(n: Int): IntLitF          = IntLitF(BigInt(n), None)
-  private def conv(rs: List[convention_rule_full]): conventions_decl_full =
+  private def conv(rs: List[convention_rule]): conventions_decl =
     ConventionsDeclFull(rs, None)
 
   // Minimal TableSpec for index-append tests.

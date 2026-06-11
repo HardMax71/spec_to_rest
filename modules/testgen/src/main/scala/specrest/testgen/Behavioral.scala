@@ -42,7 +42,7 @@ object Behavioral:
 
   private def testsForOperation(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
@@ -69,19 +69,19 @@ object Behavioral:
   // the element shapes and container types differ irreconcilably black-box. Skip honestly
   // rather than emit an assertion that can never hold.
   private[testgen] def isAggregateEqualityOverState(
-      clause: expr_full,
-      opDecl: operation_decl_full
+      clause: expr,
+      opDecl: operation_decl
   ): Boolean =
     val collOutputs = operOutputs(opDecl)
       .filter(p => isCollectionType(prmType(p)))
       .map(prmName)
       .toSet
-    def refsCollOutput(e: expr_full): Boolean = e match
+    def refsCollOutput(e: expr): Boolean = e match
       case IdentifierF(n, _) => collOutputs.contains(n)
       case PrimeF(inner, _)  => refsCollOutput(inner)
       case PreF(inner, _)    => refsCollOutput(inner)
       case _                 => false
-    def isComprehension(e: expr_full): Boolean = e match
+    def isComprehension(e: expr): Boolean = e match
       case _: SetComprehensionF => true
       case _                    => false
     clause match
@@ -107,7 +107,7 @@ object Behavioral:
 
   private def ensuresTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
@@ -162,7 +162,7 @@ object Behavioral:
 
   private def negativeTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull
   ): List[Either[TestSkip, GeneratedTest]] =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
@@ -208,7 +208,7 @@ object Behavioral:
 
   private def invariantTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
@@ -254,7 +254,7 @@ object Behavioral:
 
   private def temporalTests(
       pop: ProfiledOperation,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       ir: ServiceIRFull,
       coveredByTransit: Set[String]
   ): List[Either[TestSkip, GeneratedTest]] =
@@ -338,7 +338,7 @@ object Behavioral:
                 )
 
   private def transitionTestsForTd(
-      td: transition_decl_full,
+      td: transition_decl,
       profiled: ProfiledService,
       ir: ServiceIRFull
   ): TransitionEmissionResult =
@@ -484,7 +484,7 @@ object Behavioral:
       TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
   private def enumValuesForField(
-      field: field_decl_full,
+      field: field_decl,
       ir: ServiceIRFull
   ): Option[List[String]] =
     SpecRestGenerated.enumValuesForField(field, svcEnums(ir), svcTypeAliases(ir))
@@ -515,7 +515,7 @@ object Behavioral:
           .get
 
   private def nonPathInputBindings(
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       ir: ServiceIRFull
   ): Either[(String, String), List[NonPathInput]] =
@@ -539,12 +539,12 @@ object Behavioral:
         Right(withArgs._1)
 
   private def buildTransitionPositiveOrSkip(
-      td: transition_decl_full,
-      entity: entity_decl_full,
+      td: transition_decl,
+      entity: entity_decl,
       fieldName: String,
       pkName: String,
-      rule: transition_rule_full,
-      opDecl: operation_decl_full,
+      rule: transition_rule,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       stateField: String,
       ir: ServiceIRFull,
@@ -580,13 +580,13 @@ object Behavioral:
         )
 
   private def buildTransitionPositive(
-      td: transition_decl_full,
-      entity: entity_decl_full,
+      td: transition_decl,
+      entity: entity_decl,
       fieldName: String,
       pkName: String,
       from: String,
       to: String,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       stateField: String,
       guardFixLines: List[String],
@@ -635,11 +635,11 @@ object Behavioral:
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
   private def buildTransitionNegative(
-      entity: entity_decl_full,
+      entity: entity_decl,
       fieldName: String,
       pkName: String,
       from: String,
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       nonPath: List[NonPathInput]
   ): Either[TestSkip, GeneratedTest] =
@@ -863,7 +863,7 @@ object Behavioral:
   )
 
   private def statusRestrictionPattern(
-      e: expr_full,
+      e: expr,
       inputs: Set[String],
       state: Set[String],
       ir: ServiceIRFull
@@ -899,7 +899,7 @@ object Behavioral:
       .flatMap(relationTargetEntityName)
 
   private def statusRestrictionNegativeOrSkip(
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       ir: ServiceIRFull,
       restriction: StatusRestriction,
@@ -931,7 +931,7 @@ object Behavioral:
           Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
 
   private def buildStatusRestrictionNegative(
-      opDecl: operation_decl_full,
+      opDecl: operation_decl,
       pop: ProfiledOperation,
       r: StatusRestriction,
       nonPath: List[NonPathInput]
@@ -972,10 +972,10 @@ object Behavioral:
     )
     GeneratedTest(name = testName, body = sb.toString, skipReason = None)
 
-  private def invName(inv: invariant_decl_full, idx: Int): String =
+  private def invName(inv: invariant_decl, idx: Int): String =
     SpecRestGenerated.invName(inv).getOrElse(s"anon_$idx")
 
-  private def prettyOneLine(e: expr_full): String =
+  private def prettyOneLine(e: expr): String =
     PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
 
   private def escapeDocstring(s: String): String =
@@ -1076,8 +1076,8 @@ object Behavioral:
       def lines: List[String] = Nil
 
     def recognize(
-        guard: expr_full,
-        entity: entity_decl_full,
+        guard: expr,
+        entity: entity_decl,
         transitionField: String,
         from: String,
         ir: ServiceIRFull
@@ -1111,8 +1111,8 @@ object Behavioral:
     private def topoOrder(fixes: List[Fix]): Option[List[Fix]] = topoStep(fixes, Nil)
 
     private def collect(
-        guard: expr_full,
-        entity: entity_decl_full,
+        guard: expr,
+        entity: entity_decl,
         transitionField: String,
         from: String,
         ir: ServiceIRFull
@@ -1133,7 +1133,7 @@ object Behavioral:
           else None
 
       case BinaryOpF(op, IdentifierF(a, _), IdentifierF(b, _), _)
-          if Set[bin_op_full](BGt(), BGe(), BLt(), BLe()).contains(op) =>
+          if Set[bin_op](BGt(), BGe(), BLt(), BLe()).contains(op) =>
         if a == transitionField || b == transitionField then None
         else
           for
@@ -1158,7 +1158,7 @@ object Behavioral:
           )
 
       case BinaryOpF(op, IdentifierF(a, _), rhs, _)
-          if Set[bin_op_full](BGt(), BGe(), BLt(), BLe()).contains(op)
+          if Set[bin_op](BGt(), BGe(), BLt(), BLe()).contains(op)
             && a != transitionField =>
         for
           fa <- findFieldDeclFull(entFields(entity), a)
@@ -1213,7 +1213,7 @@ object Behavioral:
 
     private def buildFillers(
         size: Int,
-        inner: type_expr_full,
+        inner: type_expr,
         ir: ServiceIRFull
     ): Option[List[String]] =
       if size == 0 then Some(Nil)
@@ -1232,21 +1232,21 @@ object Behavioral:
               case _ => None
           case _ => None
 
-    private def orderedDelta(op: bin_op_full): Int = op match
+    private def orderedDelta(op: bin_op): Int = op match
       case _: BGt => 1
       case _: BGe => 0
       case _: BLt => -1
       case _: BLe => 0
       case _      => 0
 
-    private def numericLiteralPy(e: expr_full): Option[String] = e match
+    private def numericLiteralPy(e: expr): Option[String] = e match
       case IntLitF(v, _)   => Some(v.toString)
       case FloatLitF(v, _) => Some(v.toString)
       case _               => None
 
     private def literalForElementType(
-        lit: expr_full,
-        inner: type_expr_full,
+        lit: expr,
+        inner: type_expr,
         ir: ServiceIRFull
     ): Option[String] =
       val _ = inner
@@ -1262,7 +1262,7 @@ object Behavioral:
           else None
         case _ => None
 
-    private def literalValueFor(rhs: expr_full, ir: ServiceIRFull): Option[String] =
+    private def literalValueFor(rhs: expr, ir: ServiceIRFull): Option[String] =
       rhs match
         case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
         case IdentifierF(name, _) =>
@@ -1275,7 +1275,7 @@ object Behavioral:
         case FloatLitF(v, _)  => Some(v.toString)
         case _                => None
 
-    private def notNoneAnchorFor(f: field_decl_full, ir: ServiceIRFull): Option[String] =
+    private def notNoneAnchorFor(f: field_decl, ir: ServiceIRFull): Option[String] =
       val inner = fldType(f) match
         case OptionTypeF(t, _) => t
         case t                 => t

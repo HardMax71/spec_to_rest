@@ -69,7 +69,7 @@ object Inspect:
     format match
       case InspectFormat.Json =>
         val printer = Printer.spaces2.copy(dropNullValues = false)
-        val irJson  = (ir: service_ir_full).asJson
+        val irJson  = (ir: service_ir).asJson
         val strategy = Json.obj(
           classifications.map(c =>
             classificationOperationName(c) ->

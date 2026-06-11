@@ -4,9 +4,9 @@ import specrest.ir.generated.SpecRestGenerated.*
 
 class ClassifierTest extends munit.CatsEffectSuite:
 
-  private def intLit(n: Long): expr_full = IntLitF(BigInt(n), None)
-  private def id(s: String): expr_full   = IdentifierF(s, None)
-  private def bb(v: Boolean): expr_full  = BoolLitF(v, None)
+  private def intLit(n: Long): expr = IntLitF(BigInt(n), None)
+  private def id(s: String): expr   = IdentifierF(s, None)
+  private def bb(v: Boolean): expr  = BoolLitF(v, None)
 
   test("pure FOL invariant classifies to Z3"):
     val inv = InvariantDeclFull(

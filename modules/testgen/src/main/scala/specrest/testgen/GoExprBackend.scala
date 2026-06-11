@@ -108,7 +108,7 @@ object GoExprBackend extends ExprBackend:
 
   def stringLiteral(s: String): String = GoLit.str(s)
 
-  def translate(expr: expr_full, ctx: TestCtx): Translated = expr match
+  def translate(expr: expr, ctx: TestCtx): Translated = expr match
     case BoolLitF(v, _)   => Translated.Emit(if v then "true" else "false")
     case IntLitF(n, _)    => Translated.Emit(s"int64($n)")
     case FloatLitF(d, _)  => Translated.Emit(d.toString)
@@ -226,7 +226,7 @@ object GoExprBackend extends ExprBackend:
       case _: IcEnumValue => Translated.Emit(GoLit.str(name))
       case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
 
-  private def binOpText(op: bin_op_full, l: String, r: String): Translated =
+  private def binOpText(op: bin_op, l: String, r: String): Translated =
     op match
       case BAnd()       => Translated.Emit(s"(_truthy($l) && _truthy($r))")
       case BOr()        => Translated.Emit(s"(_truthy($l) || _truthy($r))")
@@ -249,15 +249,15 @@ object GoExprBackend extends ExprBackend:
       case BDiff()      => Translated.Emit(s"_diff($l, $r)")
       case BSubset()    => Translated.Emit(s"_subset($l, $r)")
 
-  private def unOpText(op: un_op_full, x: String): Translated = op match
+  private def unOpText(op: un_op, x: String): Translated = op match
     case UNot()         => Translated.Emit(s"(!_truthy($x))")
     case UNegate()      => Translated.Emit(s"_neg($x)")
     case UCardinality() => Translated.Emit(s"_len($x)")
     case UPower()       => Translated.Emit(s"_powerset($x)")
 
   private def callExpr(
-      callee: expr_full,
-      args: List[expr_full],
+      callee: expr,
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -272,7 +272,7 @@ object GoExprBackend extends ExprBackend:
 
   private def identifierCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -285,7 +285,7 @@ object GoExprBackend extends ExprBackend:
 
   private def recognizedCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -293,7 +293,7 @@ object GoExprBackend extends ExprBackend:
 
   private def userDefinedCall(
       fname: String,
-      args: List[expr_full],
+      args: List[expr],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -312,7 +312,7 @@ object GoExprBackend extends ExprBackend:
         ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"$fname(${ps.mkString(", ")})"))
 
   private def mapLiteral(
-      entries: List[map_entry_full],
+      entries: List[map_entry],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -326,7 +326,7 @@ object GoExprBackend extends ExprBackend:
       ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"_mapOf(${ps.mkString(", ")})"))
 
   private def constructorLiteral(
-      fields: List[field_assign_full],
+      fields: List[field_assign],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -340,8 +340,8 @@ object GoExprBackend extends ExprBackend:
       ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"_mapOf(${ps.mkString(", ")})"))
 
   private def withUpdate(
-      base: expr_full,
-      updates: List[field_assign_full],
+      base: expr,
+      updates: List[field_assign],
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -356,8 +356,8 @@ object GoExprBackend extends ExprBackend:
 
   private def setComprehension(
       v: String,
-      dom: expr_full,
-      pred: expr_full,
+      dom: expr,
+      pred: expr,
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =
@@ -371,9 +371,9 @@ object GoExprBackend extends ExprBackend:
         Translated.Emit(s"_setFilter($d, func($v any) bool { return _truthy($p) })")
 
   private def quantifier(
-      kind: quant_kind_full,
-      bindings: List[quantifier_binding_full],
-      body: expr_full,
+      kind: quant_kind,
+      bindings: List[quantifier_binding],
+      body: expr,
       ctx: TestCtx,
       span: Option[span_t]
   ): Translated =

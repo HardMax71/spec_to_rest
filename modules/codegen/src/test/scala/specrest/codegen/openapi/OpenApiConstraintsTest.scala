@@ -9,12 +9,12 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
   private def intL(n: Int): IntLitF         = IntLitF(BigInt(n), None)
   private def floatL(v: String): FloatLitF  = FloatLitF(v, None)
   private val valueRef: IdentifierF         = ident("value")
-  private val lenOfValue: expr_full         = CallF(ident("len"), List(valueRef), None)
+  private val lenOfValue: expr              = CallF(ident("len"), List(valueRef), None)
 
-  private def binOp(op: bin_op_full, l: expr_full, r: expr_full): BinaryOpF =
+  private def binOp(op: bin_op, l: expr, r: expr): BinaryOpF =
     BinaryOpF(op, l, r, None)
 
-  private def walk(e: expr_full): openapi_bounds =
+  private def walk(e: expr): openapi_bounds =
     visitConstraintOpenApi(e, emptyOpenApiBounds)
 
   private def i(n: Int): BigInt                = BigInt(n)
@@ -86,7 +86,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
 
   // -- RaValueCmp (Int path) ----------------------------------------------
 
-  List[(String, bin_op_full, Int, openapi_bounds => Option[decimal_lit], decimal_lit)](
+  List[(String, bin_op, Int, openapi_bounds => Option[decimal_lit], decimal_lit)](
     ("BGe → inclusive min", BGe(), 10, _.minimum, dec(10, 0)),
     ("BGt → exclusive min (NOT +1)", BGt(), 10, _.exclusiveMinimum, dec(10, 0)),
     ("BLe → inclusive max", BLe(), 100, _.maximum, dec(100, 0)),
@@ -102,7 +102,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
 
   // -- RaLenCmp (Int path) ------------------------------------------------
 
-  List[(String, bin_op_full, Int, openapi_bounds => Option[BigInt], Int)](
+  List[(String, bin_op, Int, openapi_bounds => Option[BigInt], Int)](
     ("BGe → minLength", BGe(), 3, _.minLength, 3),
     ("BGt → minLength +1 (length is integer-valued)", BGt(), 3, _.minLength, 4),
     ("BLe → maxLength", BLe(), 10, _.maxLength, 10),
@@ -119,7 +119,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
 
   // -- Float literal numeric bounds --------------------------------------
 
-  List[(String, bin_op_full, String, openapi_bounds => Option[decimal_lit], decimal_lit)](
+  List[(String, bin_op, String, openapi_bounds => Option[decimal_lit], decimal_lit)](
     ("BGe → minimum", BGe(), "1.5", _.minimum, dec(15, -1)),
     ("BGt → exclusiveMinimum", BGt(), "3.14", _.exclusiveMinimum, dec(314, -2)),
     ("BLe → maximum", BLe(), "100.5", _.maximum, dec(1005, -1)),

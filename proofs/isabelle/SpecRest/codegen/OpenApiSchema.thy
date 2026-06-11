@@ -214,7 +214,7 @@ text \<open>Compute the constraint bounds for a field's type and optional
   \<open>JsonSchemaConstraints\<close>-with-\<open>Double\<close> intermediate is eliminated).\<close>
 
 definition computeFieldBounds ::
-  "type_expr_full \<Rightarrow> expr_full option \<Rightarrow> alias_map \<Rightarrow> openapi_bounds"
+  "type_expr \<Rightarrow> expr option \<Rightarrow> alias_map \<Rightarrow> openapi_bounds"
 where
   "computeFieldBounds ty cOpt am =
     (let alias_bounds =
@@ -239,10 +239,10 @@ text \<open>Recursive lifted walker. Mirrors \<open>OpenApi.Schema.typeExprToSch
   \<open>FieldSchema.nullable\<close> flag).\<close>
 
 function typeExprToSchemaAux ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
+  "nat \<Rightarrow> type_expr \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
     \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> schema_object"
 and fieldToSchemaAux ::
-  "nat \<Rightarrow> type_expr_full \<Rightarrow> expr_full option
+  "nat \<Rightarrow> type_expr \<Rightarrow> expr option
     \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> (schema_object \<times> bool)"
 where
   "typeExprToSchemaAux 0 _ _ _ _ _ _ = emptySchemaObject"
@@ -297,14 +297,14 @@ definition openApiSchemaFuel :: "alias_map \<Rightarrow> nat" where
   "openApiSchemaFuel am = length am + 100"
 
 definition typeExprToSchema ::
-  "type_expr_full \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
+  "type_expr \<Rightarrow> openapi_bounds \<Rightarrow> String.literal list option
     \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> schema_object"
 where
   "typeExprToSchema ty bounds enumOpt am em ens =
      typeExprToSchemaAux (openApiSchemaFuel am) ty bounds enumOpt am em ens"
 
 definition fieldToSchema ::
-  "type_expr_full \<Rightarrow> expr_full option
+  "type_expr \<Rightarrow> expr option
     \<Rightarrow> alias_map \<Rightarrow> enum_map \<Rightarrow> String.literal list \<Rightarrow> (schema_object \<times> bool)"
 where
   "fieldToSchema ty cOpt am em ens =

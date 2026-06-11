@@ -7,11 +7,11 @@ class TrustTest extends CatsEffectSuite:
 
   private val enums: List[String] = List("Color", "Status")
 
-  private def lit(b: Boolean): expr_full = BoolLitF(b, None)
-  private def i(n: Int): expr_full       = IntLitF(BigInt(n), None)
-  private def id(s: String): expr_full   = IdentifierF(s, None)
+  private def lit(b: Boolean): expr = BoolLitF(b, None)
+  private def i(n: Int): expr       = IntLitF(BigInt(n), None)
+  private def id(s: String): expr   = IdentifierF(s, None)
 
-  private val classifyCases: List[(String, expr_full, TrustLevel)] = List(
+  private val classifyCases: List[(String, expr, TrustLevel)] = List(
     ("Sound: in-subset BoolBin", BinaryOpF(BAnd(), lit(true), lit(false), None), TrustLevel.Sound),
     ("Sound: integer Cmp", BinaryOpF(BLt(), i(1), i(2), None), TrustLevel.Sound),
     (

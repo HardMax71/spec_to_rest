@@ -145,7 +145,7 @@ object EmitGo:
       k -> v.domain
     val aliasExprs =
       svcTypeAliases(profiled.ir).map(a => talName(a) -> talType(a)).toMap
-    def resolveAliasType(te: type_expr_full, seen: Set[String] = Set.empty): Option[String] =
+    def resolveAliasType(te: type_expr, seen: Set[String] = Set.empty): Option[String] =
       te match
         case NamedTypeF(n, _) =>
           baseTypeLookup
@@ -725,7 +725,7 @@ object EmitGo:
       entity.fields.exists(_.columnName == c)
     .map(toPascalCase)
 
-  private def goTypeForParam(typeExpr: type_expr_full, typeLookup: Map[String, String]): String =
+  private def goTypeForParam(typeExpr: type_expr, typeLookup: Map[String, String]): String =
     typeExpr match
       case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "string")
       case OptionTypeF(inner, _) => s"*${goTypeForParam(inner, typeLookup)}"

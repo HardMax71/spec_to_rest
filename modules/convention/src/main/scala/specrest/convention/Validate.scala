@@ -65,7 +65,7 @@ object Validate:
     Registry.map(p => p.name -> p).toMap
 
   def validateConventions(
-      conventions: Option[conventions_decl_full],
+      conventions: Option[conventions_decl],
       ir: ServiceIRFull
   ): List[ConventionDiagnostic] =
     conventions match
@@ -78,7 +78,7 @@ object Validate:
         val aliasNames  = ix.aliasNames
         val enumNames   = ix.enumNames
         val diagnostics = List.newBuilder[ConventionDiagnostic]
-        val seen        = scala.collection.mutable.Map.empty[String, convention_rule_full]
+        val seen        = scala.collection.mutable.Map.empty[String, convention_rule]
 
         for rule <- rules do
           val propName = cvrProperty(rule)
@@ -153,7 +153,7 @@ object Validate:
 
   // Format a parser-emitted validation_failure into a diagnostic message keyed
   // to the rule's target + property name.
-  private def failureMsg(rule: convention_rule_full, f: validation_failure): String = f match
+  private def failureMsg(rule: convention_rule, f: validation_failure): String = f match
     case _: ExpectedString =>
       s"invalid value for ${cvrTarget(rule)}.${cvrProperty(rule)} — expected a string"
     case _: ExpectedInteger =>
@@ -179,7 +179,7 @@ object Validate:
           rule
         )}.strategy — expected "module:symbol" (e.g., "tests.strategies_user:valid_url"), got "$v""""
 
-  private def qualifierMissingMsg(rule: convention_rule_full): String = cvrProperty(rule) match
+  private def qualifierMissingMsg(rule: convention_rule): String = cvrProperty(rule) match
     case "http_header" =>
       s"""${cvrTarget(
           rule
@@ -198,7 +198,7 @@ object Validate:
       s"${cvrTarget(rule)}.${cvrProperty(rule)} requires a qualifier"
 
   private def mismatchMessage(
-      rule: convention_rule_full,
+      rule: convention_rule,
       prop: ConventionProperty,
       target: ConventionTarget
   ): String =
@@ -221,7 +221,7 @@ object Validate:
         s"property '${cvrProperty(rule)}' is not valid for ${target.labelSingular} '${cvrTarget(rule)}'; it applies to $applicable"
 
   private def validateIrContext(
-      rule: convention_rule_full,
+      rule: convention_rule,
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
@@ -240,7 +240,7 @@ object Validate:
         )
 
   private def detectEntityFieldCollisions(
-      rules: List[convention_rule_full],
+      rules: List[convention_rule],
       ir: ServiceIRFull,
       diagnostics: DiagBuilder
   ): Unit =
@@ -261,7 +261,7 @@ object Validate:
           )
       case _ => ()
 
-  private def err(rule: convention_rule_full, msg: String, diagnostics: DiagBuilder): Unit =
+  private def err(rule: convention_rule, msg: String, diagnostics: DiagBuilder): Unit =
     diagnostics += ConventionDiagnostic(
       DiagnosticLevel.Error,
       msg,

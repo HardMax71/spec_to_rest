@@ -7,46 +7,46 @@ class SpecRestGeneratedTest extends FunSuite:
 
   private val enums: List[String] = List("Color")
 
-  test("extracted translate_full_direct handles atom expressions"):
-    assertEquals(G.translate_full_direct(enums, G.BoolLitF(true, None)), Some(G.BLit(true)))
-    assertEquals(G.translate_full_direct(enums, G.BoolLitF(false, None)), Some(G.BLit(false)))
-    assertEquals(G.translate_full_direct(enums, G.IdentifierF("x", None)), Some(G.TVar("x")))
+  test("extracted translate handles atom expressions"):
+    assertEquals(G.translate(enums, G.BoolLitF(true, None)), Some(G.BLit(true)))
+    assertEquals(G.translate(enums, G.BoolLitF(false, None)), Some(G.BLit(false)))
+    assertEquals(G.translate(enums, G.IdentifierF("x", None)), Some(G.TVar("x")))
 
-  test("extracted translate_full_direct handles unary"):
+  test("extracted translate handles unary"):
     val inner = G.BoolLitF(true, None)
     assertEquals(
-      G.translate_full_direct(enums, G.UnaryOpF(G.UNot(), inner, None)),
+      G.translate(enums, G.UnaryOpF(G.UNot(), inner, None)),
       Some(G.TNot(G.BLit(true)))
     )
 
-  test("extracted translate_full_direct handles boolean binary"):
+  test("extracted translate handles boolean binary"):
     val l = G.BoolLitF(true, None)
     val r = G.BoolLitF(false, None)
     assertEquals(
-      G.translate_full_direct(enums, G.BinaryOpF(G.BAnd(), l, r, None)),
+      G.translate(enums, G.BinaryOpF(G.BAnd(), l, r, None)),
       Some(G.TAnd(G.BLit(true), G.BLit(false)))
     )
 
-  test("extracted translate_full_direct handles BGe via TLt + TEq composition"):
+  test("extracted translate handles BGe via TLt + TEq composition"):
     val l       = G.IdentifierF("a", None)
     val r       = G.IdentifierF("b", None)
-    val emitted = G.translate_full_direct(enums, G.BinaryOpF(G.BGe(), l, r, None))
+    val emitted = G.translate(enums, G.BinaryOpF(G.BGe(), l, r, None))
     val expected = G.TOr(
       G.TLt(G.TVar("b"), G.TVar("a")),
       G.TEq(G.TVar("a"), G.TVar("b"))
     )
     assertEquals(emitted, Some(expected))
 
-  test("extracted translate_full_direct handles set ops"):
+  test("extracted translate handles set ops"):
     val l = G.IdentifierF("s1", None)
     val r = G.IdentifierF("s2", None)
     assertEquals(
-      G.translate_full_direct(enums, G.BinaryOpF(G.BUnion(), l, r, None)),
+      G.translate(enums, G.BinaryOpF(G.BUnion(), l, r, None)),
       Some(G.TSetUnion(G.TVar("s1"), G.TVar("s2")))
     )
 
-  test("extracted translate_full_direct covers the surface constructs (smoke)"):
-    val probes: List[G.expr_full] = List(
+  test("extracted translate covers the surface constructs (smoke)"):
+    val probes: List[G.expr] = List(
       G.BoolLitF(true, None),
       G.IntLitF(BigInt(0), None),
       G.IdentifierF("x", None),
@@ -85,6 +85,6 @@ class SpecRestGeneratedTest extends FunSuite:
       )
     )
     probes.foreach: e =>
-      G.translate_full_direct(enums, e) match
+      G.translate(enums, e) match
         case Some(t) => assert(t.toString.nonEmpty, s"empty toString on $e")
-        case None    => fail(s"translate_full_direct punted on in-subset probe $e")
+        case None    => fail(s"translate punted on in-subset probe $e")

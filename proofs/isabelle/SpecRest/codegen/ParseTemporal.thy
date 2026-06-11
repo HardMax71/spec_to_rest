@@ -10,7 +10,7 @@ text \<open>Parse-don't-validate dispatcher for temporal declarations. Mirrors
   corresponding constructor; everything else flows into \<open>TbInvalid\<close>
   carrying the raw expression for diagnostics + faithful round-trip.\<close>
 
-definition parseTemporalBody :: "expr_full \<Rightarrow> temporal_body" where
+definition parseTemporalBody :: "expr \<Rightarrow> temporal_body" where
   "parseTemporalBody e = (case e of
        CallF (IdentifierF name _) [arg] _ \<Rightarrow>
          (if name = STR ''always''      then TbAlways arg
@@ -24,20 +24,20 @@ text \<open>Accessor for the underlying expression. Wellformed bodies expose
   expression. Used by IR-walking visitors (lint, dafny, typecheck)
   that don't care about the keyword wrapper.\<close>
 
-fun temporalArg :: "temporal_body \<Rightarrow> expr_full" where
+fun temporalArg :: "temporal_body \<Rightarrow> expr" where
   "temporalArg (TbAlways e) = e"
 | "temporalArg (TbEventually e) = e"
 | "temporalArg (TbFairness e) = e"
 | "temporalArg (TbInvalid e) = e"
 
-text \<open>Inverse direction: re-synthesise the original \<open>expr_full\<close> shape
+text \<open>Inverse direction: re-synthesise the original \<open>expr\<close> shape
   from a typed body. Used by Scala's \<open>Serialize\<close> to round-trip
-  \<open>temporal_decl_full\<close> through JSON without expanding the wire format.
+  \<open>temporal_decl\<close> through JSON without expanding the wire format.
   The synthesised \<open>CallF\<close>s carry no spans — span information is
   preserved on the outer \<open>TemporalDeclFull\<close> wrapper, not on the
   re-emitted call wrapper.\<close>
 
-definition synthTemporalExpr :: "temporal_body \<Rightarrow> expr_full" where
+definition synthTemporalExpr :: "temporal_body \<Rightarrow> expr" where
   "synthTemporalExpr b = (case b of
        TbAlways arg     \<Rightarrow> CallF (IdentifierF (STR ''always'') None) [arg] None
      | TbEventually arg \<Rightarrow> CallF (IdentifierF (STR ''eventually'') None) [arg] None
@@ -71,7 +71,7 @@ lemma parseTemporalBody_synth_fairness:
 lemma parseTemporalBody_TbInvalid_raw_eq:
   "parseTemporalBody e = TbInvalid raw \<Longrightarrow> raw = e"
   by (auto simp: parseTemporalBody_def
-           split: expr_full.splits list.splits if_splits)
+           split: expr.splits list.splits if_splits)
 
 lemma parseTemporalBody_synth_invalid:
   assumes "parseTemporalBody e = TbInvalid e"

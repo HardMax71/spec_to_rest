@@ -3,7 +3,7 @@ package specrest.testgen
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.entFields
 import specrest.ir.generated.SpecRestGenerated.entName
-import specrest.ir.generated.SpecRestGenerated.entity_decl_full
+import specrest.ir.generated.SpecRestGenerated.entity_decl
 import specrest.ir.generated.SpecRestGenerated.fldName
 import specrest.ir.generated.SpecRestGenerated.irStateFields
 import specrest.ir.generated.SpecRestGenerated.stfName
@@ -25,7 +25,7 @@ object AdminRouterGo:
     val entities = svcEntities(ir)
     val isPg     = profiled.profile.database == "postgres"
 
-    def tbl(e: entity_decl_full): String = Naming.toTableName(entName(e))
+    def tbl(e: entity_decl): String = Naming.toTableName(entName(e))
 
     val resetStmts =
       if entities.isEmpty then "\t\t// no entities"
@@ -183,7 +183,7 @@ object AdminRouterGo:
         |}
         |""".stripMargin
 
-  private def seedHandler(e: entity_decl_full, isPg: Boolean): String =
+  private def seedHandler(e: entity_decl, isPg: Boolean): String =
     val snake  = Naming.toSnakeCase(entName(e))
     val pk     = AdminModel.primaryKeyField(e).getOrElse("id")
     val pkCol  = Naming.toColumnName(pk)

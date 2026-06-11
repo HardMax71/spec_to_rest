@@ -4,7 +4,7 @@ begin
 
 text \<open>Language-neutral decision kernels shared by the per-target expression backends
   (\<open>testgen.ExprToPython\<close>, \<open>TsExprBackend\<close>, \<open>GoExprBackend\<close>). The three backends walk
-  \<open>expr_full\<close> with byte-identical structure and differ only in the rendered tokens;
+  \<open>expr\<close> with byte-identical structure and differ only in the rendered tokens;
   this theory lifts the parts that are pure decisions, so each backend becomes a
   renderer over the lifted result.
 
@@ -90,11 +90,11 @@ text \<open>\<open>quantifierAllIn\<close> lifts the gate at the head of each ba
   the comprehension form is only emitted when every binding uses \<open>in\<close> (\<open>BkIn\<close>); a
   \<open>:\<close>-binding (\<open>BkColon\<close>) forces the shared skip.\<close>
 
-fun quantBindingIsIn :: "quantifier_binding_full \<Rightarrow> bool" where
+fun quantBindingIsIn :: "quantifier_binding \<Rightarrow> bool" where
   "quantBindingIsIn (QuantifierBindingFull _ _ BkIn _) = True"
 | "quantBindingIsIn _ = False"
 
-definition quantifierAllIn :: "quantifier_binding_full list \<Rightarrow> bool" where
+definition quantifierAllIn :: "quantifier_binding list \<Rightarrow> bool" where
   "quantifierAllIn bs = list_all quantBindingIsIn bs"
 
 lemmas lookupArity_code [code]      = lookupArity.simps
@@ -106,7 +106,7 @@ text \<open>\<open>isMapLiteralExpr\<close> recognises a \<open>MapLiteralF\<clo
   \<open>isInstanceOf[MapLiteralF]\<close> guard each backend uses to route a \<open>BAdd\<close> over
   map literals to a dict-merge, removing the reflection (and the wart suppression).\<close>
 
-fun isMapLiteralExpr :: "expr_full \<Rightarrow> bool" where
+fun isMapLiteralExpr :: "expr \<Rightarrow> bool" where
   "isMapLiteralExpr (MapLiteralF _ _) = True"
 | "isMapLiteralExpr _ = False"
 
@@ -120,16 +120,16 @@ text \<open>Type-expression walkers shared by the testgen admin / behavioral bac
   identical on every realistic spec, and both reject cyclic aliases.\<close>
 
 fun lookupAliasTarget ::
-  "type_alias_decl_full list \<Rightarrow> String.literal \<Rightarrow> type_expr_full option"
+  "type_alias_decl list \<Rightarrow> String.literal \<Rightarrow> type_expr option"
 where
   "lookupAliasTarget [] _ = None"
 | "lookupAliasTarget (TypeAliasDeclFull nm tgt _ _ # rest) n =
      (if nm = n then Some tgt else lookupAliasTarget rest n)"
 
-definition typeWalkFuel :: "type_alias_decl_full list \<Rightarrow> nat" where
+definition typeWalkFuel :: "type_alias_decl list \<Rightarrow> nat" where
   "typeWalkFuel aliases = length aliases + 100"
 
-fun isNumericTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+fun isNumericTypeAux :: "nat \<Rightarrow> type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isNumericTypeAux 0 _ _ = False"
 | "isNumericTypeAux (Suc fuel) aliases t =
      (case t of
@@ -142,7 +142,7 @@ fun isNumericTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarro
       | OptionTypeF inner _ \<Rightarrow> isNumericTypeAux fuel aliases inner
       | _ \<Rightarrow> False)"
 
-fun isOptionalTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+fun isOptionalTypeAux :: "nat \<Rightarrow> type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isOptionalTypeAux 0 _ _ = False"
 | "isOptionalTypeAux (Suc fuel) aliases t =
      (case t of
@@ -153,7 +153,7 @@ fun isOptionalTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarr
            | None \<Rightarrow> False)
       | _ \<Rightarrow> False)"
 
-fun isDateTimeTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+fun isDateTimeTypeAux :: "nat \<Rightarrow> type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isDateTimeTypeAux 0 _ _ = False"
 | "isDateTimeTypeAux (Suc fuel) aliases t =
      (case t of
@@ -166,7 +166,7 @@ fun isDateTimeTypeAux :: "nat \<Rightarrow> type_alias_decl_full list \<Rightarr
       | _ \<Rightarrow> False)"
 
 fun collectionElementTypeAux ::
-  "nat \<Rightarrow> type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> type_expr_full option"
+  "nat \<Rightarrow> type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> type_expr option"
 where
   "collectionElementTypeAux 0 _ _ = None"
 | "collectionElementTypeAux (Suc fuel) aliases t =
@@ -180,17 +180,17 @@ where
            | None \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
-definition isNumericType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+definition isNumericType :: "type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isNumericType aliases t = isNumericTypeAux (typeWalkFuel aliases) aliases t"
 
-definition isOptionalType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+definition isOptionalType :: "type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isOptionalType aliases t = isOptionalTypeAux (typeWalkFuel aliases) aliases t"
 
-definition isDateTimeType :: "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> bool" where
+definition isDateTimeType :: "type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> bool" where
   "isDateTimeType aliases t = isDateTimeTypeAux (typeWalkFuel aliases) aliases t"
 
 definition collectionElementType ::
-  "type_alias_decl_full list \<Rightarrow> type_expr_full \<Rightarrow> type_expr_full option"
+  "type_alias_decl list \<Rightarrow> type_expr \<Rightarrow> type_expr option"
 where
   "collectionElementType aliases t = collectionElementTypeAux (typeWalkFuel aliases) aliases t"
 

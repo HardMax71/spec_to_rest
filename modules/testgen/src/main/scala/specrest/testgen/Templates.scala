@@ -42,16 +42,16 @@ object Templates:
       svcPredicates(ir).map(renderPredicate(_, ir))
     parts.mkString("")
 
-  private def renderFunction(fn: function_decl_full, ir: ServiceIRFull): String =
+  private def renderFunction(fn: function_decl, ir: ServiceIRFull): String =
     renderUserDef(fncName(fn), fncParams(fn).map(prmName), fncBody(fn), ir)
 
-  private def renderPredicate(pr: predicate_decl_full, ir: ServiceIRFull): String =
+  private def renderPredicate(pr: predicate_decl, ir: ServiceIRFull): String =
     renderUserDef(prdName(pr), prdParams(pr).map(prmName), prdBody(pr), ir)
 
   private def renderUserDef(
       specName: String,
       paramNames: List[String],
-      body: expr_full,
+      body: expr,
       ir: ServiceIRFull
   ): String =
     val pyName        = Naming.toSnakeCase(specName)
