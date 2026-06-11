@@ -459,14 +459,6 @@ text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Righta
   \<open>typeExprFullToTy\<close> hoisted up to the \<open>value_has_ty\<close> block since
   \<open>schemaFieldType\<close> (referenced by \<open>vt_entity_with\<close>) depends on it.\<close>
 
-fun identName :: "expr \<Rightarrow> String.literal option" where
-  "identName (IdentifierF rel _) = Some rel"
-| "identName _ = None"
-
-lemma identName_SomeD:
-  "identName e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
-  by (cases e rule: identName.cases) auto
-
 fun peelRelationRef :: "expr \<Rightarrow> String.literal option" where
   "peelRelationRef (IdentifierF rel _) = Some rel"
 | "peelRelationRef (PreF b _)          = identName b"

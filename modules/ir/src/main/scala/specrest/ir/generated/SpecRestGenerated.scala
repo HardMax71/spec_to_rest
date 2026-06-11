@@ -2720,6 +2720,36 @@ object SpecRestGenerated {
     case BDiv()       => "/"
   }
 
+  def identName(x0: expr): Option[String] = x0 match {
+    case IdentifierF(rel, uu)             => Some[String](rel)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+  }
+
   def isLitFull(x0: expr): Boolean = x0 match {
     case BoolLitF(uu, uv)                 => true
     case IntLitF(uw, ux)                  => true
@@ -3978,6 +4008,17 @@ object SpecRestGenerated {
         list_all[String]((d: String) => d == n || !membera[String](names, d), deps)
     }
 
+  def map2_opt(
+      f: smt_term => smt_term => smt_term,
+      a: Option[smt_term],
+      b: Option[smt_term]
+  ): Option[smt_term] =
+    (a, b) match {
+      case (None, _)          => None
+      case (Some(_), None)    => None
+      case (Some(x), Some(y)) => Some[smt_term](f(x)(y))
+    }
+
   def mpeKey(x0: map_entry): expr = x0 match {
     case MapEntryFull(x1, x2, x3) => x1
   }
@@ -4224,36 +4265,6 @@ object SpecRestGenerated {
     case TableSpec(uu, uv, uw, ux, uy, uz, ixs) => ixs
   }
 
-  def identName(x0: expr): Option[String] = x0 match {
-    case IdentifierF(rel, uu)             => Some[String](rel)
-    case BinaryOpF(v, va, vb, vc)         => None
-    case UnaryOpF(v, va, vb)              => None
-    case QuantifierF(v, va, vb, vc)       => None
-    case SomeWrapF(v, va)                 => None
-    case TheF(v, va, vb, vc)              => None
-    case FieldAccessF(v, va, vb)          => None
-    case EnumAccessF(v, va, vb)           => None
-    case IndexF(v, va, vb)                => None
-    case CallF(v, va, vb)                 => None
-    case PrimeF(v, va)                    => None
-    case PreF(v, va)                      => None
-    case WithF(v, va, vb)                 => None
-    case IfF(v, va, vb, vc)               => None
-    case LetF(v, va, vb, vc)              => None
-    case LambdaF(v, va, vb)               => None
-    case ConstructorF(v, va, vb)          => None
-    case SetLiteralF(v, va)               => None
-    case MapLiteralF(v, va)               => None
-    case SetComprehensionF(v, va, vb, vc) => None
-    case SeqLiteralF(v, va)               => None
-    case MatchesF(v, va, vb)              => None
-    case IntLitF(v, va)                   => None
-    case FloatLitF(v, va)                 => None
-    case StringLitF(v, va)                => None
-    case BoolLitF(v, va)                  => None
-    case NoneLitF(v)                      => None
-  }
-
   def translate_forall_step(
       enums: List[String],
       x1: quantifier_binding,
@@ -4440,6 +4451,66 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+  }
+
+  def comp_parts(x0: expr): Option[(String, (String, expr))] = x0 match {
+    case SetComprehensionF(vara, d, p, uu) =>
+      d match {
+        case BinaryOpF(_, _, _, _)         => None
+        case UnaryOpF(_, _, _)             => None
+        case QuantifierF(_, _, _, _)       => None
+        case SomeWrapF(_, _)               => None
+        case TheF(_, _, _, _)              => None
+        case FieldAccessF(_, _, _)         => None
+        case EnumAccessF(_, _, _)          => None
+        case IndexF(_, _, _)               => None
+        case CallF(_, _, _)                => None
+        case PrimeF(_, _)                  => None
+        case PreF(_, _)                    => None
+        case WithF(_, _, _)                => None
+        case IfF(_, _, _, _)               => None
+        case LetF(_, _, _, _)              => None
+        case LambdaF(_, _, _)              => None
+        case ConstructorF(_, _, _)         => None
+        case SetLiteralF(_, _)             => None
+        case MapLiteralF(_, _)             => None
+        case SetComprehensionF(_, _, _, _) => None
+        case SeqLiteralF(_, _)             => None
+        case MatchesF(_, _, _)             => None
+        case IntLitF(_, _)                 => None
+        case FloatLitF(_, _)               => None
+        case StringLitF(_, _)              => None
+        case BoolLitF(_, _)                => None
+        case NoneLitF(_)                   => None
+        case IdentifierF(dnm, _) =>
+          Some[(String, (String, expr))]((vara, (dnm, p)))
+      }
+    case BinaryOpF(v, va, vb, vc)   => None
+    case UnaryOpF(v, va, vb)        => None
+    case QuantifierF(v, va, vb, vc) => None
+    case SomeWrapF(v, va)           => None
+    case TheF(v, va, vb, vc)        => None
+    case FieldAccessF(v, va, vb)    => None
+    case EnumAccessF(v, va, vb)     => None
+    case IndexF(v, va, vb)          => None
+    case CallF(v, va, vb)           => None
+    case PrimeF(v, va)              => None
+    case PreF(v, va)                => None
+    case WithF(v, va, vb)           => None
+    case IfF(v, va, vb, vc)         => None
+    case LetF(v, va, vb, vc)        => None
+    case LambdaF(v, va, vb)         => None
+    case ConstructorF(v, va, vb)    => None
+    case SetLiteralF(v, va)         => None
+    case MapLiteralF(v, va)         => None
+    case SeqLiteralF(v, va)         => None
+    case MatchesF(v, va, vb)        => None
+    case IntLitF(v, va)             => None
+    case FloatLitF(v, va)           => None
+    case StringLitF(v, va)          => None
+    case BoolLitF(v, va)            => None
+    case NoneLitF(v)                => None
+    case IdentifierF(v, va)         => None
   }
 
   def translate_with_assigns(
@@ -4644,953 +4715,183 @@ object SpecRestGenerated {
     case (enums, BinaryOpF(op, l, r, vv)) =>
       op match {
         case BAnd() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TAnd(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TAnd(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BOr() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TOr(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TOr(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BImplies() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TImplies(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TImplies(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BIff() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)       => None
-            case (Some(_), None) => None
-            case (Some(lt), Some(rt)) =>
-              Some[smt_term](TAnd(TImplies(lt, rt), TImplies(rt, lt)))
-          }
+          map2_opt(
+            (lt: smt_term) =>
+              (rt: smt_term) =>
+                TAnd(TImplies(lt, rt), TImplies(rt, lt)),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BEq() =>
           translate_beq_dom_or_none(l, r) match {
             case None =>
-              r match {
-                case BinaryOpF(_, _, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case UnaryOpF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case QuantifierF(_, _, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SomeWrapF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case TheF(_, _, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case FieldAccessF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case EnumAccessF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case IndexF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case CallF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case PrimeF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case PreF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case WithF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case IfF(_, _, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case LetF(_, _, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case LambdaF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case ConstructorF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetLiteralF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case MapLiteralF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, BinaryOpF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, UnaryOpF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, QuantifierF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, SomeWrapF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, TheF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, FieldAccessF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, EnumAccessF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, IndexF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, CallF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, PrimeF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, PreF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, WithF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, IfF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, LetF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, LambdaF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, ConstructorF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, SetLiteralF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, MapLiteralF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, SetComprehensionF(_, _, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)       => None
-                    case (Some(_), None) => None
-                    case (Some(lt), Some(rt)) =>
-                      Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, SeqLiteralF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, MatchesF(_, _, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, IntLitF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, FloatLitF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, StringLitF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, BoolLitF(_, _), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(_, NoneLitF(_), _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case SetComprehensionF(vara, IdentifierF(dnm, _), p, _) =>
-                  (translate(enums, l), translate(enums, p)) match {
-                    case (None, _)       => None
-                    case (Some(_), None) => None
-                    case (Some(lt), Some(pt)) =>
-                      Some[smt_term](translate_set_comp_eq(enums, vara, dnm, lt, pt))
-                  }
-                case SeqLiteralF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case MatchesF(_, _, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case IntLitF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case FloatLitF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case StringLitF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case BoolLitF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case NoneLitF(_) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
-                case IdentifierF(_, _) =>
-                  (translate(enums, l), translate(enums, r)) match {
-                    case (None, _)            => None
-                    case (Some(_), None)      => None
-                    case (Some(lt), Some(rt)) => Some[smt_term](TEq(lt, rt))
-                  }
+              comp_parts(r) match {
+                case None =>
+                  map2_opt(
+                    (a: smt_term) => (b: smt_term) => TEq(a, b),
+                    translate(enums, l),
+                    translate(enums, r)
+                  )
+                case Some((vara, (dnm, p))) =>
+                  map2_opt(
+                    (a: smt_term) =>
+                      (b: smt_term) =>
+                        translate_set_comp_eq(enums, vara, dnm, a, b),
+                    translate(enums, l),
+                    translate(enums, p)
+                  )
               }
             case Some(a) => Some[smt_term](a)
           }
         case BNeq() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TNot(TEq(lt, rt)))
-          }
+          map2_opt(
+            (lt: smt_term) => (rt: smt_term) => TNot(TEq(lt, rt)),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BLt() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TLt(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TLt(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BGt() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TLt(rt, lt))
-          }
+          map2_opt(
+            (lt: smt_term) => (rt: smt_term) => TLt(rt, lt),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BLe() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)       => None
-            case (Some(_), None) => None
-            case (Some(lt), Some(rt)) =>
-              Some[smt_term](TOr(TLt(lt, rt), TEq(lt, rt)))
-          }
+          map2_opt(
+            (lt: smt_term) =>
+              (rt: smt_term) =>
+                TOr(TLt(lt, rt), TEq(lt, rt)),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BGe() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)       => None
-            case (Some(_), None) => None
-            case (Some(lt), Some(rt)) =>
-              Some[smt_term](TOr(TLt(rt, lt), TEq(lt, rt)))
-          }
+          map2_opt(
+            (lt: smt_term) =>
+              (rt: smt_term) =>
+                TOr(TLt(rt, lt), TEq(lt, rt)),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BIn() =>
-          r match {
-            case BinaryOpF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
+          identName(r) match {
+            case None =>
+              comp_parts(r) match {
+                case None =>
+                  map2_opt(
+                    (a: smt_term) =>
+                      (b: smt_term) =>
+                        TSetMember(a, b),
+                    translate(enums, l),
+                    translate(enums, r)
+                  )
+                case Some((vara, (dnm, p))) =>
+                  map2_opt(
+                    (lt: smt_term) =>
+                      (pt: smt_term) =>
+                        TLetIn(
+                          vara,
+                          lt,
+                          string_in_list(dnm, enums) match {
+                            case true  => pt
+                            case false => TAnd(TInDom(dnm, TVar(vara)), pt)
+                          }
+                        ),
+                    translate(enums, l),
+                    translate(enums, p)
+                  )
               }
-            case UnaryOpF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case QuantifierF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SomeWrapF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case TheF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case FieldAccessF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case EnumAccessF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case IndexF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case CallF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case PrimeF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case PreF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case WithF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case IfF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case LetF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case LambdaF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case ConstructorF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case MapLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, BinaryOpF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, UnaryOpF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, QuantifierF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, SomeWrapF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, TheF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, FieldAccessF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, EnumAccessF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, IndexF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, CallF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, PrimeF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, PreF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, WithF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, IfF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, LetF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, LambdaF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, ConstructorF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, SetLiteralF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, MapLiteralF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, SetComprehensionF(_, _, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, SeqLiteralF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, MatchesF(_, _, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, IntLitF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, FloatLitF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, StringLitF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, BoolLitF(_, _), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(_, NoneLitF(_), _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case SetComprehensionF(vara, IdentifierF(dnm, _), p, _) =>
-              (translate(enums, l), translate(enums, p)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(pt)) =>
-                  Some[smt_term](TLetIn(
-                    vara,
-                    lt,
-                    string_in_list(dnm, enums) match {
-                      case true  => pt
-                      case false => TAnd(TInDom(dnm, TVar(vara)), pt)
-                    }
-                  ))
-              }
-            case SeqLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case MatchesF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case IntLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case FloatLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case StringLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case BoolLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case NoneLitF(_) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)            => None
-                case (Some(_), None)      => None
-                case (Some(lt), Some(rt)) => Some[smt_term](TSetMember(lt, rt))
-              }
-            case IdentifierF(rel, _) =>
+            case Some(rel) =>
               map_option[smt_term, smt_term]((a: smt_term) => TInDom(rel, a), translate(enums, l))
           }
         case BNotIn() =>
-          r match {
-            case BinaryOpF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case UnaryOpF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case QuantifierF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case SomeWrapF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case TheF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case FieldAccessF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case EnumAccessF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case IndexF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case CallF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case PrimeF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case PreF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case WithF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case IfF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case LetF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case LambdaF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case ConstructorF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case SetLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case MapLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case SetComprehensionF(_, _, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case SeqLiteralF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case MatchesF(_, _, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case IntLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case FloatLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case StringLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case BoolLitF(_, _) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case NoneLitF(_) =>
-              (translate(enums, l), translate(enums, r)) match {
-                case (None, _)       => None
-                case (Some(_), None) => None
-                case (Some(lt), Some(rt)) =>
-                  Some[smt_term](TNot(TSetMember(lt, rt)))
-              }
-            case IdentifierF(rel, _) =>
+          identName(r) match {
+            case None =>
+              map2_opt(
+                (lt: smt_term) =>
+                  (rt: smt_term) =>
+                    TNot(TSetMember(lt, rt)),
+                translate(enums, l),
+                translate(enums, r)
+              )
+            case Some(rel) =>
               map_option[smt_term, smt_term](
                 (lt: smt_term) => TNot(TInDom(rel, lt)),
                 translate(enums, l)
               )
           }
         case BSubset() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)       => None
-            case (Some(_), None) => None
-            case (Some(lt), Some(rt)) =>
-              Some[smt_term](TEq(TSetDiff(lt, rt), TSetEmpty()))
-          }
+          map2_opt(
+            (lt: smt_term) =>
+              (rt: smt_term) =>
+                TEq(TSetDiff(lt, rt), TSetEmpty()),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BUnion() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TSetUnion(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TSetUnion(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BIntersect() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TSetIntersect(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TSetIntersect(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BDiff() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TSetDiff(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TSetDiff(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BAdd() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TAdd(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TAdd(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BSub() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TSub(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TSub(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BMul() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TMul(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TMul(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
         case BDiv() =>
-          (translate(enums, l), translate(enums, r)) match {
-            case (None, _)            => None
-            case (Some(_), None)      => None
-            case (Some(lt), Some(rt)) => Some[smt_term](TDiv(lt, rt))
-          }
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TDiv(a, b),
+            translate(enums, l),
+            translate(enums, r)
+          )
       }
     case (enums, LetF(x, v, body, vw)) =>
       (translate(enums, v), translate(enums, body)) match {

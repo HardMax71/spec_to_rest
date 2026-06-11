@@ -32,6 +32,25 @@ lemma peelRelationRefFull_some_imp_rel_ref_shape:
   "peelRelationRef base = Some rel \<Longrightarrow> rel_ref_shape base"
   by (cases base rule: peelRelationRef.cases) (auto dest!: identName_SomeD)
 
+text \<open>\<open>comp_pred_or_self\<close> hoists the ident-domain-comprehension dispatch
+  out of \<open>wf_z3\<close>'s recursive equation. Nested-pattern case bodies inside a
+  recursive \<open>fun\<close> duplicate the recursive default branch per constructor,
+  which is what made the old equation cost ~29 s to elaborate.\<close>
+
+fun comp_pred_or_self :: "expr \<Rightarrow> expr" where
+  "comp_pred_or_self (SetComprehensionF v d p s) =
+     (case d of IdentifierF _ _ \<Rightarrow> p | _ \<Rightarrow> SetComprehensionF v d p s)"
+| "comp_pred_or_self e = e"
+
+lemma comp_pred_or_self_size [termination_simp]:
+  "size (comp_pred_or_self e) \<le> size e"
+  by (cases e rule: comp_pred_or_self.cases) (auto split: expr.splits)
+
+lemma comp_pred_or_self_noncomp:
+  "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3
+     \<Longrightarrow> comp_pred_or_self r = r"
+  by (cases r rule: comp_pred_or_self.cases) (auto split: expr.splits)
+
 fun wf_z3 :: "expr \<Rightarrow> bool"
 and wf_z3_list :: "expr list \<Rightarrow> bool"
 and wf_z3_fields :: "field_assign list \<Rightarrow> bool"
@@ -45,17 +64,13 @@ where
         | UCardinality \<Rightarrow> (\<exists>x s. e = IdentifierF x s)
         | UPower \<Rightarrow> False)"
 | "wf_z3 (BinaryOpF op l r _)      =
-     (case op of BSubset \<Rightarrow> (wf_z3 l \<and> wf_z3 r)
-        | BEq \<Rightarrow>
-            (case r of
-               SetComprehensionF _ (IdentifierF _ _) p _ \<Rightarrow> wf_z3 l \<and> wf_z3 p
-             | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)
-        | BIn \<Rightarrow>
-            (case r of
-               SetComprehensionF _ (IdentifierF _ _) p _ \<Rightarrow> wf_z3 l \<and> wf_z3 p
-             | _ \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r)))
-        | BNotIn \<Rightarrow> (wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r))
-        | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)"
+     (case op of
+        BEq \<Rightarrow> wf_z3 l \<and> wf_z3 (comp_pred_or_self r)
+      | BIn \<Rightarrow>
+          wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s)
+                       \<or> wf_z3 (comp_pred_or_self r))
+      | BNotIn \<Rightarrow> wf_z3 l \<and> ((\<exists>rel s. r = IdentifierF rel s) \<or> wf_z3 r)
+      | _ \<Rightarrow> wf_z3 l \<and> wf_z3 r)"
 | "wf_z3 (LetF _ v b _)            = (wf_z3 v \<and> wf_z3 b)"
 | "wf_z3 (EnumAccessF base _ _)    = (\<exists>en s. base = IdentifierF en s)"
 | "wf_z3 (FieldAccessF base _ _)   = wf_z3 base"

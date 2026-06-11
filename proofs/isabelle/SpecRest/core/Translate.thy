@@ -33,6 +33,33 @@ where
         None \<Rightarrow> None
       | Some inner \<Rightarrow> translate_forall_step enums b inner)"
 
+definition map2_opt ::
+  "(smt_term \<Rightarrow> smt_term \<Rightarrow> smt_term)
+     \<Rightarrow> smt_term option \<Rightarrow> smt_term option \<Rightarrow> smt_term option"
+where
+  "map2_opt f a b = (case (a, b) of (Some x, Some y) \<Rightarrow> Some (f x y) | _ \<Rightarrow> None)"
+
+lemma map2_opt_simps [simp]:
+  "map2_opt f (Some x) (Some y) = Some (f x y)"
+  "map2_opt f None b = None"
+  "map2_opt f a None = None"
+  by (auto simp: map2_opt_def split: option.splits)
+
+lemma map2_opt_eq_Some [simp]:
+  "(map2_opt f a b = Some t) = (\<exists>x y. a = Some x \<and> b = Some y \<and> t = f x y)"
+  by (auto simp: map2_opt_def split: option.splits)
+
+fun comp_parts ::
+  "expr \<Rightarrow> (String.literal \<times> String.literal \<times> expr) option"
+where
+  "comp_parts (SetComprehensionF var d p _) =
+     (case d of IdentifierF dnm _ \<Rightarrow> Some (var, dnm, p) | _ \<Rightarrow> None)"
+| "comp_parts _ = None"
+
+lemma comp_parts_size:
+  "comp_parts r = Some (var, dnm, p) \<Longrightarrow> size p < size r"
+  by (cases r rule: comp_parts.cases) (auto split: expr.splits)
+
 fun translate_set_comp_eq ::
     "String.literal list \<Rightarrow> String.literal \<Rightarrow> String.literal
        \<Rightarrow> smt_term \<Rightarrow> smt_term \<Rightarrow> smt_term"
@@ -116,95 +143,60 @@ where
       | UPower \<Rightarrow> None)"
 | "translate enums (BinaryOpF op l r _) =
      (case op of
-        BAnd \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TAnd lt rt) | _ \<Rightarrow> None)
-      | BOr \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TOr lt rt) | _ \<Rightarrow> None)
-      | BImplies \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TImplies lt rt) | _ \<Rightarrow> None)
+        BAnd \<Rightarrow> map2_opt TAnd (translate enums l) (translate enums r)
+      | BOr \<Rightarrow> map2_opt TOr (translate enums l) (translate enums r)
+      | BImplies \<Rightarrow> map2_opt TImplies (translate enums l) (translate enums r)
       | BIff \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TAnd (TImplies lt rt) (TImplies rt lt)) | _ \<Rightarrow> None)
+          map2_opt (\<lambda>lt rt. TAnd (TImplies lt rt) (TImplies rt lt))
+            (translate enums l) (translate enums r)
       | BEq \<Rightarrow>
           (case translate_beq_dom_or_none l r of
              Some t \<Rightarrow> Some t
            | None \<Rightarrow>
-             (case r of
-                SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
-                  (case (translate enums l, translate enums p) of
-                     (Some lt, Some pt) \<Rightarrow> Some (translate_set_comp_eq enums var dnm lt pt)
-                   | _ \<Rightarrow> None)
-              | _ \<Rightarrow>
-                  (case (translate enums l, translate enums r) of
-                     (Some lt, Some rt) \<Rightarrow> Some (TEq lt rt)
-                   | _ \<Rightarrow> None)))
+               (case comp_parts r of
+                  Some (var, dnm, p) \<Rightarrow>
+                    map2_opt (translate_set_comp_eq enums var dnm)
+                      (translate enums l) (translate enums p)
+                | None \<Rightarrow> map2_opt TEq (translate enums l) (translate enums r)))
       | BNeq \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TNot (TEq lt rt)) | _ \<Rightarrow> None)
-      | BLt \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TLt lt rt) | _ \<Rightarrow> None)
-      | BGt \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TLt rt lt) | _ \<Rightarrow> None)
+          map2_opt (\<lambda>lt rt. TNot (TEq lt rt)) (translate enums l) (translate enums r)
+      | BLt \<Rightarrow> map2_opt TLt (translate enums l) (translate enums r)
+      | BGt \<Rightarrow> map2_opt (\<lambda>lt rt. TLt rt lt) (translate enums l) (translate enums r)
       | BLe \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TOr (TLt lt rt) (TEq lt rt)) | _ \<Rightarrow> None)
+          map2_opt (\<lambda>lt rt. TOr (TLt lt rt) (TEq lt rt))
+            (translate enums l) (translate enums r)
       | BGe \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TOr (TLt rt lt) (TEq lt rt)) | _ \<Rightarrow> None)
-      | BAdd \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TAdd lt rt) | _ \<Rightarrow> None)
-      | BSub \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TSub lt rt) | _ \<Rightarrow> None)
-      | BMul \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TMul lt rt) | _ \<Rightarrow> None)
-      | BDiv \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TDiv lt rt) | _ \<Rightarrow> None)
-      | BUnion \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TSetUnion lt rt) | _ \<Rightarrow> None)
-      | BIntersect \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TSetIntersect lt rt) | _ \<Rightarrow> None)
-      | BDiff \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TSetDiff lt rt) | _ \<Rightarrow> None)
+          map2_opt (\<lambda>lt rt. TOr (TLt rt lt) (TEq lt rt))
+            (translate enums l) (translate enums r)
+      | BAdd \<Rightarrow> map2_opt TAdd (translate enums l) (translate enums r)
+      | BSub \<Rightarrow> map2_opt TSub (translate enums l) (translate enums r)
+      | BMul \<Rightarrow> map2_opt TMul (translate enums l) (translate enums r)
+      | BDiv \<Rightarrow> map2_opt TDiv (translate enums l) (translate enums r)
+      | BUnion \<Rightarrow> map2_opt TSetUnion (translate enums l) (translate enums r)
+      | BIntersect \<Rightarrow> map2_opt TSetIntersect (translate enums l) (translate enums r)
+      | BDiff \<Rightarrow> map2_opt TSetDiff (translate enums l) (translate enums r)
       | BIn \<Rightarrow>
-          (case r of
-             IdentifierF rel _ \<Rightarrow>
-               map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
-           | SetComprehensionF var (IdentifierF dnm _) p _ \<Rightarrow>
-               (case (translate enums l, translate enums p) of
-                  (Some lt, Some pt) \<Rightarrow>
-                    Some (TLetIn var lt
-                           (if string_in_list dnm enums
-                              then pt
-                              else TAnd (TInDom dnm (TVar var)) pt))
-                | _ \<Rightarrow> None)
-           | _ \<Rightarrow>
-               (case (translate enums l, translate enums r) of
-                  (Some lt, Some rt) \<Rightarrow> Some (TSetMember lt rt)
-                | _ \<Rightarrow> None))
+          (case identName r of
+             Some rel \<Rightarrow> map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
+           | None \<Rightarrow>
+               (case comp_parts r of
+                  Some (var, dnm, p) \<Rightarrow>
+                    map2_opt (\<lambda>lt pt.
+                        TLetIn var lt
+                          (if string_in_list dnm enums then pt
+                           else TAnd (TInDom dnm (TVar var)) pt))
+                      (translate enums l) (translate enums p)
+                | None \<Rightarrow>
+                    map2_opt TSetMember (translate enums l) (translate enums r)))
       | BNotIn \<Rightarrow>
-          (case r of
-             IdentifierF rel _ \<Rightarrow>
-               map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l)
-           | _ \<Rightarrow>
-               (case (translate enums l, translate enums r) of
-                  (Some lt, Some rt) \<Rightarrow> Some (TNot (TSetMember lt rt))
-                | _ \<Rightarrow> None))
+          (case identName r of
+             Some rel \<Rightarrow> map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l)
+           | None \<Rightarrow>
+               map2_opt (\<lambda>lt rt. TNot (TSetMember lt rt))
+                 (translate enums l) (translate enums r))
       | BSubset \<Rightarrow>
-          (case (translate enums l, translate enums r) of
-             (Some lt, Some rt) \<Rightarrow> Some (TEq (TSetDiff lt rt) TSetEmpty)
-           | _ \<Rightarrow> None))"
+          map2_opt (\<lambda>lt rt. TEq (TSetDiff lt rt) TSetEmpty)
+            (translate enums l) (translate enums r))"
 | "translate enums (LetF x v body _) =
      (case (translate enums v, translate enums body) of
         (Some vt, Some bt) \<Rightarrow> Some (TLetIn x vt bt)
@@ -279,34 +271,30 @@ termination
              | Inr (Inr (Inl (_, elems))) \<Rightarrow> Suc (length elems)
              | Inr (Inr (Inr (_, entries))) \<Rightarrow> Suc (length entries))
        ]")
-     auto
+     (auto dest!: comp_parts_size)
+
+lemma comp_parts_None:
+  assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
+  shows "comp_parts r = None"
+  using assms by (cases r rule: comp_parts.cases) (auto split: expr.splits)
 
 lemma translate_BEq_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
       and "dom_arg l = None \<or> dom_arg r = None"
   shows "translate enums (BinaryOpF BEq l r sp)
-           = (case (translate enums l, translate enums r) of
-                (Some lt, Some rt) \<Rightarrow> Some (TEq lt rt) | _ \<Rightarrow> None)"
+           = map2_opt TEq (translate enums l) (translate enums r)"
 proof -
   have dn: "translate_beq_dom_or_none l r = None"
     using assms(2) by (auto simp: translate_beq_dom_or_none_def split: option.splits)
-  show ?thesis
-  proof (cases r)
-    case (SetComprehensionF v dm pr s)
-    with assms dn show ?thesis by (cases dm) (auto split: option.splits)
-  qed (use assms dn in \<open>auto split: option.splits\<close>)
+  show ?thesis using dn comp_parts_None[OF assms(1)] by simp
 qed
 
 lemma translate_BIn_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "translate enums (BinaryOpF BIn l r sp)
-           = (case r of
-                IdentifierF rel _ \<Rightarrow> map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
-              | _ \<Rightarrow> (case (translate enums l, translate enums r) of
-                        (Some lt, Some rt) \<Rightarrow> Some (TSetMember lt rt) | _ \<Rightarrow> None))"
-proof (cases r)
-  case (SetComprehensionF v dm pr s)
-  with assms show ?thesis by (cases dm) auto
-qed auto
+           = (case identName r of
+                Some rel \<Rightarrow> map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
+              | None \<Rightarrow> map2_opt TSetMember (translate enums l) (translate enums r))"
+  using comp_parts_None[OF assms] by (auto split: option.splits)
 
 end
