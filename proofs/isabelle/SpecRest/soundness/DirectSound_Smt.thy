@@ -120,6 +120,30 @@ lemma TGe_sound:
   shows "smtEval m env (TOr (TLt rt lt) (TEq lt rt)) = Some (value_to_smt v)"
   using assms by (cases a; cases b) (auto simp: le_less)
 
+lemma TAdd_sound:
+  "smtEval m env lt = Some (value_to_smt a) \<Longrightarrow> smtEval m env rt = Some (value_to_smt b)
+     \<Longrightarrow> eval_arith AddOp (Some a) (Some b) = Some v
+     \<Longrightarrow> smtEval m env (TAdd lt rt) = Some (value_to_smt v)"
+  by (cases a; cases b) (auto split: if_splits)
+
+lemma TSub_sound:
+  "smtEval m env lt = Some (value_to_smt a) \<Longrightarrow> smtEval m env rt = Some (value_to_smt b)
+     \<Longrightarrow> eval_arith SubOp (Some a) (Some b) = Some v
+     \<Longrightarrow> smtEval m env (TSub lt rt) = Some (value_to_smt v)"
+  by (cases a; cases b) (auto split: if_splits)
+
+lemma TMul_sound:
+  "smtEval m env lt = Some (value_to_smt a) \<Longrightarrow> smtEval m env rt = Some (value_to_smt b)
+     \<Longrightarrow> eval_arith MulOp (Some a) (Some b) = Some v
+     \<Longrightarrow> smtEval m env (TMul lt rt) = Some (value_to_smt v)"
+  by (cases a; cases b) (auto split: if_splits)
+
+lemma TDiv_sound:
+  "smtEval m env lt = Some (value_to_smt a) \<Longrightarrow> smtEval m env rt = Some (value_to_smt b)
+     \<Longrightarrow> eval_arith DivOp (Some a) (Some b) = Some v
+     \<Longrightarrow> smtEval m env (TDiv lt rt) = Some (value_to_smt v)"
+  by (cases a; cases b) (auto split: if_splits)
+
 lemma TArith_sound:
   assumes "smtEval m env lt = Some (value_to_smt a)"
       and "smtEval m env rt = Some (value_to_smt b)"
@@ -127,7 +151,23 @@ lemma TArith_sound:
   shows "smtEval m env (case aop of AddOp \<Rightarrow> TAdd lt rt | SubOp \<Rightarrow> TSub lt rt
                           | MulOp \<Rightarrow> TMul lt rt | DivOp \<Rightarrow> TDiv lt rt)
            = Some (value_to_smt v)"
-  using assms by (cases aop; cases a; cases b) (auto split: if_splits)
+proof (cases aop)
+  case AddOp
+  hence ea: "eval_arith AddOp (Some a) (Some b) = Some v" using assms(3) by simp
+  show ?thesis unfolding AddOp using TAdd_sound[OF assms(1) assms(2) ea] by simp
+next
+  case SubOp
+  hence ea: "eval_arith SubOp (Some a) (Some b) = Some v" using assms(3) by simp
+  show ?thesis unfolding SubOp using TSub_sound[OF assms(1) assms(2) ea] by simp
+next
+  case MulOp
+  hence ea: "eval_arith MulOp (Some a) (Some b) = Some v" using assms(3) by simp
+  show ?thesis unfolding MulOp using TMul_sound[OF assms(1) assms(2) ea] by simp
+next
+  case DivOp
+  hence ea: "eval_arith DivOp (Some a) (Some b) = Some v" using assms(3) by simp
+  show ?thesis unfolding DivOp using TDiv_sound[OF assms(1) assms(2) ea] by simp
+qed
 
 section \<open>Free-variable irrelevance on the smt side\<close>
 

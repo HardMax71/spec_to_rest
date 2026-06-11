@@ -293,6 +293,14 @@ primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Ri
   "string_in_list y [] = False"
 | "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
 
+fun identName :: "expr \<Rightarrow> String.literal option" where
+  "identName (IdentifierF rel _) = Some rel"
+| "identName _ = None"
+
+lemma identName_SomeD:
+  "identName e = Some rel \<Longrightarrow> \<exists>sp. e = IdentifierF rel sp"
+  by (cases e rule: identName.cases) auto
+
 fun isLitFull :: "expr \<Rightarrow> bool" where
   "isLitFull (BoolLitF _ _)   = True"
 | "isLitFull (IntLitF _ _)    = True"

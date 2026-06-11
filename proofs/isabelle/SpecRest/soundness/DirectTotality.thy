@@ -350,7 +350,8 @@ proof (induction e rule: measure_induct_rule[where f = size])
           hence nc: "\<nexists>var dnm sp3 p sp4. r2 = SetComprehensionF var (IdentifierF dnm sp3) p sp4"
             by blast
           have wl: "wf_z3 l2" and wr: "wf_z3 r2"
-            using less.prems BinaryOpF BEq wf_z3_BEq_noncomp[OF nc] by simp_all
+            using less.prems BinaryOpF BEq
+            by (simp_all add: comp_pred_or_self_noncomp[OF nc])
           obtain lt where hl: "translate enums l2 = Some lt"
             using less.IH[OF sl wl] by blast
           obtain rt where hr: "translate enums r2 = Some rt"
@@ -379,7 +380,7 @@ proof (induction e rule: measure_induct_rule[where f = size])
         hence nc: "\<nexists>var dnm sp3 p sp4. r2 = SetComprehensionF var (IdentifierF dnm sp3) p sp4"
           by blast
         have wl: "wf_z3 l2"
-          using less.prems BinaryOpF BIn wf_z3_BIn_noncomp[OF nc] by simp
+          using less.prems BinaryOpF BIn by simp
         obtain lt where hl: "translate enums l2 = Some lt"
           using less.IH[OF sl wl] by blast
         show ?thesis
@@ -389,7 +390,8 @@ proof (induction e rule: measure_induct_rule[where f = size])
         next
           case False
           have wr: "wf_z3 r2"
-            using less.prems BinaryOpF BIn wf_z3_BIn_noncomp[OF nc] False by auto
+            using less.prems BinaryOpF BIn False
+            by (auto simp: comp_pred_or_self_noncomp[OF nc])
           obtain rt where hr: "translate enums r2 = Some rt"
             using less.IH[OF sr wr] by blast
           show ?thesis
@@ -401,11 +403,11 @@ proof (induction e rule: measure_induct_rule[where f = size])
     next
       case BNotIn
       have beq: "translate enums e
-                   = (case r2 of
-                        IdentifierF rel _ \<Rightarrow>
+                   = (case identName r2 of
+                        Some rel \<Rightarrow>
                           map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l2)
-                      | _ \<Rightarrow> (case (translate enums l2, translate enums r2) of
-                                (Some lt, Some rt) \<Rightarrow> Some (TNot (TSetMember lt rt)) | _ \<Rightarrow> None))"
+                      | None \<Rightarrow> map2_opt (\<lambda>lt rt. TNot (TSetMember lt rt))
+                                  (translate enums l2) (translate enums r2))"
         using BinaryOpF BNotIn by simp
       have wl: "wf_z3 l2" using less.prems BinaryOpF BNotIn by simp
       obtain lt where hl: "translate enums l2 = Some lt"

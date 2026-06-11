@@ -149,8 +149,9 @@ text \<open>Call-callee collectors composed on top of \<open>allSubexprs\<close>
   restrict to known predicate/function names).\<close>
 
 fun callSelfAllNames :: "expr \<Rightarrow> String.literal list" where
-  "callSelfAllNames (CallF (IdentifierF n _) _ _) = [n]"
-| "callSelfAllNames _                              = []"
+  "callSelfAllNames (CallF c _ _) =
+     (case c of IdentifierF n _ \<Rightarrow> [n] | _ \<Rightarrow> [])"
+| "callSelfAllNames _ = []"
 
 definition collectAllCallNames :: "expr \<Rightarrow> String.literal list" where
   "collectAllCallNames e = concat (map callSelfAllNames (allSubexprs e))"
@@ -158,8 +159,10 @@ definition collectAllCallNames :: "expr \<Rightarrow> String.literal list" where
 fun callSelfFilteredNames ::
   "String.literal list \<Rightarrow> expr \<Rightarrow> String.literal list"
 where
-  "callSelfFilteredNames filt (CallF (IdentifierF n _) _ _) =
-     (if List.member filt n then [n] else [])"
+  "callSelfFilteredNames filt (CallF c _ _) =
+     (case c of
+        IdentifierF n _ \<Rightarrow> (if List.member filt n then [n] else [])
+      | _ \<Rightarrow> [])"
 | "callSelfFilteredNames _ _ = []"
 
 definition collectCallNames ::

@@ -523,6 +523,51 @@ branch (~50 lines) stays inline: its IHs need mid-proof-derived guard facts (`en
 so a step-lemma signature would be larger than the body. Same verdict for the remaining cases (each
 <= 56 readable lines): extraction boilerplate would exceed the win.
 
+### Hotspot pass: flattens + RHS factoring of `translate` / `wf_z3` (2026-06-11)
+
+Post-#391-collapse profiling pass (CI trace, run #280 baseline). Three classes of fix, one PR:
+
+**1. Tier 2.6/2.7 re-detonations flattened** (the collapse made `expr` THE wide datatype):
+`containsPreInPlusChain`, `referencesPrimedRelation`, `referencesPreRelation` (IR_Helpers),
+`isLenOfValue`, `extractFieldName`, `matchesIdentityShape` (IR_Analysis), `innerIsTargetCard`
+(Classify - the Tier 2.6 fix itself had re-detonated), `callSelfAllNames`, `callSelfFilteredNames`
+(LintAnalysis), `translate_forall_step` (Translate), `eval_set_bin` (Semantics, two-operand
+cross-product). Plus `TArith_sound`'s 4x12x12 case proof split into four per-op lemmas (parallel
+toplevel commands) + trivial dispatcher.
+
+**2. `translate` RHS factoring - the lever the earlier "Failed" entry left untried.** The diagnosis
+there ("complex recursive RHS") resolves to a concrete mechanism: nested-pattern case bodies
+(`case r of SetComprehensionF _ (IdentifierF _ _) p _ => ... | _ => <recursive calls>`) compile to
+case trees whose DEFAULT branch is duplicated per constructor - ~58 copies of recursive-call-bearing
+branches per comp dispatch, and the 20 binop branches each carried a 3x3 option-pair case. Fix:
+hoist the dispatches into non-recursive helpers (`comp_parts`, `identName` - now in IR.thy next to
+`expr` - and a `map2_opt` combinator), leaving the recursive equation with plain applications.
+Termination via `comp_parts_size [termination_simp]` (`size p < size r`). Same factoring for `wf_z3`
+via `comp_pred_or_self` (returns the comprehension predicate for ident-domain comps, the expression
+itself otherwise - semantics identical because `wf_z3 (SetComprehensionF ...) = False`).
+
+**3. Downstream re-keys:** `translate_BEq_noncomp`/`translate_BIn_noncomp` restated via
+`map2_opt`/`identName` (consumers reduce through `map2_opt_eq_Some [simp]`); `wf_z3` consumers
+bridge with `comp_pred_or_self_noncomp`. Three fix sites in DirectTotality.
+
+| Command                  | Before         | After      |
+| ------------------------ | -------------- | ---------- |
+| `translate` (def + term) | 28.4 s + 8.3 s | 2.3 s      |
+| `wf_z3`                  | 29.3 s         | < 2 s      |
+| `export_code`            | 26.9 s         | 12.4 s     |
+| Bucket-A recognisers     | ~48 s          | < 2 s each |
+
+| Session command total | Baseline (run #280) | After       |
+| --------------------- | ------------------- | ----------- |
+| Core                  | 215.6 s             | 125.2 s     |
+| Codegen               | 145.5 s             | 103.2 s     |
+| Soundness             | 87.7 s              | 35.2 s      |
+| **Grand total**       | **448.8 s**         | **263.6 s** |
+
+Wall: Core 4:37 -> 1:31, Soundness ~1:30 -> 0:12, Codegen ~1:05 -> 0:38. The extracted `translate`
+lost ~700 lines of enumerated cross-product patterns (regen +246/-945). Remaining top items are
+irreducible: datatype BNF derivations, `export_code`, the mutual walkers.
+
 ## Failed
 
 ### wf_z3 / lower definition cost (mutual `fun`/`function` over `expr_full`) - the levers don't apply

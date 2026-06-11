@@ -53,8 +53,9 @@ fun isValueRef :: "expr \<Rightarrow> bool" where
 | "isValueRef _                  = False"
 
 fun isLenOfValue :: "expr \<Rightarrow> bool" where
-  "isLenOfValue (CallF (IdentifierF n _) [arg] _) =
-     (n = STR ''len'' \<and> isValueRef arg)"
+  "isLenOfValue (CallF c args _) =
+     ((case c of IdentifierF n _ \<Rightarrow> n = STR ''len'' | _ \<Rightarrow> False)
+      \<and> (case args of [arg] \<Rightarrow> isValueRef arg | _ \<Rightarrow> False))"
 | "isLenOfValue _ = False"
 
 fun isRefinementCmp :: "bin_op \<Rightarrow> bool" where
@@ -584,8 +585,10 @@ fun isLiteral :: "expr \<Rightarrow> bool" where
 | "isLiteral _                = False"
 
 fun extractFieldName :: "expr \<Rightarrow> String.literal option" where
-  "extractFieldName (FieldAccessF (IdentifierF s _) name _) =
-     (if s = STR ''self'' then Some name else None)"
+  "extractFieldName (FieldAccessF b name _) =
+     (case b of
+        IdentifierF s _ \<Rightarrow> (if s = STR ''self'' then Some name else None)
+      | _ \<Rightarrow> None)"
 | "extractFieldName (IdentifierF name _) = Some name"
 | "extractFieldName _ = None"
 
@@ -789,8 +792,10 @@ text \<open>Phase 9\<theta> (\<open>matchesIdentityShape\<close>): recognises an
 
 fun matchesIdentityShape ::
   "expr \<Rightarrow> String.literal \<Rightarrow> String.literal option" where
-  "matchesIdentityShape (MatchesF (IdentifierF p _) pattern _) name =
-     (if p = name then Some pattern else None)"
+  "matchesIdentityShape (MatchesF x pattern _) name =
+     (case x of
+        IdentifierF p _ \<Rightarrow> (if p = name then Some pattern else None)
+      | _ \<Rightarrow> None)"
 | "matchesIdentityShape _ _ = None"
 
 lemmas isPrePrime_code [code]              = isPrePrime.simps

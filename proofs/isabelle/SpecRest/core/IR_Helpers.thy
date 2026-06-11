@@ -26,9 +26,11 @@ definition collectPreservedRelations ::
 
 fun containsPreInPlusChain ::
   "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "containsPreInPlusChain (PreF (IdentifierF n _) _) field = (n = field)"
-| "containsPreInPlusChain (BinaryOpF BAdd l r _) field =
-     (containsPreInPlusChain l field \<or> containsPreInPlusChain r field)"
+  "containsPreInPlusChain (PreF e _) field =
+     (case e of IdentifierF n _ \<Rightarrow> n = field | _ \<Rightarrow> False)"
+| "containsPreInPlusChain (BinaryOpF op l r _) field =
+     ((case op of BAdd \<Rightarrow> True | _ \<Rightarrow> False)
+      \<and> (containsPreInPlusChain l field \<or> containsPreInPlusChain r field))"
 | "containsPreInPlusChain _ _ = False"
 
 definition createPatternOf ::
@@ -380,12 +382,14 @@ fun relationTargetEntityName ::
 
 fun referencesPrimedRelation ::
   "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "referencesPrimedRelation (PrimeF (IdentifierF n _) _) rel = (n = rel)"
+  "referencesPrimedRelation (PrimeF e _) rel =
+     (case e of IdentifierF n _ \<Rightarrow> n = rel | _ \<Rightarrow> False)"
 | "referencesPrimedRelation _ _ = False"
 
 fun referencesPreRelation ::
   "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "referencesPreRelation (PreF (IdentifierF n _) _) rel = (n = rel)"
+  "referencesPreRelation (PreF e _) rel =
+     (case e of IdentifierF n _ \<Rightarrow> n = rel | _ \<Rightarrow> False)"
 | "referencesPreRelation (IdentifierF n _) rel = (n = rel)"
 | "referencesPreRelation _ _ = False"
 

@@ -150,7 +150,8 @@ text \<open>\<open>isCardinalityRhs\<close>: recognises an RHS like \<open>(|n| 
   explode against \<open>expr\<close>'s ~50 constructors (152s -> seconds).\<close>
 
 fun innerIsTargetCard :: "expr \<Rightarrow> String.literal \<Rightarrow> bool" where
-  "innerIsTargetCard (PreF (IdentifierF m _) _) n = (m = n)"
+  "innerIsTargetCard (PreF e _) n =
+     (case e of IdentifierF m _ \<Rightarrow> m = n | _ \<Rightarrow> False)"
 | "innerIsTargetCard (IdentifierF m _) n = (m = n)"
 | "innerIsTargetCard _ _ = False"
 
