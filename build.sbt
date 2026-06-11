@@ -249,10 +249,14 @@ lazy val cli = (project in file("modules/cli"))
     nativeImageInstalled := true,
     nativeImageOptions ++= Seq(
       "--no-fallback",
-      // GH-hosted runners have 16 GB; the analysis peak grew past the builder's
-      // auto heap cap (~11.8 GB) with the June 2026 verify-layer lifts, OOMing
-      // every native build (docker, native, native-diag). Halving compilation
-      // parallelism flattens the peak without changing the produced binary.
+      // The analysis peak grew past the builder's AUTO heap cap with the June
+      // 2026 verify-layer lifts (May 28: 7.15 GB peak under an 8.3 GB cap;
+      // June 4+: OOM under 11.8 GB). The auto cap also scales DOWN with
+      // --parallelism (50% of RAM at 2 threads), so it cannot be tuned from
+      // here alone: CI sets NATIVE_IMAGE_MAX_HEAP per runner class and adds a
+      // swapfile for headroom; local builds keep the auto policy. Parallelism
+      // stays halved to keep the working set flat - the output binary is
+      // identical either way.
       "--parallelism=2",
       // Required by GraalVM 23+ for the -H: options below; on 21 it's
       // accepted as a no-op and silences the "experimental option" warnings.
@@ -270,7 +274,7 @@ lazy val cli = (project in file("modules/cli"))
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
       "--initialize-at-run-time=com.microsoft.z3.Version"
-    )
+    ) ++ sys.env.get("NATIVE_IMAGE_MAX_HEAP").filter(_.nonEmpty).map(m => s"-J-Xmx$m").toSeq
   )
 
 // Test-only module: depends on every other module so ArchUnit can analyze the whole

@@ -42,7 +42,17 @@ jobs:
 
       - uses: sbt/setup-sbt@af116cce31c00823d3903ce687f9cda3a4f19f1b # v1.2.1
 
+      - name: Add swap for the native-image builder
+        run: |
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Build native binary
+        env:
+          NATIVE_IMAGE_MAX_HEAP: 13g
         run: sbt cli/nativeImage
 
       - name: Stage binary into docker context
