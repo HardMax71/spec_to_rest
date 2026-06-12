@@ -199,16 +199,19 @@ and structural-lite (`<svc>_structural_test.go`, fuzzes every non-stub operation
 type-valid input and asserts no 5xx — schemathesis's core check minus full schema
 validation; fail-loud stubs are honest-skipped exactly as the Python schemathesis
 renderer excludes them, recorded in `tests/_testgen_skips.json`). The
-`/__test_admin__/*` reset/state/seed router is a spec-derived
-`internal/testadmin/admin_conformance.go` (build tag `conformance`); the normal build
-links an always-present `!conformance` no-op stub, so the plain `go build` matrix is
-unaffected and the test-admin code never ships in production binaries.
+`/admin/*` reset/state/seed router is a spec-derived `internal/admin/admin.go`,
+compiled into every build and guarded by bearer auth: with no `ADMIN_TOKEN`
+configured (the production default) the routes answer 404; with one configured,
+requests need `Authorization: Bearer $ADMIN_TOKEN`. The `conformance` build tag
+remains only on the test files themselves, as suite selection - `go test ./...`
+without the tag never runs the live-server suite.
 
-Run it against a server built with the conformance tag:
+Run it against a plain production build:
 
 ```bash
-go build -tags conformance -o server ./cmd/server
-ENABLE_TEST_ADMIN=1 ./server &
+go build -o server ./cmd/server
+export ADMIN_TOKEN=$(openssl rand -hex 32)
+./server &
 bash tests/run_conformance.sh smoke      # or: go test -tags conformance ./tests/...
 ```
 

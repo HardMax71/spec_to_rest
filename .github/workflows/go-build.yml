@@ -272,9 +272,9 @@ jobs:
         working-directory: out
         run: go vet -tags conformance ./...
 
-      - name: build server (-tags conformance)
+      - name: build server
         working-directory: out
-        run: go build -tags conformance -o server ./cmd/server
+        run: go build -o server ./cmd/server
 
       - name: Install golang-migrate CLI
         run: go install -tags 'postgres sqlite' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
@@ -285,11 +285,13 @@ jobs:
           DB_URL: ${{ matrix.migrate_url }}
         run: migrate -path migrations -database "$DB_URL" up
 
-      - name: Boot go-chi server (ENABLE_TEST_ADMIN=1)
+      - name: Mint per-run admin token
+        run: echo "ADMIN_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Boot go-chi server
         working-directory: out
         env:
           DATABASE_URL: ${{ matrix.db_url }}
-          ENABLE_TEST_ADMIN: "1"
           PORT: "8080"
         run: |
           nohup ./server > server.log 2>&1 &

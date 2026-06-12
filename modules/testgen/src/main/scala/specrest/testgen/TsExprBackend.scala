@@ -52,7 +52,7 @@ private[testgen] val TsReservedNames: Set[String] = Set(
 // Set/relation semantics that Python gets from built-ins (`in`, `==` on sets,
 // `len`, `|`/`&`/`-`) are delegated to runtime helpers the vitest harness module
 // provides: _len, _in, _eq, _union, _inter, _diff, _subset, _powerset. State is
-// read from the parsed /__test_admin__/state JSON objects `preState`/`postState`
+// read from the parsed /admin/state JSON objects `preState`/`postState`
 // and the response body object `responseData`.
 object TsExprBackend extends ExprBackend:
 

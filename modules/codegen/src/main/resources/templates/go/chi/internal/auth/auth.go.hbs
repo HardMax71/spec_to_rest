@@ -1,0 +1,28 @@
+package auth
+
+import (
+	"crypto/subtle"
+	"net/http"
+	"strings"
+)
+
+// RequireAdmin guards a route with a bearer token. With no token configured
+// (the production default) the guarded surface does not exist: every request
+// gets 404. With one configured, requests need Authorization: Bearer <token>.
+func RequireAdmin(token string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if token == "" {
+				http.NotFound(w, r)
+				return
+			}
+			presented := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

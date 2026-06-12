@@ -11,6 +11,7 @@ import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
+import specrest.convention.Validate
 import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
@@ -101,8 +102,12 @@ object Compile:
               case Left(err) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
+                val routeDiags = Validate.validateRoutes(ir)
                 val gate =
-                  if opts.ignoreVerify then
+                  if routeDiags.nonEmpty then
+                    IO.delay(routeDiags.foreach(d => log.error(Check.renderConv(specFile, d))))
+                      .as(ExitCodes.Violations)
+                  else if opts.ignoreVerify then
                     IO.delay(log.warn("proceeding without verification (--ignore-verify)"))
                       .as(ExitCodes.Ok)
                   else Verify.runGate(specFile, ir, VerificationConfig.Default, log)

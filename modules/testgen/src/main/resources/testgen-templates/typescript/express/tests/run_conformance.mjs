@@ -3,7 +3,8 @@
 //
 // Runs the conformance suite (structural + behavioral + stateful test files)
 // against an already-running service via vitest, forwarding the profile. The
-// caller is responsible for bringing the service up with ENABLE_TEST_ADMIN=1.
+// caller is responsible for bringing the service up with the same ADMIN_TOKEN
+// this process sees.
 //
 // Usage: node tests/run_conformance.mjs [smoke|thorough|exhaustive]
 // Profile precedence: argv[2] > SPEC_TEST_PROFILE > "thorough".

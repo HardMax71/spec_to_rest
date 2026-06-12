@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.AdminModel
 import specrest.codegen.SensitiveFields
 import specrest.ir.Naming
 import specrest.ir.PrettyPrint
@@ -69,7 +70,7 @@ object Structural:
         )
         sb.append("    if response.status_code >= 500:\n")
         sb.append("        return\n")
-        sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
+        sb.append("    post_state = client.get(\"/admin/state\").json()\n")
         sb.append(
           s"    assert $text, ${ExprToPython.pyString(s"invariant violated: $name")}\n"
         )
@@ -228,7 +229,7 @@ object Structural:
         |
         |Loads openapi.yaml and uses Schemathesis to fuzz every (method, path);
         |custom checks below are derived from spec invariants and pure-output
-        |ensures clauses. Per-case state reset via /__test_admin__/reset keeps
+        |ensures clauses. Per-case state reset via /admin/reset keeps
         |global-invariant assertions meaningful across hundreds of fuzzed cases.
         |
         |See tests/_testgen_skips.json (structural_skipped) for clauses skipped
@@ -285,7 +286,7 @@ object Structural:
         |)
         |def test_api_structural(case):
         |    ${TQ}For every (method, path), Schemathesis fuzzes inputs and validates the response shape.$TQ
-        |    client.post("/__test_admin__/reset")
+        |    client.post("/admin/reset")
         |    response = case.call(base_url=BASE_URL)
         |    if _ALL_CHECKS:
         |        case.validate_response(response, checks=_ALL_CHECKS)

@@ -7,6 +7,7 @@ type Config struct {
 	BaseURL     string `env:"BASE_URL"     envDefault:"http://localhost:8080"`
 	Port        int    `env:"PORT"         envDefault:"8080"`
 	LogLevel    string `env:"LOG_LEVEL"    envDefault:"info"`
+	AdminToken  string `env:"ADMIN_TOKEN"  envDefault:""`
 }
 
 func Load() (*Config, error) {

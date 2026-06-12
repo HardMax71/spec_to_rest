@@ -220,6 +220,7 @@ object EmitTs:
       "src/prisma.ts"              -> templates.prisma,
       "src/middleware/error.ts"    -> templates.errorMiddleware,
       "src/middleware/validate.ts" -> templates.validateMiddleware,
+      "src/middleware/auth.ts"     -> templates.authMiddleware,
       "src/routes/index.ts"        -> templates.routesIndex
     )
 
@@ -254,6 +255,8 @@ object EmitTs:
         s"src/routes/${entityCtx.entityPluralCamel}.ts",
         engine.renderAny(templates.routeEntity, perEntity)
       )
+
+    files += EmittedFile("src/routes/admin.ts", AdminRouterTs.emit(profiled))
 
     if scalarOps.nonEmpty then
       files += EmittedFile("src/services/stateOps.ts", tsStateService(scalarFields, scalarOps))

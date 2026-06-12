@@ -73,9 +73,9 @@ class BehavioralTest extends CatsEffectSuite:
       val test = out.tests
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
-      assert(test.body.contains("client.post(\"/__test_admin__/reset\")"))
-      assert(test.body.contains("pre_state = client.get(\"/__test_admin__/state\")"))
-      assert(test.body.contains("post_state = client.get(\"/__test_admin__/state\")"))
+      assert(test.body.contains("client.post(\"/admin/reset\")"))
+      assert(test.body.contains("pre_state = client.get(\"/admin/state\")"))
+      assert(test.body.contains("post_state = client.get(\"/admin/state\")"))
       assert(test.body.contains("response = client."), s"body=${test.body}")
 
   test("url_shortener: Shorten ensures generated, Resolve+Delete state-dep skipped"):
@@ -316,10 +316,10 @@ class BehavioralTest extends CatsEffectSuite:
         .find(_.name == "test_start_work_transition_todo_to_in_progress")
         .getOrElse(fail("missing positive transition test"))
       assert(test.body.contains("@given(row=strategy_todo())"), s"body=${test.body}")
-      assert(test.body.contains("client.post(\"/__test_admin__/reset\")"))
+      assert(test.body.contains("client.post(\"/admin/reset\")"))
       assert(test.body.contains("row[\"status\"] = \"TODO\""), s"body=${test.body}")
       assert(
-        test.body.contains("client.post(\"/__test_admin__/seed/todo\""),
+        test.body.contains("client.post(\"/admin/seed/todo\""),
         s"body=${test.body}"
       )
       assert(test.body.contains("seeded_id = seed.json()[\"id\"]"))
@@ -1329,7 +1329,7 @@ class BehavioralTest extends CatsEffectSuite:
         s"DRAFT (the required status) must NOT appear in sampled_from; body=${t.body}"
       )
       assert(
-        t.body.contains("seed = client.post(\"/__test_admin__/seed/order\""),
+        t.body.contains("seed = client.post(\"/admin/seed/order\""),
         s"missing seed call; body=${t.body}"
       )
       assert(

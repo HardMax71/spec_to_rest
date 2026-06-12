@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.AdminModel
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.Registry
 import specrest.profile.TargetKey
@@ -12,9 +13,6 @@ object FilePaths:
   val RedactionFile      = "tests/redaction.py"
   val PredicatesFile     = "tests/predicates.py"
   val SkipsFile          = "tests/_testgen_skips.json"
-  val AdminRouterFile    = "app/routers/test_admin.py"
-  val AdminRouterFileTs  = "src/routes/testAdmin.ts"
-  val AdminRouterFileGo  = "internal/testadmin/admin_conformance.go"
   val PytestIniFile      = "pytest.ini"
   val RunConformanceFile = "tests/run_conformance.py"
 

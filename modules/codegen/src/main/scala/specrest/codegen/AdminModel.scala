@@ -1,4 +1,4 @@
-package specrest.testgen
+package specrest.codegen
 
 import specrest.convention.ScalarState
 import specrest.ir.generated.SpecRestGenerated.*

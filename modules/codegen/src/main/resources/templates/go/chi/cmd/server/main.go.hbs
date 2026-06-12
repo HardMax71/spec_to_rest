@@ -13,12 +13,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"{{module}}/internal/admin"
+	"{{module}}/internal/auth"
 	"{{module}}/internal/config"
 	"{{module}}/internal/database"
 	"{{module}}/internal/extensions"
 	"{{module}}/internal/handlers"
 	"{{module}}/internal/services"
-	"{{module}}/internal/testadmin"
 )
 
 func main() {
@@ -60,7 +61,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	testadmin.Register(r, db)
+	admin.Register(r, db, auth.RequireAdmin(cfg.AdminToken))
 
 {{#each entities}}{{#each operations}}	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
 {{/each}}{{/each}}{{#each scalarOps}}	r.{{methodPascal}}("{{chiPath}}", stateOpsHandler.{{handlerName}})

@@ -4,6 +4,9 @@ object EnvExample:
 
   final case class Entry(key: String, value: String, comment: Option[String] = None)
 
+  private val AdminTokenComment =
+    "Optional bearer credential for the /admin surface; leave unset to disable it (404)"
+
   private def baseEntries(in: Compose.Inputs): List[Entry] = in.family match
     case Compose.Family.Python =>
       List(
@@ -13,14 +16,16 @@ object EnvExample:
           s"http://localhost:${in.appPort}",
           Some("Base URL the service is reachable at (used for constructing absolute URLs)")
         ),
-        Entry("LOG_LEVEL", "info", Some("Logging level: debug, info, warning, error"))
+        Entry("LOG_LEVEL", "info", Some("Logging level: debug, info, warning, error")),
+        Entry("ADMIN_TOKEN", "", Some(AdminTokenComment))
       )
     case Compose.Family.GoTs =>
       List(
         Entry("DATABASE_URL", in.dsnComposeNetwork),
         Entry("BASE_URL", s"http://localhost:${in.appPort}"),
         Entry("PORT", in.appPort.toString),
-        Entry("LOG_LEVEL", "info")
+        Entry("LOG_LEVEL", "info"),
+        Entry("ADMIN_TOKEN", "", Some(AdminTokenComment))
       )
 
   def render(in: Compose.Inputs): String =

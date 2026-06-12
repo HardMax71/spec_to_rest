@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.EmittedFile
+import specrest.codegen.go.GoLit
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.enmName
 import specrest.ir.generated.SpecRestGenerated.enmVariants

@@ -1,6 +1,6 @@
 ---
 title: Test Generation
-description: compile emits a native behavioral/stateful/structural conformance suite (per target language) + a gated admin router from spec ensures/requires/invariants
+description: compile emits a native behavioral/stateful/structural conformance suite (per target language) + a bearer-token-guarded admin router from spec ensures/requires/invariants
 ---
 
 `spec-to-rest compile` produces a property-test conformance suite alongside the
@@ -32,17 +32,22 @@ cp .env.example .env
 make test-conformance-docker PROFILE=smoke
 
 # Or against an already-running service:
-ENABLE_TEST_ADMIN=1 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+export ADMIN_TOKEN=$(openssl rand -hex 32)
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
 make test-conformance PROFILE=smoke
 ```
 
-The generated `docker-compose.yml` already forwards `ENABLE_TEST_ADMIN` from the host
-to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` works without manual
-edits.
+The generated `docker-compose.yml` already forwards `ADMIN_TOKEN` from the host
+environment to the app container, and `make test-conformance-docker` generates a
+per-run token automatically, so the dockerized path needs no manual setup.
 
-The `ENABLE_TEST_ADMIN=1` env var is required: tests use a small admin router
-(`/__test_admin__/reset` and `/__test_admin__/state`) to control state and read it back.
-Production deployments must leave this unset; the router returns 403 by default.
+The `ADMIN_TOKEN` env var is required when running by hand: tests use the generated
+admin router (`/admin/reset` and `/admin/state`) to control state and read it back,
+and the conformance client attaches the `Authorization: Bearer $ADMIN_TOKEN` header
+automatically from the environment. The service reads the token through its typed
+config (pydantic `Settings` field `admin_token`). Production deployments leave it
+unset, which is the default: with no token configured, every `/admin` route answers
+404 and the surface is invisible.
 
 ## Native multi-language emission
 
@@ -82,18 +87,19 @@ bug.
 **Structural-lite** (ts/go): schemathesis has no TS/Go peer, so rather than reimplement
 an OpenAPI/JSON-Schema fuzzer the structural phase reuses the IR `Strategies` seam — for
 every non-stub operation it generates type-valid inputs, calls with a per-case
-`/__test_admin__/reset`, and asserts the server did not 5xx (schemathesis's core
+`/admin/reset`, and asserts the server did not 5xx (schemathesis's core
 "documented, no server error" check, minus full schema validation). Fail-loud stubs are
 honest-skipped exactly as the Python schemathesis renderer `schema.exclude(...)`s them.
 
-The `/__test_admin__/*` reset/state/seed contract is identical across targets; only its
-*implementation* is stack-specific (`AdminRouter.scala` → FastAPI, `AdminRouterTs.scala`
-→ Express `src/routes/testAdmin.ts`, `AdminRouterGo.scala` → Go
-`internal/testadmin/admin_conformance.go`). Go links statically, so there is no
-dynamic-import gate: codegen always emits a `!conformance` no-op `testadmin.Register` +
-`main.go` wiring, and the default-on test emission (opt out with `--no-tests`) adds the
-real `conformance`-tagged router — keep the test-admin code out of production binaries
-via the build tag, not a runtime branch.
+The `/admin/*` reset/state/seed contract is identical across targets; only its
+*implementation* is stack-specific (`AdminRouter.scala` → FastAPI
+`app/routers/admin.py`, `AdminRouterTs.scala` → Express, `AdminRouterGo.scala` → Go).
+The router is emitted by codegen as a credentialed ops surface of the generated
+service (state export, data import, re-initialize), so it is present in every build,
+including `--no-tests`, and is documented in the emitted OpenAPI under an
+`AdminBearer` security scheme. There is no build-time gate: every `/admin` route
+requires `Authorization: Bearer $ADMIN_TOKEN`; wrong or missing credentials get 401,
+and with no token configured the routes answer 404 (fail-closed).
 
 Each backend's per-target page documents the exact file layout and run commands:
 [python-fastapi](/targets/python/fastapi/postgres) ·
@@ -109,9 +115,9 @@ backends emit the analogous set in their own conventions (see the per-target pag
 
 | File | Source | What it is |
 |---|---|---|
-| `app/routers/test_admin.py` | `AdminRouter.scala` | `/__test_admin__/reset` truncates entity tables; `/__test_admin__/state` returns spec state as JSON; `/__test_admin__/seed/<entity>` (per entity that participates in a `TransitionDecl`) inserts a row directly so transition tests can drive entities into a chosen status. All endpoints 403 unless `ENABLE_TEST_ADMIN=1`. |
+| `app/routers/admin.py` | `AdminRouter.scala` | `/admin/reset` truncates entity tables; `/admin/state` returns spec state as JSON; `/admin/seed/<entity>` (per entity that participates in a `TransitionDecl`) inserts a row directly so transition tests can drive entities into a chosen status. All endpoints require `Authorization: Bearer $ADMIN_TOKEN`; with no token configured they answer 404. |
 | `tests/__init__.py` | empty | makes `tests` a Python package |
-| `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable or the admin router isn't enabled |
+| `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable, the admin surface is unconfigured (404), or the token is missing/mismatched (401) |
 | `tests/predicates.py` | rendered from `ir.predicates` | `_powerset` plus one Python helper per spec/preamble predicate (auto-derived from the body) |
 | `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return ...` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
 | `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
@@ -137,13 +143,13 @@ the IR-to-Python translator can handle becomes a property test:
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_shorten_ensures_0(url):
     """ensures: (code not in pre(store))"""
-    client.post("/__test_admin__/reset")
-    pre_state = client.get("/__test_admin__/state").json()
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
     response = client.post("/shorten", json={"url": url})
     assume(response.status_code == 201)
     assert response.status_code == 201, response.text
     response_data = response.json() if response.content else {}
-    post_state = client.get("/__test_admin__/state").json()
+    post_state = client.get("/admin/state").json()
     assert ((response_data["code"]) not in (pre_state["store"])), "ensures violated: ensures: (code not in pre(store))"
 ```
 
@@ -170,8 +176,8 @@ calls the operation, and asserts a 4xx response:
 @settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_resolve_negative_code_not_in_store(code):
     """requires 'code in store' (negative): missing key returns 4xx."""
-    client.post("/__test_admin__/reset")
-    pre_state = client.get("/__test_admin__/state").json()
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
     assume(code not in pre_state.get("store", {}))
     response = client.get(f"/{code}")
     assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
@@ -180,7 +186,7 @@ def test_resolve_negative_code_not_in_store(code):
 A second negative pattern recognises status restrictions on existing entries:
 `<state>[<input>].<enum-field> = <required-value>` (the precondition that the entry,
 once it exists, must be in a particular status). When the underlying entity is in a
-`TransitionDecl` (so `/__test_admin__/seed/<entity>` exists), a negative test is
+`TransitionDecl` (so `/admin/seed/<entity>` exists), a negative test is
 emitted that seeds the entity in any *other* enum value of the field, picked by
 `st.sampled_from(<all-other-values>)`, and asserts a 4xx response:
 
@@ -189,10 +195,10 @@ emitted that seeds the entity in any *other* enum value of the field, picked by
 @settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amount):
     """requires 'orders[order_id].status = PLACED' (negative): wrong status returns 4xx."""
-    client.post("/__test_admin__/reset")
+    client.post("/admin/reset")
     row = dict(row)
     row["status"] = wrong_status
-    seed = client.post("/__test_admin__/seed/order", json=row)
+    seed = client.post("/admin/seed/order", json=row)
     assume(seed.status_code == 201)
     seeded_id = seed.json()["id"]
     response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
@@ -217,12 +223,12 @@ For each global invariant, one test per operation that has a non-state-dep requi
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_shorten_invariant_all_ur_ls_valid(url):
     """invariant allURLsValid: (all c in store | isValidURI(store[c]))"""
-    client.post("/__test_admin__/reset")
-    pre_state = client.get("/__test_admin__/state").json()
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
     response = client.post("/shorten", json={"url": url})
     assume(response.status_code == 201)
     response_data = response.json() if response.content else {}
-    post_state = client.get("/__test_admin__/state").json()
+    post_state = client.get("/admin/state").json()
     assert all(is_valid_uri(post_state["store"][c]) for c in (post_state["store"])), "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
 ```
 
@@ -248,7 +254,7 @@ state machine:
 @invariant()
 def temporal_eventually_observe_some_user_exists(self):
     """temporal eventually(someUserExists): (some u in users | u.is_active)"""
-    post_state = client.get("/__test_admin__/state").json()
+    post_state = client.get("/admin/state").json()
     if any(u["is_active"] for u in post_state["users"].values()):
         self._eventually_seen_some_user_exists = True
 
@@ -296,10 +302,11 @@ each `from` status using a generated seed admin endpoint, then exercise the oper
 - **Negative** test per illegal `from` (every value of the field's enum that is *not* a
   `from`-state for `via X`). Seed entity in that state, call the via operation, assert 4xx.
 
-Setup uses `POST /__test_admin__/seed/<entity>`, emitted by `AdminRouter.scala` for every
+Setup uses `POST /admin/seed/<entity>`, emitted by `AdminRouter.scala` for every
 entity referenced by a `TransitionDecl`. The endpoint accepts a JSON dict, parses any
 `DateTime`-typed columns from ISO strings, inserts the row, and returns the new primary
-key. Like `/reset` and `/state`, it 403s unless `ENABLE_TEST_ADMIN=1`.
+key. Like `/reset` and `/state`, it requires `Authorization: Bearer $ADMIN_TOKEN` and
+answers 404 when no token is configured.
 
 Row strategies come from `Strategies.scala`'s new `strategy_<entity>()` function, emitted
 only for transition entities; non-transition specs (`safe_counter`, `url_shortener`)
@@ -310,15 +317,15 @@ generate byte-identical strategies.py to before.
 @settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_start_work_transition_todo_to_in_progress(row):
     """transition StartWork: TODO -> IN_PROGRESS (post-state status = IN_PROGRESS)"""
-    client.post("/__test_admin__/reset")
+    client.post("/admin/reset")
     row = dict(row)
     row["status"] = "TODO"
-    seed = client.post("/__test_admin__/seed/todo", json=row)
+    seed = client.post("/admin/seed/todo", json=row)
     assume(seed.status_code == 201)
     seeded_id = seed.json()["id"]
     response = client.post(f"/todos/{seeded_id}/start")
     assert response.status_code == 200, response.text
-    post_state = client.get("/__test_admin__/state").json()
+    post_state = client.get("/admin/state").json()
     bucket = post_state.get("todos", {})
     entity_view = bucket.get(str(seeded_id)) or bucket.get(seeded_id)
     actual = entity_view.get("status") if isinstance(entity_view, dict) else entity_view
@@ -330,10 +337,10 @@ def test_start_work_transition_todo_to_in_progress(row):
 @settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_archive_transition_illegal_from_in_progress(row):
     """transition Archive: from=IN_PROGRESS is illegal (no rule); SUT must reject 4xx"""
-    client.post("/__test_admin__/reset")
+    client.post("/admin/reset")
     row = dict(row)
     row["status"] = "IN_PROGRESS"
-    seed = client.post("/__test_admin__/seed/todo", json=row)
+    seed = client.post("/admin/seed/todo", json=row)
     assume(seed.status_code == 201)
     seeded_id = seed.json()["id"]
     response = client.post(f"/todos/{seeded_id}/archive")
@@ -420,10 +427,10 @@ same `Strategies.expressionFor(...)` used in non-transition tests, and wired int
 @settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
 def test_record_payment_transition_illegal_from_draft(row, amount):
     """transition RecordPayment: from=DRAFT is illegal (no rule); SUT must reject 4xx"""
-    client.post("/__test_admin__/reset")
+    client.post("/admin/reset")
     row = dict(row)
     row["status"] = "DRAFT"
-    seed = client.post("/__test_admin__/seed/order", json=row)
+    seed = client.post("/admin/seed/order", json=row)
     assume(seed.status_code == 201)
     seeded_id = seed.json()["id"]
     response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
@@ -474,7 +481,7 @@ that exercises multi-step operation sequences against the live SUT. Each spec op
 becomes an `@rule` performing the real HTTP call. Entity ids returned from `Create`-classified
 operations flow into other rules through `Bundle`s, so a `Resolve` rule receives a code that
 was just produced by a `Shorten` rule, and a `Delete` rule consumes the code from the bundle.
-Global invariants run after every step against `/__test_admin__/state`.
+Global invariants run after every step against `/admin/state`.
 
 ```python
 class UrlShortenerStateMachine(RuleBasedStateMachine):
@@ -482,7 +489,7 @@ class UrlShortenerStateMachine(RuleBasedStateMachine):
 
     @initialize()
     def _reset(self):
-        client.post("/__test_admin__/reset")
+        client.post("/admin/reset")
 
     @rule(target=url_mapping_ids, url=strategy_long_url())
     def shorten(self, url):
@@ -502,7 +509,7 @@ class UrlShortenerStateMachine(RuleBasedStateMachine):
 
     @invariant()
     def invariant_all_ur_ls_valid(self):
-        post_state = client.get("/__test_admin__/state").json()
+        post_state = client.get("/admin/state").json()
         assert all(is_valid_uri(post_state["store"][c]) for c in post_state["store"])
 
 TestStatefulUrlShortener = UrlShortenerStateMachine.TestCase
@@ -615,7 +622,7 @@ deadline trips on slow CI machines.
 ### What stateful does not do (in M5.2)
 
 - It does **not** maintain a Python-side ghost model of state. The SUT, accessed via
-  `/__test_admin__/state`, is the model. This trades shrink-output detail for emitter
+  `/admin/state`, is the model. This trades shrink-output detail for emitter
   simplicity and avoids re-translating every `ensures` clause as a model update.
 - Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
   Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
@@ -659,7 +666,7 @@ def _check_invariant_metadata_consistent(response, case):
     """invariant metadataConsistent: dom(store) = dom(metadata)"""
     if response.status_code >= 500:
         return
-    post_state = client.get("/__test_admin__/state").json()
+    post_state = client.get("/admin/state").json()
     assert set(post_state["store"].keys()) == set(post_state["metadata"].keys()), \
         "invariant violated: metadataConsistent"
 
@@ -671,7 +678,7 @@ _ALL_CHECKS = (_check_invariant_all_ur_ls_valid,
 @settings(max_examples=_PROFILE["max_examples"], deadline=None,
           suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
 def test_api_structural(case):
-    client.post("/__test_admin__/reset")
+    client.post("/admin/reset")
     response = case.call(base_url=BASE_URL)
     if _ALL_CHECKS:
         case.validate_response(response, checks=_ALL_CHECKS)
@@ -700,7 +707,7 @@ SPEC_TEST_PROFILE=smoke pytest tests/test_structural_*.py -v
 
 For each global `invariant` that `ExprToPython` can translate, testgen emits one
 `def _check_invariant_<name>(response, case)` function. The check fetches
-`/__test_admin__/state` and asserts the translated predicate. Checks gate on
+`/admin/state` and asserts the translated predicate. Checks gate on
 `response.status_code < 500` so 5xx unhandled exceptions surface via Schemathesis's
 own `not_a_server_error` check rather than a stale state read.
 
@@ -713,7 +720,7 @@ this shape are recorded under the new `structural_skipped` array of
 
 ### Reset between cases
 
-Before every parametrized case, `client.post("/__test_admin__/reset")` runs so global
+Before every parametrized case, `client.post("/admin/reset")` runs so global
 invariant checks stay meaningful across hundreds of fuzzed cases. The cost is one
 extra round-trip per case (~1 ms locally). The Links state machine, in contrast,
 fires Hypothesis's per-scenario `__init__` on its own, no manual reset hook needed.
@@ -754,7 +761,7 @@ make test-conformance-docker PROFILE=thorough
 ```
 
 Phase order is structural $\to$ behavioral $\to$ stateful. Each phase begins with
-`POST /__test_admin__/reset` (on top of the per-case resets in the test files
+`POST /admin/reset` (on top of the per-case resets in the test files
 themselves) so a wedged state from one phase cannot poison the next. The phase
 glob is expanded inside the runner; pytest receives concrete paths, so `pytest`'s
 own collection-error path doesn't trigger when a phase has no matching files (a
@@ -776,12 +783,12 @@ Exit codes:
 
 - `0`, all three phases passed
 - `1`, at least one phase failed
-- `2`, service unreachable, admin router disabled, or invalid `PROFILE`
+- `2`, service unreachable, admin token missing or rejected, or invalid `PROFILE`
 
-The generated `docker-compose.yml` forwards `ENABLE_TEST_ADMIN` from the host
-environment to the app container, so `ENABLE_TEST_ADMIN=1 docker compose up` is
-sufficient, no manual edit required (the M5.1 caveat in the quick-start above is
-historical; M5.4 plumbs this for you).
+The generated `docker-compose.yml` forwards `ADMIN_TOKEN` from the host environment
+to the app container, and `make test-conformance-docker` mints a per-run token before
+bringing the stack up, so no manual edit is required (the by-hand `export ADMIN_TOKEN`
+in the quick-start is only needed against a service you started yourself).
 
 ## Sensitive fields (M5.8)
 
@@ -842,7 +849,7 @@ a length/regex.
 `ExprToPython` covers every `Expr` constructor in the IR, no translator coverage gaps
 remain. The remaining `Translated.Skip` outputs split into (i) **unbacked-scalar-state
 floor** — state fields not backed by an entity table get projected as `null` by the
-test-admin `/state` endpoint, so they can't be asserted black-box (`safe_counter.count`,
+admin `/state` endpoint, so they can't be asserted black-box (`safe_counter.count`,
 `url_shortener.base_url`, `todo_list.next_id`, `edge_cases.plain`, `auth_service.next_*_id`),
 (ii) user errors in the spec (unbound identifier, undeclared function, wrong arity,
 reserved-name binding), and (iii) parser-side gaps (currently the multi-clause `let ... in`
@@ -889,14 +896,17 @@ not-none / conjunction of those); (d) a real user error in the spec.
 
 - The generated service must be running and reachable at `SPEC_TEST_BASE_URL`
   (default `http://localhost:8000`).
-- The service must have started with `ENABLE_TEST_ADMIN=1`. Without it, the conftest
-  fixture skips the whole suite with a clear message rather than failing weirdly.
+- The service must have been started with `ADMIN_TOKEN` set, and the same token must
+  be exported in the test environment; the client attaches the
+  `Authorization: Bearer $ADMIN_TOKEN` header automatically. The conftest fixture
+  fails fast with a clear message on a missing/mismatched token (401) or an
+  unconfigured service (404) rather than failing weirdly.
 - Setting `SPEC_TEST_INPROC=1` flips `conftest.py` to use FastAPI's `TestClient` against
   an in-process import of `app.main:app` instead of going over HTTP to `SPEC_TEST_BASE_URL`.
   Each `pytest` invocation re-imports the app fresh, required for mutation testing
   (see [Mutation Testing](/pipelines/mutation-testing)) where the runner has to
-  observe edits to `app/`. The admin router is auto-enabled in this mode (the conftest
-  unconditionally sets `ENABLE_TEST_ADMIN=1` before importing `app.main`). Postgres (or
+  observe edits to `app/`. The admin surface is auto-configured in this mode (the
+  conftest mints and exports `ADMIN_TOKEN` before importing `app.main`). Postgres (or
   whatever `DATABASE_URL` points at) is still required because the in-process app makes
   real DB calls.
 - By default, `compile` emits service stubs that raise `NotImplementedError` for any

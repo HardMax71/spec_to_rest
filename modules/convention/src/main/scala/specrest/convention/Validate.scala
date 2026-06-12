@@ -64,6 +64,25 @@ object Validate:
   private val byName: Map[String, ConventionProperty] =
     Registry.map(p => p.name -> p).toMap
 
+  private val ReservedRoutes: List[(String, String)] = List(
+    "/health" -> "the generated health endpoint",
+    "/admin"  -> "the generated admin surface"
+  )
+
+  def validateRoutes(ir: ServiceIRFull): List[ConventionDiagnostic] =
+    val endpoints = Path.deriveEndpoints(Classify.classifyOperations(ir), ir)
+    val opSpans   = svcOperations(ir).map(op => operName(op) -> operSpan(op)).toMap
+    endpoints.flatMap: ep =>
+      ReservedRoutes.collectFirst:
+        case (root, what) if ep.path == root || ep.path.startsWith(root + "/") =>
+          ConventionDiagnostic(
+            DiagnosticLevel.Error,
+            s"operation '${ep.operationName}' resolves to route '${ep.path}', which is reserved for $what; rename the operation or set an http_path convention override",
+            opSpans.getOrElse(ep.operationName, None),
+            ep.operationName,
+            "http_path"
+          )
+
   def validateConventions(
       conventions: Option[conventions_decl],
       ir: ServiceIRFull

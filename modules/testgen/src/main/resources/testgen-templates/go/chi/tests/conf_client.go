@@ -4,8 +4,8 @@
 //
 // Black-box HTTP client for the booted service. Mirrors the Python conftest
 // `client` contract: verb methods returning a response with Status() and
-// JSON(). The test-admin router (ENABLE_TEST_ADMIN=1, -tags conformance) must
-// be mounted; ensureAdmin is the fail-fast reachability guard.
+// JSON(). The /admin router requires ADMIN_TOKEN (exported to both the
+// service and this process); ensureAdmin is the fail-fast guard.
 
 package tests
 
@@ -24,6 +24,8 @@ var baseURL = func() string {
 	}
 	return "http://localhost:8080"
 }()
+
+var adminToken = os.Getenv("ADMIN_TOKEN")
 
 // confStepCount is the stateful random-sequence length per profile, mirroring
 // the TypeScript _STEPS map (rapid.Check iteration count is profile-tuned in
@@ -73,6 +75,9 @@ func httpDo(method, path string, body any) clientResponse {
 	if body != nil {
 		req.Header.Set("content-type", "application/json")
 	}
+	if adminToken != "" {
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return clientResponse{status: -1}
@@ -115,24 +120,28 @@ func (httpClient) delete(p string) clientResponse { return httpDo("DELETE", p, n
 var client = httpClient{}
 
 func adminState() any {
-	return client.get("/__test_admin__/state").JSON()
+	return client.get("/admin/state").JSON()
 }
 
-// ensureAdmin resets state and fails fast (clear reason) when the test-admin
-// router is unreachable or disabled. Behavioral/stateful tests call it at the
-// top of each test so every property starts from a clean, reachable state.
+// ensureAdmin resets state and fails fast (clear reason) when the /admin
+// router is unreachable or the credential is wrong. Behavioral/stateful tests
+// call it at the top of each test so every property starts from a clean,
+// reachable state.
 func ensureAdmin(t *testing.T) {
 	t.Helper()
-	r := client.post("/__test_admin__/reset")
+	r := client.post("/admin/reset")
 	switch r.status {
 	case 204:
 		return
 	case -1:
-		t.Fatalf("service unreachable at %s: the test-admin router is required", baseURL)
-	case 403:
-		t.Fatalf("ENABLE_TEST_ADMIN=1 is not set; restart the server with " +
-			"ENABLE_TEST_ADMIN=1 and build -tags conformance")
+		t.Fatalf("service unreachable at %s: the /admin router is required", baseURL)
+	case 404:
+		t.Fatalf("/admin answered 404: the service has no ADMIN_TOKEN configured; " +
+			"export ADMIN_TOKEN and restart the server with the same value")
+	case 401:
+		t.Fatalf("/admin rejected the credential (401): ADMIN_TOKEN is missing from " +
+			"the test environment or differs from the one the server was started with")
 	default:
-		t.Fatalf("admin /__test_admin__/reset returned %d; service not M5.1-ready", r.status)
+		t.Fatalf("admin /admin/reset returned %d; service not M5.1-ready", r.status)
 	}
 }

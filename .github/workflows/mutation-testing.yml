@@ -41,7 +41,6 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://${{ matrix.fixture }}:${{ matrix.fixture }}@localhost:5432/${{ matrix.fixture }}
       SPEC_TEST_INPROC: "1"
-      ENABLE_TEST_ADMIN: "1"
       MUTATION_THRESHOLD: "90"
 
     steps:
@@ -93,7 +92,7 @@ jobs:
 
           [tool.mutmut]
           paths_to_mutate = ["app/"]
-          paths_to_exclude = ["app/db/", "app/routers/test_admin.py"]
+          paths_to_exclude = ["app/db/", "app/routers/admin.py"]
           runner = "uv run pytest tests/test_behavioral_*.py -x --tb=no -q"
           TOML
 

@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.AdminModel
 import specrest.convention.EndpointSpec
 import specrest.ir.Naming
 import specrest.ir.PrettyPrint
@@ -608,17 +609,17 @@ object Behavioral:
     sb.append(
       s"    \"\"\"transition ${operName(opDecl)}: $from -> $to (post-state ${trnField(td)} = $to)\"\"\"\n"
     )
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
     guardFixLines.foreach: line =>
       sb.append(s"    $line\n")
-    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
-    sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
     sb.append(
       s"    bucket = post_state.get($stateKey, {})\n"
     )
@@ -658,10 +659,10 @@ object Behavioral:
     sb.append(
       s"    \"\"\"transition ${operName(opDecl)}: from=$from is illegal (no rule); SUT must reject 4xx\"\"\"\n"
     )
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
-    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))
@@ -728,14 +729,14 @@ object Behavioral:
       )
     sb.append(s"def $name($sig):\n")
     sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
-    sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
+    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
     sb.append(s"    response = ${requestCallExpr(pop)}\n")
     if nonTrivialRequires then
       sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
-    sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
     sb.append(s"    assert $assertion, ${ExprToPython.pyString(s"ensures violated: $docstring")}\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
@@ -758,8 +759,8 @@ object Behavioral:
     sb.append(
       s"    \"\"\"requires '$inputName in $stateName' (negative): missing key returns 4xx.\"\"\"\n"
     )
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
-    sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
+    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
     sb.append(
       s"    assume($inputName not in pre_state.get(${ExprToPython.pyString(stateName)}, {}))\n"
     )
@@ -787,12 +788,12 @@ object Behavioral:
       )
     sb.append(s"def $name($sig):\n")
     sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
-    sb.append("    pre_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
+    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
     sb.append(s"    response = ${requestCallExpr(pop)}\n")
     sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
-    sb.append("    post_state = client.get(\"/__test_admin__/state\").json()\n")
+    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
     sb.append(
       s"    assert $assertion, ${ExprToPython.pyString(s"invariant violated: $docstring")}\n"
     )
@@ -959,10 +960,10 @@ object Behavioral:
     sb.append(
       s"    \"\"\"requires '${r.stateName}[${r.inputName}].${r.fieldName} = ${r.requiredValue}' (negative): wrong status returns 4xx.\"\"\"\n"
     )
-    sb.append("    client.post(\"/__test_admin__/reset\")\n")
+    sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = wrong_status\n")
-    sb.append(s"    seed = client.post(\"/__test_admin__/seed/$entitySnake\", json=row)\n")
+    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))

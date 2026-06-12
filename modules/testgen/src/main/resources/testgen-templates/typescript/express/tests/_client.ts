@@ -2,10 +2,11 @@
 //
 // Black-box HTTP client for the booted service. Mirrors the Python conftest
 // `client` contract: verb methods returning a response with `.status`, async
-// `.json()` and `.text()`. The test-admin router (ENABLE_TEST_ADMIN=1) must be
-// mounted; `ensureAdmin()` is the fail-fast reachability guard.
+// `.json()` and `.text()`. The /admin router requires ADMIN_TOKEN (exported to
+// both the service and this process); `ensureAdmin()` is the fail-fast guard.
 
 const BASE_URL = process.env.SPEC_TEST_BASE_URL ?? "http://localhost:8080";
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
 
 export interface ClientResponse {
   status: number;
@@ -19,9 +20,16 @@ async function request(
   body?: unknown,
 ): Promise<ClientResponse> {
   const init: RequestInit = { method };
+  const headers: Record<string, string> = {};
+  if (ADMIN_TOKEN !== "") {
+    headers["authorization"] = `Bearer ${ADMIN_TOKEN}`;
+  }
   if (body !== undefined) {
     init.body = JSON.stringify(body);
-    init.headers = { "content-type": "application/json" };
+    headers["content-type"] = "application/json";
+  }
+  if (Object.keys(headers).length > 0) {
+    init.headers = headers;
   }
   const res = await fetch(BASE_URL + path, init);
   const buf = await res.text();
@@ -42,24 +50,31 @@ export const client = {
 
 export class AdminUnavailable extends Error {}
 
-// Resolves when the test-admin router is reachable and reset succeeds; rejects
+// Resolves when the /admin router is reachable and reset succeeds; rejects
 // with AdminUnavailable otherwise so the suite fails fast with a clear reason.
 export async function ensureAdmin(): Promise<void> {
   let res: ClientResponse;
   try {
-    res = await client.post("/__test_admin__/reset");
+    res = await client.post("/admin/reset");
   } catch (e) {
     throw new AdminUnavailable(`service unreachable at ${BASE_URL}: ${String(e)}`);
   }
-  if (res.status === 403) {
+  if (res.status === 404) {
     throw new AdminUnavailable(
-      "ENABLE_TEST_ADMIN=1 is not set on the service; the test-admin router " +
-        "is required. Restart with: ENABLE_TEST_ADMIN=1 npm start",
+      "/admin answered 404: the service has no ADMIN_TOKEN configured. " +
+        "Export ADMIN_TOKEN and restart the service with the same value, " +
+        "e.g. ADMIN_TOKEN=$(openssl rand -hex 32) npm start",
+    );
+  }
+  if (res.status === 401) {
+    throw new AdminUnavailable(
+      "/admin rejected the credential (401): ADMIN_TOKEN is missing from the " +
+        "test environment or differs from the one the service was started with",
     );
   }
   if (res.status !== 204) {
     throw new AdminUnavailable(
-      `admin /__test_admin__/reset returned ${res.status}; service not M5.1-ready`,
+      `admin /admin/reset returned ${res.status}; service not M5.1-ready`,
     );
   }
 }

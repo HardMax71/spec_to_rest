@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets
 final case class PythonFastapiPostgresTemplates(
     main: String,
     config: String,
+    security: String,
     database: String,
     dbBase: String,
     redaction: String,
@@ -66,6 +67,7 @@ object Templates:
     PythonFastapiPostgresTemplates(
       main = loadResource("main.py.hbs"),
       config = loadResource("config.py.hbs"),
+      security = loadResource("security.py.hbs"),
       database = loadResource("database.py.hbs"),
       dbBase = loadResource("db/base.py.hbs"),
       redaction = loadResource("app/redaction.py.hbs"),

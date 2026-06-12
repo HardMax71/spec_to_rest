@@ -280,11 +280,13 @@ jobs:
           DATABASE_URL: ${{ matrix.db_url }}
         run: npx prisma migrate deploy
 
-      - name: Boot ts-express server (ENABLE_TEST_ADMIN=1)
+      - name: Mint per-run admin token
+        run: echo "ADMIN_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Boot ts-express server
         working-directory: out
         env:
           DATABASE_URL: ${{ matrix.db_url }}
-          ENABLE_TEST_ADMIN: "1"
           PORT: "8080"
         run: |
           nohup node dist/index.js > server.log 2>&1 &

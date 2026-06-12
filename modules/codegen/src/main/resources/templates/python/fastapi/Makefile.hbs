@@ -46,7 +46,8 @@ test-conformance-docker: ## Boot service via docker compose, run conformance, te
 	cleanup() { docker compose down -v >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
 	uv sync --all-extras; \
-	ENABLE_TEST_ADMIN=1 docker compose up --build -d; \
+	export ADMIN_TOKEN="$${ADMIN_TOKEN:-$$(openssl rand -hex 32)}"; \
+	docker compose up --build -d; \
 	timeout 60 bash -c 'until curl -fsS http://localhost:8000/health >/dev/null; do sleep 2; done'; \
 	$(MAKE) test-conformance PROFILE=$(PROFILE)
 

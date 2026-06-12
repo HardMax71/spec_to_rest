@@ -205,6 +205,7 @@ object EmitGo:
       "go.mod"                        -> templates.goMod,
       "cmd/server/main.go"            -> templates.main,
       "internal/config/config.go"     -> templates.config,
+      "internal/auth/auth.go"         -> templates.auth,
       "internal/database/database.go" -> templates.database,
       "internal/models/common.go"     -> templates.modelCommon,
       "internal/handlers/common.go"   -> templates.handlerCommon,
@@ -241,27 +242,7 @@ object EmitGo:
       preserve = true
     )
 
-    // Go links statically: main.go always calls testadmin.Register, so the
-    // package must always exist. This is the `!conformance` no-op; testgen
-    // (default; opt out with --no-tests) emits the spec-derived
-    // `conformance`-tagged Register.
-    files += EmittedFile(
-      "internal/testadmin/testadmin.go",
-      """|//go:build !conformance
-         |
-         |package testadmin
-         |
-         |import (
-         |	"github.com/go-chi/chi/v5"
-         |	"github.com/uptrace/bun"
-         |)
-         |
-         |// Register is a no-op in normal builds; the spec-derived conformance
-         |// implementation (build tag `conformance`, emitted by default — opt out
-         |// with --no-tests) replaces it via the build constraint.
-         |func Register(_ chi.Router, _ *bun.DB) {}
-         |""".stripMargin
-    )
+    files += EmittedFile("internal/admin/admin.go", AdminRouterGo.emit(profiled))
 
     entities.foreach: entityCtx =>
       val perEntity = mergeProfile(ctx, projectCtx, Some(entityCtx))

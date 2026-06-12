@@ -150,7 +150,7 @@ object Compose:
       name = "app",
       build = Some("."),
       envFile = Some(".env"),
-      environment = List("ENABLE_TEST_ADMIN" -> "${ENABLE_TEST_ADMIN:-}"),
+      environment = List("ADMIN_TOKEN" -> "${ADMIN_TOKEN:-}"),
       ports = List(s"${in.appPort}:${in.appPort}"),
       volumes = if in.hasDbService then Nil else List(s"${in.dbVolumeName}:/data"),
       dependsOn = appDeps
@@ -165,6 +165,7 @@ object Compose:
       name = "app",
       build = Some("."),
       envFile = Some(".env"),
+      environment = List("ADMIN_TOKEN" -> "${ADMIN_TOKEN:-}"),
       ports = List(s"${in.appPort}:${in.appPort}"),
       dependsOn = if in.hasDbService then List("db" -> DependsCondition.Healthy) else Nil
     )

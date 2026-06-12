@@ -14,9 +14,8 @@ object TestEmit:
 
   // Native Go conformance (go test + rapid). Structural fuzzing is not yet
   // ported (#175) — honest-skipped; structural invariants are exercised by the
-  // stateful suite. Behavioral/stateful are the Go emitters; the spec-derived
-  // test-admin router is build-tagged `conformance` (the codegen side emits the
-  // always-present `!conformance` no-op stub + main.go wiring).
+  // stateful suite. Behavioral/stateful are the Go emitters; the bearer-guarded
+  // /admin router is emitted by codegen and present in every build.
   private def emitGo(profiled: ProfiledService): List[EmittedFile] =
     val ir            = profiled.ir
     val serviceSnake  = Naming.toSnakeCase(svcName(ir))
@@ -31,8 +30,7 @@ object TestEmit:
       behavioralOut.skips ++ statefulOut.skips,
       structuralOut.skips
     )
-    EmittedFile(FilePaths.AdminRouterFileGo, AdminRouterGo.emit(profiled)) ::
-      harness.scaffoldFiles(ir) ++
+    harness.scaffoldFiles(ir) ++
       List(
         EmittedFile(harness.strategiesPath, renderGoStrategiesFile(stratSpecs)),
         EmittedFile(
@@ -79,8 +77,7 @@ object TestEmit:
       behavioralOut.skips ++ statefulOut.skips,
       structuralOut.skips
     )
-    EmittedFile(FilePaths.AdminRouterFileTs, AdminRouterTs.emit(profiled)) ::
-      harness.scaffoldFiles(ir) ++
+    harness.scaffoldFiles(ir) ++
       List(
         EmittedFile(harness.strategiesPath, renderTsStrategiesFile(stratSpecs)),
         EmittedFile(
@@ -136,15 +133,8 @@ object TestEmit:
     val behavioralOut = Behavioral.emitFor(profiled)
     val statefulOut   = Stateful.emitFor(profiled)
     val structuralOut = Structural.emitFor(profiled)
-    // The conformance bundle (conftest/run_conformance/behavioral/stateful/structural) is the
-    // spec-derived, language-agnostic HTTP black-box suite — emitted identically for every
-    // target. Only the test-admin router is language-specific.
-    val (adminRouterFile, adminRouterSrc) =
-      if profiled.profile.framework == "express" then
-        (FilePaths.AdminRouterFileTs, AdminRouterTs.emit(profiled))
-      else (FilePaths.AdminRouterFile, AdminRouter.emit(profiled))
-    val strategiesPy = renderStrategiesFile(strategySpecs)
-    val behavioralPy = renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs)
+    val strategiesPy  = renderStrategiesFile(strategySpecs)
+    val behavioralPy  = renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs)
     val skipsJson =
       renderSkipsJson(
         svcName(ir),
@@ -153,8 +143,7 @@ object TestEmit:
         structuralOut.skips
       )
 
-    EmittedFile(adminRouterFile, adminRouterSrc) ::
-      harness.scaffoldFiles(ir) ++
+    harness.scaffoldFiles(ir) ++
       List(
         EmittedFile(harness.strategiesPath, strategiesPy),
         EmittedFile(harness.behavioralTestPath(serviceSnake), behavioralPy),

@@ -2,7 +2,7 @@
 //
 // Runtime helpers the generated assertions call. These give TypeScript the
 // set/relation semantics Python gets from built-ins (`in`, `==` on sets,
-// `len`, `|`/`&`/`-`, powerset). State read from /__test_admin__/state is a
+// `len`, `|`/`&`/`-`, powerset). State read from /admin/state is a
 // plain JSON object; relation/map state fields project as `{ key: value }`.
 
 import { createHash } from "node:crypto";

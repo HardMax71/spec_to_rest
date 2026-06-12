@@ -1,5 +1,6 @@
-package specrest.testgen
+package specrest.codegen.python
 
+import specrest.codegen.AdminModel
 import specrest.convention.ScalarState
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
@@ -70,10 +71,9 @@ object AdminRouter:
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
 
-    s"""import os
-       |from datetime import datetime, date
+    s"""from datetime import datetime, date
        |
-       |from fastapi import APIRouter, Body, Depends, HTTPException
+       |from fastapi import APIRouter, Body, Depends
        |from fastapi.responses import Response
        |from sqlalchemy import delete, select${
         if hasScalars then ", update as sa_update" else ""
@@ -81,14 +81,10 @@ object AdminRouter:
        |from sqlalchemy.ext.asyncio import AsyncSession
        |
        |from app.database import get_session
+       |from app.security import require_admin
        |${if entityImports.nonEmpty then entityImports else ""}$stateImport
        |
-       |router = APIRouter(prefix="/__test_admin__", tags=["test-admin"])
-       |
-       |
-       |def _check_enabled() -> None:
-       |    if os.environ.get("ENABLE_TEST_ADMIN") != "1":
-       |        raise HTTPException(status_code=403, detail="test admin disabled")
+       |router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
        |
        |
        |def _row_to_dict(row) -> dict:
@@ -109,14 +105,12 @@ object AdminRouter:
        |
        |@router.post("/reset", status_code=204)
        |async def reset(session: AsyncSession = Depends(get_session)) -> Response:
-       |    _check_enabled()
        |$deleteStatements
        |    return Response(status_code=204)
        |
        |
        |@router.get("/state")
        |async def get_state(session: AsyncSession = Depends(get_session)) -> dict:
-       |    _check_enabled()
        |$stateProjections$seedSection
        |""".stripMargin
 
@@ -138,7 +132,6 @@ object AdminRouter:
         |    payload: dict = Body(...),
         |    session: AsyncSession = Depends(get_session),
         |) -> dict:
-        |    _check_enabled()
         |    payload = dict(payload)
         |$coercion    obj = ${entName(entity)}(**payload)
         |    session.add(obj)

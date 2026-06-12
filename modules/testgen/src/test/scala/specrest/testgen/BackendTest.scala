@@ -321,7 +321,7 @@ class BackendTest extends CatsEffectSuite:
       val noInput = out.tests
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
-      assert(noInput.body.contains("client.post(\"/__test_admin__/reset\")"), noInput.body)
+      assert(noInput.body.contains("client.post(\"/admin/reset\")"), noInput.body)
       assert(noInput.body.contains("const preState = "), noInput.body)
       assert(noInput.body.contains("const postState = "), noInput.body)
       assert(noInput.body.contains("const responseData = "), noInput.body)
@@ -358,7 +358,7 @@ class BackendTest extends CatsEffectSuite:
       assert(f.contains("import fc from \"fast-check\";"), f.take(300))
       assert(f.contains("fc.asyncProperty("), f)
       assert(f.contains("fc.oneof("), f)
-      assert(f.contains("client.post(\"/__test_admin__/reset\")"), f)
+      assert(f.contains("client.post(\"/admin/reset\")"), f)
       assert(f.contains("async function dispatch(step: any)"), f)
       assert(f.contains("const STEP_COUNT ="), f)
       assert(f.contains("postState["), f)
@@ -526,7 +526,7 @@ class BackendTest extends CatsEffectSuite:
       val noInput = out.tests
         .find(_.name == "Test_no_input_ensures_0")
         .getOrElse(fail(s"missing Test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
-      assert(noInput.body.contains("client.post(\"/__test_admin__/reset\")"), noInput.body)
+      assert(noInput.body.contains("client.post(\"/admin/reset\")"), noInput.body)
       assert(noInput.body.contains("preState := adminState()"), noInput.body)
       assert(noInput.body.contains("postState := adminState()"), noInput.body)
       assert(noInput.body.contains("responseData := response.JSON()"), noInput.body)
@@ -558,7 +558,7 @@ class BackendTest extends CatsEffectSuite:
       assert(f.contains("rapid.Check("), f)
       assert(f.contains("switch op {"), f)
       assert(f.contains("confStepCount()"), f)
-      assert(f.contains("client.post(\"/__test_admin__/reset\")"), f)
+      assert(f.contains("client.post(\"/admin/reset\")"), f)
       assert(f.contains("invariant violated:"), f)
       assert(f.contains("package tests"), f.take(200))
 
@@ -588,7 +588,7 @@ class BackendTest extends CatsEffectSuite:
       val out = TsStructural.emitFor(SynthFixture.profiled(ir))
       assert(out.tests.nonEmpty, s"expected fuzzable ops; got ${out.tests.map(_.name)}")
       val body = out.tests.map(_.body).mkString
-      assert(body.contains("client.post(\"/__test_admin__/reset\")"), body)
+      assert(body.contains("client.post(\"/admin/reset\")"), body)
       assert(body.contains("response.status >= 500"), body)
       // Any stub/untranslatable op is recorded as a structural skip (kind).
       assert(out.skips.forall(_.kind == "structural"), out.skips.toString)
@@ -601,7 +601,7 @@ class BackendTest extends CatsEffectSuite:
       val out = GoStructural.emitFor(SynthFixture.profiled(ir))
       assert(out.tests.nonEmpty, s"expected fuzzable ops; got ${out.tests.map(_.name)}")
       val body = out.tests.map(_.body).mkString
-      assert(body.contains("client.post(\"/__test_admin__/reset\")"), body)
+      assert(body.contains("client.post(\"/admin/reset\")"), body)
       assert(body.contains("response.Status() >= 500"), body)
       assert(out.skips.forall(_.kind == "structural"), out.skips.toString)
       val mod = GoStructural.renderModule(ir, out.tests)

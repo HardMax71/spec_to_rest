@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
-import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.extensions import register as register_extensions
 from app.redaction import configure_logging
+from app.routers import admin
 
 from app.routers import url_mappings
 
@@ -45,15 +45,7 @@ async def health_check() -> dict[str, str]:
 
 register_extensions(app)
 
-if os.environ.get("ENABLE_TEST_ADMIN") == "1":
-    try:
-        from app.routers import test_admin as _test_admin
-    except ModuleNotFoundError as exc:
-        if exc.name != "app.routers.test_admin":
-            raise
-    else:
-        app.include_router(_test_admin.router)
-
+app.include_router(admin.router)
 
 app.include_router(url_mappings.router)
 

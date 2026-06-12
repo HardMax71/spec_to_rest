@@ -344,8 +344,9 @@ GitHub Actions workflow triggered on push/PR to `main` plus a nightly
 
 - **test**, installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
   `mypy app/`, `alembic upgrade head`, then `pytest tests/test_health.py`. After unit
-  tests pass it boots the app in the background with `ENABLE_TEST_ADMIN=1` (required by
-  the admin router the conformance suite uses), waits up to 30 s for `/health`, and runs
+  tests pass it mints a per-run `ADMIN_TOKEN` (the conformance suite authenticates
+  against the `/admin` router with it), boots the app in the background, waits up to
+  30 s for `/health`, and runs
   `make test-conformance PROFILE=$SPEC_TEST_PROFILE`. The profile is `exhaustive` on
   scheduled runs and `thorough` otherwise, selected via
   `${{ github.event_name == 'schedule' && 'exhaustive' || 'thorough' }}`. JUnit XML

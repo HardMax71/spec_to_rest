@@ -11,6 +11,7 @@ const ConfigSchema = z.object({
   BASE_URL: z.string().default('http://localhost:8080'),
   PORT: z.coerce.number().int().positive().default(8080),
   LOG_LEVEL: z.string().default('info'),
+  ADMIN_TOKEN: z.string().optional(),
 });
 
 const parsed = ConfigSchema.parse(process.env);
@@ -20,6 +21,7 @@ export const config = {
   baseUrl: parsed.BASE_URL,
   port: parsed.PORT,
   logLevel: parsed.LOG_LEVEL,
+  adminToken: parsed.ADMIN_TOKEN,
 } as const;
 
 export type Config = typeof config;
