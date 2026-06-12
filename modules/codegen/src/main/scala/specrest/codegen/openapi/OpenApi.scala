@@ -117,6 +117,8 @@ final case class SecuritySchemeObject(
     `type`: String,
     scheme: Option[String] = None,
     bearerFormat: Option[String] = None,
+    in_ : Option[String] = None,
+    name: Option[String] = None,
     description: Option[String] = None
 )
 
@@ -201,10 +203,13 @@ object Components:
         schemas(entity.createSchemaName) = SchemaObjectAdapter.fromLifted(createL)
         schemas(entity.readSchemaName) = SchemaObjectAdapter.fromLifted(readL)
         schemas(entity.updateSchemaName) = SchemaObjectAdapter.fromLifted(updateL)
+    val declaredSchemes = svcSecurity(profiled.ir).map { decl =>
+      ssdName(decl) -> userSecurityScheme(ssdKind(decl))
+    }.toMap
     ComponentsObject(
       schemas = schemas.toMap,
       securitySchemes = Some(
-        Map(
+        declaredSchemes + (
           "AdminBearer" -> SecuritySchemeObject(
             `type` = "http",
             scheme = Some("bearer"),
@@ -216,6 +221,14 @@ object Components:
         )
       )
     )
+
+  private def userSecurityScheme(kind: security_scheme_kind): SecuritySchemeObject = kind match
+    case SsBearer(format) =>
+      SecuritySchemeObject(`type` = "http", scheme = Some("bearer"), bearerFormat = format)
+    case SsApiKey(location, paramName) =>
+      SecuritySchemeObject(`type` = "apiKey", in_ = Some(location), name = Some(paramName))
+    case SsBasic() =>
+      SecuritySchemeObject(`type` = "http", scheme = Some("basic"))
 
   private def decorateFields(
       entity: ProfiledEntity,
@@ -439,8 +452,17 @@ object Paths:
       tags = List(Naming.toSnakeCase(entity.entityName)),
       parameters = if parameters.nonEmpty then Some(parameters) else None,
       requestBody = requestBody,
-      responses = responses
+      responses = responses,
+      security = operationSecurity(op)
     )
+
+  // one single-entry map per scheme name = OR-alternatives (OpenAPI security
+  // array); requiresAuth is empty for public operations, emitting no field
+  private def operationSecurity(
+      op: ProfiledOperation
+  ): Option[List[Map[String, List[String]]]] =
+    if op.requiresAuth.isEmpty then None
+    else Some(op.requiresAuth.map(n => Map(n -> List.empty[String])))
 
   private def buildParameters(op: ProfiledOperation, ctx: BuildContext): List[ParameterObject] =
     op.endpoint.pathParams.map(p => paramObject(p, "path", ctx)) ++
@@ -617,7 +639,8 @@ object Paths:
       tags = List("state"),
       parameters = None,
       requestBody = None,
-      responses = ok ++ conflict
+      responses = ok ++ conflict,
+      security = operationSecurity(v.operation)
     )
 
   private def jsonResponse(description: String, schema: SchemaObject): ResponseObject =
@@ -749,6 +772,7 @@ object OpenApi:
   // Map internal Scala identifiers to proper OpenAPI YAML keys
   private def mapKeyName(scalaKey: String): String = scalaKey match
     case "enum_"      => "enum"
+    case "in_"        => "in"
     case "ref"        => "$ref"
     case "type"       => "type"
     case "xInvariant" => "x-invariant"

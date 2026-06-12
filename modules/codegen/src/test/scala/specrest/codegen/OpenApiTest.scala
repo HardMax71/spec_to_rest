@@ -24,6 +24,61 @@ class OpenApiTest extends CatsEffectSuite:
       val resolve = doc.paths.get("/{code}").flatMap(_.get)
       assert(resolve.isDefined, "expected GET /{code}")
 
+  private def allOperations(doc: openapi.OpenApiDocument) =
+    doc.paths.toList.flatMap: (path, item) =>
+      List(item.get, item.post, item.put, item.patch, item.delete).flatten.map(path -> _)
+
+  test("auth_service: spec-declared schemes are emitted next to AdminBearer (M8.2)"):
+    SpecFixtures.loadProfiled("auth_service").map: profiled =>
+      val doc = OpenApi.buildOpenApiDocument(profiled)
+      val schemes =
+        doc.components.securitySchemes.getOrElse(fail("expected securitySchemes"))
+      assertEquals(schemes.keySet, Set("AdminBearer", "bearer", "api_key"))
+      val bearer = schemes("bearer")
+      assertEquals(bearer.`type`, "http")
+      assertEquals(bearer.scheme, Some("bearer"))
+      assertEquals(bearer.bearerFormat, Some("JWT"))
+      val apiKey = schemes("api_key")
+      assertEquals(apiKey.`type`, "apiKey")
+      assertEquals(apiKey.in_, Some("header"))
+      assertEquals(apiKey.name, Some("X-API-Key"))
+
+  test("auth_service: requires_auth emits per-operation security as OR-alternatives"):
+    SpecFixtures.loadProfiled("auth_service").map: profiled =>
+      val doc  = OpenApi.buildOpenApiDocument(profiled)
+      val byId = allOperations(doc).map((_, op) => op.operationId -> op).toMap
+      assertEquals(
+        byId("logout").security,
+        Some(List(Map("bearer" -> List.empty[String])))
+      )
+      assertEquals(
+        byId("refresh_token").security,
+        Some(List(Map("bearer" -> List.empty[String]), Map("api_key" -> List.empty[String])))
+      )
+      assertEquals(byId("register").security, None)
+      assertEquals(byId("login").security, None)
+
+  test("url_shortener (no security block): only AdminBearer, no op security outside /admin"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val doc = OpenApi.buildOpenApiDocument(profiled)
+      assertEquals(
+        doc.components.securitySchemes.map(_.keySet),
+        Some(Set("AdminBearer"))
+      )
+      val publicOps =
+        allOperations(doc).filterNot((path, _) => path.startsWith("/admin"))
+      assert(publicOps.forall((_, op) => op.security.isEmpty), "public ops must carry no security")
+
+  test("auth_service YAML renders apiKey in/name and per-op security arrays"):
+    SpecFixtures.loadProfiled("auth_service").map: profiled =>
+      val yaml = OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled))
+      assert(
+        yaml.contains("type: apiKey\n      in: header\n      name: X-API-Key"),
+        s"apiKey scheme block malformed (in_ must render as in):\n$yaml"
+      )
+      assert(yaml.contains("- bearer: []"), s"missing per-op security entry:\n$yaml")
+      assert(yaml.contains("- api_key: []"), s"missing OR-alternative entry:\n$yaml")
+
   test("components.securitySchemes declares AdminBearer (http bearer)"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val doc = OpenApi.buildOpenApiDocument(profiled)
