@@ -1,5 +1,5 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,11 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app.extensions import register as register_extensions
 from app.redaction import configure_logging
-from app.routers import admin
-
-from app.routers import url_mappings
-
-
+from app.routers import admin, url_mappings
 
 configure_logging()
 
@@ -46,6 +42,4 @@ async def health_check() -> dict[str, str]:
 register_extensions(app)
 
 app.include_router(admin.router)
-
 app.include_router(url_mappings.router)
-

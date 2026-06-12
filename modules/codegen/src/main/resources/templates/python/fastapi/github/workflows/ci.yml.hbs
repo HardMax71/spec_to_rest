@@ -14,8 +14,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-
 {{#if db.hasDbService}}
+
     services:
       database:
         image: {{db.dbImage}}
@@ -68,16 +68,34 @@ jobs:
         run: make test-conformance PROFILE=$SPEC_TEST_PROFILE
       - name: Upload JUnit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: conformance-results-$\{{ env.SPEC_TEST_PROFILE }}
           path: results/
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+      - name: Audit dependencies (pip-audit)
+        run: |
+          uv export --format requirements-txt --no-emit-project > /tmp/requirements.txt
+          uvx pip-audit -r /tmp/requirements.txt
+      - name: Audit workflow files (zizmor)
+        run: uvx zizmor .github/workflows/
 
   docker:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Seed .env from example
         run: cp .env.example .env
       - name: Build and start stack

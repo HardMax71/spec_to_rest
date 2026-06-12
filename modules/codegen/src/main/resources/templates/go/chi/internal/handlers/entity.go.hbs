@@ -1,14 +1,6 @@
 package handlers
 
-import (
-{{#if entity.usesRequestBody}}	"encoding/json"
-{{/if}}{{#if entity.usesNotFound}}	"errors"
-{{/if}}{{#if entity.hasOperations}}	"net/http"
-{{/if}}{{#if entity.needsStrconv}}	"strconv"
-{{/if}}{{#if entity.usesPathParams}}	"github.com/go-chi/chi/v5"
-{{/if}}{{#if entity.usesRequestBody}}	"{{module}}/internal/models"
-{{/if}}	"{{module}}/internal/services"
-)
+{{{entity.handlerImports}}}
 
 type {{entity.entity.modelClassName}}Handler struct {
 	svc *services.{{entity.entity.modelClassName}}Service
@@ -18,6 +10,7 @@ func New{{entity.entity.modelClassName}}Handler(svc *services.{{entity.entity.mo
 	return &{{entity.entity.modelClassName}}Handler{svc: svc}
 }
 {{#each entity.operations}}
+
 func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.ResponseWriter, r *http.Request) {
 {{#each pathParams}}{{#if isInt}}	{{goName}}Str := chi.URLParam(r, "{{name}}")
 	{{goName}}, {{goName}}Err := strconv.ParseInt({{goName}}Str, 10, 64)

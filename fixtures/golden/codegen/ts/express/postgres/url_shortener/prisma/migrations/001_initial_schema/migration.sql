@@ -1,7 +1,6 @@
 -- spec-to-rest generated migration. Apply via `npx prisma migrate deploy`.
 -- Each statement is wrapped in an implicit transaction by Prisma.
 
-
 CREATE TABLE url_mappings (
     id BIGSERIAL NOT NULL,
     code TEXT NOT NULL,
@@ -16,5 +15,4 @@ CREATE TABLE url_mappings (
     CONSTRAINT ck_url_mappings_3 CHECK (length(url) > 0),
     CONSTRAINT ck_url_mappings_4 CHECK (click_count >= 0)
 );
-
 

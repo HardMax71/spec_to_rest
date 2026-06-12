@@ -66,8 +66,12 @@ class EmitGoTest extends CatsEffectSuite:
       val model = files("internal/models/url_mapping.go")
       assert(model.contains("type UrlMapping struct"), model)
       assert(model.contains("bun.BaseModel `bun:\"table:url_mappings"), model)
-      assert(model.contains("ID int64 `bun:\"id,pk,autoincrement\" json:\"id\"`"), model)
-      assert(model.contains("Code string `bun:\"code,notnull\" json:\"code\"`"), model)
+      // struct fields are gofmt-aligned (text/tabwriter column padding)
+      assert(
+        model.contains("ID            int64     `bun:\"id,pk,autoincrement\" json:\"id\"`"),
+        model
+      )
+      assert(model.contains("Code          string    `bun:\"code,notnull\" json:\"code\"`"), model)
       assert(model.contains("type UrlMappingCreate struct"), model)
       assert(!model.contains("type ErrorResponse struct"), model)
       assert(model.contains("\"github.com/uptrace/bun\""), model)

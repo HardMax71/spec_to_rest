@@ -13,11 +13,12 @@ object AdminRouter:
     val entities   = svcEntities(ir)
     val hasScalars = ScalarState.fields(ir).nonEmpty
 
-    val entityImports = entities
-      .map(e => s"from app.models.${Naming.toSnakeCase(entName(e))} import ${entName(e)}")
-      .mkString("\n")
-    val stateImport =
-      if hasScalars then "\nfrom app.models.service_state import ServiceState" else ""
+    val modelImports = (entities
+      .map(e => s"from app.models.${Naming.toSnakeCase(entName(e))} import ${entName(e)}") ++
+      (if hasScalars then List("from app.models.service_state import ServiceState") else Nil)).sorted
+    val firstPartyImports =
+      ("from app.database import get_session" :: modelImports :::
+        List("from app.security import require_admin")).mkString("\n")
 
     val scalarResets =
       if hasScalars then
@@ -71,18 +72,22 @@ object AdminRouter:
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")
 
-    s"""from datetime import datetime, date
+    val sqlalchemyImports = (
+      (if deleteStatements.contains("delete(") then List("delete") else Nil) :::
+        (if stateProjections.contains("select(") then List("select") else Nil)
+    ) match
+      case Nil   => ""
+      case names => s"\nfrom sqlalchemy import ${names.mkString(", ")}"
+
+    s"""from datetime import date, datetime
        |
-       |from fastapi import APIRouter, Body, Depends
-       |from fastapi.responses import Response
-       |from sqlalchemy import delete, select${
-        if hasScalars then ", update as sa_update" else ""
+       |from fastapi import APIRouter, ${if seedTargets.nonEmpty then "Body, " else ""}Depends
+       |from fastapi.responses import Response$sqlalchemyImports${
+        if hasScalars then "\nfrom sqlalchemy import update as sa_update" else ""
       }
        |from sqlalchemy.ext.asyncio import AsyncSession
        |
-       |from app.database import get_session
-       |from app.security import require_admin
-       |${if entityImports.nonEmpty then entityImports else ""}$stateImport
+       |$firstPartyImports
        |
        |router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
        |

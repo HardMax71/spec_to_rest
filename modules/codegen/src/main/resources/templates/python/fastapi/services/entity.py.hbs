@@ -1,6 +1,6 @@
-{{#if serviceImports.sqlalchemyCoreImports.length}}
-from sqlalchemy import {{join serviceImports.sqlalchemyCoreImports ", "}}
-{{/if}}
+{{#each serviceImports.sqlalchemyCoreImports}}
+from sqlalchemy import {{this}}
+{{/each}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
 {{#if serviceImports.needsDafnyKernel}}

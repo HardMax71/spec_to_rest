@@ -48,7 +48,8 @@ final case class RenderContext(
     db: DialectView,
     dafnyKernel: Option[DafnyKernel] = None,
     scalarStateFields: List[ScalarStateFieldView] = Nil,
-    hasScalarOps: Boolean = false
+    hasScalarOps: Boolean = false,
+    routerImport: String = "admin"
 )
 
 final case class RenderResult(fileName: String, content: String)
@@ -79,7 +80,14 @@ object RenderContext:
         .deployment(Naming.toSnakeCase(svcName(profiled.ir))),
       dafnyKernel = dafnyKernel,
       scalarStateFields = ScalarOps.stateFields(profiled),
-      hasScalarOps = ScalarOps.views(profiled).nonEmpty
+      hasScalarOps = ScalarOps.views(profiled).nonEmpty,
+      routerImport = {
+        val modules =
+          "admin" ::
+            profiled.entities.map(e => Naming.toSnakeCase(Naming.pluralize(e.entityName))) :::
+            (if ScalarOps.views(profiled).nonEmpty then List("state_ops") else Nil)
+        modules.sorted.mkString(", ")
+      }
     )
 
   private def convertProfile(profile: DeploymentProfile): RenderProfile =

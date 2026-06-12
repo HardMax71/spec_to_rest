@@ -20,6 +20,7 @@ func New{{entity.entity.modelClassName}}Service(db *bun.DB, cfg *config.Config) 
 	return &{{entity.entity.modelClassName}}Service{db: db, cfg: cfg}
 }
 {{#each entity.operations}}
+
 {{#if (eq routeKind "create")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.modelClassName}}, error) {
 	m := &models.{{../entity.entity.modelClassName}}{
 {{#each createAssigns}}		{{this}},

@@ -39,8 +39,8 @@ def upgrade() -> None:
 {{#each this.upgradeStatements}}
     {{{this}}}
 {{/each}}
-
 {{/each}}
+
 
 def downgrade() -> None:
 {{#each migration.triggersReversed}}

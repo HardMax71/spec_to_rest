@@ -14,6 +14,8 @@ import scala.jdk.CollectionConverters.*
 final class TemplateEngine:
   private val hbs: Handlebars =
     val h = new Handlebars()
+    // standalone block-tag lines must not leak blank lines into output
+    h.setPrettyPrint(true)
     h.`with`(EscapingStrategy.NOOP)
 
   registerDefaultHelpers(hbs)
