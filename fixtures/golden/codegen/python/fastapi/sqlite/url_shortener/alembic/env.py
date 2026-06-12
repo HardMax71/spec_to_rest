@@ -33,7 +33,6 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-
     if connection.dialect.name == "sqlite":
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
     context.configure(
@@ -41,7 +40,6 @@ def do_run_migrations(connection: Connection) -> None:
         target_metadata=target_metadata,
         render_as_batch=True,
     )
-
     with context.begin_transaction():
         context.run_migrations()
 

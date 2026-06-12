@@ -1,9 +1,7 @@
 from collections.abc import AsyncIterator
-
 from typing import Any
 
 from sqlalchemy import event
-
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
@@ -13,7 +11,6 @@ engine = create_async_engine(
     echo=False,
     connect_args={"check_same_thread": False},
 )
-
 
 @event.listens_for(engine.sync_engine, "connect")
 def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
@@ -29,7 +26,6 @@ def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
     finally:
         if ac is not None:
             dbapi_connection.autocommit = ac
-
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 

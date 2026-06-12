@@ -7,21 +7,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model UrlMapping {
-
   id BigInt @id @default(autoincrement())
-
   code String
-
   url String
-
   createdAt DateTime @map("created_at")
-
   clickCount Int @map("click_count")
-
 
   @@map("url_mappings")
 }
-
 

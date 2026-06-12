@@ -768,7 +768,9 @@ object EmitPython:
     val sqlSet         = mutable.Set.empty[String]
     val pgSet          = mutable.Set.empty[String]
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field <- entity.fields do
+    // the id column renders as `mapped_column(primary_key=True)` with no type,
+    // so its column type must not contribute an import
+    for field <- entity.fields.filterNot(_.fieldName == "id") do
       val colType = modelColumnType(field.ormColumnType, dialect)
       if PostgresDialectTypes.contains(colType) then pgSet += colType
       else sqlSet += colType

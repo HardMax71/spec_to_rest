@@ -3,21 +3,20 @@ package models
 import (
 {{#if entity.needsTime}}	"time"
 
-{{/if}}	"github.com/uptrace/bun"
-{{#if entity.needsUuid}}	"github.com/google/uuid"
+{{/if}}{{#if entity.needsUuid}}	"github.com/google/uuid"
 {{/if}}{{#if entity.needsDecimal}}	"github.com/shopspring/decimal"
-{{/if}})
+{{/if}}	"github.com/uptrace/bun"
+)
 
 type {{entity.entity.modelClassName}} struct {
-	bun.BaseModel `bun:"table:{{entity.entity.tableName}},alias:{{entity.entity.tableName}}"`
-{{#each entity.fields}}	{{this.goField}} {{this.domainType}} `bun:"{{this.bunTag}}" json:"{{this.jsonTag}}"`
+{{#each entity.modelStructLines}}	{{{this}}}
 {{/each}}{{! }}}
 
 type {{entity.entity.createSchemaName}} struct {
-{{#each entity.nonIdFields}}	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
+{{#each entity.createStructLines}}	{{{this}}}
 {{/each}}{{! }}}
 {{#each entity.customSchemas}}
 type {{this.name}} struct {
-{{#each this.fields}}	{{this.goField}} {{this.domainType}} `json:"{{this.jsonTag}}"{{#unless this.nullable}} validate:"required"{{/unless}}`
+{{#each this.structLines}}	{{{this}}}
 {{/each}}{{! }}}
 {{/each}}

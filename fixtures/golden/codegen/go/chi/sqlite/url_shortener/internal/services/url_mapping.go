@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-
 	"github.com/uptrace/bun"
 
 	"github.com/generated/url-shortener/internal/config"

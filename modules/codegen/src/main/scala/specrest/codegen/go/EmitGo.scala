@@ -26,7 +26,11 @@ import specrest.profile.ProfiledField
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
-final private case class GoCustomSchema(name: String, fields: List[GoFieldView])
+final private case class GoCustomSchema(
+    name: String,
+    fields: List[GoFieldView],
+    structLines: List[String]
+)
 
 final private case class GoFieldView(
     goField: String,
@@ -94,7 +98,10 @@ final private case class GoEntityCtx(
     usesNotFound: Boolean,
     usesErrors: Boolean,
     usesSqlNoRows: Boolean,
-    customSchemas: List[GoCustomSchema]
+    customSchemas: List[GoCustomSchema],
+    modelStructLines: List[String],
+    createStructLines: List[String],
+    handlerImports: String
 )
 
 final private case class GoServiceNames(name: String, snakeName: String, kebabName: String)
@@ -561,7 +568,9 @@ object EmitGo:
     val usesPathParams  = operations.exists(_.pathParams.nonEmpty)
 
     val customSchemas = operations.flatMap: op =>
-      op.customRequestSchemaName.map(name => GoCustomSchema(name, op.customRequestFields))
+      op.customRequestSchemaName.map(name =>
+        GoCustomSchema(name, op.customRequestFields, schemaStructLines(op.customRequestFields))
+      )
 
     GoEntityCtx(
       service =
@@ -587,8 +596,49 @@ object EmitGo:
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
       usesSqlNoRows = usesSqlNoRows,
-      customSchemas = customSchemas
+      customSchemas = customSchemas,
+      modelStructLines = padCells(
+        List(
+          "bun.BaseModel",
+          s"`bun:\"table:${entity.tableName},alias:${entity.tableName}\"`"
+        ) :: allFields.map(f =>
+          List(f.goField, f.domainType, s"`bun:\"${f.bunTag}\" json:\"${f.jsonTag}\"`")
+        )
+      ),
+      createStructLines = schemaStructLines(nonIdFields),
+      handlerImports = {
+        val stdlib = List(
+          Option.when(usesRequestBody)("\"encoding/json\""),
+          Option.when(usesNotFound)("\"errors\""),
+          Option.when(operations.nonEmpty)("\"net/http\""),
+          Option.when(operations.exists(_.pathParams.exists(_.isInt)))("\"strconv\"")
+        ).flatten
+        val third =
+          Option.when(usesRequestBody)(s"\"$module/internal/models\"").toList :::
+            List(s"\"$module/internal/services\"") :::
+            Option.when(usesPathParams)("\"github.com/go-chi/chi/v5\"").toList
+        val groups = List(stdlib, third).filter(_.nonEmpty)
+        groups.map(_.map("\t" + _).mkString("\n")).mkString("import (\n", "\n\n", "\n)")
+      }
     )
+
+  private def schemaStructLines(fields: List[GoFieldView]): List[String] =
+    padCells(
+      fields.map: f =>
+        val validate = if f.nullable then "" else " validate:\"required\""
+        List(f.goField, f.domainType, s"`json:\"${f.jsonTag}\"$validate`")
+    )
+
+  // gofmt column alignment for struct field runs: every cell except a row's
+  // last is padded to the column max + 1 (text/tabwriter semantics).
+  private def padCells(rows: List[List[String]]): List[String] =
+    val numCols = rows.map(_.length).maxOption.getOrElse(0)
+    val widths = (0 until numCols).map: i =>
+      rows.filter(_.length > i + 1).map(_(i).length).maxOption.getOrElse(0)
+    rows.map: row =>
+      row.zipWithIndex.map: (cell, i) =>
+        if i == row.length - 1 then cell else cell.padTo(widths(i) + 1, ' ')
+      .mkString
 
   private def toGoField(f: ProfiledField): GoFieldView =
     GoFieldView(

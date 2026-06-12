@@ -8,36 +8,22 @@ version = "0.1.0"
 description = "Generated from UrlShortener.spec"
 requires-python = ">=3.10"
 dependencies = [
-
     "fastapi>=0.115",
-
     "uvicorn[standard]>=0.34",
-
     "sqlalchemy>=2.0",
-
     "asyncpg>=0.30",
-
     "alembic>=1.14",
-
     "pydantic-settings>=2.0",
-
     "structlog>=24,<26",
-
 ]
 
 [project.optional-dependencies]
 dev = [
-
     "pytest>=8.0",
-
     "pytest-asyncio>=0.24",
-
     "httpx>=0.28",
-
     "ruff>=0.8",
-
     "mypy>=1.13",
-
     "schemathesis>=4.16,<5",
     "mutmut>=3.3,<4",
 ]

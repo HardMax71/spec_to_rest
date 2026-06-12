@@ -1,6 +1,9 @@
 {{#each stdlibImports}}
 from {{this.module}} import {{join this.names ", "}}
 {{/each}}
+{{#if stdlibImports.length}}
+
+{{/if}}
 {{#if sqlalchemyImports.length}}
 from sqlalchemy import {{join sqlalchemyImports ", "}}
 {{/if}}
