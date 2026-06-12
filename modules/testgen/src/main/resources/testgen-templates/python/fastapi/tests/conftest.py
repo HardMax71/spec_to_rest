@@ -34,7 +34,11 @@ if ADMIN_TOKEN:
 
 @pytest.fixture(scope="session", autouse=True)
 def _admin_endpoint_available():
-    """Fail-fast guard: tests need the /admin router reachable with ADMIN_TOKEN."""
+    """Fail-fast guard: tests need the /admin router reachable with ADMIN_TOKEN.
+
+    Failures here are hard errors (like the Go/TS harnesses), never skips: a
+    broken ADMIN_TOKEN setup must not produce a green all-skipped run.
+    """
     if INPROC:
         r = client.post("/admin/reset")
     else:
@@ -44,16 +48,15 @@ def _admin_endpoint_available():
             try:
                 r = probe.post("/admin/reset")
             except httpx.HTTPError as e:
-                pytest.skip(f"service unreachable at {BASE_URL}: {e}")
-                return
+                pytest.fail(f"service unreachable at {BASE_URL}: {e}")
     if r.status_code == 404:
-        pytest.skip(
+        pytest.fail(
             "/admin answered 404: the service has no ADMIN_TOKEN configured. "
             "Export ADMIN_TOKEN and restart the service with the same value, "
             "e.g. ADMIN_TOKEN=$(openssl rand -hex 32) docker compose up"
         )
     if r.status_code == 401:
-        pytest.skip(
+        pytest.fail(
             "/admin rejected the credential (401): ADMIN_TOKEN is missing from "
             "the test environment or differs from the one the service was "
             "started with"
@@ -63,7 +66,7 @@ def _admin_endpoint_available():
             f"admin /admin/reset returned {r.status_code}; service is unhealthy"
         )
     if r.status_code != 204:
-        pytest.skip(
+        pytest.fail(
             f"admin /admin/reset returned {r.status_code}; "
-            "service may not be M5.1-ready"
+            "the admin contract is not behaving (expected 204)"
         )

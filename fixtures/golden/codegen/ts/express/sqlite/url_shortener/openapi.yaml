@@ -132,8 +132,22 @@ paths:
                 additionalProperties: true
         '401':
           description: Missing or invalid admin credential
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenge
+              schema:
+                type:
+                - string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Admin surface disabled (no ADMIN_TOKEN configured on the service)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       security:
       - AdminBearer: []
   /admin/reset:
@@ -149,8 +163,22 @@ paths:
           description: State re-initialized
         '401':
           description: Missing or invalid admin credential
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenge
+              schema:
+                type:
+                - string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Admin surface disabled (no ADMIN_TOKEN configured on the service)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
       security:
       - AdminBearer: []
   /shorten:

@@ -284,16 +284,32 @@ object Paths:
   private val AdminSecurity: Option[List[Map[String, List[String]]]] =
     Some(List(Map("AdminBearer" -> List.empty[String])))
 
+  private val adminErrorContent: Option[Map[String, MediaTypeObject]] =
+    Some(
+      Map(
+        "application/json" -> MediaTypeObject(
+          SchemaObject(ref = Some("#/components/schemas/ErrorResponse"))
+        )
+      )
+    )
+
   private def adminErrorResponses: Map[String, ResponseObject] = Map(
     "401" -> ResponseObject(
       description = "Missing or invalid admin credential",
-      headers = None,
-      content = None
+      headers = Some(
+        Map(
+          "WWW-Authenticate" -> HeaderObject(
+            description = Some("Bearer authentication challenge"),
+            schema = SchemaObject(`type` = Some(List("string")))
+          )
+        )
+      ),
+      content = adminErrorContent
     ),
     "404" -> ResponseObject(
       description = "Admin surface disabled (no ADMIN_TOKEN configured on the service)",
       headers = None,
-      content = None
+      content = adminErrorContent
     )
   )
 

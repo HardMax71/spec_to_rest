@@ -2,11 +2,20 @@ package auth
 
 import (
 	"crypto/subtle"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
 
 const bearerPrefix = "Bearer "
+
+// writeDetail mirrors the {"detail": ...} error shape (ErrorResponse) the
+// fastapi/express targets emit, so the admin contract is target-uniform.
+func writeDetail(w http.ResponseWriter, status int, detail string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"detail": detail})
+}
 
 // RequireAdmin guards a route with a bearer token. With no token configured
 // (the production default) the guarded surface does not exist: every request
@@ -16,7 +25,7 @@ func RequireAdmin(token string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if token == "" {
-				http.NotFound(w, r)
+				writeDetail(w, http.StatusNotFound, "Not Found")
 				return
 			}
 			header := r.Header.Get("Authorization")
@@ -26,7 +35,7 @@ func RequireAdmin(token string) func(http.Handler) http.Handler {
 			}
 			if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
 				w.Header().Set("WWW-Authenticate", "Bearer")
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				writeDetail(w, http.StatusUnauthorized, "Unauthorized")
 				return
 			}
 			next.ServeHTTP(w, r)
