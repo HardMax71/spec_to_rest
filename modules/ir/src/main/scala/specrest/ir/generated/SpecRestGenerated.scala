@@ -5123,7 +5123,43 @@ object SpecRestGenerated {
             case false => None
           }
       }
-    case (n, BinaryOpF(op, l, r, ux)) =>
+    case (n, UnaryOpF(op, e, ux)) =>
+      op match {
+        case UNot() => None
+        case UNegate() =>
+          e match {
+            case BinaryOpF(_, _, _, _)         => None
+            case UnaryOpF(_, _, _)             => None
+            case QuantifierF(_, _, _, _)       => None
+            case SomeWrapF(_, _)               => None
+            case TheF(_, _, _, _)              => None
+            case FieldAccessF(_, _, _)         => None
+            case EnumAccessF(_, _, _)          => None
+            case IndexF(_, _, _)               => None
+            case CallF(_, _, _)                => None
+            case PrimeF(_, _)                  => None
+            case PreF(_, _)                    => None
+            case WithF(_, _, _)                => None
+            case IfF(_, _, _, _)               => None
+            case LetF(_, _, _, _)              => None
+            case LambdaF(_, _, _)              => None
+            case ConstructorF(_, _, _)         => None
+            case SetLiteralF(_, _)             => None
+            case MapLiteralF(_, _)             => None
+            case SetComprehensionF(_, _, _, _) => None
+            case SeqLiteralF(_, _)             => None
+            case MatchesF(_, _, _)             => None
+            case IntLitF(k, _)                 => Some[scalar_rhs](SrLit(uminus_int(k)))
+            case FloatLitF(_, _)               => None
+            case StringLitF(_, _)              => None
+            case BoolLitF(_, _)                => None
+            case NoneLitF(_)                   => None
+            case IdentifierF(_, _)             => None
+          }
+        case UCardinality() => None
+        case UPower()       => None
+      }
+    case (n, BinaryOpF(op, l, r, uy)) =>
       (scalarRhsOf(n, l), scalarRhsOf(n, r)) match {
         case (None, _)       => None
         case (Some(_), None) => None
@@ -5151,29 +5187,28 @@ object SpecRestGenerated {
             case BDiv()       => None
           }
       }
-    case (uy, UnaryOpF(v, va, vb))              => None
-    case (uy, QuantifierF(v, va, vb, vc))       => None
-    case (uy, SomeWrapF(v, va))                 => None
-    case (uy, TheF(v, va, vb, vc))              => None
-    case (uy, FieldAccessF(v, va, vb))          => None
-    case (uy, EnumAccessF(v, va, vb))           => None
-    case (uy, IndexF(v, va, vb))                => None
-    case (uy, CallF(v, va, vb))                 => None
-    case (uy, PrimeF(v, va))                    => None
-    case (uy, WithF(v, va, vb))                 => None
-    case (uy, IfF(v, va, vb, vc))               => None
-    case (uy, LetF(v, va, vb, vc))              => None
-    case (uy, LambdaF(v, va, vb))               => None
-    case (uy, ConstructorF(v, va, vb))          => None
-    case (uy, SetLiteralF(v, va))               => None
-    case (uy, MapLiteralF(v, va))               => None
-    case (uy, SetComprehensionF(v, va, vb, vc)) => None
-    case (uy, SeqLiteralF(v, va))               => None
-    case (uy, MatchesF(v, va, vb))              => None
-    case (uy, FloatLitF(v, va))                 => None
-    case (uy, StringLitF(v, va))                => None
-    case (uy, BoolLitF(v, va))                  => None
-    case (uy, NoneLitF(v))                      => None
+    case (uz, QuantifierF(v, vb, vc, vd))       => None
+    case (uz, SomeWrapF(v, vb))                 => None
+    case (uz, TheF(v, vb, vc, vd))              => None
+    case (uz, FieldAccessF(v, vb, vc))          => None
+    case (uz, EnumAccessF(v, vb, vc))           => None
+    case (uz, IndexF(v, vb, vc))                => None
+    case (uz, CallF(v, vb, vc))                 => None
+    case (uz, PrimeF(v, vb))                    => None
+    case (uz, WithF(v, vb, vc))                 => None
+    case (uz, IfF(v, vb, vc, vd))               => None
+    case (uz, LetF(v, vb, vc, vd))              => None
+    case (uz, LambdaF(v, vb, vc))               => None
+    case (uz, ConstructorF(v, vb, vc))          => None
+    case (uz, SetLiteralF(v, vb))               => None
+    case (uz, MapLiteralF(v, vb))               => None
+    case (uz, SetComprehensionF(v, vb, vc, vd)) => None
+    case (uz, SeqLiteralF(v, vb))               => None
+    case (uz, MatchesF(v, vb, vc))              => None
+    case (uz, FloatLitF(v, vb))                 => None
+    case (uz, StringLitF(v, vb))                => None
+    case (uz, BoolLitF(v, vb))                  => None
+    case (uz, NoneLitF(v))                      => None
   }
 
   def enmName(x0: enum_decl): String = x0 match {

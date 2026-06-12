@@ -196,6 +196,10 @@ fun scalarRhsOf :: "String.literal \<Rightarrow> expr \<Rightarrow> scalar_rhs o
      (case e of
         IdentifierF m _ \<Rightarrow> (if m = n then Some SrSelf else None)
       | _ \<Rightarrow> None)"
+| "scalarRhsOf n (UnaryOpF op e _) =
+     (case op of
+        UNegate \<Rightarrow> (case e of IntLitF k _ \<Rightarrow> Some (SrLit (- k)) | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
 | "scalarRhsOf n (BinaryOpF op l r _) =
      (case (scalarRhsOf n l, scalarRhsOf n r) of
         (Some a, Some b) \<Rightarrow>

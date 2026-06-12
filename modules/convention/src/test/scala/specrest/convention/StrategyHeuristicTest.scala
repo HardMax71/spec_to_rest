@@ -82,6 +82,13 @@ class StrategyHeuristicTest extends CatsEffectSuite:
       LlmSynthesis(): synthesis_strategy
     )
 
+  test("negative-literal scalar updates → DirectEmit (UNegate spelling)"):
+    val negLit = UnaryOpF(UNegate(), lit(1), None)
+    val toNeg  = beq(prime(id("count")), negLit)
+    val addNeg = beq(prime(id("count")), badd(id("count"), negLit))
+    assertEquals(scalarStrategyOf(List(toNeg)), DirectEmit(): synthesis_strategy)
+    assertEquals(scalarStrategyOf(List(addNeg)), DirectEmit(): synthesis_strategy)
+
   test("empty ensures → LlmSynthesis (regression: no longer vacuously DirectEmit)"):
     assertEquals(strategyOf(Nil), LlmSynthesis(): synthesis_strategy)
 
