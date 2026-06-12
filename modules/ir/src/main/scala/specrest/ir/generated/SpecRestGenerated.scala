@@ -527,9 +527,13 @@ object SpecRestGenerated {
   final case class TBool()            extends ty
   final case class TInt()             extends ty
   final case class TReal()            extends ty
+  final case class TStr()             extends ty
   final case class TEnum(a: String)   extends ty
   final case class TEntity(a: String) extends ty
   final case class TSet(a: ty)        extends ty
+  final case class TOption(a: ty)     extends ty
+  final case class TSeq(a: ty)        extends ty
+  final case class TMap(a: ty, b: ty) extends ty
 
   sealed abstract class smt_term
   final case class BLit(a: Boolean)                                extends smt_term
@@ -720,9 +724,14 @@ object SpecRestGenerated {
   sealed abstract class schema_type
   final case class BoolT()                                   extends schema_type
   final case class IntT()                                    extends schema_type
+  final case class RealT()                                   extends schema_type
+  final case class StrT()                                    extends schema_type
   final case class EnumT(a: String)                          extends schema_type
   final case class EntityT(a: String)                        extends schema_type
   final case class RelationT(a: schema_type, b: schema_type) extends schema_type
+  final case class OptionT(a: schema_type)                   extends schema_type
+  final case class SeqT(a: schema_type)                      extends schema_type
+  final case class MapT(a: schema_type, b: schema_type)      extends schema_type
 
   sealed abstract class column_spec
   final case class ColumnSpec(a: String, b: String, c: Boolean, d: Option[String])
@@ -6106,9 +6115,19 @@ object SpecRestGenerated {
   def typeExprToTy(x0: schema_type): Option[ty] = x0 match {
     case BoolT()           => Some[ty](TBool())
     case IntT()            => Some[ty](TInt())
+    case RealT()           => Some[ty](TReal())
+    case StrT()            => Some[ty](TStr())
     case EnumT(n)          => Some[ty](TEnum(n))
     case EntityT(n)        => Some[ty](TEntity(n))
     case RelationT(uu, uv) => None
+    case OptionT(t) =>
+      map_option[ty, ty]((a: ty) => TOption(a), typeExprToTy(t))
+    case SeqT(t) => map_option[ty, ty]((a: ty) => TSeq(a), typeExprToTy(t))
+    case MapT(k, v) => (typeExprToTy(k), typeExprToTy(v)) match {
+        case (None, _)            => None
+        case (Some(_), None)      => None
+        case (Some(tk), Some(tv)) => Some[ty](TMap(tk, tv))
+      }
   }
 
   def min[A: ord](a: A, b: A): A =
@@ -9830,19 +9849,21 @@ object SpecRestGenerated {
   def typeExprFullToTy(enums: List[String], entities: List[String], x2: type_expr): Option[ty] =
     (enums, entities, x2) match {
       case (enums, entities, NamedTypeF(n, uu)) =>
-        n == "Bool" match {
+        n == "Bool" || n == "Boolean" match {
           case true => Some[ty](TBool())
-          case false => n == "Int" match {
+          case false => n == "Int" || (n == "DateTime" || n == "Date") match {
               case true => Some[ty](TInt())
               case false => n == "Float" ||
-                  (n == "Double" ||
-                    (n == "Decimal" || n == "Money")) match {
+                  (n == "Decimal" || n == "Money") match {
                   case true => Some[ty](TReal())
-                  case false => membera[String](enums, n) match {
-                      case true => Some[ty](TEnum(n))
-                      case false => membera[String](entities, n) match {
-                          case true  => Some[ty](TEntity(n))
-                          case false => None
+                  case false => n == "String" match {
+                      case true => Some[ty](TStr())
+                      case false => membera[String](enums, n) match {
+                          case true => Some[ty](TEnum(n))
+                          case false => membera[String](entities, n) match {
+                              case true  => Some[ty](TEntity(n))
+                              case false => None
+                            }
                         }
                     }
                 }
@@ -9850,10 +9871,17 @@ object SpecRestGenerated {
         }
       case (enums, entities, SetTypeF(inner, uv)) =>
         map_option[ty, ty]((a: ty) => TSet(a), typeExprFullToTy(enums, entities, inner))
-      case (uw, ux, MapTypeF(v, va, vb))          => None
-      case (uw, ux, SeqTypeF(v, va))              => None
-      case (uw, ux, OptionTypeF(v, va))           => None
-      case (uw, ux, RelationTypeF(v, va, vb, vc)) => None
+      case (enums, entities, OptionTypeF(inner, uw)) =>
+        map_option[ty, ty]((a: ty) => TOption(a), typeExprFullToTy(enums, entities, inner))
+      case (enums, entities, SeqTypeF(inner, ux)) =>
+        map_option[ty, ty]((a: ty) => TSeq(a), typeExprFullToTy(enums, entities, inner))
+      case (enums, entities, MapTypeF(k, v, uy)) =>
+        (typeExprFullToTy(enums, entities, k), typeExprFullToTy(enums, entities, v)) match {
+          case (None, _)            => None
+          case (Some(_), None)      => None
+          case (Some(tk), Some(tv)) => Some[ty](TMap(tk, tv))
+        }
+      case (uz, va, RelationTypeF(v, vc, vd, ve)) => None
     }
 
   def schemaFieldType(gamma: tyctx_ext[Unit], ename: String, fname: String): Option[ty] =
@@ -12406,47 +12434,126 @@ object SpecRestGenerated {
     }
 
   def equal_ty(x0: ty, x1: ty): Boolean = (x0, x1) match {
-    case (TEntity(x5), TSet(x6))    => false
-    case (TSet(x6), TEntity(x5))    => false
-    case (TEnum(x4), TSet(x6))      => false
-    case (TSet(x6), TEnum(x4))      => false
-    case (TEnum(x4), TEntity(x5))   => false
-    case (TEntity(x5), TEnum(x4))   => false
-    case (TReal(), TSet(x6))        => false
-    case (TSet(x6), TReal())        => false
-    case (TReal(), TEntity(x5))     => false
-    case (TEntity(x5), TReal())     => false
-    case (TReal(), TEnum(x4))       => false
-    case (TEnum(x4), TReal())       => false
-    case (TInt(), TSet(x6))         => false
-    case (TSet(x6), TInt())         => false
-    case (TInt(), TEntity(x5))      => false
-    case (TEntity(x5), TInt())      => false
-    case (TInt(), TEnum(x4))        => false
-    case (TEnum(x4), TInt())        => false
-    case (TInt(), TReal())          => false
-    case (TReal(), TInt())          => false
-    case (TBool(), TSet(x6))        => false
-    case (TSet(x6), TBool())        => false
-    case (TBool(), TEntity(x5))     => false
-    case (TEntity(x5), TBool())     => false
-    case (TBool(), TEnum(x4))       => false
-    case (TEnum(x4), TBool())       => false
-    case (TBool(), TReal())         => false
-    case (TReal(), TBool())         => false
-    case (TBool(), TInt())          => false
-    case (TInt(), TBool())          => false
-    case (TSet(x6), TSet(y6))       => equal_ty(x6, y6)
-    case (TEntity(x5), TEntity(y5)) => x5 == y5
-    case (TEnum(x4), TEnum(y4))     => x4 == y4
+    case (TSeq(x9), TMap(x101, x102))    => false
+    case (TMap(x101, x102), TSeq(x9))    => false
+    case (TOption(x8), TMap(x101, x102)) => false
+    case (TMap(x101, x102), TOption(x8)) => false
+    case (TOption(x8), TSeq(x9))         => false
+    case (TSeq(x9), TOption(x8))         => false
+    case (TSet(x7), TMap(x101, x102))    => false
+    case (TMap(x101, x102), TSet(x7))    => false
+    case (TSet(x7), TSeq(x9))            => false
+    case (TSeq(x9), TSet(x7))            => false
+    case (TSet(x7), TOption(x8))         => false
+    case (TOption(x8), TSet(x7))         => false
+    case (TEntity(x6), TMap(x101, x102)) => false
+    case (TMap(x101, x102), TEntity(x6)) => false
+    case (TEntity(x6), TSeq(x9))         => false
+    case (TSeq(x9), TEntity(x6))         => false
+    case (TEntity(x6), TOption(x8))      => false
+    case (TOption(x8), TEntity(x6))      => false
+    case (TEntity(x6), TSet(x7))         => false
+    case (TSet(x7), TEntity(x6))         => false
+    case (TEnum(x5), TMap(x101, x102))   => false
+    case (TMap(x101, x102), TEnum(x5))   => false
+    case (TEnum(x5), TSeq(x9))           => false
+    case (TSeq(x9), TEnum(x5))           => false
+    case (TEnum(x5), TOption(x8))        => false
+    case (TOption(x8), TEnum(x5))        => false
+    case (TEnum(x5), TSet(x7))           => false
+    case (TSet(x7), TEnum(x5))           => false
+    case (TEnum(x5), TEntity(x6))        => false
+    case (TEntity(x6), TEnum(x5))        => false
+    case (TStr(), TMap(x101, x102))      => false
+    case (TMap(x101, x102), TStr())      => false
+    case (TStr(), TSeq(x9))              => false
+    case (TSeq(x9), TStr())              => false
+    case (TStr(), TOption(x8))           => false
+    case (TOption(x8), TStr())           => false
+    case (TStr(), TSet(x7))              => false
+    case (TSet(x7), TStr())              => false
+    case (TStr(), TEntity(x6))           => false
+    case (TEntity(x6), TStr())           => false
+    case (TStr(), TEnum(x5))             => false
+    case (TEnum(x5), TStr())             => false
+    case (TReal(), TMap(x101, x102))     => false
+    case (TMap(x101, x102), TReal())     => false
+    case (TReal(), TSeq(x9))             => false
+    case (TSeq(x9), TReal())             => false
+    case (TReal(), TOption(x8))          => false
+    case (TOption(x8), TReal())          => false
+    case (TReal(), TSet(x7))             => false
+    case (TSet(x7), TReal())             => false
+    case (TReal(), TEntity(x6))          => false
+    case (TEntity(x6), TReal())          => false
+    case (TReal(), TEnum(x5))            => false
+    case (TEnum(x5), TReal())            => false
+    case (TReal(), TStr())               => false
+    case (TStr(), TReal())               => false
+    case (TInt(), TMap(x101, x102))      => false
+    case (TMap(x101, x102), TInt())      => false
+    case (TInt(), TSeq(x9))              => false
+    case (TSeq(x9), TInt())              => false
+    case (TInt(), TOption(x8))           => false
+    case (TOption(x8), TInt())           => false
+    case (TInt(), TSet(x7))              => false
+    case (TSet(x7), TInt())              => false
+    case (TInt(), TEntity(x6))           => false
+    case (TEntity(x6), TInt())           => false
+    case (TInt(), TEnum(x5))             => false
+    case (TEnum(x5), TInt())             => false
+    case (TInt(), TStr())                => false
+    case (TStr(), TInt())                => false
+    case (TInt(), TReal())               => false
+    case (TReal(), TInt())               => false
+    case (TBool(), TMap(x101, x102))     => false
+    case (TMap(x101, x102), TBool())     => false
+    case (TBool(), TSeq(x9))             => false
+    case (TSeq(x9), TBool())             => false
+    case (TBool(), TOption(x8))          => false
+    case (TOption(x8), TBool())          => false
+    case (TBool(), TSet(x7))             => false
+    case (TSet(x7), TBool())             => false
+    case (TBool(), TEntity(x6))          => false
+    case (TEntity(x6), TBool())          => false
+    case (TBool(), TEnum(x5))            => false
+    case (TEnum(x5), TBool())            => false
+    case (TBool(), TStr())               => false
+    case (TStr(), TBool())               => false
+    case (TBool(), TReal())              => false
+    case (TReal(), TBool())              => false
+    case (TBool(), TInt())               => false
+    case (TInt(), TBool())               => false
+    case (TMap(x101, x102), TMap(y101, y102)) =>
+      equal_ty(x101, y101) && equal_ty(x102, y102)
+    case (TSeq(x9), TSeq(y9))       => equal_ty(x9, y9)
+    case (TOption(x8), TOption(y8)) => equal_ty(x8, y8)
+    case (TSet(x7), TSet(y7))       => equal_ty(x7, y7)
+    case (TEntity(x6), TEntity(y6)) => x6 == y6
+    case (TEnum(x5), TEnum(y5))     => x5 == y5
+    case (TStr(), TStr())           => true
     case (TReal(), TReal())         => true
     case (TInt(), TInt())           => true
     case (TBool(), TBool())         => true
   }
 
-  def check_value_has_ty_list(wh: tyctx_ext[Unit], x1: List[ir_value], wi: ty): Boolean =
-    (wh, x1, wi) match {
-      case (wh, Nil, wi) => true
+  def check_value_has_ty_pairs(
+      vc: tyctx_ext[Unit],
+      x1: List[(ir_value, ir_value)],
+      vd: ty,
+      ve: ty
+  ): Boolean =
+    (vc, x1, vd, ve) match {
+      case (vc, Nil, vd, ve) => true
+      case (gamma, (k, w) :: ps, tk, tv) =>
+        check_value_has_ty(gamma, k, tk) &&
+        (check_value_has_ty(gamma, w, tv) &&
+          check_value_has_ty_pairs(gamma, ps, tk, tv))
+    }
+
+  def check_value_has_ty_list(va: tyctx_ext[Unit], x1: List[ir_value], vb: ty): Boolean =
+    (va, x1, vb) match {
+      case (va, Nil, vb) => true
       case (gamma, v :: vs, t) =>
         check_value_has_ty(gamma, v, t) && check_value_has_ty_list(gamma, vs, t)
     }
@@ -12456,30 +12563,91 @@ object SpecRestGenerated {
       case (gamma, VBool(uu), t)          => equal_ty(t, TBool())
       case (gamma, VInt(uv), t)           => equal_ty(t, TInt())
       case (gamma, VReal(uw), t)          => equal_ty(t, TReal())
-      case (gamma, VEnum(ename, ux), t)   => equal_ty(t, TEnum(ename))
-      case (gamma, VEntity(ename, uy), t) => equal_ty(t, TEntity(ename))
-      case (gamma, VSet(vs), TSet(t))     => check_value_has_ty_list(gamma, vs, t)
-      case (gamma, VSet(uz), TBool())     => false
-      case (gamma, VSet(va), TInt())      => false
-      case (gamma, VSet(vb), TReal())     => false
-      case (gamma, VSet(vc), TEnum(vd))   => false
-      case (gamma, VSet(ve), TEntity(vf)) => false
-      case (gamma, VEntityWith(base, fld, overridea), TEntity(ename)) =>
-        check_value_has_ty(gamma, base, TEntity(ename)) &&
-        (schemaFieldType(gamma, ename, fld) match {
-          case None    => false
-          case Some(a) => check_value_has_ty(gamma, overridea, a)
-        })
-      case (gamma, VEntityWith(vg, vh, vi), TBool())   => false
-      case (gamma, VEntityWith(vj, vk, vl), TInt())    => false
-      case (gamma, VEntityWith(vm, vn, vo), TReal())   => false
-      case (gamma, VEntityWith(vp, vq, vr), TEnum(vt)) => false
-      case (gamma, VEntityWith(vu, vv, vw), TSet(vx))  => false
-      case (gamma, VNone(), vy)                        => false
-      case (gamma, VSome(vz), wa)                      => false
-      case (gamma, VStr(wb), wc)                       => false
-      case (gamma, VSeq(wd), we)                       => false
-      case (gamma, VMap(wf), wg)                       => false
+      case (gamma, VStr(ux), t)           => equal_ty(t, TStr())
+      case (gamma, VEnum(ename, uy), t)   => equal_ty(t, TEnum(ename))
+      case (gamma, VEntity(ename, uz), t) => equal_ty(t, TEntity(ename))
+      case (gamma, VSet(vs), t) =>
+        t match {
+          case TBool()    => false
+          case TInt()     => false
+          case TReal()    => false
+          case TStr()     => false
+          case TEnum(_)   => false
+          case TEntity(_) => false
+          case TSet(a)    => check_value_has_ty_list(gamma, vs, a)
+          case TOption(_) => false
+          case TSeq(_)    => false
+          case TMap(_, _) => false
+        }
+      case (gamma, VEntityWith(base, fld, overridea), t) =>
+        t match {
+          case TBool()  => false
+          case TInt()   => false
+          case TReal()  => false
+          case TStr()   => false
+          case TEnum(_) => false
+          case TEntity(ename) =>
+            check_value_has_ty(gamma, base, TEntity(ename)) &&
+            (schemaFieldType(gamma, ename, fld) match {
+              case None    => false
+              case Some(a) => check_value_has_ty(gamma, overridea, a)
+            })
+          case TSet(_)    => false
+          case TOption(_) => false
+          case TSeq(_)    => false
+          case TMap(_, _) => false
+        }
+      case (gamma, VNone(), t) => t match {
+          case TBool()    => false
+          case TInt()     => false
+          case TReal()    => false
+          case TStr()     => false
+          case TEnum(_)   => false
+          case TEntity(_) => false
+          case TSet(_)    => false
+          case TOption(_) => true
+          case TSeq(_)    => false
+          case TMap(_, _) => false
+        }
+      case (gamma, VSome(v), t) =>
+        t match {
+          case TBool()    => false
+          case TInt()     => false
+          case TReal()    => false
+          case TStr()     => false
+          case TEnum(_)   => false
+          case TEntity(_) => false
+          case TSet(_)    => false
+          case TOption(a) => check_value_has_ty(gamma, v, a)
+          case TSeq(_)    => false
+          case TMap(_, _) => false
+        }
+      case (gamma, VSeq(vs), t) =>
+        t match {
+          case TBool()    => false
+          case TInt()     => false
+          case TReal()    => false
+          case TStr()     => false
+          case TEnum(_)   => false
+          case TEntity(_) => false
+          case TSet(_)    => false
+          case TOption(_) => false
+          case TSeq(a)    => check_value_has_ty_list(gamma, vs, a)
+          case TMap(_, _) => false
+        }
+      case (gamma, VMap(ps), t) =>
+        t match {
+          case TBool()    => false
+          case TInt()     => false
+          case TReal()    => false
+          case TStr()     => false
+          case TEnum(_)   => false
+          case TEntity(_) => false
+          case TSet(_)    => false
+          case TOption(_) => false
+          case TSeq(_)    => false
+          case TMap(a, b) => check_value_has_ty_pairs(gamma, ps, a, b)
+        }
     }
 
   def tc_relations[A](x0: tyctx_ext[A]): List[state_field_decl] = x0 match {

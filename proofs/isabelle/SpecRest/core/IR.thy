@@ -31,9 +31,14 @@ type_synonym option_span = "span_t option"
 datatype (plugins only: code size) schema_type =
     BoolT
   | IntT
+  | RealT
+  | StrT
   | EnumT "String.literal"
   | EntityT "String.literal"
   | RelationT "schema_type" "schema_type"
+  | OptionT "schema_type"
+  | SeqT "schema_type"
+  | MapT "schema_type" "schema_type"
 
 datatype (plugins only: code size) bool_bin_op =
     AndOp

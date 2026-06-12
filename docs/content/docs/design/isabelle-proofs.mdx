@@ -76,7 +76,7 @@ graph TD
 | `IR_Analysis.thy`    | ~415   | The Phase-9 lifted primitives (`isTrueLit`, `enumLiteralOf`, `combineAnd`, `decomposeAtom` + `refinement_atom`, `free_vars` / `subst` / `hasPrePrime` mutual recs, `litClass` + diagnostic helpers) |
 | `IR_Lower.thy`       | ~210   | `lower` and the `lower_forall_*` / `lower_with_assigns` mutual lowering from `expr_full` to the verified subset `expr` |
 | `Smt.thy`            | ~320   | The SMT IR (`smt_term`, `smt_val`, `smt_model`) and `smt_eval` |
-| `Semantics.thy`      | ~1190  | `ir_value`, `state`, `tyctx`, the typing judgement, `eval`, `check_value_has_ty` |
+| `Semantics.thy`      | ~1310  | `ir_value`, `state`, `tyctx`, the typing judgement, `eval`, `check_value_has_ty` |
 | `Translate.thy`      | ~50    | The translator `translate :: expr ⇒ smt_term` (small but central) |
 | `Soundness.thy`      | ~2970  | All 157 lemmas that close `soundness` |
 | `Codegen.thy`        | ~115   | `export_code` directives — the contract with the consumer Scala layer |

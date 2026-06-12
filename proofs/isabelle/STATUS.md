@@ -40,9 +40,9 @@ pivot (issue #193).
 
 - **`fun` proof tactics that work for binary operators**:
   `using assms by (cases op; auto split: option.splits smt_val.splits)` — but only when the IH gives
-  the smt*eval result *forward* (i.e., `smt_eval ... = Some *`), not *backward* (`Some _ = smt_eval
-  ...`). The fix is the `smt_eval_of_eval_\*` helper lemmas: take an IH and a concrete eval result
-  and produce the forward-direction smt_eval equation.
+  the `smt_eval` result _forward_ (i.e., `smt_eval ... = Some _`), not _backward_
+  (`Some _ = smt_eval ...`). The fix is the `smt_eval_of_eval_*` helper lemmas: take an IH and a
+  concrete eval result and produce the forward-direction `smt_eval` equation.
 - **Per-op success-path lemmas mirror Lean's structure** (`Soundness.lean` lines 596-1894). Each
   takes concrete `eval ... = Some (VInt _)` style hypotheses and closes by
   `using ... helper[OF ... ...] by simp`.
@@ -136,9 +136,9 @@ not incremental PRs:
   9v extension:_ `T_Let` rule for `LetF x v body` covering local-binding scope, paired with
   `env_agrees_strict_cons` / `agrees_strict_cons` (Semantics.thy) showing that extending env by a
   typed value preserves agreement with the extended context. The umbrella generalises
-  `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. T*Let is
+  `arbitrary: e' v env` so the body-IH instantiates at the extended env `(x, va) # env`. `T_Let` is
   the first scope-extending rule, validating the design for future binder-introducing rules
-  (T_Quantifier, T_With, etc.). _Phase 9w extension:_ three more rules — `T_Prime` and `T_Pre`
+  (`T_Quantifier`, `T_With`, etc.). _Phase 9w extension:_ three more rules — `T_Prime` and `T_Pre`
   (type-propagating temporal wrappers; eval is the identity, lower wraps with `Prime` / `Pre`
   constructors, the umbrella case delegates to the inner IH after stripping the wrapper) and
   `T_EnumAccess` (the leaf rule for `EnumAccessF (IdentifierF en _) mem` typing as `TEnum en`; the
@@ -206,50 +206,46 @@ not incremental PRs:
   package generates a per-update IH automatically (each `v` in updates gets its own preservation IH
   at its declared field type `ft`). Three helper lemmas in Soundness.thy: `wf_z3_fields_iff` (the
   equivalence `wf_z3_fields updates ↔ ∀(_, v, _) ∈ updates. wf_z3 v` — cheaper than the mutual
-  `.induct` which doesn't exist standalone in the wf*z3 / wf_z3_list / wf_z3_fields mutual group);
-  `lower_with_assigns_eval_implies_base_eval` (the chain's outer eval succeeds ⟹ the base's eval
-  also succeeds — used to discharge the IH(1) base-eval premise);
+  `.induct` which doesn't exist standalone in the `wf_z3` / `wf_z3_list` / `wf_z3_fields` mutual
+  group); `lower_with_assigns_eval_implies_base_eval` (the chain's outer eval succeeds ⟹ the base's
+  eval also succeeds — used to discharge the IH(1) base-eval premise);
   `lower_with_assigns_preserves_entity` (the chain preserves `TEntity ename` — by structural
   induction on updates, each `WithRec` wrap re-applies `vt_entity_with` to preserve the entity type;
-  post-Phase-9ww-followup the rule now requires the override be typed at the declared field type,
-  so the lemma takes a per-update `updates_typed` premise threaded from `T_With.IH(2)`). The
-  umbrella case composes the three helpers and closes via the tightened `vt_entity_with`.
+  post-Phase-9ww-followup the rule now requires the override be typed at the declared field type, so
+  the lemma takes a per-update `updates_typed` premise threaded from `T_With.IH(2)`). The umbrella
+  case composes the three helpers and closes via the tightened `vt_entity_with`.
 
   _Phase 9ww-followup (PR #286):_ tightened `vt_entity_with` per the H3-blocker raised by
-  coderabbitai on PR #285. Old rule: `base ::v TEntity ename ⟹ VEntityWith base fld override ::v
-  TEntity ename` (override unconstrained), which let a derivation type any garbage value as an
-  entity field override and so `entity_field_well_typed Γ st` was unprovable for non-TInt schemas.
-  New rule: `value_has_ty Γ base (TEntity ename) ⟹ schemaFieldType Γ ename fld = Some ft ⟹
-  value_has_ty Γ override ft ⟹ value_has_ty Γ (VEntityWith base fld override) (TEntity ename)`.
+  coderabbitai on PR #285. Old rule:
+  `base ::v TEntity ename ⟹ VEntityWith base fld override ::v TEntity ename` (override
+  unconstrained), which let a derivation type any garbage value as an entity field override and so
+  `entity_field_well_typed Γ st` was unprovable for non-TInt schemas. New rule:
+  `value_has_ty Γ base (TEntity ename) ⟹ schemaFieldType Γ ename fld = Some ft ⟹ value_has_ty Γ override ft ⟹ value_has_ty Γ (VEntityWith base fld override) (TEntity ename)`.
   Required parameterising `value_has_ty` by `tyctx` (the override-typing premise consults
   `schemaFieldType Γ`), dropping the infix `::v`, and threading `Γ` through `env_agrees`,
   `state_agrees_scalars`, `env_agrees_strict` and their tc_env-update simp companions.
-  `lower_with_assigns_preserves_entity` took the per-update typing premise (a universally
-  quantified IH-shaped predicate), and the H3 `T_With` case feeds it from `T_With.IH(2)`. ~100
-  references rewritten; Isabelle build 5:49 → 6:02, no Scala-side diff.
+  `lower_with_assigns_preserves_entity` took the per-update typing premise (a universally quantified
+  IH-shaped predicate), and the H3 `T_With` case feeds it from `T_With.IH(2)`. ~100 references
+  rewritten; Isabelle build 5:49 → 6:02, no Scala-side diff.
 
-  _Phase 9ww-followup runtime integration (PR #287):_ `value_has_ty` made
-  executable via mutual-fun `check_value_has_ty` + `check_value_has_ty_list`
-  with `check_value_has_ty_iff` bridging back to the inductive. Added
-  `tyctxFromService :: service_ir_full ⇒ tyctx` + `enumNameFull` so Scala
-  consumers construct the typing context directly from the IR via autogen.
-  Wired into `Z3CounterExample.decode` — each decoded entity-field /
-  state-relation entry / state-constant / input runs through
-  `check_value_has_ty`; failures collect into
-  `DecodedCounterExample.typingFailures` (asserted empty on the real
-  `broken_url_shortener.spec` counterexample, demonstrating the
-  proof-extracted typing predicate agrees with the runtime Scala decoder).
-  `IrValueDecoder.decodeZ3` is the irreducible Z3-string → `ir_value`
-  parser; everything else (tyctx construction, type-check, sortToTy) calls
-  autogen directly without Scala-side wrappers.
+  _Phase 9ww-followup runtime integration (PR #287):_ `value_has_ty` made executable via mutual-fun
+  `check_value_has_ty` + `check_value_has_ty_list` with `check_value_has_ty_iff` bridging back to
+  the inductive. Added `tyctxFromService :: service_ir_full ⇒ tyctx` + `enumNameFull` so Scala
+  consumers construct the typing context directly from the IR via autogen. Wired into
+  `Z3CounterExample.decode` — each decoded entity-field / state-relation entry / state-constant /
+  input runs through `check_value_has_ty`; failures collect into
+  `DecodedCounterExample.typingFailures` (asserted empty on the real `broken_url_shortener.spec`
+  counterexample, demonstrating the proof-extracted typing predicate agrees with the runtime Scala
+  decoder). `IrValueDecoder.decodeZ3` is the irreducible Z3-string → `ir_value` parser; everything
+  else (tyctx construction, type-check, sortToTy) calls autogen directly without Scala-side
+  wrappers.
 
-  _Phase 9ee
-  extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the body in a
-  context extended by `(var, t_dom)` for any `t_dom` — the body must type at `TBool`, no constraint
-  on whether `dnm` is an enum or relation at the typing level (lowering's `string_in_list dnm enums`
-  decides the routing, and the umbrella case handles both `ForallEnum` and `ForallRel` branches).
-  Two helper lemmas in Semantics.thy: `eval_forall_enum_some_imp_bool` and
-  `eval_forall_rel_some_imp_bool` (both: whenever the fold-evaluator returns `Some v`, `v` is
+  _Phase 9ee extension:_ `T_Forall_QAll` (single-binding universal quantifier). The rule binds the
+  body in a context extended by `(var, t_dom)` for any `t_dom` — the body must type at `TBool`, no
+  constraint on whether `dnm` is an enum or relation at the typing level (lowering's
+  `string_in_list dnm enums` decides the routing, and the umbrella case handles both `ForallEnum`
+  and `ForallRel` branches). Two helper lemmas in Semantics.thy: `eval_forall_enum_some_imp_bool`
+  and `eval_forall_rel_some_imp_bool` (both: whenever the fold-evaluator returns `Some v`, `v` is
   `VBool`, by structural list induction on members / domain — the body-eval is gated through the
   `VBool b` pattern). The umbrella case splits on `string_in_list dnm enums` and dispatches per
   branch; each branch extracts the inner schema / relation lookup, applies the appropriate helper,
@@ -309,16 +305,42 @@ not incremental PRs:
   both cardinalities (single, multi) — 16 tight rules total. _Phase 9ww-followup:_ removed the 8
   loose generic `T_Forall_*` rules (`T_Forall_QAll` / `_Cons` and the analogous `QNo` / `QExists` /
   `QSome` variants) that left `t_dom` as a free meta-variable bypassing schema lookup. PR #285
-  review (cubic + coderabbitai) flagged them as strict over-generalisations; the 16 tight
-  `_Enum` / `_Rel` rules already provide sound coverage. Soundness proofs lose their generic
-  umbrella cases (8 trivial `by simp` + 8 ~30-line `string_in_list dnm enums` case-splits, ~265
-  lines net deletion); the tight Enum/Rel proofs are untouched and discharge every quantifier
-  derivation post-removal. Umbrella now covers 43 typing rules. _Phase 9mm init-friendliness:_ small family of empty / init lemmas to
-  ease caller verification — `schema_field_type_empty`, `schema_relation_value_type_empty`,
-  `entity_field_well_typed_empty`, `relation_value_well_typed_empty`, `env_agrees_strict_empty` (all
-  `[simp]`), plus a `tyctx_empty` definition and an `agrees_strict_empty` theorem closing
+  review (cubic + coderabbitai) flagged them as strict over-generalisations; the 16 tight `_Enum` /
+  `_Rel` rules already provide sound coverage. Soundness proofs lose their generic umbrella cases (8
+  trivial `by simp` + 8 ~30-line `string_in_list dnm enums` case-splits, ~265 lines net deletion);
+  the tight Enum/Rel proofs are untouched and discharge every quantifier derivation post-removal.
+  Umbrella now covers 43 typing rules. _Phase 9mm init-friendliness:_ small family of empty / init
+  lemmas to ease caller verification — `schema_field_type_empty`,
+  `schema_relation_value_type_empty`, `entity_field_well_typed_empty`,
+  `relation_value_well_typed_empty`, `env_agrees_strict_empty` (all `[simp]`), plus a `tyctx_empty`
+  definition and an `agrees_strict_empty` theorem closing
   `agrees_strict [] state_empty tyctx_empty`. These let a spec author bootstrap `agrees_strict` from
-  a trivial-initial scenario without manually unfolding the four well-typedness conjuncts.
+  a trivial-initial scenario without manually unfolding the four well-typedness conjuncts. _Phase
+  9nn extension (issue #383):_ the typing layer covers the lifted native sorts. `ty` gains `TStr` /
+  `TOption ty` / `TSeq ty` / `TMap ty ty`; `value_has_ty` gains `vt_str` / `vt_none` (polymorphic:
+  `VNone : TOption t` for any `t`) / `vt_some` / `vt_seq` / `vt_map` (pairwise key+value premises).
+  `check_value_has_ty` gains a `check_value_has_ty_pairs` mutual companion and is now a `function`
+  with a hand `measure` — the pairs branch recurses into both components of each pair, which the
+  lexicographic-order search cannot synthesise; the measure reuses the datatype's `size_prod`
+  component so the `VMap` descent matches `ir_value.size` verbatim. The ctor-matched value arms
+  dispatch on `ty` via a `case` RHS (non-recursive `False` default), so future `ty` growth does not
+  multiply equation rows. `typeExprFullToTy` covers `String` / `OptionTypeF` / `SeqTypeF` /
+  `MapTypeF` and aligns its primitive-name policy with the verify layer's `primitiveSortOf`
+  (`Boolean`; `DateTime` / `Date` as epoch ints; the phantom `Double` alias dropped — nothing
+  produces it); `schemaFieldType` / `schemaRelationValueType` inherit the coverage for free.
+  `schema_type` gains the matching `RealT` / `StrT` / `OptionT` / `SeqT` / `MapT` forms with
+  `typeExprToTy` cases. `expr_has_ty` gains nine rules — `T_StrLit`, `T_NoneLit` (polymorphic option
+  type, mirroring `T_SetLit_Empty`), `T_SomeWrap`, `T_SeqLit_Empty` / `T_SeqLit_Cons`,
+  `T_MapLit_Empty` / `T_MapLit_Cons`, plus `T_If` and `T_Matches` closing the remaining batch-3 lift
+  gaps (#378's `Ite` and the natural `TStr` consumer). String equality typing was already free via
+  `T_Cmp_Eq`'s `t1 = t2` branch. `well_typed_imp_wf_z3` absorbs all nine new cases in its trailing
+  `auto` (`wf_z3` was already `True` for these constructs); `h3_preservation` gets nine explicit
+  cases (`T_SeqLit_Cons` mirrors `T_SetLit_Cons` minus the dedupe fold; `T_MapLit_Cons` threads
+  per-entry IHs directly from the Cons-style rule — no universally-quantified helper needed; `T_If`
+  dispatches on the scrutinee's `VBool`). Umbrella now covers 52 typing rules. The verify-layer
+  stopgap removal (`lacksVerifiedTy` skip, `sortToTy` native-sort `None`s) is the follow-up PR on
+  #383.
+
 - **`wf_z3` syntactic subset proven sufficient for `lower`** (`Soundness.thy` §Phase 9j, dual of
   9i): a syntactic predicate `wf_z3` carves out the Z3-verifiable fragment of `expr_full` and the
   capstone `wf_z3_imp_lower_some` proves `wf_z3 e ⟹ lower enums e ≠ None`. This upgrades
