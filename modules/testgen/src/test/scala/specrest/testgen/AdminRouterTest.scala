@@ -49,13 +49,14 @@ class AdminRouterTest extends CatsEffectSuite:
       // base_url: scalar — None placeholder
       assert(src.contains("\"base_url\": None"), s"src=$src")
 
-  test("safe_counter (no entities): reset is no-op, state returns empty"):
+  test("safe_counter: reset zeroes the scalar state row, state projects count (#407)"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
-      // Reset has nothing to delete
-      assert(src.contains("    pass"))
-      // count is scalar state, no entity backs it
-      assert(src.contains("\"count\": None"))
+      // Reset restores the seeded defaults for the backed scalar
+      assert(src.contains("sa_update(ServiceState).values(count=0)"), s"src=$src")
+      // count is read from the singleton service_state row
+      assert(src.contains("\"count\": state_row.count"), s"src=$src")
+      assert(src.contains("from app.models.service_state import ServiceState"), s"src=$src")
 
   test("entity model imports use snake_case file names matching codegen"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

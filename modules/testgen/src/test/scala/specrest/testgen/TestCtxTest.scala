@@ -30,7 +30,7 @@ class TestCtxTest extends CatsEffectSuite:
       assertEquals(ctx.outputs, Set.empty[String])
       assertEquals(ctx.capture, CaptureMode.PreState)
 
-  test("ExprToPython honest-skips safe_counter clauses that touch unbacked scalar `count`"):
+  test("ExprToPython translates safe_counter clauses via the backed scalar `count` (#407)"):
     val src = scala.io.Source
       .fromFile("fixtures/spec/safe_counter.spec")
       .getLines
@@ -43,18 +43,15 @@ class TestCtxTest extends CatsEffectSuite:
           s"${operName(op)}.requires" -> ExprToPython.translate(e, reqCtx)
         ) ++
           operEnsures(op).map(e => s"${operName(op)}.ensures" -> ExprToPython.translate(e, ensCtx))
+      // `count` is an Int scalar backed by the service_state table since #407,
+      // so every clause translates - nothing honest-skips.
       val skips = results.collect { case (n, Translated.Skip(r, _)) => n -> r }
-      // `count` is the only state and it is unbacked; every clause that references it
-      // must honest-skip rather than emit a `None`-comparison that crashes at runtime.
-      assert(skips.nonEmpty, s"expected unbacked-state skips; got $results")
+      assert(skips.isEmpty, s"backed scalar state must not skip; got $skips")
       assert(
-        skips.forall(_._2.contains("not backed by an entity table")),
-        s"safe_counter clauses should only skip for the unbacked-state reason; got $skips"
-      )
-      // `Increment.requires` is the literal `true` — no state reference, stays translatable.
-      assert(
-        results.exists { case (n, r) =>
-          n == "Increment.requires" && r.isInstanceOf[Translated.Emit]
+        results.exists {
+          case (n, Translated.Emit(code)) =>
+            n == "Decrement.ensures" && code.contains("post_state[\"count\"]")
+          case _ => false
         },
-        s"Increment.requires (`true`) must still translate; got $results"
+        s"Decrement.ensures must translate against post_state; got $results"
       )

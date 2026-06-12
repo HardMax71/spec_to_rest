@@ -8,6 +8,9 @@ import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
+import specrest.codegen.ScalarOpView
+import specrest.codegen.ScalarOps
+import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
 import specrest.codegen.migration.Revision
@@ -109,6 +112,15 @@ final private case class TsDbView(
     dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 )
 
+final private case class TsScalarOpView(
+    handlerName: String,
+    method: String,
+    expressPath: String,
+    successStatus: Int,
+    updateSql: String,
+    guardPretty: String
+)
+
 final private case class TsProjectCtx(
     service: TsServiceNames,
     packageName: String,
@@ -116,7 +128,8 @@ final private case class TsProjectCtx(
     needsDecimal: Boolean,
     needsBuffer: Boolean,
     db: TsDbView,
-    dafnyKernel: Option[DafnyKernel]
+    dafnyKernel: Option[DafnyKernel],
+    scalarOps: List[TsScalarOpView]
 )
 
 object EmitTs:
@@ -180,6 +193,9 @@ object EmitTs:
     val needsDecimal = entities.exists(_.needsDecimal)
     val needsBuffer  = entities.exists(_.needsBuffer)
 
+    val scalarFields = ScalarOps.stateFields(profiled)
+    val scalarOps    = ScalarOps.views(profiled).map(tsScalarOp)
+
     val projectCtx = TsProjectCtx(
       service = service,
       packageName = packageName,
@@ -187,7 +203,8 @@ object EmitTs:
       needsDecimal = needsDecimal,
       needsBuffer = needsBuffer,
       db = db,
-      dafnyKernel = opts.dafnyKernel
+      dafnyKernel = opts.dafnyKernel,
+      scalarOps = scalarOps
     )
 
     val files        = List.newBuilder[EmittedFile]
@@ -237,6 +254,10 @@ object EmitTs:
         s"src/routes/${entityCtx.entityPluralCamel}.ts",
         engine.renderAny(templates.routeEntity, perEntity)
       )
+
+    if scalarOps.nonEmpty then
+      files += EmittedFile("src/services/stateOps.ts", tsStateService(scalarFields, scalarOps))
+      files += EmittedFile("src/routes/stateOps.ts", tsStateRoutes(scalarOps))
 
     projectTail.foreach: (path, tpl) =>
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
@@ -298,8 +319,12 @@ object EmitTs:
       val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
       val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
+      val seeds = SchemaDiff
+        .topoSort(schemaTables(schema))
+        .filter(ScalarOps.isStateTable)
+        .map(t => ScalarOps.seedSqlFor(t) + ";")
       val upScope = Map[String, Any](
-        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
+        "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect) ++ seeds)
       )
       val downScope = Map[String, Any](
         "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
@@ -320,8 +345,13 @@ object EmitTs:
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
+          // A state table first appearing in a delta still needs its singleton
+          // row; without it every scalar op's guarded UPDATE matches 0 rows.
+          val deltaSeeds = ops.collect:
+            case CreateTable(t) if ScalarOps.isStateTable(t) =>
+              ScalarOps.seedSqlFor(t) + ";"
           val upScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
+            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds)
           )
           val downScope = Map[String, Any](
             "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
@@ -355,6 +385,96 @@ object EmitTs:
       dsnRecipe = db.dsnRecipe,
       envExampleHeaderLine = None
     )
+
+  private def tsScalarOp(v: ScalarOpView): TsScalarOpView =
+    val ep = v.operation.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
+    val setSql = v.updates
+      .map(u => s"${u.columnName} = ${ScalarOps.renderRhs(u.rhs, u.columnName)}")
+      .mkString(", ")
+    val whereSql =
+      ("id = 1" :: v.guards.map(g => s"${g.columnName} ${ScalarOps.sqlCmp(g.cmp)} ${g.lit}"))
+        .mkString(" AND ")
+    TsScalarOpView(
+      handlerName = Naming.toCamelCase(v.operation.operationName, Naming.CamelStrategy.Ts),
+      method = method,
+      expressPath = ep.path,
+      successStatus = ep.successStatus,
+      updateSql = s"UPDATE ${ScalarOps.TableName} SET $setSql WHERE $whereSql",
+      guardPretty = v.guardPretty
+    )
+
+  private def tsStateService(
+      fields: List[ScalarStateFieldView],
+      ops: List[TsScalarOpView]
+  ): String =
+    val snapshotPairs = fields
+      .map(f => s"    ${f.specName}: Number(row.${f.camelName}),")
+      .mkString("\n")
+    val opFns = ops
+      .map: op =>
+        s"""|export const ${op.handlerName} = async (): Promise<StateSnapshot | null> => {
+            |  // Atomic guarded update: the requires clause rides in the WHERE so a
+            |  // stale read can never break the verified invariant under concurrency.
+            |  const updated = await prisma.$$executeRawUnsafe(
+            |    '${op.updateSql}',
+            |  );
+            |  if (updated === 0) {
+            |    return null;
+            |  }
+            |  return snapshot();
+            |};
+            |""".stripMargin
+      .mkString("\n")
+    s"""|import { prisma } from '../prisma.js';
+        |
+        |export type StateSnapshot = {
+        |${fields.map(f => s"  ${f.specName}: number;").mkString("\n")}
+        |};
+        |
+        |const snapshot = async (): Promise<StateSnapshot> => {
+        |  const row = await prisma.serviceState.findUniqueOrThrow({ where: { id: 1 } });
+        |  return {
+        |$snapshotPairs
+        |  };
+        |};
+        |
+        |$opFns""".stripMargin
+
+  private def tsStateRoutes(ops: List[TsScalarOpView]): String =
+    val routes = ops
+      .map: op =>
+        s"""|  app.${op.method}(
+            |    '${op.expressPath}',
+            |    wrap(async (_req, res) => {
+            |      const result = await stateOps.${op.handlerName}();
+            |      if (result === null) {
+            |        res.status(409).json({ detail: 'precondition failed: ${op.guardPretty}' });
+            |        return;
+            |      }
+            |      res.status(${op.successStatus}).json(result);
+            |    }),
+            |  );
+            |""".stripMargin
+      .mkString("\n")
+    s"""|import type { Express, NextFunction, Request, Response } from 'express';
+        |
+        |import * as stateOps from '../services/stateOps.js';
+        |
+        |const wrap =
+        |  (handler: (req: Request, res: Response) => Promise<void>) =>
+        |  (req: Request, res: Response, next: NextFunction): void => {
+        |    handler(req, res).catch(next);
+        |  };
+        |
+        |export const registerStateOpsRoutes = (app: Express): void => {
+        |$routes};
+        |""".stripMargin
 
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>
@@ -428,14 +548,17 @@ object EmitTs:
       currentEntity: Option[TsEntityCtx] = None
   ): Map[String, Any] =
     val base = Map[String, Any](
-      "service"      -> proj.service,
-      "packageName"  -> proj.packageName,
-      "profile"      -> ctx.profile,
-      "entities"     -> proj.entities,
-      "needsDecimal" -> proj.needsDecimal,
-      "needsBuffer"  -> proj.needsBuffer,
-      "db"           -> proj.db,
-      "hasDafny"     -> proj.dafnyKernel.isDefined
+      "service"           -> proj.service,
+      "packageName"       -> proj.packageName,
+      "profile"           -> ctx.profile,
+      "entities"          -> proj.entities,
+      "needsDecimal"      -> proj.needsDecimal,
+      "needsBuffer"       -> proj.needsBuffer,
+      "db"                -> proj.db,
+      "hasDafny"          -> proj.dafnyKernel.isDefined,
+      "scalarOps"         -> proj.scalarOps,
+      "scalarStateFields" -> ctx.scalarStateFields,
+      "hasScalarOps"      -> ctx.hasScalarOps
     )
     currentEntity match
       case Some(e) =>

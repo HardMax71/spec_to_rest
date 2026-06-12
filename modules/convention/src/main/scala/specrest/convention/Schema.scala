@@ -51,6 +51,8 @@ object Schema:
             case _ => ()
       case None => ()
 
+    ScalarState.stateTable(ir).foreach(tables += _)
+
     val builtTables        = tables.result()
     val withPartialIndexes = applyPartialIndexConventions(builtTables, entities, svcConventions(ir))
     val triggers           = detectAggregateTriggers(entities, withPartialIndexes)

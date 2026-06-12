@@ -174,6 +174,125 @@ text \<open>Top-level \<open>fun\<close> pattern instead of an inline \<open>cas
 fun mapEntryIsLeafLeaf :: "map_entry \<Rightarrow> bool" where
   "mapEntryIsLeafLeaf (MapEntryFull k v _) = (isLeafValue k \<and> isLeafValue v)"
 
+text \<open>Scalar direct-emit recognisers (issue #407). A scalar-update ensures
+  clause assigns an Int-typed state scalar from arithmetic over itself
+  (current or \<open>pre\<close>) and integer literals. The extractors return the
+  structured update / guard rather than a bare bool so the classifier gate
+  and the emitters consume the same parse - the recognised fragment and
+  the emitted SQL cannot drift. Guards are the requires atoms an emitter
+  can fold into the atomic UPDATE's WHERE clause.\<close>
+
+datatype scalar_rhs =
+    SrLit int
+  | SrSelf
+  | SrAdd scalar_rhs scalar_rhs
+  | SrSub scalar_rhs scalar_rhs
+  | SrMul scalar_rhs scalar_rhs
+
+fun scalarRhsOf :: "String.literal \<Rightarrow> expr \<Rightarrow> scalar_rhs option" where
+  "scalarRhsOf n (IntLitF k _) = Some (SrLit k)"
+| "scalarRhsOf n (IdentifierF m _) = (if m = n then Some SrSelf else None)"
+| "scalarRhsOf n (PreF e _) =
+     (case e of
+        IdentifierF m _ \<Rightarrow> (if m = n then Some SrSelf else None)
+      | _ \<Rightarrow> None)"
+| "scalarRhsOf n (UnaryOpF op e _) =
+     (case op of
+        UNegate \<Rightarrow> (case e of IntLitF k _ \<Rightarrow> Some (SrLit (- k)) | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "scalarRhsOf n (BinaryOpF op l r _) =
+     (case (scalarRhsOf n l, scalarRhsOf n r) of
+        (Some a, Some b) \<Rightarrow>
+          (case op of
+             BAdd \<Rightarrow> Some (SrAdd a b)
+           | BSub \<Rightarrow> Some (SrSub a b)
+           | BMul \<Rightarrow> Some (SrMul a b)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "scalarRhsOf _ _ = None"
+
+fun scalarUpdateOf ::
+  "String.literal list \<Rightarrow> expr \<Rightarrow> (String.literal \<times> scalar_rhs) option"
+where
+  "scalarUpdateOf scalars (BinaryOpF op lhs rhs _) =
+     (case op of
+        BEq \<Rightarrow>
+          (case lhs of
+             PrimeF inner _ \<Rightarrow>
+               (case inner of
+                  IdentifierF n _ \<Rightarrow>
+                    (if n \<in> set scalars
+                     then map_option (Pair n) (scalarRhsOf n rhs)
+                     else None)
+                | _ \<Rightarrow> None)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "scalarUpdateOf _ _ = None"
+
+datatype scalar_cmp = ScGt | ScGe | ScLt | ScLe | ScEq | ScNeq
+
+datatype scalar_guard =
+    SgTrue
+  | SgCmp String.literal scalar_cmp int
+
+text \<open>\<open>scalar_cmp\<close> is a dedicated closed comparator set (not \<open>bin_op\<close>)
+  so Scala consumers can render guards with an exhaustive match instead
+  of a defensive catch-all over the ~50 \<open>bin_op\<close> constructors.\<close>
+
+fun scalarCmpOf :: "bin_op \<Rightarrow> scalar_cmp option" where
+  "scalarCmpOf BGt  = Some ScGt"
+| "scalarCmpOf BGe  = Some ScGe"
+| "scalarCmpOf BLt  = Some ScLt"
+| "scalarCmpOf BLe  = Some ScLe"
+| "scalarCmpOf BEq  = Some ScEq"
+| "scalarCmpOf BNeq = Some ScNeq"
+| "scalarCmpOf _    = None"
+
+text \<open>The parser renders a negative literal as \<open>UNegate (IntLitF k)\<close>,
+  so guard atoms accept both spellings.\<close>
+
+fun scalarLitOf :: "expr \<Rightarrow> int option" where
+  "scalarLitOf (IntLitF k _) = Some k"
+| "scalarLitOf (UnaryOpF op e _) =
+     (case op of
+        UNegate \<Rightarrow> (case e of IntLitF k _ \<Rightarrow> Some (- k) | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "scalarLitOf _ = None"
+
+fun scalarGuardOf ::
+  "String.literal list \<Rightarrow> expr \<Rightarrow> scalar_guard option"
+where
+  "scalarGuardOf scalars (BoolLitF b _) = (if b then Some SgTrue else None)"
+| "scalarGuardOf scalars (BinaryOpF op l r _) =
+     (case scalarCmpOf op of
+        None \<Rightarrow> None
+      | Some c \<Rightarrow>
+          (case l of
+             IdentifierF n _ \<Rightarrow>
+               (if n \<in> set scalars
+                then map_option (SgCmp n c) (scalarLitOf r)
+                else None)
+           | _ \<Rightarrow> None))"
+| "scalarGuardOf _ _ = None"
+
+definition isScalarUpdateClause ::
+  "String.literal list \<Rightarrow> expr \<Rightarrow> bool"
+where
+  "isScalarUpdateClause scalars c = (scalarUpdateOf scalars c \<noteq> None)"
+
+text \<open>A conjunction assigning the same scalar twice with different
+  right-hand sides has no single-UPDATE interpretation (it is an
+  unsatisfiable ensures); identical repeats are harmless. Checked at
+  classification so the emitters never see a conflicting op.\<close>
+
+fun scalarUpdatesConsistent ::
+  "(String.literal \<times> scalar_rhs) list \<Rightarrow> bool"
+where
+  "scalarUpdatesConsistent [] = True"
+| "scalarUpdatesConsistent ((n, r) # rest) =
+     (list_all (\<lambda>(m, s). m \<noteq> n \<or> s = r) rest \<and>
+      scalarUpdatesConsistent rest)"
+
 text \<open>\<open>isDirectEmitShape\<close>: a single ensures-clause is direct-emit-able when its
   shape matches one of the recognised verified-subset patterns (preserve a
   state field, append-disjoint, cardinality-preserving, single-index update,
@@ -207,15 +326,37 @@ text \<open>\<open>classifyStrategy\<close>: an operation is direct-emit-able wh
   ensures-clause matches one of the recognised shapes, otherwise it falls back
   to LLM synthesis. Takes the ensures body and field-name lists directly so
   the caller can do the \<open>flattenEnsures\<close> + name-set computation at the
-  Scala boundary.\<close>
+  Scala boundary.
+
+  Scalar branch (issue #407): if ANY clause is a scalar update, ALL clauses
+  must be - a mixed entity/scalar operation would otherwise be emitted by
+  the entity-CRUD path with the scalar clauses silently dropped. Scalar
+  operations additionally require: no declared inputs (the literal-only
+  handlers take none, and an unused id-shaped input would put a path
+  parameter in the derived route that no handler binds); pairwise
+  consistent updates (\<open>scalarUpdatesConsistent\<close>); and every
+  requires-atom guardable (foldable into the atomic UPDATE's WHERE
+  clause) - verification assumes requires holds on entry, but HTTP
+  callers can invoke the route in any state, so an unguardable
+  precondition would let a runtime call break a verified invariant.\<close>
 
 definition classifyStrategy ::
-  "expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> synthesis_strategy"
+  "expr list \<Rightarrow> expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal list
+     \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> synthesis_strategy"
 where
-  "classifyStrategy ensures stateFieldNames outputNames = (
+  "classifyStrategy ensures reqs inputNames stateFieldNames scalarFieldNames
+     outputNames = (
     let clauses = flattenEnsures ensures in
-    if clauses \<noteq> [] \<and>
-       list_all (\<lambda>c. isDirectEmitShape c stateFieldNames outputNames) clauses
+    if clauses = [] then LlmSynthesis
+    else if list_ex (isScalarUpdateClause scalarFieldNames) clauses then
+      (if list_all (isScalarUpdateClause scalarFieldNames) clauses \<and>
+          inputNames = [] \<and>
+          scalarUpdatesConsistent
+            (List.map_filter (scalarUpdateOf scalarFieldNames) clauses) \<and>
+          list_all (\<lambda>r. scalarGuardOf scalarFieldNames r \<noteq> None)
+                   (flattenEnsures reqs)
+       then DirectEmit else LlmSynthesis)
+    else if list_all (\<lambda>c. isDirectEmitShape c stateFieldNames outputNames) clauses
     then DirectEmit else LlmSynthesis)"
 
 definition synthesisStrategyLabel :: "synthesis_strategy \<Rightarrow> String.literal" where
@@ -226,6 +367,13 @@ lemmas decidePutPatch_code [code] = decidePutPatch_def
 lemmas decideKindAndMethod_code [code] = decideKindAndMethod_def
 lemmas isCardinalityRhs_code [code] = isCardinalityRhs.simps
 lemmas isDirectEmitShape_code [code] = isDirectEmitShape_def
+lemmas scalarRhsOf_code [code] = scalarRhsOf.simps
+lemmas scalarUpdateOf_code [code] = scalarUpdateOf.simps
+lemmas scalarCmpOf_code [code] = scalarCmpOf.simps
+lemmas scalarLitOf_code [code] = scalarLitOf.simps
+lemmas scalarGuardOf_code [code] = scalarGuardOf.simps
+lemmas isScalarUpdateClause_code [code] = isScalarUpdateClause_def
+lemmas scalarUpdatesConsistent_code [code] = scalarUpdatesConsistent.simps
 lemmas classifyStrategy_code [code] = classifyStrategy_def
 lemmas synthesisStrategyLabel_code [code] = synthesisStrategyLabel_def
 

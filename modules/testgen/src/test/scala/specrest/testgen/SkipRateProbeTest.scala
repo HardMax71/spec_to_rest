@@ -68,11 +68,26 @@ class SkipRateProbeTest extends CatsEffectSuite:
     )
 
   List(
-    ("safe_counter", 5, 3, "count is unbacked scalar state (admin /state projects null)"),
-    ("url_shortener", 21, 1, "base_url is unbacked scalar state"),
-    ("todo_list", 50, 2, "next_id is unbacked scalar state"),
-    ("ecommerce", 76, 5, "3 unbacked scalar-state ensures + 2 `removed` parser scope leak"),
-    ("edge_cases", 29, 3, "plain is unbacked scalar state"),
+    ("safe_counter", 5, 0, "count is an Int scalar backed by service_state since #407"),
+    (
+      "url_shortener",
+      21,
+      1,
+      "base_url is unbacked scalar state (String, outside the #407 Int scope)"
+    ),
+    (
+      "todo_list",
+      50,
+      2,
+      "next_id stays unbacked: `next_id not in todos` is invariant-relevant but not a derivable seed bound, so #407 conservatively leaves it on the unbacked path"
+    ),
+    (
+      "ecommerce",
+      76,
+      4,
+      "2 `removed` parser scope leak + 2 non-Int scalar ensures; Int scalars backed since #407"
+    ),
+    ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
       "auth_service",
       43,

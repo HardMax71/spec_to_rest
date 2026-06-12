@@ -1,0 +1,35 @@
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.service_state import ServiceState
+
+
+class StateOpsService:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def _snapshot(self) -> dict[str, int]:
+        result = await self._session.execute(select(ServiceState).where(ServiceState.id == 1))
+        row = result.scalar_one()
+        return {
+{{#each stateFields}}
+            "{{this.specName}}": row.{{this.columnName}},
+{{/each}}
+        }
+{{#each scalarOps}}
+
+    async def {{this.handlerName}}(self) -> dict[str, int] | None:
+        # Atomic guarded update: the requires clause rides in the WHERE so a
+        # stale read can never break the verified invariant under concurrency.
+        result = await self._session.execute(
+            update(ServiceState)
+            .where(ServiceState.id == 1)
+{{#each this.guardConds}}
+            .where({{{this}}})
+{{/each}}
+            .values({{{this.valuesArgs}}})
+        )
+        if result.rowcount == 0:
+            return None
+        return await self._snapshot()
+{{/each}}

@@ -16,7 +16,14 @@ object Classify:
     val entityMap    = ir.idx.entityByName
     val targetEntity = resolveTargetEntity(op, ir, entityMap)
     val outputNames  = operOutputs(op).map(prmName)
-    val strategy     = classifyStrategy(operEnsures(op), stateFieldNames.toList, outputNames)
+    val strategy = classifyStrategy(
+      operEnsures(op),
+      operRequires(op),
+      operInputs(op).map(prmName),
+      stateFieldNames.toList,
+      ScalarState.fieldNames(ir),
+      outputNames
+    )
     val entityFieldCount: Option[nat] =
       targetEntity.flatMap(entityMap.get).map(e => Nata(BigInt(entFields(e).length)))
     buildOperationClassification(

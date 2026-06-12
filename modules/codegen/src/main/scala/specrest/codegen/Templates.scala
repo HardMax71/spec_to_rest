@@ -35,7 +35,10 @@ final case class PythonFastapiPostgresTemplates(
     testHealth: String,
     testLogRedaction: String,
     dafnyAdapter: String,
-    synthService: String
+    synthService: String,
+    modelServiceState: String,
+    serviceStateOps: String,
+    routerStateOps: String
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
@@ -88,5 +91,8 @@ object Templates:
       testHealth = loadResource("tests/test_health.py.hbs"),
       testLogRedaction = loadResource("tests/test_log_redaction.py.hbs"),
       dafnyAdapter = loadResource("services/_dafny_adapter.py.hbs"),
-      synthService = loadResource("services/_synth.py.hbs")
+      synthService = loadResource("services/_synth.py.hbs"),
+      modelServiceState = loadResource("models/service_state.py.hbs"),
+      serviceStateOps = loadResource("services/state_ops.py.hbs"),
+      routerStateOps = loadResource("routers/state_ops.py.hbs")
     )

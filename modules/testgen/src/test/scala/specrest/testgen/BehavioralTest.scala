@@ -48,20 +48,18 @@ class BehavioralTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("safe_counter: Increment ensures honest-skipped (unbacked count), Decrement state-dep"):
+  test("safe_counter: Increment ensures emits via backed scalar (#407), Decrement state-dep"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val out = Behavioral.emitFor(profiled)
-      // `count` is pure scalar state with no backing table; asserting `count' = count + 1`
-      // black-box would compare `None`, so the ensures must honest-skip, not emit.
+      // `count` is an Int scalar backed by service_state since #407, so the
+      // ensures asserts post_state["count"] black-box instead of honest-skipping.
       assert(
-        !out.tests.exists(_.name.startsWith("test_increment_ensures")),
-        s"Increment.ensures touches unbacked `count`; must not emit: ${out.tests.map(_.name)}"
+        out.tests.exists(_.name.startsWith("test_increment_ensures")),
+        s"Increment.ensures must emit against the backed scalar: ${out.tests.map(_.name)}"
       )
       assert(
-        out.skips.exists(s =>
-          s.operation == "Increment" && s.reason.contains("not backed by an entity table")
-        ),
-        s"expected Increment unbacked-state skip; got ${out.skips}"
+        !out.skips.exists(_.reason.contains("not backed by an entity table")),
+        s"no unbacked-state skips expected; got ${out.skips}"
       )
       val decSkips = out.skips.filter(_.operation == "Decrement")
       assert(

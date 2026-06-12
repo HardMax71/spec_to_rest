@@ -361,6 +361,19 @@ not incremental PRs:
   theorems unlock the Phase-9m extraction PR that replaces those circe codecs with calls to
   extracted `SpecRestGenerated.*` functions. The full `expr_full`/`type_expr_full` codec is the next
   size-induction proof.
+- **Scalar direct-emit recognisers** (`Classify.thy`, issue #407): `scalarRhsOf` / `scalarUpdateOf`
+  parse an ensures clause `x' = <arithmetic over x / pre(x) / int literals>` into a structured
+  `scalar_rhs` tree; `scalarGuardOf` parses requires atoms into `scalar_guard`
+  (`SgCmp name scalar_cmp int`, where `scalar_cmp` is a dedicated closed comparator datatype so
+  Scala consumers render guards with an exhaustive match instead of a defensive catch-all over
+  `bin_op`). `classifyStrategy` gained `requires` and `scalarFieldNames` parameters: if ANY
+  flattened ensures clause is a scalar update, ALL must be (a mixed entity/scalar operation would
+  otherwise be emitted by the entity-CRUD path with the scalar clauses silently dropped), and every
+  requires atom must be guardable - the emitters fold guards into the atomic UPDATE's WHERE clause,
+  so an unguardable precondition would let an HTTP caller break a verified invariant at runtime. The
+  same extracted extractors feed both the classifier gate and all three language emitters (single
+  source of truth: the recognised fragment and the emitted SQL cannot drift). Proof-free executable
+  code, like the rest of the classifier.
 - **Alloy backend unverified.** Only the router `requires_alloy` is proven. The `expr_full ⇒ Alloy`
   translation and Alloy semantics have no Isabelle analog — a full second trusted backend. A
   `translate_alloy` + Alloy-semantics + soundness theorem mirrors the entire Z3 effort.

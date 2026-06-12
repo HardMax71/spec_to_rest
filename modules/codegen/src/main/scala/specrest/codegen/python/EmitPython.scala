@@ -8,6 +8,9 @@ import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
+import specrest.codegen.ScalarOpView
+import specrest.codegen.ScalarOps
+import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.SensitiveFields
 import specrest.codegen.ServiceNames
 import specrest.codegen.TemplateEngine
@@ -46,6 +49,26 @@ final case class AlembicDeltaCtx(
     service: ServiceNames,
     profile: RenderProfile,
     migration: AlembicDelta
+)
+
+final case class StateModelCtx(
+    tableName: String,
+    stateFields: List[ScalarStateFieldView]
+)
+
+final case class PyScalarOp(
+    handlerName: String,
+    method: String,
+    path: String,
+    successStatus: Int,
+    guardConds: List[String],
+    valuesArgs: String,
+    guardPretty: String
+)
+
+final case class StateOpsCtx(
+    stateFields: List[ScalarStateFieldView],
+    scalarOps: List[PyScalarOp]
 )
 
 final private case class StdlibImport(module: String, names: List[String])
@@ -215,6 +238,27 @@ object EmitPython:
       preserve = true
     )
 
+    val scalarFields = ScalarOps.stateFields(profiled)
+    val scalarOps    = ScalarOps.views(profiled)
+    if scalarFields.nonEmpty then
+      files += EmittedFile(
+        "app/models/service_state.py",
+        engine.renderAny(
+          templates.modelServiceState,
+          StateModelCtx(ScalarOps.TableName, scalarFields)
+        )
+      )
+    if scalarOps.nonEmpty then
+      val stateCtx = StateOpsCtx(scalarFields, scalarOps.map(pyScalarOp))
+      files += EmittedFile(
+        "app/services/state_ops.py",
+        engine.renderAny(templates.serviceStateOps, stateCtx)
+      )
+      files += EmittedFile(
+        "app/routers/state_ops.py",
+        engine.renderAny(templates.routerStateOps, stateCtx)
+      )
+
     for entity <- ctx.entities do
       val table = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
       val entityOps = ctx.operations
@@ -355,11 +399,16 @@ object EmitPython:
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
           val downRev = Revision.head(opts.existingRevisions).getOrElse("001")
+          // A state table first appearing in a delta still needs its singleton
+          // row; without it every scalar op's guarded UPDATE matches 0 rows.
+          val deltaSeeds = ops.collect:
+            case CreateTable(t) if ScalarOps.isStateTable(t) =>
+              s"""op.execute("${ScalarOps.seedSqlFor(t)}")"""
           val delta = AlembicDelta(
             revision = nextRev,
             downRevision = downRev,
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
-            upgradeStatements = AlembicRenderer.upgrade(ops, dialect),
+            upgradeStatements = AlembicRenderer.upgrade(ops, dialect) ++ deltaSeeds,
             downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
             needsPostgresDialect = Dialect.hasPostgresDialectTypes(ops, dialect)
           )
@@ -689,6 +738,29 @@ object EmitPython:
     if ormColumnType == "JSONB" && dialect.saType(CanonicalType.Json).importModule.isEmpty then
       "JSON"
     else ormColumnType
+
+  private def pyScalarOp(v: ScalarOpView): PyScalarOp =
+    val ep = v.operation.endpoint
+    val method = ep.method match
+      case _: GET    => "get"
+      case _: POST   => "post"
+      case _: PUT    => "put"
+      case _: PATCH  => "patch"
+      case _: DELETE => "delete"
+    val guardConds = v.guards.map: g =>
+      s"ServiceState.${g.columnName} ${ScalarOps.pyCmp(g.cmp)} ${g.lit}"
+    val valuesArgs = v.updates
+      .map(u => s"${u.columnName}=${ScalarOps.renderRhs(u.rhs, s"ServiceState.${u.columnName}")}")
+      .mkString(", ")
+    PyScalarOp(
+      handlerName = v.operation.handlerName,
+      method = method,
+      path = ep.path,
+      successStatus = ep.successStatus,
+      guardConds = guardConds,
+      valuesArgs = valuesArgs,
+      guardPretty = v.guardPretty
+    )
 
   private def collectEntityImports(entity: ProfiledEntity, dialect: Dialect): EntityImports =
     val sqlSet         = mutable.Set.empty[String]

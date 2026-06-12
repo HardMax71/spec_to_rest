@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.convention.ScalarState
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.entFields
 import specrest.ir.generated.SpecRestGenerated.entName
@@ -52,17 +53,37 @@ object AdminRouterTs:
       .mkString("\n\n")
 
     val resetStmts =
-      if entities.isEmpty then "      // no entities"
+      if entities.isEmpty && ScalarState.fields(ir).isEmpty then "      // no entities"
       else
+        val scalarReset =
+          if ScalarState.fields(ir).isEmpty then ""
+          else
+            val seeds = ScalarState
+              .fieldsWithSeeds(ir)
+              .map: (sf, seed) =>
+                s"${Naming.toCamelCase(ScalarState.columnName(stfName(sf)))}: $seed"
+              .mkString(", ")
+            s"\n      await (prisma as unknown as AnyPrisma).serviceState.updateMany({ data: { $seeds } });"
         entities.reverse
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
-          .mkString("\n")
+          .mkString("\n") + scalarReset
 
     val stateFields = irStateFields(ir)
-    val neededEntities = stateFields
-      .flatMap(f => AdminModel.projectionFor(f, ir).map(_.entityName))
+    val projections = stateFields.map(f => f -> AdminModel.projectionFor(f, ir))
+    val neededEntities = projections
+      .collect:
+        case (_, Some(p))
+            if p.valueShape match
+              case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
+              case _                                               => true
+            =>
+          p.entityName
       .distinct
-    val rowsDecls = neededEntities
+    val stateRowDecl =
+      if ScalarState.fields(ir).isEmpty then ""
+      else
+        "      const stateRow = await (prisma as unknown as AnyPrisma).serviceState.findFirst();\n"
+    val rowsDecls = stateRowDecl + neededEntities
       .flatMap(en => entities.find(e => entName(e) == en))
       .map: e =>
         s"      const rows_${entName(e)} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany();"
@@ -71,17 +92,22 @@ object AdminRouterTs:
       .map: f =>
         AdminModel.projectionFor(f, ir) match
           case Some(p) =>
-            val keyTs = Naming.toCamelCase(p.keyFieldName)
-            val value = p.valueShape match
-              case AdminModel.ProjectionValue.EntityRow =>
-                s"rowToDict_${p.entityName}(r)"
-              case AdminModel.ProjectionValue.PrimitiveField(name) =>
-                s"r.${Naming.toCamelCase(name)}"
-            s"""        ${tsKey(stfName(f))}: Object.fromEntries(
-               |          rows_${p.entityName}.map((r: Record<string, unknown>) => [
-               |            String(r.$keyTs), $value,
-               |          ]),
-               |        ),""".stripMargin
+            p.valueShape match
+              case AdminModel.ProjectionValue.ScalarStateColumn(col) =>
+                val tsField = Naming.toCamelCase(col)
+                s"        ${tsKey(stfName(f))}: stateRow == null ? null : Number((stateRow as Record<string, unknown>).$tsField)," // prisma BigInt does not JSON-serialize
+              case shape =>
+                val keyTs = Naming.toCamelCase(p.keyFieldName)
+                val value = shape match
+                  case AdminModel.ProjectionValue.PrimitiveField(name) =>
+                    s"r.${Naming.toCamelCase(name)}"
+                  case _ =>
+                    s"rowToDict_${p.entityName}(r)"
+                s"""        ${tsKey(stfName(f))}: Object.fromEntries(
+                   |          rows_${p.entityName}.map((r: Record<string, unknown>) => [
+                   |            String(r.$keyTs), $value,
+                   |          ]),
+                   |        ),""".stripMargin
           case None =>
             s"        ${tsKey(stfName(f))}: null,"
       .mkString("\n")
@@ -136,7 +162,9 @@ import { prisma } from '../prisma.js';
 type AnyPrisma = Record<string, {
   deleteMany: () => Promise<unknown>;
   findMany: () => Promise<Array<Record<string, unknown>>>;
+  findFirst: () => Promise<Record<string, unknown> | null>;
   create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+  updateMany: (args: { data: Record<string, unknown> }) => Promise<unknown>;
 }>;
 
 const enabled = (): boolean => process.env.ENABLE_TEST_ADMIN === '1';

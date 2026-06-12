@@ -40,7 +40,9 @@ func main() {
 
 {{#each entities}}{{#if hasOperations}}	{{entityCamel}}Svc := services.New{{entity.modelClassName}}Service(db, cfg)
 	{{entityCamel}}Handler := handlers.New{{entity.modelClassName}}Handler({{entityCamel}}Svc)
-{{/if}}{{/each}}
+{{/if}}{{/each}}{{#if scalarOps.length}}	stateOpsSvc := services.NewStateOpsService(db, cfg)
+	stateOpsHandler := handlers.NewStateOpsHandler(stateOpsSvc)
+{{/if}}
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -61,7 +63,8 @@ func main() {
 	testadmin.Register(r, db)
 
 {{#each entities}}{{#each operations}}	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
-{{/each}}{{/each}}
+{{/each}}{{/each}}{{#each scalarOps}}	r.{{methodPascal}}("{{chiPath}}", stateOpsHandler.{{handlerName}})
+{{/each}}
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      r,

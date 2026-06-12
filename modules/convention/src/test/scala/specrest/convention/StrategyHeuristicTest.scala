@@ -12,7 +12,82 @@ class StrategyHeuristicTest extends CatsEffectSuite:
   private def lit(n: Int): expr   = IntLitF(BigInt(n), None)
 
   private def strategyOf(ensures: List[expr]): synthesis_strategy =
-    classifyStrategy(ensures, state, Nil)
+    classifyStrategy(ensures, Nil, Nil, state, Nil, Nil)
+
+  private def scalarStrategyOf(
+      ensures: List[expr],
+      requires: List[expr] = Nil,
+      inputs: List[String] = Nil
+  ): synthesis_strategy =
+    classifyStrategy(ensures, requires, inputs, List("count"), List("count"), Nil)
+
+  private def prime(e: expr): expr         = PrimeF(e, None)
+  private def beq(l: expr, r: expr): expr  = BinaryOpF(BEq(), l, r, None)
+  private def badd(l: expr, r: expr): expr = BinaryOpF(BAdd(), l, r, None)
+  private def bsub(l: expr, r: expr): expr = BinaryOpF(BSub(), l, r, None)
+  private def bgt(l: expr, r: expr): expr  = BinaryOpF(BGt(), l, r, None)
+  private def scalarInc: expr              = beq(prime(id("count")), badd(id("count"), lit(1)))
+
+  test("scalar `count' = count + 1` → DirectEmit"):
+    assertEquals(scalarStrategyOf(List(scalarInc)), DirectEmit(): synthesis_strategy)
+
+  test("scalar `count' = count - 1` with guardable requires → DirectEmit"):
+    val dec = beq(prime(id("count")), bsub(id("count"), lit(1)))
+    assertEquals(
+      scalarStrategyOf(List(dec), requires = List(bgt(id("count"), lit(0)))),
+      DirectEmit(): synthesis_strategy
+    )
+
+  test("scalar update with unguardable requires → LlmSynthesis"):
+    val req = bgt(badd(id("count"), lit(1)), lit(0))
+    assertEquals(
+      scalarStrategyOf(List(scalarInc), requires = List(req)),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("scalar update over input arithmetic `count' = count + n` → LlmSynthesis"):
+    val clause = beq(prime(id("count")), badd(id("count"), id("n")))
+    assertEquals(scalarStrategyOf(List(clause)), LlmSynthesis(): synthesis_strategy)
+
+  test("mixed scalar + relation clauses → LlmSynthesis (purity rule)"):
+    val rel = beq(prime(id("store")), id("store"))
+    assertEquals(
+      classifyStrategy(
+        List(scalarInc, rel),
+        Nil,
+        Nil,
+        List("count", "store"),
+        List("count"),
+        Nil
+      ),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("conflicting duplicate scalar assignments → LlmSynthesis"):
+    val other = beq(prime(id("count")), badd(id("count"), lit(2)))
+    assertEquals(
+      scalarStrategyOf(List(scalarInc, other)),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("identical duplicate scalar assignments → DirectEmit"):
+    assertEquals(
+      scalarStrategyOf(List(scalarInc, scalarInc)),
+      DirectEmit(): synthesis_strategy
+    )
+
+  test("scalar update with declared inputs → LlmSynthesis"):
+    assertEquals(
+      scalarStrategyOf(List(scalarInc), inputs = List("x")),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("negative-literal scalar updates → DirectEmit (UNegate spelling)"):
+    val negLit = UnaryOpF(UNegate(), lit(1), None)
+    val toNeg  = beq(prime(id("count")), negLit)
+    val addNeg = beq(prime(id("count")), badd(id("count"), negLit))
+    assertEquals(scalarStrategyOf(List(toNeg)), DirectEmit(): synthesis_strategy)
+    assertEquals(scalarStrategyOf(List(addNeg)), DirectEmit(): synthesis_strategy)
 
   test("empty ensures → LlmSynthesis (regression: no longer vacuously DirectEmit)"):
     assertEquals(strategyOf(Nil), LlmSynthesis(): synthesis_strategy)

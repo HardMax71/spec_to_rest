@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.convention.ScalarState
 import specrest.ir.generated.SpecRestGenerated.*
 
 object AdminModel:
@@ -13,6 +14,7 @@ object AdminModel:
   enum ProjectionValue derives CanEqual:
     case PrimitiveField(fieldName: String)
     case EntityRow
+    case ScalarStateColumn(columnName: String)
 
   def unbackedStateFieldNames(ir: ServiceIRFull): Set[String] =
     irStateFields(ir)
@@ -24,6 +26,14 @@ object AdminModel:
     stfType(f) match
       case RelationTypeF(k, _, v, _) =>
         inferRelationProjection(k, v, ir)
+      case NamedTypeF(_, _) if ScalarState.fieldNames(ir).contains(stfName(f)) =>
+        Some(
+          Projection(
+            "",
+            "",
+            ProjectionValue.ScalarStateColumn(ScalarState.columnName(stfName(f)))
+          )
+        )
       case NamedTypeF(name, _) =>
         svcEntities(ir)
           .find(e => entName(e) == name)

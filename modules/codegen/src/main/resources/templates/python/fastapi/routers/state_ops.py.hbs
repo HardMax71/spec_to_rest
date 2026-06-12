@@ -1,0 +1,20 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_session
+from app.services.state_ops import StateOpsService
+
+router = APIRouter(tags=["state"])
+{{#each scalarOps}}
+
+
+@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}})
+async def {{this.handlerName}}(
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, int]:
+    svc = StateOpsService(session)
+    result = await svc.{{this.handlerName}}()
+    if result is None:
+        raise HTTPException(status_code=409, detail="precondition failed: {{this.guardPretty}}")
+    return result
+{{/each}}

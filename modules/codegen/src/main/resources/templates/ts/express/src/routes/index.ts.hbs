@@ -2,10 +2,14 @@ import type { Express } from 'express';
 
 {{#each entities}}
 import { register{{entity.modelClassName}}Routes } from './{{entityPluralCamel}}.js';
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+import { registerStateOpsRoutes } from './stateOps.js';
+{{/if}}
 
 export const mountRoutes = (app: Express): void => {
 {{#each entities}}
   register{{entity.modelClassName}}Routes(app);
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+  registerStateOpsRoutes(app);
+{{/if}}
 };
