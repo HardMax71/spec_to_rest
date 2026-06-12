@@ -72,7 +72,7 @@ object GoTestHarness extends HarnessTemplates:
        |""".stripMargin
 
   private def predicates(ir: ServiceIRFull): String =
-    PredicatesHeader + renderUserDefinitions(ir)
+    (PredicatesHeader + renderUserDefinitions(ir)).stripTrailing + "\n"
 
   private def renderUserDefinitions(ir: ServiceIRFull): String =
     val parts = svcFunctions(ir).map(renderFunction(_, ir)) ++

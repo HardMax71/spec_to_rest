@@ -11,6 +11,9 @@ dependencies = [
 {{#each profile.dependencies}}
     "{{this.name}}{{this.version}}",
 {{/each}}
+{{#if needsJwt}}
+    "pyjwt>=2.10.1,<3",
+{{/if}}
 ]
 
 [project.optional-dependencies]

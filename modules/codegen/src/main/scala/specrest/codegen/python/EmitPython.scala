@@ -1,5 +1,6 @@
 package specrest.codegen.python
 
+import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
@@ -63,12 +64,14 @@ final case class PyScalarOp(
     successStatus: Int,
     guardConds: List[String],
     valuesArgs: String,
-    guardPretty: String
+    guardPretty: String,
+    authDependency: Option[String]
 )
 
 final case class StateOpsCtx(
     stateFields: List[ScalarStateFieldView],
-    scalarOps: List[PyScalarOp]
+    scalarOps: List[PyScalarOp],
+    authDeps: List[String]
 )
 
 final private case class StdlibImport(module: String, names: List[String])
@@ -108,7 +111,8 @@ final private case class EnrichedOperation(
     dafnyMethod: Option[String],
     dafnyCallArgs: List[String],
     kernelHandlerSignature: String,
-    initFields: List[ModelInitFieldView]
+    initFields: List[ModelInitFieldView],
+    authDependency: Option[String]
 )
 
 final private case class EntityImports(
@@ -122,14 +126,18 @@ final private case class RouterTemplateImports(
     needsResponse: Boolean,
     needsRedirectResponse: Boolean,
     schemas: List[String],
-    stdlibImports: List[StdlibImport]
+    stdlibImports: List[StdlibImport],
+    authDeps: List[String]
 )
 
 final private case class ServiceTemplateImports(
-    sqlalchemyCoreImports: List[String],
+    sqlalchemyPlainImports: List[String],
+    sqlalchemyAliasImports: List[String],
     schemas: List[String],
     needsModelImport: Boolean,
-    needsDafnyKernel: Boolean
+    needsDafnyKernel: Boolean,
+    hasAppImports: Boolean,
+    needsTypingCast: Boolean
 )
 
 final private case class ModelCtx(
@@ -224,15 +232,15 @@ object EmitPython:
     files += EmittedFile("app/__init__.py", "")
     files += EmittedFile("app/main.py", engine.renderAny(templates.main, ctx))
     files += EmittedFile("app/config.py", engine.renderAny(templates.config, ctx))
-    files += EmittedFile("app/security.py", engine.renderAny(templates.security, ctx))
+    files += EmittedFile("app/security.py", SecurityPython.emit(profiled))
     files += EmittedFile("app/database.py", engine.renderAny(templates.database, ctx))
     files += EmittedFile("app/redaction.py", engine.renderAny(templates.redaction, ctx))
     files += EmittedFile("app/db/__init__.py", "")
     files += EmittedFile("app/db/base.py", engine.renderAny(templates.dbBase, ctx))
-    files += EmittedFile("app/models/__init__.py", engine.renderAny(templates.modelInit, ctx))
-    files += EmittedFile("app/schemas/__init__.py", engine.renderAny(templates.schemaInit, ctx))
-    files += EmittedFile("app/routers/__init__.py", engine.renderAny(templates.routerInit, ctx))
-    files += EmittedFile("app/services/__init__.py", engine.renderAny(templates.serviceInit, ctx))
+    files += EmittedFile("app/models/__init__.py", PyInit.models(profiled))
+    files += EmittedFile("app/schemas/__init__.py", PyInit.schemas(profiled))
+    files += EmittedFile("app/routers/__init__.py", PyInit.routers(profiled))
+    files += EmittedFile("app/services/__init__.py", PyInit.services(profiled))
     files += EmittedFile(
       "app/extensions/__init__.py",
       ExtensionStub.python,
@@ -251,7 +259,9 @@ object EmitPython:
         )
       )
     if scalarOps.nonEmpty then
-      val stateCtx = StateOpsCtx(scalarFields, scalarOps.map(pyScalarOp))
+      val pyOps = scalarOps.map(pyScalarOp)
+      val stateCtx =
+        StateOpsCtx(scalarFields, pyOps, pyOps.flatMap(_.authDependency).distinct.sorted)
       files += EmittedFile(
         "app/services/state_ops.py",
         engine.renderAny(templates.serviceStateOps, stateCtx)
@@ -438,7 +448,13 @@ object EmitPython:
       preserve = true
     )
     files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
-    files += EmittedFile(".env.example", EnvExample.render(composeIn))
+    val authEnv = AuthSchemes.envEntries(profiled.ir).map: (k, v) =>
+      EnvExample.Entry(
+        k,
+        v,
+        Some("Credential for the spec's security scheme; unset rejects requests (401)")
+      )
+    files += EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
     files += EmittedFile("Makefile", engine.renderAny(templates.makefile, ctx))
     files += EmittedFile(".gitignore", engine.renderAny(templates.gitignore, ctx))
     files += EmittedFile(".dockerignore", engine.renderAny(templates.dockerignore, ctx))
@@ -674,7 +690,9 @@ object EmitPython:
       dafnyMethod = op.dafnyMethod,
       dafnyCallArgs = dafnyArgs,
       kernelHandlerSignature = kernelSig,
-      initFields = createInitFields
+      initFields = createInitFields,
+      authDependency =
+        Option.when(op.requiresAuth.nonEmpty)(SecurityPython.dependencyName(op.requiresAuth))
     )
 
   private def kernelSignatureAndArgs(
@@ -761,7 +779,10 @@ object EmitPython:
       successStatus = ep.successStatus,
       guardConds = guardConds,
       valuesArgs = valuesArgs,
-      guardPretty = v.guardPretty
+      guardPretty = v.guardPretty,
+      authDependency = Option.when(v.operation.requiresAuth.nonEmpty)(
+        SecurityPython.dependencyName(v.operation.requiresAuth)
+      )
     )
 
   private def collectEntityImports(entity: ProfiledEntity, dialect: Dialect): EntityImports =
@@ -817,7 +838,8 @@ object EmitPython:
       needsResponse = needsResponse,
       needsRedirectResponse = needsRedirectResponse,
       schemas = schemaSet.toList.sorted,
-      stdlibImports = finalizeStdlibImports(stdlibByModule)
+      stdlibImports = finalizeStdlibImports(stdlibByModule),
+      authDeps = operations.flatMap(_.authDependency).distinct.sorted
     )
 
   private def collectServiceImports(
@@ -840,13 +862,19 @@ object EmitPython:
         schemaSet += entity.readSchemaName
       if op.hasRequestBody && op.requestBodyType.nonEmpty then schemaSet += op.requestBodyType
 
-    val coreImports = List.newBuilder[String]
-    if needsSaDelete then coreImports += "delete as sa_delete"
-    if needsSelect then coreImports += "select"
+    val plainImports = List.newBuilder[String]
+    val aliasImports = List.newBuilder[String]
+    if needsSaDelete then plainImports += "CursorResult"
+    if needsSaDelete then aliasImports += "delete as sa_delete"
+    if needsSelect then plainImports += "select"
 
+    val needsDafnyKernel = operations.exists(_.dafnyMethod.isDefined)
     ServiceTemplateImports(
-      sqlalchemyCoreImports = coreImports.result(),
+      sqlalchemyPlainImports = plainImports.result().sorted,
+      sqlalchemyAliasImports = aliasImports.result().sorted,
       schemas = schemaSet.toList.sorted,
       needsModelImport = needsModelImport,
-      needsDafnyKernel = operations.exists(_.dafnyMethod.isDefined)
+      needsDafnyKernel = needsDafnyKernel,
+      hasAppImports = needsDafnyKernel || needsModelImport || schemaSet.nonEmpty,
+      needsTypingCast = needsSaDelete
     )

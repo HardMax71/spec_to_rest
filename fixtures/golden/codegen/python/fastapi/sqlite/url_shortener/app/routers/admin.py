@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import Response
@@ -12,8 +13,8 @@ from app.security import require_admin
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
 
-def _row_to_dict(row) -> dict:
-    out: dict = {}
+def _row_to_dict(row: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     for col in row.__table__.columns:
         v = getattr(row, col.name)
         if isinstance(v, (datetime, date)):
@@ -22,7 +23,7 @@ def _row_to_dict(row) -> dict:
     return out
 
 
-def _parse_iso(value):
+def _parse_iso(value: Any) -> Any:
     if isinstance(value, str):
         return datetime.fromisoformat(value)
     return value
@@ -35,7 +36,7 @@ async def reset(session: AsyncSession = Depends(get_session)) -> Response:
 
 
 @router.get("/state")
-async def get_state(session: AsyncSession = Depends(get_session)) -> dict:
+async def get_state(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
     rows = (await session.execute(select(UrlMapping))).scalars().all()
     return {
         "store": {row.code: row.url for row in rows},

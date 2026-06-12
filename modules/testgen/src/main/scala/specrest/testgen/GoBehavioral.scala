@@ -19,6 +19,8 @@ object GoBehavioral:
     val collected = profiled.operations.flatMap: pop =>
       if StubOps.isStub(profiled, pop) then
         List(Left(TestSkip(pop.operationName, "operation", StubOps.skipReason(pop))))
+      else if pop.requiresAuth.nonEmpty then
+        List(Left(TestSkip(pop.operationName, "operation", StubOps.authSkipReason(pop))))
       else
         svcOperations(ir).find(o => operName(o) == pop.operationName) match
           case Some(opDecl) =>

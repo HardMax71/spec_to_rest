@@ -49,7 +49,9 @@ final case class RenderContext(
     dafnyKernel: Option[DafnyKernel] = None,
     scalarStateFields: List[ScalarStateFieldView] = Nil,
     hasScalarOps: Boolean = false,
-    routerImport: String = "admin"
+    routerImport: String = "admin",
+    authSettingLines: List[String] = Nil,
+    needsJwt: Boolean = false
 )
 
 final case class RenderResult(fileName: String, content: String)
@@ -87,7 +89,9 @@ object RenderContext:
             profiled.entities.map(e => Naming.toSnakeCase(Naming.pluralize(e.entityName))) :::
             (if ScalarOps.views(profiled).nonEmpty then List("state_ops") else Nil)
         modules.sorted.mkString(", ")
-      }
+      },
+      authSettingLines = specrest.codegen.python.SecurityPython.settingLines(profiled.ir),
+      needsJwt = AuthSchemes.needsJwt(profiled.ir)
     )
 
   private def convertProfile(profile: DeploymentProfile): RenderProfile =
