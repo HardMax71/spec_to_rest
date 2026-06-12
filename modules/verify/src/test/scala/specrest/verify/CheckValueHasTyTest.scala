@@ -39,6 +39,7 @@ class CheckValueHasTyTest extends CatsEffectSuite:
       Nil,
       Nil,
       None,
+      Nil,
       None
     )
 

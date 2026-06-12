@@ -106,6 +106,40 @@ operation Shorten {
 `requires:` lists preconditions; `ensures:` lists postconditions. Each takes
 one or more expressions, conjoined.
 
+### Security schemes
+
+A service-wide `security { ... }` block declares named credential schemes; an
+operation opts in with a `requires_auth:` clause naming one or more of them.
+
+```spec
+security {
+  bearer: Bearer(bearer_format: "JWT")
+  api_key: ApiKey(header: "X-API-Key")
+  basic: Basic
+}
+
+operation GetProfile {
+  requires_auth: bearer, api_key
+
+  output: profile: User
+
+  ensures:
+    true
+}
+```
+
+Three scheme kinds exist. `Bearer` takes an optional `bearer_format`; `ApiKey`
+takes exactly one location argument (`header`, `query`, or `cookie`) whose value
+is the parameter name; `Basic` takes no arguments. A comma list in
+`requires_auth:` means the schemes are alternatives (a client may satisfy any
+one of them - OpenAPI security-array semantics). Operations without the clause
+are public. Referencing an undeclared scheme or declaring two schemes with the
+same name is a compile-time error.
+
+Auth is pure metadata at this stage: classification, verification, and test
+generation ignore it. OpenAPI `securitySchemes` emission and generated runtime
+guards build on these declarations (issues #54, #55).
+
 ### Invariants
 
 Invariants are properties that must hold across all states. The body comes after a colon. There

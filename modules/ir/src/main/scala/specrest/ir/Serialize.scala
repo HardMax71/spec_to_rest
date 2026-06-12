@@ -541,15 +541,16 @@ object Serialize:
     yield ParamDeclFull(n, t, sp)
 
   given operationDeclEnc: Encoder[operation_decl] = Encoder.AsObject.instance:
-    case OperationDeclFull(n, i, o, r, e, sp) =>
-      kindObj(
+    case OperationDeclFull(n, i, o, r, e, ra, sp) =>
+      val base = kindObj(
         "Operation",
         "name"     -> n.asJson,
         "inputs"   -> i.asJson,
         "outputs"  -> o.asJson,
         "requires" -> r.asJson,
         "ensures"  -> e.asJson
-      ).addSpan(sp)
+      )
+      ra.fold(base)(xs => base.add("requiresAuth", xs.asJson)).addSpan(sp)
 
   given operationDeclDec: Decoder[operation_decl] = Decoder.instance: c =>
     for
@@ -558,8 +559,9 @@ object Serialize:
       o  <- c.getOrElse[List[param_decl]]("outputs")(Nil)
       r  <- c.getOrElse[List[expr]]("requires")(Nil)
       e  <- c.getOrElse[List[expr]]("ensures")(Nil)
+      ra <- c.getOrElse[Option[List[String]]]("requiresAuth")(None)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
-    yield OperationDeclFull(n, i, o, r, e, sp)
+    yield OperationDeclFull(n, i, o, r, e, ra, sp)
 
   given transitionRuleEnc: Encoder[transition_rule] = Encoder.AsObject.instance:
     case TransitionRuleFull(f, t, v, g, sp) =>
@@ -697,9 +699,50 @@ object Serialize:
       sp <- c.getOrElse[Option[span_t]]("span")(None)
     yield ConventionsDeclFull(r, sp)
 
+  given securitySchemeKindEnc: Encoder[security_scheme_kind] = Encoder.instance:
+    case SsBearer(fmt) =>
+      Json.fromJsonObject(
+        fmt.fold(JsonObject("scheme" -> "Bearer".asJson))(f =>
+          JsonObject("scheme" -> "Bearer".asJson, "bearerFormat" -> f.asJson)
+        )
+      )
+    case SsApiKey(location, name) =>
+      Json.fromJsonObject(
+        JsonObject(
+          "scheme"   -> "ApiKey".asJson,
+          "location" -> location.asJson,
+          "name"     -> name.asJson
+        )
+      )
+    case SsBasic() => Json.fromJsonObject(JsonObject("scheme" -> "Basic".asJson))
+
+  given securitySchemeKindDec: Decoder[security_scheme_kind] = Decoder.instance: c =>
+    c.get[String]("scheme").flatMap:
+      case "Bearer" =>
+        c.getOrElse[Option[String]]("bearerFormat")(None).map(SsBearer(_))
+      case "ApiKey" =>
+        for
+          location <- c.get[String]("location")
+          name     <- c.get[String]("name")
+        yield SsApiKey(location, name)
+      case "Basic" => Right(SsBasic())
+      case other =>
+        Left(io.circe.DecodingFailure(s"Unknown security scheme kind: $other", c.history))
+
+  given securitySchemeDeclEnc: Encoder[security_scheme_decl] = Encoder.AsObject.instance:
+    case SecuritySchemeDeclFull(n, k, sp) =>
+      kindObj("SecurityScheme", "name" -> n.asJson, "kind" -> k.asJson).addSpan(sp)
+
+  given securitySchemeDeclDec: Decoder[security_scheme_decl] = Decoder.instance: c =>
+    for
+      n  <- c.get[String]("name")
+      k  <- c.get[security_scheme_kind]("kind")
+      sp <- c.getOrElse[Option[span_t]]("span")(None)
+    yield SecuritySchemeDeclFull(n, k, sp)
+
   given serviceIREnc: Encoder[service_ir] = Encoder.AsObject.instance:
-    case ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, sp) =>
-      kindObj(
+    case ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, se, sp) =>
+      val base = kindObj(
         "Service",
         "name"        -> n.asJson,
         "imports"     -> im.asJson,
@@ -715,7 +758,8 @@ object Serialize:
         "functions"   -> fn.asJson,
         "predicates"  -> pr.asJson,
         "conventions" -> nullable(cv)
-      ).addSpan(sp)
+      )
+      (if se.isEmpty then base else base.add("security", se.asJson)).addSpan(sp)
 
   given serviceIRDec: Decoder[service_ir] = Decoder.instance: c =>
     for
@@ -733,8 +777,9 @@ object Serialize:
       fn <- c.getOrElse[List[function_decl]]("functions")(Nil)
       pr <- c.getOrElse[List[predicate_decl]]("predicates")(Nil)
       cv <- c.getOrElse[Option[conventions_decl]]("conventions")(None)
+      se <- c.getOrElse[List[security_scheme_decl]]("security")(Nil)
       sp <- c.getOrElse[Option[span_t]]("span")(None)
-    yield ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, sp)
+    yield ServiceIRFull(n, im, en, es, ta, st, op, tr, iv, tm, fa, fn, pr, cv, se, sp)
 
   def toJson(ir: service_ir): Json = ir.asJson
 

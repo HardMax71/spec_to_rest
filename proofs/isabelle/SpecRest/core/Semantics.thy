@@ -849,14 +849,14 @@ text \<open>\<open>tyctxFromService\<close> bootstraps the schema-typed half of 
   preservation case for binders, set by the verifier at use.\<close>
 
 fun serviceEntities :: "service_ir \<Rightarrow> entity_decl list" where
-  "serviceEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _) = es"
+  "serviceEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _ _) = es"
 
 fun serviceEnums :: "service_ir \<Rightarrow> enum_decl list" where
-  "serviceEnums (ServiceIRFull _ _ _ en _ _ _ _ _ _ _ _ _ _ _) = en"
+  "serviceEnums (ServiceIRFull _ _ _ en _ _ _ _ _ _ _ _ _ _ _ _) = en"
 
 fun serviceStateFields ::
   "service_ir \<Rightarrow> state_field_decl list" where
-  "serviceStateFields (ServiceIRFull _ _ _ _ _ st _ _ _ _ _ _ _ _ _) =
+  "serviceStateFields (ServiceIRFull _ _ _ _ _ st _ _ _ _ _ _ _ _ _ _) =
      (case st of None \<Rightarrow> []
                | Some (StateDeclFull fs _) \<Rightarrow> fs)"
 

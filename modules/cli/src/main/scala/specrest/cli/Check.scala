@@ -44,7 +44,8 @@ object Check:
 
                     val convDiags =
                       Validate.validateConventions(svcConventions(ir), ir) ++
-                        Validate.validateRoutes(ir)
+                        Validate.validateRoutes(ir) ++
+                        Validate.validateSecurity(ir)
                     val lintDiags = Lint.run(ir)
 
                     val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)

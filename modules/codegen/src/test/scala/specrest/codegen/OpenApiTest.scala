@@ -180,7 +180,8 @@ class OpenApiTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
 
   test("components include Create / Read / Update schemas + ErrorResponse"):

@@ -43,7 +43,8 @@ class TemplatesTest extends CatsEffectSuite:
       l = functions,
       m = predicates,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
 
   test("conftest template loads and contains the admin-availability fixture"):

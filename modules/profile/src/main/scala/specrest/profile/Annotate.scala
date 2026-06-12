@@ -172,5 +172,6 @@ object Annotate:
       requestBodyFields =
         operInputs(op).map(p => profileField(prmName(p), prmType(p), profile, ctx)),
       responseFields =
-        operOutputs(op).map(p => profileField(prmName(p), prmType(p), profile, ctx))
+        operOutputs(op).map(p => profileField(prmName(p), prmType(p), profile, ctx)),
+      requiresAuth = operRequiresAuth(op).getOrElse(Nil)
     )

@@ -429,8 +429,8 @@ fun flatten_entity ::
                      sp))"
 
 fun flattenInheritance :: "service_ir \<Rightarrow> service_ir" where
-  "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p) =
-     ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n p"
+  "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n sec p) =
+     ServiceIRFull a b (map (flatten_entity c) c) d e f g h i j k l m n sec p"
 
 text \<open>Phase 9f — the Phase 9 structural primitives are now backed by proof,
   not merely totality.
@@ -481,8 +481,8 @@ lemma flatten_entity_noparent:
 
 lemma flattenInheritance_id_on_parentless:
   assumes "list_all (\<lambda>x. entityParentFull x = None) c"
-  shows "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p)
-           = ServiceIRFull a b c d e f g h i j k l m n p"
+  shows "flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n sec p)
+           = ServiceIRFull a b c d e f g h i j k l m n sec p"
 proof -
   have "map (flatten_entity c) c = c"
     using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity_noparent)
@@ -515,8 +515,8 @@ fun flatten_entity2 ::
                      sp))"
 
 fun flattenInheritance2 :: "service_ir \<Rightarrow> service_ir" where
-  "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n p) =
-     ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n p"
+  "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n sec p) =
+     ServiceIRFull a b (map (flatten_entity2 c) c) d e f g h i j k l m n sec p"
 
 lemma flatten_entity2_parent_cleared:
   "entityParentFull (flatten_entity2 es e) = None"
@@ -533,7 +533,7 @@ lemma flatten_entity2_eq_on_noparent:
 lemma flattenInheritance2_idem:
   "flattenInheritance2 (flattenInheritance2 s) = flattenInheritance2 s"
 proof (cases s)
-  case (ServiceIRFull a b c d ee f g h i j k l m n p)
+  case (ServiceIRFull a b c d ee f g h i j k l m n sec p)
   let ?c' = "map (flatten_entity2 c) c"
   have "list_all (\<lambda>x. entityParentFull x = None) ?c'"
     by (simp add: list_all_iff flatten_entity2_parent_cleared)
@@ -544,8 +544,8 @@ qed
 
 lemma flattenInheritance2_eq_on_parentless:
   assumes "list_all (\<lambda>x. entityParentFull x = None) c"
-  shows "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n p)
-           = flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n p)"
+  shows "flattenInheritance2 (ServiceIRFull a b c d e f g h i j k l m n sec p)
+           = flattenInheritance (ServiceIRFull a b c d e f g h i j k l m n sec p)"
 proof -
   have a: "map (flatten_entity2 c) c = c"
     using assms by (intro map_idI) (auto simp: list_all_iff flatten_entity2_noparent)
@@ -556,7 +556,7 @@ qed
 
 definition emptyServiceIrFull :: "String.literal \<Rightarrow> service_ir" where
   "emptyServiceIrFull nm =
-     ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None None"
+     ServiceIRFull nm [] [] [] [] None [] [] [] [] [] [] [] None [] None"
 
 text \<open>Issue #202 close-out: \<open>lower\<close> projects \<open>expr\<close> onto the
   verified-subset \<open>expr\<close>. Out-of-subset constructors return \<open>None\<close>. Span

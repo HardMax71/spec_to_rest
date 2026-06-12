@@ -40,6 +40,7 @@ serviceMember
     | functionDecl
     | predicateDecl
     | conventionBlock
+    | securityBlock
     ;
 
 // ─── Entity ──────────────────────────────────────────────────
@@ -130,6 +131,7 @@ operationClause
     | outputClause
     | requiresClause
     | ensuresClause
+    | requiresAuthClause
     ;
 
 inputClause
@@ -154,6 +156,10 @@ requiresClause
 
 ensuresClause
     : ENSURES COLON expr+
+    ;
+
+requiresAuthClause
+    : REQUIRES_AUTH COLON lowerIdent (COMMA lowerIdent)*
     ;
 
 // ─── Transition (state machine) ─────────────────────────────
@@ -202,6 +208,20 @@ conventionBlock
 
 conventionRule
     : UPPER_IDENT DOT lowerIdent (DOT lowerIdent)? STRING_LIT? EQ expr
+    ;
+
+// ─── Security schemes ────────────────────────────────────────
+
+securityBlock
+    : SECURITY LBRACE securitySchemeDecl* RBRACE
+    ;
+
+securitySchemeDecl
+    : lowerIdent COLON UPPER_IDENT (LPAREN securitySchemeArg (COMMA securitySchemeArg)* RPAREN)?
+    ;
+
+securitySchemeArg
+    : lowerIdent COLON STRING_LIT
     ;
 
 // ─── Expressions ─────────────────────────────────────────────
@@ -353,7 +373,7 @@ lowerIdent
     | INPUT | OUTPUT | FIELD | STATE
     | ONE | LONE | SET_MULT
     | VIA | WHEN | WHERE | WITH | EXTENDS
-    | REQUIRES | ENSURES
+    | REQUIRES | ENSURES | REQUIRES_AUTH | SECURITY
     | ENTITY | OPERATION | TRANSITION | INVARIANT | TEMPORAL | FACT
     | CONVENTIONS | FUNCTION | PREDICATE | TYPE | ENUM | IMPORT
     | SERVICE
@@ -376,6 +396,7 @@ INVARIANT   : 'invariant' ;
 TEMPORAL    : 'temporal' ;
 FACT        : 'fact' ;
 CONVENTIONS : 'conventions' ;
+SECURITY    : 'security' ;
 IMPORT      : 'import' ;
 FUNCTION    : 'function' ;
 PREDICATE   : 'predicate' ;
@@ -383,6 +404,7 @@ EXTENDS     : 'extends' ;
 
 INPUT       : 'input' ;
 OUTPUT      : 'output' ;
+REQUIRES_AUTH : 'requires_auth' ;
 REQUIRES    : 'requires' ;
 ENSURES     : 'ensures' ;
 FIELD       : 'field' ;

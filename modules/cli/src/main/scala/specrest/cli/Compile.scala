@@ -102,7 +102,7 @@ object Compile:
               case Left(err) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
               case Right(ir) =>
-                val routeDiags = Validate.validateRoutes(ir)
+                val routeDiags = Validate.validateRoutes(ir) ++ Validate.validateSecurity(ir)
                 val gate =
                   if routeDiags.nonEmpty then
                     IO.delay(routeDiags.foreach(d => log.error(Check.renderConv(specFile, d))))

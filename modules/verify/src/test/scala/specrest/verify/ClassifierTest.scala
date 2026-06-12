@@ -69,7 +69,8 @@ class ClassifierTest extends munit.CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
     assertEquals(Classifier.classifyGlobal(ir), VerifierTool.Alloy)
 
@@ -87,6 +88,7 @@ class ClassifierTest extends munit.CatsEffectSuite:
           None
         )
       ),
+      None,
       None
     )
     val inv = InvariantDeclFull(Some("p"), bb(true), None)

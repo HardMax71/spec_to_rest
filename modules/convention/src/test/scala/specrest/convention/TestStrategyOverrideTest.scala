@@ -42,7 +42,8 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = if rules.isEmpty then None else Some(ConventionsDeclFull(rules, None)),
-      o = None
+      o = Nil,
+      p = None
     )
 
   private val userEntity = EntityDeclFull(
@@ -66,6 +67,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
     Nil,
     Nil,
     Nil,
+    None,
     None
   )
 
@@ -242,7 +244,7 @@ class TestStrategyOverrideTest extends CatsEffectSuite:
 
   test("multiple http_method rules with different string qualifiers do not bypass dup detection"):
     val ir = baseIR(
-      operations = List(OperationDeclFull("Login", Nil, Nil, Nil, Nil, None)),
+      operations = List(OperationDeclFull("Login", Nil, Nil, Nil, Nil, None, None)),
       rules = List(
         rule("Login", "http_method", Some("x"), StringLitF("POST", None)),
         rule("Login", "http_method", Some("y"), StringLitF("GET", None))

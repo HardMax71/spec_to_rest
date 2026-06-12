@@ -197,7 +197,7 @@ datatype (plugins only: code size) param_decl =
     ParamDeclFull (prmName: "String.literal") (prmType: type_expr) (prmSpan: option_span)
 
 datatype (plugins only: code size) operation_decl =
-    OperationDeclFull (operName: "String.literal") (operInputs: "param_decl list") (operOutputs: "param_decl list") (operRequires: "expr list") (operEnsures: "expr list") (operSpan: option_span)
+    OperationDeclFull (operName: "String.literal") (operInputs: "param_decl list") (operOutputs: "param_decl list") (operRequires: "expr list") (operEnsures: "expr list") (operRequiresAuth: "(String.literal list) option") (operSpan: option_span)
 
 datatype (plugins only: code size) transition_rule =
     TransitionRuleFull (trlFrom: "String.literal") (trlTo: "String.literal") (trlVia: "String.literal") (trlGuard: "expr option") (trlSpan: option_span)
@@ -278,6 +278,21 @@ datatype (plugins only: code size) convention_rule =
 datatype (plugins only: code size) conventions_decl =
     ConventionsDeclFull (cvdRules: "convention_rule list") (cvdSpan: option_span)
 
+text \<open>Security schemes (M8.1, issue #53): named credential declarations from the
+  spec's \<open>security { ... }\<close> block. \<open>operRequiresAuth\<close> on an operation lists
+  alternative scheme names (OpenAPI security-array OR semantics); \<open>None\<close>
+  means the operation carries no annotation and is public. Auth is pure
+  metadata: classification, verification and evaluation ignore it.\<close>
+
+datatype (plugins only: code size) security_scheme_kind =
+    SsBearer "String.literal option"
+  | SsApiKey "String.literal" "String.literal"
+  | SsBasic
+
+datatype (plugins only: code size) security_scheme_decl =
+    SecuritySchemeDeclFull (ssdName: "String.literal") (ssdKind: security_scheme_kind)
+                           (ssdSpan: option_span)
+
 datatype (plugins only: code size) service_ir =
     ServiceIRFull (svcName: "String.literal") (svcImports: "String.literal list")
                   (svcEntities: "entity_decl list") (svcEnums: "enum_decl list")
@@ -286,7 +301,7 @@ datatype (plugins only: code size) service_ir =
                   (svcInvariants: "invariant_decl list") (svcTemporals: "temporal_decl list")
                   (svcFacts: "fact_decl list") (svcFunctions: "function_decl list")
                   (svcPredicates: "predicate_decl list") (svcConventions: "conventions_decl option")
-                  (svcSpan: option_span)
+                  (svcSecurity: "security_scheme_decl list") (svcSpan: option_span)
 
 text \<open>\<open>string_in_list\<close> is the monomorphic membership predicate over
   \<open>String.literal list\<close>. Hoisted to the top of the file because using

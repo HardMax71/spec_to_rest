@@ -152,7 +152,8 @@ class StructuralTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
     val profile  = specrest.profile.Annotate.buildProfiledService(ir, "python-fastapi-postgres")
     val out      = Structural.emitFor(profile)

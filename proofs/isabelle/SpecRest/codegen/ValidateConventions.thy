@@ -176,8 +176,8 @@ fun findOperationByName ::
   "operation_decl list \<Rightarrow> String.literal \<Rightarrow> operation_decl option"
 where
   "findOperationByName [] _ = None"
-| "findOperationByName (OperationDeclFull n a b c d e # rest) nm =
-     (if n = nm then Some (OperationDeclFull n a b c d e)
+| "findOperationByName (OperationDeclFull n a b c d ra e # rest) nm =
+     (if n = nm then Some (OperationDeclFull n a b c d ra e)
       else findOperationByName rest nm)"
 
 fun paramListHasName ::
@@ -190,7 +190,7 @@ where
 fun operationHasParamNamed ::
   "operation_decl \<Rightarrow> String.literal \<Rightarrow> bool"
 where
-  "operationHasParamNamed (OperationDeclFull _ inputs _ _ _ _) nm =
+  "operationHasParamNamed (OperationDeclFull _ inputs _ _ _ _ _) nm =
      paramListHasName inputs nm"
 
 fun validateIrContextRule ::
