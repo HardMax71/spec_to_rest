@@ -90,7 +90,8 @@ final private case class ServiceAcc(
     k: List[FactDeclFull] = Nil,
     l: List[FunctionDeclFull] = Nil,
     m: List[PredicateDeclFull] = Nil,
-    n: Option[ConventionsDeclFull] = None
+    n: Option[ConventionsDeclFull] = None,
+    security: List[SecuritySchemeDeclFull] = Nil
 )
 
 @SuppressWarnings(Array("org.wartremover.warts.Null"))
@@ -140,7 +141,8 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
         l = acc.l.reverse,
         m = acc.m.reverse,
         n = acc.n,
-        o = sp(ctx)
+        o = acc.security.reverse,
+        p = sp(ctx)
       )
 
   private def processMember(acc: ServiceAcc, m: ServiceMemberContext): BuildResult[ServiceAcc] =
@@ -171,6 +173,10 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
       if acc.n.isDefined then
         Left(buildErr("duplicate conventions block", m.conventionBlock))
       else buildConventions(m.conventionBlock).map(c => acc.copy(n = Some(c)))
+    else if m.securityBlock ne null then
+      m.securityBlock.securitySchemeDecl.asScala.toList
+        .traverseB(buildSecurityScheme)
+        .map(ss => acc.copy(security = ss.reverse ::: acc.security))
     else Right(acc)
 
   private def buildEntity(ctx: EntityDeclContext): BuildResult[EntityDeclFull] =
@@ -230,31 +236,35 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
         List[ParamDeclFull],
         List[ParamDeclFull],
         List[expr],
-        List[expr]
+        List[expr],
+        Option[List[String]]
     )] =
-      Right((Nil, Nil, Nil, Nil))
+      Right((Nil, Nil, Nil, Nil, None))
     val collected = clauses.foldLeft(acc0):
       case (accE, clause) =>
-        accE.flatMap: (ins, outs, reqs, ens) =>
+        accE.flatMap: (ins, outs, reqs, ens, auth) =>
           if clause.inputClause ne null then
             clause.inputClause.paramList.param.asScala.toList
               .traverseB(buildParam)
-              .map(ps => (ins ++ ps, outs, reqs, ens))
+              .map(ps => (ins ++ ps, outs, reqs, ens, auth))
           else if clause.outputClause ne null then
             clause.outputClause.paramList.param.asScala.toList
               .traverseB(buildParam)
-              .map(ps => (ins, outs ++ ps, reqs, ens))
+              .map(ps => (ins, outs ++ ps, reqs, ens, auth))
           else if clause.requiresClause ne null then
             clause.requiresClause.expr.asScala.toList
               .traverseB(expr)
-              .map(es => (ins, outs, reqs ++ es, ens))
+              .map(es => (ins, outs, reqs ++ es, ens, auth))
           else if clause.ensuresClause ne null then
             clause.ensuresClause.expr.asScala.toList
               .traverseB(expr)
-              .map(es => (ins, outs, reqs, ens ++ es))
-          else Right((ins, outs, reqs, ens))
-    collected.map: (ins, outs, reqs, ens) =>
-      OperationDeclFull(name, ins, outs, reqs, ens, sp(ctx))
+              .map(es => (ins, outs, reqs, ens ++ es, auth))
+          else if clause.requiresAuthClause ne null then
+            val names = clause.requiresAuthClause.lowerIdent.asScala.toList.map(_.getText)
+            Right((ins, outs, reqs, ens, Some(auth.getOrElse(Nil) ++ names)))
+          else Right((ins, outs, reqs, ens, auth))
+    collected.map: (ins, outs, reqs, ens, auth) =>
+      OperationDeclFull(name, ins, outs, reqs, ens, auth, sp(ctx))
 
   private def buildParam(ctx: ParamContext): BuildResult[ParamDeclFull] =
     buildTypeExpr(ctx.typeExpr).map(t => ParamDeclFull(ctx.lowerIdent.getText, t, sp(ctx)))
@@ -313,6 +323,47 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
     ctx.conventionRule.asScala.toList
       .traverseB(buildConventionRule)
       .map(rules => ConventionsDeclFull(rules, sp(ctx)))
+
+  private def buildSecurityScheme(
+      ctx: SecuritySchemeDeclContext
+  ): BuildResult[SecuritySchemeDeclFull] =
+    val name = ctx.lowerIdent.getText
+    val kind = ctx.UPPER_IDENT.getText
+    val args = ctx.securitySchemeArg.asScala.toList
+      .map(a => a.lowerIdent.getText -> unquote(a.STRING_LIT.getText))
+    def only(allowed: String*): BuildResult[Map[String, String]] =
+      args.find(a => !allowed.contains(a._1)) match
+        case Some((bad, _)) =>
+          Left(buildErr(
+            s"security scheme '$name': unknown $kind argument '$bad'" +
+              (if allowed.isEmpty then "" else s"; expected ${allowed.mkString(", ")}"),
+            ctx
+          ))
+        case None =>
+          args.groupBy(_._1).collectFirst { case (k, vs) if vs.sizeIs > 1 => k } match
+            case Some(k) =>
+              Left(buildErr(s"security scheme '$name': duplicate argument '$k'", ctx))
+            case None => Right(args.toMap)
+    val kindE: BuildResult[security_scheme_kind] = kind match
+      case "Bearer" => only("bearer_format").map(m => SsBearer(m.get("bearer_format")))
+      case "ApiKey" =>
+        only("header", "query", "cookie").flatMap: m =>
+          m.toList match
+            case List((location, keyName)) => Right(SsApiKey(location, keyName))
+            case Nil =>
+              Left(buildErr(
+                s"security scheme '$name': ApiKey needs a location argument (header, query, or cookie)",
+                ctx
+              ))
+            case _ =>
+              Left(buildErr(s"security scheme '$name': ApiKey takes exactly one location", ctx))
+      case "Basic" => only().map(_ => SsBasic())
+      case other =>
+        Left(buildErr(
+          s"unknown security scheme kind '$other'; expected Bearer, ApiKey, or Basic",
+          ctx
+        ))
+    kindE.map(k => SecuritySchemeDeclFull(name, k, sp(ctx)))
 
   private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRuleFull] =
     val target          = ctx.UPPER_IDENT.getText

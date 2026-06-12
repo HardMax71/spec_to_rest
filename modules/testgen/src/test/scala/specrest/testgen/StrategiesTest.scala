@@ -67,7 +67,7 @@ class StrategiesTest extends CatsEffectSuite:
       requires: List[expr] = Nil,
       ensures: List[expr] = Nil
   ): OperationDeclFull =
-    OperationDeclFull(name, inputs, outputs, requires, ensures, None)
+    OperationDeclFull(name, inputs, outputs, requires, ensures, None, None)
   private def conventionRule(
       target: String,
       property: String,
@@ -104,7 +104,8 @@ class StrategiesTest extends CatsEffectSuite:
       l = Nil,
       m = predicates,
       n = conventions,
-      o = None
+      o = Nil,
+      p = None
     )
 
   test("ShortCode (regex + length) → from_regex with len filter"):

@@ -92,7 +92,7 @@ fun entityHasBoolField :: "entity_decl \<Rightarrow> bool" where
      (\<exists>f \<in> set fs. fieldTypeHasBool f)"
 
 fun operationHasBoolLit :: "operation_decl \<Rightarrow> bool" where
-  "operationHasBoolLit (OperationDeclFull _ _ _ requires ensures _) =
+  "operationHasBoolLit (OperationDeclFull _ _ _ requires ensures _ _) =
      ((\<exists>e \<in> set requires. exprContainsBoolLit e) \<or>
       (\<exists>e \<in> set ensures. exprContainsBoolLit e))"
 
@@ -109,7 +109,7 @@ fun needsBoolSig ::
    \<Rightarrow> bool"
 where
   "needsBoolSig
-      (ServiceIRFull _ _ es _ _ _ ops _ invs temps _ _ _ _ _)
+      (ServiceIRFull _ _ es _ _ _ ops _ invs temps _ _ _ _ _ _)
       stateFields inputFields = (
      (\<exists>e \<in> set es. entityHasBoolField e) \<or>
      (\<exists>kv \<in> set stateFields. typeContainsNamed (STR ''Bool'') (snd kv)) \<or>

@@ -33,6 +33,7 @@ class FlattenInheritanceTest extends CatsEffectSuite:
       Nil,
       Nil,
       None,
+      Nil,
       None
     )
 

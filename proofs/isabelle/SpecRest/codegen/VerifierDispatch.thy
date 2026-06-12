@@ -51,22 +51,22 @@ fun invariantBody :: "invariant_decl \<Rightarrow> expr" where
   "invariantBody (InvariantDeclFull _ b _) = b"
 
 fun operationRequires :: "operation_decl \<Rightarrow> expr list" where
-  "operationRequires (OperationDeclFull _ _ _ requires _ _) = requires"
+  "operationRequires (OperationDeclFull _ _ _ requires _ _ _) = requires"
 
 fun operationEnsures :: "operation_decl \<Rightarrow> expr list" where
-  "operationEnsures (OperationDeclFull _ _ _ _ ensures _) = ensures"
+  "operationEnsures (OperationDeclFull _ _ _ _ ensures _ _) = ensures"
 
 fun enumDeclName :: "enum_decl \<Rightarrow> String.literal" where
   "enumDeclName (EnumDeclFull n _ _) = n"
 
 fun serviceIrEntities :: "service_ir \<Rightarrow> entity_decl list" where
-  "serviceIrEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _) = es"
+  "serviceIrEntities (ServiceIRFull _ _ es _ _ _ _ _ _ _ _ _ _ _ _ _) = es"
 
 fun serviceIrEnums :: "service_ir \<Rightarrow> enum_decl list" where
-  "serviceIrEnums (ServiceIRFull _ _ _ es _ _ _ _ _ _ _ _ _ _ _) = es"
+  "serviceIrEnums (ServiceIRFull _ _ _ es _ _ _ _ _ _ _ _ _ _ _ _) = es"
 
 fun serviceIrInvariants :: "service_ir \<Rightarrow> invariant_decl list" where
-  "serviceIrInvariants (ServiceIRFull _ _ _ _ _ _ _ _ invs _ _ _ _ _ _) = invs"
+  "serviceIrInvariants (ServiceIRFull _ _ _ _ _ _ _ _ invs _ _ _ _ _ _ _) = invs"
 
 definition invariantBodies :: "service_ir \<Rightarrow> expr list" where
   "invariantBodies ir = map invariantBody (serviceIrInvariants ir)"

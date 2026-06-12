@@ -76,7 +76,10 @@ final case class ProfiledOperation(
     targetEntity: Option[String],
     requestBodyFields: List[ProfiledField],
     responseFields: List[ProfiledField],
-    dafnyMethod: Option[String] = None
+    dafnyMethod: Option[String] = None,
+    // alternative security scheme names (OpenAPI security-array OR semantics);
+    // empty = public
+    requiresAuth: List[String] = Nil
 )
 
 final case class ProfiledService(

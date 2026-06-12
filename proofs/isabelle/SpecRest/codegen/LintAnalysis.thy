@@ -11,7 +11,7 @@ text \<open>Pure decision predicates and IR walkers for the lint analyses in
 text \<open>\<open>L03 — MissingEnsures\<close>: trivial per-op predicate.\<close>
 
 fun operationMissingEnsures :: "operation_decl \<Rightarrow> bool" where
-  "operationMissingEnsures (OperationDeclFull _ _ outputs _ ensures _) =
+  "operationMissingEnsures (OperationDeclFull _ _ outputs _ ensures _ _) =
      (outputs \<noteq> [] \<and> ensures = [])"
 
 text \<open>\<open>L05 — UnusedEntity\<close>: collect Identifier + Constructor names

@@ -83,6 +83,37 @@ object Validate:
             "http_path"
           )
 
+  def validateSecurity(ir: ServiceIRFull): List[ConventionDiagnostic] =
+    val schemes  = svcSecurity(ir)
+    val declared = schemes.map(ssdName).toSet
+    val duplicates = schemes
+      .groupBy(ssdName)
+      .valuesIterator
+      .filter(_.sizeIs > 1)
+      .flatMap(_.drop(1))
+      .map: s =>
+        ConventionDiagnostic(
+          DiagnosticLevel.Error,
+          s"duplicate security scheme '${ssdName(s)}'",
+          ssdSpan(s),
+          ssdName(s),
+          "security"
+        )
+      .toList
+    val undeclaredRefs = svcOperations(ir).flatMap: op =>
+      operRequiresAuth(op).getOrElse(Nil).filterNot(declared.contains).map: ref =>
+        val hint =
+          if declared.isEmpty then "no security block is declared"
+          else s"declared schemes: ${declared.toList.sorted.mkString(", ")}"
+        ConventionDiagnostic(
+          DiagnosticLevel.Error,
+          s"operation '${operName(op)}' requires_auth references undeclared security scheme '$ref'; $hint",
+          operSpan(op),
+          operName(op),
+          "requires_auth"
+        )
+    duplicates ++ undeclaredRefs
+
   def validateConventions(
       conventions: Option[conventions_decl],
       ir: ServiceIRFull

@@ -454,7 +454,7 @@ export_code
     stfName stfType stfSpan
     stdFields stdSpan
     prmName prmType prmSpan
-    operName operInputs operOutputs operRequires operEnsures operSpan
+    operName operInputs operOutputs operRequires operEnsures operRequiresAuth operSpan
     trlFrom trlTo trlVia trlGuard trlSpan
     trnName trnEntity trnField trnRules trnSpan
     invName invBody invSpan
@@ -464,12 +464,13 @@ export_code
     prdName prdParams prdBody prdSpan
     cvrTarget cvrProperty cvrQualifier cvrValue cvrSpan
     cvdRules cvdSpan
+    ssdName ssdKind ssdSpan
     fasName fasValue fasSpan
     mpeKey mpeValue mpeSpan
     qbdVar qbdCollection qbdKind qbdSpan
     svcName svcImports svcEntities svcEnums svcTypeAliases svcState
     svcOperations svcTransitions svcInvariants svcTemporals svcFacts
-    svcFunctions svcPredicates svcConventions svcSpan
+    svcFunctions svcPredicates svcConventions svcSecurity svcSpan
   in Scala
   module_name SpecRestGenerated
   file_prefix "SpecRestGenerated"

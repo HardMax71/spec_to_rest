@@ -33,7 +33,8 @@ class StrategyOverrideTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = if rules.isEmpty then None else Some(ConventionsDeclFull(rules, None)),
-      o = None
+      o = Nil,
+      p = None
     )
 
   test("strategy on type alias is accepted"):
@@ -54,7 +55,7 @@ class StrategyOverrideTest extends CatsEffectSuite:
 
   test("strategy on operation is rejected"):
     val ir = baseIR(
-      operations = List(OperationDeclFull("Shorten", Nil, Nil, Nil, Nil, None)),
+      operations = List(OperationDeclFull("Shorten", Nil, Nil, Nil, Nil, None, None)),
       rules = List(stringRule("Shorten", "strategy", "tests.strategies_user:foo"))
     )
     val diagnostics = Validate.validateConventions(svcConventions(ir), ir)

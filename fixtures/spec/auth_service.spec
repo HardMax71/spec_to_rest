@@ -61,6 +61,13 @@ service AuthService {
     next_session_id: Int
   }
 
+  // --- Security schemes ---
+
+  security {
+    bearer: Bearer(bearer_format: "JWT")
+    api_key: ApiKey(header: "X-API-Key")
+  }
+
   // --- Operations ---
 
   operation Register {
@@ -129,6 +136,7 @@ service AuthService {
   operation RefreshToken {
     input:  refresh_token: Token
     output: new_session: Session
+    requires_auth: bearer, api_key
 
     requires:
       some s in sessions |
@@ -185,6 +193,7 @@ service AuthService {
 
   operation Logout {
     input: access_token: Token
+    requires_auth: bearer
 
     requires:
       some s in sessions |

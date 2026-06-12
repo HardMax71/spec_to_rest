@@ -23,3 +23,12 @@ object SpecFixtures:
           case Left(err) =>
             IO.raiseError(new AssertionError(s"build error for $label: ${err.message}"))
           case Right(ir) => IO.pure(ir)
+
+  def buildExpectingError(label: String, source: String): IO[String] =
+    Parse.parseSpec(source).flatMap:
+      case Left(err) => IO.pure(err.errors.map(_.message).mkString("; "))
+      case Right(parsed) =>
+        Builder.buildIR(parsed.tree).flatMap:
+          case Left(err) => IO.pure(err.message)
+          case Right(_) =>
+            IO.raiseError(new AssertionError(s"expected a parse/build error for $label"))

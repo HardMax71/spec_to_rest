@@ -675,7 +675,8 @@ class StatefulTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
     val profile = SynthFixture.asSynthesized(specrest.profile.Annotate.buildProfiledService(
       ir,
@@ -713,7 +714,7 @@ class StatefulTest extends CatsEffectSuite:
       // A valid Hypothesis state machine needs >= 1 @rule; without an operation the
       // machine (even with temporals/invariants) is rejected at runtime, so the
       // temporal-emission path is only reachable when at least one rule exists.
-      g = List(OperationDeclFull("Tick", Nil, Nil, List(BoolLitF(true, None)), Nil, None)),
+      g = List(OperationDeclFull("Tick", Nil, Nil, List(BoolLitF(true, None)), Nil, None, None)),
       h = Nil,
       i = Nil,
       j = temporals,
@@ -721,7 +722,8 @@ class StatefulTest extends CatsEffectSuite:
       l = Nil,
       m = Nil,
       n = None,
-      o = None
+      o = Nil,
+      p = None
     )
 
   test("temporal always(P) emits @invariant block prefixed with temporal_always_"):

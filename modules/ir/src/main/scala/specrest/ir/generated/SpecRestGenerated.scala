@@ -590,6 +590,15 @@ object SpecRestGenerated {
   final case class ParamDeclFull(a: String, b: type_expr, c: Option[span_t])
       extends param_decl
 
+  sealed abstract class security_scheme_kind
+  final case class SsBearer(a: Option[String])    extends security_scheme_kind
+  final case class SsApiKey(a: String, b: String) extends security_scheme_kind
+  final case class SsBasic()                      extends security_scheme_kind
+
+  sealed abstract class security_scheme_decl
+  final case class SecuritySchemeDeclFull(a: String, b: security_scheme_kind, c: Option[span_t])
+      extends security_scheme_decl
+
   sealed abstract class validation_failure
   final case class ExpectedString()                extends validation_failure
   final case class ExpectedInteger()               extends validation_failure
@@ -659,7 +668,8 @@ object SpecRestGenerated {
       c: List[param_decl],
       d: List[expr],
       e: List[expr],
-      f: Option[span_t]
+      f: Option[List[String]],
+      g: Option[span_t]
   ) extends operation_decl
 
   sealed abstract class invariant_decl
@@ -718,7 +728,8 @@ object SpecRestGenerated {
       l: List[function_decl],
       m: List[predicate_decl],
       n: Option[conventions_decl],
-      o: Option[span_t]
+      o: List[security_scheme_decl],
+      p: Option[span_t]
   ) extends service_ir
 
   sealed abstract class schema_type
@@ -5396,11 +5407,11 @@ object SpecRestGenerated {
   }
 
   def svcName(x0: service_ir): String = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x1
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x1
   }
 
   def svcSpan(x0: service_ir): Option[span_t] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x15
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x16
   }
 
   def stdSpan(x0: state_decl): Option[span_t] = x0 match {
@@ -6097,15 +6108,15 @@ object SpecRestGenerated {
   }
 
   def svcEnums(x0: service_ir): List[enum_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x4
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x4
   }
 
   def svcFacts(x0: service_ir): List[fact_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x11
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x11
   }
 
   def svcState(x0: service_ir): Option[state_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x6
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x6
   }
 
   def combineAnd_acc(acc: expr, x1: List[expr]): expr = (acc, x1) match {
@@ -6417,7 +6428,7 @@ object SpecRestGenerated {
   }
 
   def serviceEnums(x0: service_ir): List[enum_decl] = x0 match {
-    case ServiceIRFull(uu, uv, uw, en, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => en
+    case ServiceIRFull(uu, uv, uw, en, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh, vi) => en
   }
 
   def typeExprToTy(x0: schema_type): Option[ty] = x0 match {
@@ -6479,7 +6490,7 @@ object SpecRestGenerated {
     list_ex[expr]((a: expr) => isBoolLit(a), allSubexprs(e))
 
   def operationHasBoolLit(x0: operation_decl): Boolean = x0 match {
-    case OperationDeclFull(uu, uv, uw, requiresa, ensures, ux) =>
+    case OperationDeclFull(uu, uv, uw, requiresa, ensures, ux, uy) =>
       list_ex[expr]((a: expr) => exprContainsBoolLit(a), requiresa) ||
       list_ex[expr]((a: expr) => exprContainsBoolLit(a), ensures)
   }
@@ -6524,7 +6535,7 @@ object SpecRestGenerated {
   ): Boolean =
     (x0, stateFields, inputFields) match {
       case (
-            ServiceIRFull(uu, uv, es, uw, ux, uy, ops, uz, invs, temps, va, vb, vc, vd, ve),
+            ServiceIRFull(uu, uv, es, uw, ux, uy, ops, uz, invs, temps, va, vb, vc, vd, ve, vf),
             stateFields,
             inputFields
           ) => list_ex[entity_decl]((a: entity_decl) => entityHasBoolField(a), es) ||
@@ -7934,7 +7945,7 @@ object SpecRestGenerated {
   }
 
   def svcImports(x0: service_ir): List[String] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x2
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x2
   }
 
   def tmpBody(x0: temporal_decl): temporal_body = x0 match {
@@ -9825,7 +9836,11 @@ object SpecRestGenerated {
   }
 
   def svcEntities(x0: service_ir): List[entity_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x3
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x3
+  }
+
+  def svcSecurity(x0: service_ir): List[security_scheme_decl] = x0 match {
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x15
   }
 
   def trlVia(x0: transition_rule): String = x0 match {
@@ -10410,7 +10425,7 @@ object SpecRestGenerated {
     }
 
   def serviceEntities(x0: service_ir): List[entity_decl] = x0 match {
-    case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+    case ServiceIRFull(uu, uv, es, uw, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh, vi) => es
   }
 
   def isDateTimeTypeAux(fuel: nat, uu: List[type_alias_decl], uv: type_expr): Boolean =
@@ -10512,19 +10527,19 @@ object SpecRestGenerated {
   }
 
   def operName(x0: operation_decl): String = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x1
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x1
   }
 
   def operSpan(x0: operation_decl): Option[span_t] = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x6
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x7
   }
 
   def svcFunctions(x0: service_ir): List[function_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x12
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x12
   }
 
   def svcTemporals(x0: service_ir): List[temporal_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x10
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x10
   }
 
   def trnName(x0: transition_decl): String = x0 match {
@@ -11151,7 +11166,7 @@ object SpecRestGenerated {
     }
 
   def serviceStateFields(x0: service_ir): List[state_field_decl] = x0 match {
-    case ServiceIRFull(uu, uv, uw, ux, uy, st, uz, va, vb, vc, vd, ve, vf, vg, vh) => st match {
+    case ServiceIRFull(uu, uv, uw, ux, uy, st, uz, va, vb, vc, vd, ve, vf, vg, vh, vi) => st match {
         case None                       => Nil
         case Some(StateDeclFull(fs, _)) => fs
       }
@@ -11282,15 +11297,15 @@ object SpecRestGenerated {
   }
 
   def svcInvariants(x0: service_ir): List[invariant_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x9
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x9
   }
 
   def svcOperations(x0: service_ir): List[operation_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x7
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x7
   }
 
   def svcPredicates(x0: service_ir): List[predicate_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x13
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x13
   }
 
   def stfName(x0: state_field_decl): String = x0 match {
@@ -12565,7 +12580,7 @@ object SpecRestGenerated {
   }
 
   def operInputs(x0: operation_decl): List[param_decl] = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x2
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x2
   }
 
   def qbdVar(x0: quantifier_binding): String = x0 match {
@@ -12573,15 +12588,15 @@ object SpecRestGenerated {
   }
 
   def svcConventions(x0: service_ir): Option[conventions_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x14
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x14
   }
 
   def svcTransitions(x0: service_ir): List[transition_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x8
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x8
   }
 
   def svcTypeAliases(x0: service_ir): List[type_alias_decl] = x0 match {
-    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15) => x5
+    case ServiceIRFull(x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11, x12, x13, x14, x15, x16) => x5
   }
 
   def trnEntity(x0: transition_decl): String = x0 match {
@@ -13214,7 +13229,7 @@ object SpecRestGenerated {
   }
 
   def serviceIrInvariants(x0: service_ir): List[invariant_decl] = x0 match {
-    case ServiceIRFull(uu, uv, uw, ux, uy, uz, va, vb, invs, vc, vd, ve, vf, vg, vh) => invs
+    case ServiceIRFull(uu, uv, uw, ux, uy, uz, va, vb, invs, vc, vd, ve, vf, vg, vh, vi) => invs
   }
 
   def invariantBody(x0: invariant_decl): expr = x0 match {
@@ -13486,11 +13501,11 @@ object SpecRestGenerated {
   }
 
   def operEnsures(x0: operation_decl): List[expr] = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x5
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x5
   }
 
   def operOutputs(x0: operation_decl): List[param_decl] = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x3
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x3
   }
 
   def qbdKind(x0: quantifier_binding): binding_kind = x0 match {
@@ -13538,7 +13553,7 @@ object SpecRestGenerated {
   }
 
   def emptyServiceIrFull(nm: String): service_ir =
-    ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, None)
+    ServiceIRFull(nm, Nil, Nil, Nil, Nil, None, Nil, Nil, Nil, Nil, Nil, Nil, Nil, None, Nil, None)
 
   def extractFieldAssignRhs(x0: expr, field: String): List[expr] = (x0, field) match {
     case (BinaryOpF(BEq(), lhs, rhs, uu), field) =>
@@ -13618,7 +13633,7 @@ object SpecRestGenerated {
     enumValuesForType(Suc(size_list[type_alias_decl](aliases)), fieldTypeFull(f), enums, aliases)
 
   def flattenInheritance(x0: service_ir): service_ir = x0 match {
-    case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, p) =>
+    case ServiceIRFull(a, b, c, d, e, f, g, h, i, j, k, l, m, n, sec, p) =>
       ServiceIRFull(
         a,
         b,
@@ -13638,6 +13653,7 @@ object SpecRestGenerated {
         l,
         m,
         n,
+        sec,
         p
       )
   }
@@ -13920,7 +13936,7 @@ object SpecRestGenerated {
     }
 
   def operationRequires(x0: operation_decl): List[expr] = x0 match {
-    case OperationDeclFull(uu, uv, uw, requiresa, ux, uy) => requiresa
+    case OperationDeclFull(uu, uv, uw, requiresa, ux, uy, uz) => requiresa
   }
 
   def trustEnabled(enums: List[String], op: operation_decl, ir: service_ir): trust_level =
@@ -13974,7 +13990,7 @@ object SpecRestGenerated {
   }
 
   def operRequires(x0: operation_decl): List[expr] = x0 match {
-    case OperationDeclFull(x1, x2, x3, x4, x5, x6) => x4
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x4
   }
 
   def detectCreatePattern(es: List[expr], stateFields: List[String]): Option[String] =
@@ -14313,6 +14329,18 @@ object SpecRestGenerated {
     case (UCardinality(), UCardinality()) => true
     case (UNegate(), UNegate())           => true
     case (UNot(), UNot())                 => true
+  }
+
+  def ssdKind(x0: security_scheme_decl): security_scheme_kind = x0 match {
+    case SecuritySchemeDeclFull(x1, x2, x3) => x2
+  }
+
+  def ssdName(x0: security_scheme_decl): String = x0 match {
+    case SecuritySchemeDeclFull(x1, x2, x3) => x1
+  }
+
+  def ssdSpan(x0: security_scheme_decl): Option[span_t] = x0 match {
+    case SecuritySchemeDeclFull(x1, x2, x3) => x3
   }
 
   def identifierNameSelect(x0: expr): List[String] = x0 match {
@@ -14679,7 +14707,7 @@ object SpecRestGenerated {
     }
 
   def serviceIrEnums(x0: service_ir): List[enum_decl] = x0 match {
-    case ServiceIRFull(uu, uv, uw, es, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh) => es
+    case ServiceIRFull(uu, uv, uw, es, ux, uy, uz, va, vb, vc, vd, ve, vf, vg, vh, vi) => es
   }
 
   def knownBuiltinNames: List[String] = List("len", "dom", "ran")
@@ -15609,7 +15637,7 @@ object SpecRestGenerated {
     }
 
   def operationEnsures(x0: operation_decl): List[expr] = x0 match {
-    case OperationDeclFull(uu, uv, uw, ux, ensures, uy) => ensures
+    case OperationDeclFull(uu, uv, uw, ux, ensures, uy, uz) => ensures
   }
 
   def classifyAlloyIdentifier(
@@ -15787,6 +15815,10 @@ object SpecRestGenerated {
         case true  => " INT NOT NULL AUTO_INCREMENT"
         case false => " BIGINT NOT NULL AUTO_INCREMENT"
       })
+
+  def operRequiresAuth(x0: operation_decl): Option[List[String]] = x0 match {
+    case OperationDeclFull(x1, x2, x3, x4, x5, x6, x7) => x6
+  }
 
   def collectFieldAccessNames(e: expr): List[String] =
     remdups[String](maps[expr, String]((a: expr) => fieldAccessNameSelect(a), allSubexprs(e)))
@@ -16309,7 +16341,7 @@ object SpecRestGenerated {
     ))
 
   def operationMissingEnsures(x0: operation_decl): Boolean = x0 match {
-    case OperationDeclFull(uu, uv, outputs, uw, ensures, ux) =>
+    case OperationDeclFull(uu, uv, outputs, uw, ensures, ux, uy) =>
       !nulla[param_decl](outputs) && nulla[expr](ensures)
   }
 
@@ -16558,9 +16590,9 @@ object SpecRestGenerated {
   def findOperationByName(x0: List[operation_decl], uu: String): Option[operation_decl] =
     (x0, uu) match {
       case (Nil, uu) => None
-      case (OperationDeclFull(n, a, b, c, d, e) :: rest, nm) =>
+      case (OperationDeclFull(n, a, b, c, d, ra, e) :: rest, nm) =>
         n == nm match {
-          case true  => Some[operation_decl](OperationDeclFull(n, a, b, c, d, e))
+          case true  => Some[operation_decl](OperationDeclFull(n, a, b, c, d, ra, e))
           case false => findOperationByName(rest, nm)
         }
     }
@@ -16707,7 +16739,7 @@ object SpecRestGenerated {
 
   def operationHasParamNamed(x0: operation_decl, nm: String): Boolean =
     (x0, nm) match {
-      case (OperationDeclFull(uu, inputs, uv, uw, ux, uy), nm) =>
+      case (OperationDeclFull(uu, inputs, uv, uw, ux, uy, uz), nm) =>
         paramListHasName(inputs, nm)
     }
 
