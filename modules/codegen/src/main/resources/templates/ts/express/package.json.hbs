@@ -17,12 +17,16 @@
   "dependencies": {
 {{#each profile.dependencies}}
     "{{this.name}}": "{{this.version}}"{{#unless @last}},{{/unless}}
-{{/each}}
+{{/each}}{{#if needsJwt}},
+    "jsonwebtoken": "^9.0.3"
+{{/if}}
   },
   "devDependencies": {
 {{#each profile.devDependencies}}
     "{{this.name}}": "{{this.version}}"{{#unless @last}},{{/unless}}
-{{/each}}
+{{/each}}{{#if needsJwt}},
+    "@types/jsonwebtoken": "^9.0.10"
+{{/if}}
   },
   "engines": {
     "node": ">=20.0.0"

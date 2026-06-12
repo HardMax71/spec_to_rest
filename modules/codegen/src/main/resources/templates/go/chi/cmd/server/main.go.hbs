@@ -63,8 +63,8 @@ func main() {
 
 	admin.Register(r, db, auth.RequireAdmin(cfg.AdminToken))
 
-{{#each entities}}{{#each operations}}	r.{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
-{{/each}}{{/each}}{{#each scalarOps}}	r.{{methodPascal}}("{{chiPath}}", stateOpsHandler.{{handlerName}})
+{{#each entities}}{{#each operations}}	r.{{#if authMiddleware}}With({{authMiddleware}}).{{/if}}{{pascal_case method}}("{{chiPath}}", {{../entityCamel}}Handler.{{handlerName}})
+{{/each}}{{/each}}{{#each scalarOps}}	r.{{#if authMiddleware}}With({{authMiddleware}}).{{/if}}{{methodPascal}}("{{chiPath}}", stateOpsHandler.{{handlerName}})
 {{/each}}
 	server := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),

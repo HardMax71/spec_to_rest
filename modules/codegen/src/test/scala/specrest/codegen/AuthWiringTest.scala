@@ -5,10 +5,10 @@ import specrest.codegen.testutil.SpecFixtures
 
 class AuthWiringTest extends CatsEffectSuite:
 
-  private def emitted(name: String) =
-    SpecFixtures.loadProfiled(name).map(p =>
-      Emit.emitProject(p).map(f => f.path -> f.content).toMap
-    )
+  private def emitted(name: String, target: String = "python-fastapi-postgres") =
+    SpecFixtures
+      .loadProfiled(name, target)
+      .map(p => Emit.emitProject(p).map(f => f.path -> f.content).toMap)
 
   test("auth_service security.py emits a verifier per scheme plus the OR-combination"):
     emitted("auth_service").map: files =>
@@ -54,3 +54,48 @@ class AuthWiringTest extends CatsEffectSuite:
       assert(!sec.contains("import jwt"), sec)
       assert(!files("pyproject.toml").contains("pyjwt"), files("pyproject.toml"))
       assert(!files("app/config.py").contains("jwt_secret"), files("app/config.py"))
+
+  test("go: schemes.go middlewares, route guards, config fields, go.mod jwt"):
+    emitted("auth_service", "go-chi-postgres").map: files =>
+      val schemes = files("internal/auth/schemes.go")
+      assert(schemes.contains("func RequireBearer(cfg *config.Config)"), schemes)
+      assert(schemes.contains("func RequireApiKey(cfg *config.Config)"), schemes)
+      assert(schemes.contains("func RequireBearerOrApiKey(cfg *config.Config)"), schemes)
+      assert(schemes.contains("jwt.Parse("), schemes)
+      assert(schemes.contains("checkBearer(cfg, r) || checkApiKey(cfg, r)"), schemes)
+      val mainGo = files("cmd/server/main.go")
+      assert(mainGo.contains("r.With(auth.RequireBearer(cfg)).Post(\"/auth/logout\""), mainGo)
+      assert(
+        mainGo.contains("r.With(auth.RequireBearerOrApiKey(cfg)).Post(\"/auth/refresh\""),
+        mainGo
+      )
+      assert(mainGo.contains("r.Post(\"/auth/register\""), mainGo)
+      val config = files("internal/config/config.go")
+      assert(config.contains("JwtSecret"), config)
+      assert(config.contains("AuthKeyApiKey"), config)
+      assert(files("go.mod").contains("github.com/golang-jwt/jwt/v5"), files("go.mod"))
+
+  test("ts: schemes.ts middlewares, route guards, config, package.json jwt"):
+    emitted("auth_service", "ts-express-postgres").map: files =>
+      val schemes = files("src/middleware/schemes.ts")
+      assert(schemes.contains("export const requireBearer"), schemes)
+      assert(schemes.contains("export const requireApiKey"), schemes)
+      assert(schemes.contains("export const requireBearerOrApiKey"), schemes)
+      assert(schemes.contains("jwt.verify("), schemes)
+      val users = files("src/routes/users.ts")
+      assert(users.contains("requireBearer,"), users)
+      val config = files("src/config.ts")
+      assert(config.contains("JWT_SECRET: z.string().optional(),"), config)
+      assert(config.contains("jwtSecret: parsed.JWT_SECRET,"), config)
+      assert(files("package.json").contains("\"jsonwebtoken\""), files("package.json"))
+      assert(files("package.json").contains("@types/jsonwebtoken"), files("package.json"))
+
+  test("go/ts: url_shortener emits no scheme artifacts"):
+    for
+      goFiles <- emitted("url_shortener", "go-chi-postgres")
+      tsFiles <- emitted("url_shortener", "ts-express-postgres")
+    yield
+      assert(!goFiles.contains("internal/auth/schemes.go"))
+      assert(!tsFiles.contains("src/middleware/schemes.ts"))
+      assert(!goFiles("go.mod").contains("golang-jwt"), goFiles("go.mod"))
+      assert(!tsFiles("package.json").contains("jsonwebtoken"), tsFiles("package.json"))

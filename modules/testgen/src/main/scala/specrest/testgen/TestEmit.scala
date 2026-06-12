@@ -58,7 +58,7 @@ object TestEmit:
         spec.skipped.foreach(s => sb.append(s"// testgen-skip: $s\n"))
         sb.append(s"func ${spec.functionName}() *rapid.Generator[any] {\n")
         sb.append(s"\treturn ${spec.body}\n}\n\n")
-    sb.toString
+    sb.toString.stripTrailing + "\n"
 
   // Native TypeScript conformance (vitest + fast-check). Structural fuzzing is
   // not yet ported (#175) — it is honest-skipped; structural invariants are

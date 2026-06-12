@@ -1,13 +1,12 @@
 package specrest.codegen.python
 
+import specrest.codegen.AuthSchemes
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledService
 
 object SecurityPython:
 
-  def isJwt(kind: security_scheme_kind): Boolean = kind match
-    case SsBearer(format) => format.exists(_.equalsIgnoreCase("JWT"))
-    case _                => false
+  export AuthSchemes.isJwt
 
   def dependencyName(requiresAuth: List[String]): String =
     s"require_${requiresAuth.mkString("_or_")}"
@@ -32,21 +31,6 @@ object SecurityPython:
             s"auth_basic_${n}_username: str | None = None",
             s"auth_basic_${n}_password: SecretStr | None = None"
           )
-
-  def envEntries(ir: ServiceIRFull): List[(String, String)] =
-    val schemes = svcSecurity(ir)
-    val jwtPair =
-      if schemes.exists(s => isJwt(ssdKind(s))) then
-        List("JWT_SECRET" -> "", "JWT_ALGORITHM" -> "HS256")
-      else Nil
-    jwtPair ++ schemes.flatMap: s =>
-      val n = ssdName(s).toUpperCase
-      ssdKind(s) match
-        case SsBearer(_) if isJwt(ssdKind(s)) => Nil
-        case SsBearer(_)                      => List(s"AUTH_TOKEN_$n" -> "")
-        case SsApiKey(_, _)                   => List(s"AUTH_KEY_$n" -> "")
-        case SsBasic() =>
-          List(s"AUTH_BASIC_${n}_USERNAME" -> "", s"AUTH_BASIC_${n}_PASSWORD" -> "")
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir

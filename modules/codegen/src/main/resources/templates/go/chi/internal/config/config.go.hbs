@@ -8,6 +8,12 @@ type Config struct {
 	Port        int    `env:"PORT"         envDefault:"8080"`
 	LogLevel    string `env:"LOG_LEVEL"    envDefault:"info"`
 	AdminToken  string `env:"ADMIN_TOKEN"  envDefault:""`
+{{#if authConfigLines.length}}
+
+{{#each authConfigLines}}
+	{{{this}}}
+{{/each}}
+{{/if}}
 }
 
 func Load() (*Config, error) {

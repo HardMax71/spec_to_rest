@@ -1,5 +1,6 @@
 package specrest.codegen.python
 
+import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmittedFile
@@ -447,7 +448,7 @@ object EmitPython:
       preserve = true
     )
     files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
-    val authEnv = SecurityPython.envEntries(profiled.ir).map: (k, v) =>
+    val authEnv = AuthSchemes.envEntries(profiled.ir).map: (k, v) =>
       EnvExample.Entry(
         k,
         v,

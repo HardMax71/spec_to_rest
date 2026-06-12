@@ -4,9 +4,7 @@ import specrest.codegen.migration.Dialect
 import specrest.codegen.migration.DialectView
 import specrest.convention.EndpointSpec
 import specrest.ir.generated.SpecRestGenerated.database_schema
-import specrest.ir.generated.SpecRestGenerated.ssdKind
 import specrest.ir.generated.SpecRestGenerated.svcName
-import specrest.ir.generated.SpecRestGenerated.svcSecurity
 import specrest.profile.DependencySpec
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledOperation
@@ -93,8 +91,7 @@ object RenderContext:
         modules.sorted.mkString(", ")
       },
       authSettingLines = specrest.codegen.python.SecurityPython.settingLines(profiled.ir),
-      needsJwt = svcSecurity(profiled.ir)
-        .exists(s => specrest.codegen.python.SecurityPython.isJwt(ssdKind(s)))
+      needsJwt = AuthSchemes.needsJwt(profiled.ir)
     )
 
   private def convertProfile(profile: DeploymentProfile): RenderProfile =

@@ -1,5 +1,6 @@
 package specrest.codegen.ts
 
+import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
@@ -66,6 +67,7 @@ final private case class TsOperation(
     serviceReturnType: String,
     redirectField: Option[String],
     dafnyMethod: Option[String],
+    authMiddleware: Option[String],
     prismaCall: String,
     prismaWhere: String,
     prismaCreateData: String,
@@ -87,6 +89,7 @@ final private case class TsEntityCtx(
     fields: List[TsFieldView],
     nonIdFields: List[TsFieldView],
     operations: List[TsOperation],
+    authDeps: List[String],
     needsDecimal: Boolean,
     needsBuffer: Boolean,
     needsPrismaImport: Boolean,
@@ -118,7 +121,8 @@ final private case class TsScalarOpView(
     expressPath: String,
     successStatus: Int,
     updateSql: String,
-    guardPretty: String
+    guardPretty: String,
+    authMiddleware: Option[String]
 )
 
 final private case class TsProjectCtx(
@@ -129,7 +133,9 @@ final private case class TsProjectCtx(
     needsBuffer: Boolean,
     db: TsDbView,
     dafnyKernel: Option[DafnyKernel],
-    scalarOps: List[TsScalarOpView]
+    scalarOps: List[TsScalarOpView],
+    authSchemaLines: List[String],
+    authConfigLines: List[String]
 )
 
 object EmitTs:
@@ -204,7 +210,9 @@ object EmitTs:
       needsBuffer = needsBuffer,
       db = db,
       dafnyKernel = opts.dafnyKernel,
-      scalarOps = scalarOps
+      scalarOps = scalarOps,
+      authSchemaLines = SecurityTs.schemaLines(profiled.ir),
+      authConfigLines = SecurityTs.configLines(profiled.ir)
     )
 
     val files        = List.newBuilder[EmittedFile]
@@ -257,6 +265,8 @@ object EmitTs:
       )
 
     files += EmittedFile("src/routes/admin.ts", AdminRouterTs.emit(profiled))
+    if svcSecurity(profiled.ir).nonEmpty then
+      files += EmittedFile("src/middleware/schemes.ts", SecurityTs.emit(profiled))
 
     if scalarOps.nonEmpty then
       files += EmittedFile("src/services/stateOps.ts", tsStateService(scalarFields, scalarOps))
@@ -277,7 +287,8 @@ object EmitTs:
       preserve = true
     )
     files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
-    files += EmittedFile(".env.example", EnvExample.render(composeIn))
+    val authEnv = AuthSchemes.envEntries(profiled.ir).map((k, v) => EnvExample.Entry(k, v))
+    files += EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
 
     files += EmittedFile(
       "src/extensions/index.ts",
@@ -409,7 +420,10 @@ object EmitTs:
       expressPath = ep.path,
       successStatus = ep.successStatus,
       updateSql = s"UPDATE ${ScalarOps.TableName} SET $setSql WHERE $whereSql",
-      guardPretty = v.guardPretty
+      guardPretty = v.guardPretty,
+      authMiddleware = Option.when(v.operation.requiresAuth.nonEmpty)(
+        SecurityTs.middlewareName(v.operation.requiresAuth)
+      )
     )
 
   private def tsStateService(
@@ -450,10 +464,12 @@ object EmitTs:
         |$opFns""".stripMargin
 
   private def tsStateRoutes(ops: List[TsScalarOpView]): String =
+    val authImports = ops.flatMap(_.authMiddleware).distinct.sorted
     val routes = ops
       .map: op =>
+        val guard = op.authMiddleware.fold("")(m => s"\n    $m,")
         s"""|  app.${op.method}(
-            |    '${op.expressPath}',
+            |    '${op.expressPath}',$guard
             |    wrap(async (_req, res) => {
             |      const result = await stateOps.${op.handlerName}();
             |      if (result === null) {
@@ -467,7 +483,11 @@ object EmitTs:
       .mkString("\n")
     s"""|import type { Express, NextFunction, Request, Response } from 'express';
         |
-        |import * as stateOps from '../services/stateOps.js';
+        |${
+         if authImports.nonEmpty then
+           s"import { ${authImports.mkString(", ")} } from '../middleware/schemes.js';\n"
+         else ""
+       }import * as stateOps from '../services/stateOps.js';
         |
         |const wrap =
         |  (handler: (req: Request, res: Response) => Promise<void>) =>
@@ -561,7 +581,10 @@ object EmitTs:
       "hasDafny"          -> proj.dafnyKernel.isDefined,
       "scalarOps"         -> proj.scalarOps,
       "scalarStateFields" -> ctx.scalarStateFields,
-      "hasScalarOps"      -> ctx.hasScalarOps
+      "hasScalarOps"      -> ctx.hasScalarOps,
+      "needsJwt"          -> ctx.needsJwt,
+      "authSchemaLines"   -> proj.authSchemaLines,
+      "authConfigLines"   -> proj.authConfigLines
     )
     currentEntity match
       case Some(e) =>
@@ -660,6 +683,7 @@ object EmitTs:
       fields = allFields,
       nonIdFields = nonIdFields,
       operations = operations,
+      authDeps = operations.flatMap(_.authMiddleware).distinct.sorted,
       needsDecimal = needsDecimal,
       needsBuffer = needsBuffer,
       needsPrismaImport = needsDecimal,
@@ -906,6 +930,9 @@ object EmitTs:
       serviceReturnType = serviceReturnType,
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
+      authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
+        SecurityTs.middlewareName(op.requiresAuth)
+      ),
       prismaCall = prismaCall,
       prismaWhere = whereExpr,
       prismaCreateData = createDataObj,
