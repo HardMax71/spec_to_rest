@@ -46,15 +46,17 @@ object ScalarOps:
         val clauses = flattenEnsures(operEnsures(op))
         val updates = clauses.map(c => scalarUpdateOf(scalarNames, c))
         val guards  = flattenEnsures(operRequires(op)).map(r => scalarGuardOf(scalarNames, r))
-        if clauses.nonEmpty && updates.forall(_.isDefined) && guards.forall(_.isDefined) then
+        // Mirrors classifyStrategy's scalar branch exactly (same extracted
+        // recognisers + consistency check), so every DirectEmit scalar op
+        // gets a handler and nothing else does.
+        if clauses.nonEmpty && updates.forall(_.isDefined) && guards.forall(_.isDefined)
+          && operInputs(op).isEmpty && scalarUpdatesConsistent(updates.flatten)
+        then
           profiledByName.get(operName(op)).map: po =>
-            // conjunctive ensures repeating a field collapse to the last clause
+            // identical repeated assignments collapse to one
             val ups = updates.flatten
               .map((n, rhs) => ScalarUpdateView(n, ScalarState.columnName(n), rhs))
-              .groupBy(_.columnName)
-              .values
-              .map(_.last)
-              .toList
+              .distinctBy(_.columnName)
               .sortBy(_.columnName)
             val gs = guards.flatten.collect:
               case SgCmp(n, c, k) => ScalarGuardView(n, ScalarState.columnName(n), c, k)

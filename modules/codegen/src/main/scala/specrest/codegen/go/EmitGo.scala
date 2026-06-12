@@ -474,8 +474,13 @@ object EmitGo:
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
+          // A state table first appearing in a delta still needs its singleton
+          // row; without it every scalar op's guarded UPDATE matches 0 rows.
+          val deltaSeeds = ops.collect:
+            case CreateTable(t) if ScalarOps.isStateTable(t) =>
+              ScalarOps.seedSqlFor(t) + ";"
           val view = SqlMigrationView(
-            upgradeStatements = SqlRenderer.upgrade(ops, dialect),
+            upgradeStatements = SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds,
             downgradeStatements = SqlRenderer.downgrade(ops, dialect)
           )
           val scope = Map[String, Any](

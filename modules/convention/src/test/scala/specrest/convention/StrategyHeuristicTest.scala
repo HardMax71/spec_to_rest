@@ -12,13 +12,14 @@ class StrategyHeuristicTest extends CatsEffectSuite:
   private def lit(n: Int): expr   = IntLitF(BigInt(n), None)
 
   private def strategyOf(ensures: List[expr]): synthesis_strategy =
-    classifyStrategy(ensures, Nil, state, Nil, Nil)
+    classifyStrategy(ensures, Nil, Nil, state, Nil, Nil)
 
   private def scalarStrategyOf(
       ensures: List[expr],
-      requires: List[expr] = Nil
+      requires: List[expr] = Nil,
+      inputs: List[String] = Nil
   ): synthesis_strategy =
-    classifyStrategy(ensures, requires, List("count"), List("count"), Nil)
+    classifyStrategy(ensures, requires, inputs, List("count"), List("count"), Nil)
 
   private def prime(e: expr): expr         = PrimeF(e, None)
   private def beq(l: expr, r: expr): expr  = BinaryOpF(BEq(), l, r, None)
@@ -54,10 +55,30 @@ class StrategyHeuristicTest extends CatsEffectSuite:
       classifyStrategy(
         List(scalarInc, rel),
         Nil,
+        Nil,
         List("count", "store"),
         List("count"),
         Nil
       ),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("conflicting duplicate scalar assignments → LlmSynthesis"):
+    val other = beq(prime(id("count")), badd(id("count"), lit(2)))
+    assertEquals(
+      scalarStrategyOf(List(scalarInc, other)),
+      LlmSynthesis(): synthesis_strategy
+    )
+
+  test("identical duplicate scalar assignments → DirectEmit"):
+    assertEquals(
+      scalarStrategyOf(List(scalarInc, scalarInc)),
+      DirectEmit(): synthesis_strategy
+    )
+
+  test("scalar update with declared inputs → LlmSynthesis"):
+    assertEquals(
+      scalarStrategyOf(List(scalarInc), inputs = List("x")),
       LlmSynthesis(): synthesis_strategy
     )
 

@@ -399,11 +399,16 @@ object EmitPython:
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
           val downRev = Revision.head(opts.existingRevisions).getOrElse("001")
+          // A state table first appearing in a delta still needs its singleton
+          // row; without it every scalar op's guarded UPDATE matches 0 rows.
+          val deltaSeeds = ops.collect:
+            case CreateTable(t) if ScalarOps.isStateTable(t) =>
+              s"""op.execute("${ScalarOps.seedSqlFor(t)}")"""
           val delta = AlembicDelta(
             revision = nextRev,
             downRevision = downRev,
             createdDate = opts.createdDate.getOrElse(java.time.LocalDate.now.toString),
-            upgradeStatements = AlembicRenderer.upgrade(ops, dialect),
+            upgradeStatements = AlembicRenderer.upgrade(ops, dialect) ++ deltaSeeds,
             downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
             needsPostgresDialect = Dialect.hasPostgresDialectTypes(ops, dialect)
           )

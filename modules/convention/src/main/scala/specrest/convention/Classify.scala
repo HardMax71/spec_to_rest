@@ -19,6 +19,7 @@ object Classify:
     val strategy = classifyStrategy(
       operEnsures(op),
       operRequires(op),
+      operInputs(op).map(prmName),
       stateFieldNames.toList,
       ScalarState.fieldNames(ir),
       outputNames

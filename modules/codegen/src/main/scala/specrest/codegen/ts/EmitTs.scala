@@ -345,8 +345,13 @@ object EmitTs:
         val ops = SchemaDiff.compute(prev, schema)
         if ops.nonEmpty then
           val nextRev = Revision.next(opts.existingRevisions)
+          // A state table first appearing in a delta still needs its singleton
+          // row; without it every scalar op's guarded UPDATE matches 0 rows.
+          val deltaSeeds = ops.collect:
+            case CreateTable(t) if ScalarOps.isStateTable(t) =>
+              ScalarOps.seedSqlFor(t) + ";"
           val upScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect))
+            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds)
           )
           val downScope = Map[String, Any](
             "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))

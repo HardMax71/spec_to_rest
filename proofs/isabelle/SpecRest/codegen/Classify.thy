@@ -263,6 +263,19 @@ definition isScalarUpdateClause ::
 where
   "isScalarUpdateClause scalars c = (scalarUpdateOf scalars c \<noteq> None)"
 
+text \<open>A conjunction assigning the same scalar twice with different
+  right-hand sides has no single-UPDATE interpretation (it is an
+  unsatisfiable ensures); identical repeats are harmless. Checked at
+  classification so the emitters never see a conflicting op.\<close>
+
+fun scalarUpdatesConsistent ::
+  "(String.literal \<times> scalar_rhs) list \<Rightarrow> bool"
+where
+  "scalarUpdatesConsistent [] = True"
+| "scalarUpdatesConsistent ((n, r) # rest) =
+     (list_all (\<lambda>(m, s). m \<noteq> n \<or> s = r) rest \<and>
+      scalarUpdatesConsistent rest)"
+
 text \<open>\<open>isDirectEmitShape\<close>: a single ensures-clause is direct-emit-able when its
   shape matches one of the recognised verified-subset patterns (preserve a
   state field, append-disjoint, cardinality-preserving, single-index update,
@@ -301,21 +314,28 @@ text \<open>\<open>classifyStrategy\<close>: an operation is direct-emit-able wh
   Scalar branch (issue #407): if ANY clause is a scalar update, ALL clauses
   must be - a mixed entity/scalar operation would otherwise be emitted by
   the entity-CRUD path with the scalar clauses silently dropped. Scalar
-  operations additionally require every requires-atom to be guardable
-  (foldable into the atomic UPDATE's WHERE clause); verification assumes
-  requires holds on entry, but HTTP callers can invoke the route in any
-  state, so an unguardable precondition would let a runtime call break a
-  verified invariant.\<close>
+  operations additionally require: no declared inputs (the literal-only
+  handlers take none, and an unused id-shaped input would put a path
+  parameter in the derived route that no handler binds); pairwise
+  consistent updates (\<open>scalarUpdatesConsistent\<close>); and every
+  requires-atom guardable (foldable into the atomic UPDATE's WHERE
+  clause) - verification assumes requires holds on entry, but HTTP
+  callers can invoke the route in any state, so an unguardable
+  precondition would let a runtime call break a verified invariant.\<close>
 
 definition classifyStrategy ::
   "expr list \<Rightarrow> expr list \<Rightarrow> String.literal list \<Rightarrow> String.literal list
-     \<Rightarrow> String.literal list \<Rightarrow> synthesis_strategy"
+     \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> synthesis_strategy"
 where
-  "classifyStrategy ensures reqs stateFieldNames scalarFieldNames outputNames = (
+  "classifyStrategy ensures reqs inputNames stateFieldNames scalarFieldNames
+     outputNames = (
     let clauses = flattenEnsures ensures in
     if clauses = [] then LlmSynthesis
     else if list_ex (isScalarUpdateClause scalarFieldNames) clauses then
       (if list_all (isScalarUpdateClause scalarFieldNames) clauses \<and>
+          inputNames = [] \<and>
+          scalarUpdatesConsistent
+            (List.map_filter (scalarUpdateOf scalarFieldNames) clauses) \<and>
           list_all (\<lambda>r. scalarGuardOf scalarFieldNames r \<noteq> None)
                    (flattenEnsures reqs)
        then DirectEmit else LlmSynthesis)
@@ -335,6 +355,7 @@ lemmas scalarUpdateOf_code [code] = scalarUpdateOf.simps
 lemmas scalarCmpOf_code [code] = scalarCmpOf.simps
 lemmas scalarGuardOf_code [code] = scalarGuardOf.simps
 lemmas isScalarUpdateClause_code [code] = isScalarUpdateClause_def
+lemmas scalarUpdatesConsistent_code [code] = scalarUpdatesConsistent.simps
 lemmas classifyStrategy_code [code] = classifyStrategy_def
 lemmas synthesisStrategyLabel_code [code] = synthesisStrategyLabel_def
 

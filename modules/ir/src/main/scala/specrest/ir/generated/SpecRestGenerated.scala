@@ -8472,6 +8472,50 @@ object SpecRestGenerated {
         }
     }
 
+  def equal_scalar_rhs(x0: scalar_rhs, x1: scalar_rhs): Boolean = (x0, x1) match {
+    case (SrSub(x41, x42), SrMul(x51, x52)) => false
+    case (SrMul(x51, x52), SrSub(x41, x42)) => false
+    case (SrAdd(x31, x32), SrMul(x51, x52)) => false
+    case (SrMul(x51, x52), SrAdd(x31, x32)) => false
+    case (SrAdd(x31, x32), SrSub(x41, x42)) => false
+    case (SrSub(x41, x42), SrAdd(x31, x32)) => false
+    case (SrSelf(), SrMul(x51, x52))        => false
+    case (SrMul(x51, x52), SrSelf())        => false
+    case (SrSelf(), SrSub(x41, x42))        => false
+    case (SrSub(x41, x42), SrSelf())        => false
+    case (SrSelf(), SrAdd(x31, x32))        => false
+    case (SrAdd(x31, x32), SrSelf())        => false
+    case (SrLit(x1), SrMul(x51, x52))       => false
+    case (SrMul(x51, x52), SrLit(x1))       => false
+    case (SrLit(x1), SrSub(x41, x42))       => false
+    case (SrSub(x41, x42), SrLit(x1))       => false
+    case (SrLit(x1), SrAdd(x31, x32))       => false
+    case (SrAdd(x31, x32), SrLit(x1))       => false
+    case (SrLit(x1), SrSelf())              => false
+    case (SrSelf(), SrLit(x1))              => false
+    case (SrMul(x51, x52), SrMul(y51, y52)) =>
+      equal_scalar_rhs(x51, y51) && equal_scalar_rhs(x52, y52)
+    case (SrSub(x41, x42), SrSub(y41, y42)) =>
+      equal_scalar_rhs(x41, y41) && equal_scalar_rhs(x42, y42)
+    case (SrAdd(x31, x32), SrAdd(y31, y32)) =>
+      equal_scalar_rhs(x31, y31) && equal_scalar_rhs(x32, y32)
+    case (SrLit(x1), SrLit(y1)) => equal_int(x1, y1)
+    case (SrSelf(), SrSelf())   => true
+  }
+
+  def scalarUpdatesConsistent(x0: List[(String, scalar_rhs)]): Boolean = x0 match {
+    case Nil => true
+    case (n, r) :: rest =>
+      list_all[(String, scalar_rhs)](
+        (a: (String, scalar_rhs)) => {
+          val (m, s) = a: ((String, scalar_rhs));
+          !(m == n) || equal_scalar_rhs(s, r)
+        },
+        rest
+      ) &&
+      scalarUpdatesConsistent(rest)
+  }
+
   def isScalarUpdateClause(scalars: List[String], c: expr): Boolean =
     !is_none[(String, scalar_rhs)](scalarUpdateOf(scalars, c))
 
@@ -9596,6 +9640,7 @@ object SpecRestGenerated {
   def classifyStrategy(
       ensures: List[expr],
       reqs: List[expr],
+      inputNames: List[String],
       stateFieldNames: List[String],
       scalarFieldNames: List[String],
       outputNames: List[String]
@@ -9613,11 +9658,17 @@ object SpecRestGenerated {
                 isScalarUpdateClause(scalarFieldNames, a),
               clauses
             ) &&
-              list_all[expr](
-                (r: expr) =>
-                  !is_none[scalar_guard](scalarGuardOf(scalarFieldNames, r)),
-                flattenEnsures(reqs)
-              ) match {
+              (nulla[String](inputNames) &&
+                (scalarUpdatesConsistent(map_filter[expr, (String, scalar_rhs)](
+                  (a: expr) =>
+                    scalarUpdateOf(scalarFieldNames, a),
+                  clauses
+                )) &&
+                  list_all[expr](
+                    (r: expr) =>
+                      !is_none[scalar_guard](scalarGuardOf(scalarFieldNames, r)),
+                    flattenEnsures(reqs)
+                  ))) match {
               case true  => DirectEmit()
               case false => LlmSynthesis()
             }

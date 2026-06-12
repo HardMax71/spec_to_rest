@@ -233,7 +233,7 @@ class BackendTest extends CatsEffectSuite:
   // ---- TsVitestHarness: TS scaffold + the _runtime.ts contract ----
 
   private def loadIR(path: String) =
-    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+    val src = scala.util.Using.resource(scala.io.Source.fromFile(path))(_.getLines.mkString("\n"))
     loadIRSource(src)
 
   private def loadIRSource(src: String) =
@@ -385,6 +385,7 @@ class BackendTest extends CatsEffectSuite:
         s"count is backed since #407; got ${out.skips}"
       )
       assert(out.file.contains("invariant violated:"), out.file)
+      assert(out.file.contains("countNonNegative"), out.file)
 
   test("Strategies.forIR is backend-parameterized: same IR, per-language specs"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>

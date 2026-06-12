@@ -48,8 +48,10 @@ class TestCtxTest extends CatsEffectSuite:
       val skips = results.collect { case (n, Translated.Skip(r, _)) => n -> r }
       assert(skips.isEmpty, s"backed scalar state must not skip; got $skips")
       assert(
-        results.exists { case (n, r) =>
-          n == "Decrement.ensures" && r.isInstanceOf[Translated.Emit]
+        results.exists {
+          case (n, Translated.Emit(code)) =>
+            n == "Decrement.ensures" && code.contains("post_state[\"count\"]")
+          case _ => false
         },
         s"Decrement.ensures must translate against post_state; got $results"
       )
