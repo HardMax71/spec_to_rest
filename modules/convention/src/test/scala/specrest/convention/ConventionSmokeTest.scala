@@ -75,11 +75,11 @@ class ConventionSmokeTest extends CatsEffectSuite:
       )
     ),
     StrategyCase(
-      "safe_counter: arithmetic in ensures forces LLM",
+      "safe_counter: scalar-state arithmetic direct-emits (issue #407)",
       "safe_counter",
       List(
-        "Increment" -> LlmSynthesis(),
-        "Decrement" -> LlmSynthesis()
+        "Increment" -> DirectEmit(),
+        "Decrement" -> DirectEmit()
       )
     ),
     StrategyCase(

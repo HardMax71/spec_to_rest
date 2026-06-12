@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.OperationContext
+import specrest.codegen.ScalarOps
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -9,7 +10,11 @@ object StubOps:
   private given CanEqual[route_kind, route_kind] = CanEqual.derived
 
   def isStub(profiled: ProfiledService, op: ProfiledOperation): Boolean =
-    isFailLoudStub(op.dafnyMethod.isDefined, effectiveKind(profiled, op))
+    // A scalar-state op gets a real emitted body (direct-emit path), so it
+    // counts as "has a body" exactly like a kernel-bound method.
+    val scalarHandled =
+      ScalarOps.views(profiled).exists(_.operation.operationName == op.operationName)
+    isFailLoudStub(op.dafnyMethod.isDefined || scalarHandled, effectiveKind(profiled, op))
 
   // A `list` route returns the array as the bare response body, so its single declared
   // output is the whole body — `response_data`, not `response_data["<name>"]`.

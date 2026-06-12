@@ -234,12 +234,38 @@ class BackendTest extends CatsEffectSuite:
 
   private def loadIR(path: String) =
     val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+    loadIRSource(src)
+
+  private def loadIRSource(src: String) =
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) => ir
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
+
+  // An op over a primitive->primitive relation: no entity backs it, so the
+  // behavioral/stateful emitters honest-skip everything (zero tests).
+  private def unbackedStubSpec =
+    """service StubOnly {
+      |
+      |  state {
+      |    counters: Int -> lone Int
+      |  }
+      |
+      |  operation Bump {
+      |    input: k: Int
+      |
+      |    requires:
+      |      true
+      |
+      |    ensures:
+      |      counters'[k] = 1
+      |  }
+      |
+      |  invariant countersNonNegative:
+      |    all k in counters | counters[k] >= 0
+      |}""".stripMargin
 
   test("TsVitestHarness emits the vitest scaffold with TS-shaped paths"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>
@@ -315,7 +341,7 @@ class BackendTest extends CatsEffectSuite:
       assert(mod.contains("const NUM_RUNS ="), mod.take(600))
 
   test("TsBehavioral.renderModule emits a test.skip placeholder when zero tests"):
-    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+    loadIRSource(unbackedStubSpec).map: ir =>
       val out = TsBehavioral.emitFor(SynthFixture.profiled(ir))
       assert(out.tests.isEmpty, s"expected zero behavioral tests; got ${out.tests.map(_.name)}")
       val mod = TsBehavioral.renderModule(ir, out.tests)
@@ -338,8 +364,8 @@ class BackendTest extends CatsEffectSuite:
       assert(f.contains("postState["), f)
       assert(f.contains("invariant violated:"), f)
 
-  test("TsStateful honest-skips when invariants are unbacked (safe_counter)"):
-    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+  test("TsStateful honest-skips when invariants are unbacked"):
+    loadIRSource(unbackedStubSpec).map: ir =>
       val out = TsStateful.emitFor(SynthFixture.profiled(ir))
       assert(out.file.contains("test.skip("), out.file)
       assert(out.file.contains("no assertable rules/invariants"), out.file)
@@ -350,6 +376,15 @@ class BackendTest extends CatsEffectSuite:
         ),
         s"expected unbacked-state invariant skip; got ${out.skips}"
       )
+
+  test("TsStateful asserts backed-scalar invariants (safe_counter, #407)"):
+    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+      val out = TsStateful.emitFor(SynthFixture.profiled(ir))
+      assert(
+        !out.skips.exists(_.reason.contains("not backed by an entity table")),
+        s"count is backed since #407; got ${out.skips}"
+      )
+      assert(out.file.contains("invariant violated:"), out.file)
 
   test("Strategies.forIR is backend-parameterized: same IR, per-language specs"):
     loadIR("fixtures/spec/url_shortener.spec").map: ir =>
@@ -506,7 +541,7 @@ class BackendTest extends CatsEffectSuite:
       assert(mod.contains("\"testing\""), mod.take(300))
 
   test("GoBehavioral.renderModule emits a t.Skip placeholder when zero tests"):
-    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+    loadIRSource(unbackedStubSpec).map: ir =>
       val out = GoBehavioral.emitFor(SynthFixture.profiled(ir))
       assert(out.tests.isEmpty, s"expected zero tests; got ${out.tests.map(_.name)}")
       val mod = GoBehavioral.renderModule(ir, out.tests)
@@ -526,8 +561,8 @@ class BackendTest extends CatsEffectSuite:
       assert(f.contains("invariant violated:"), f)
       assert(f.contains("package tests"), f.take(200))
 
-  test("GoStateful honest-skips when invariants are unbacked (safe_counter)"):
-    loadIR("fixtures/spec/safe_counter.spec").map: ir =>
+  test("GoStateful honest-skips when invariants are unbacked"):
+    loadIRSource(unbackedStubSpec).map: ir =>
       val out = GoStateful.emitFor(SynthFixture.profiled(ir))
       assert(out.file.contains("t.Skip("), out.file)
       assert(

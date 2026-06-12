@@ -46,7 +46,9 @@ final case class RenderContext(
     endpoints: List[EndpointSpec],
     schema: database_schema,
     db: DialectView,
-    dafnyKernel: Option[DafnyKernel] = None
+    dafnyKernel: Option[DafnyKernel] = None,
+    scalarStateFields: List[ScalarStateFieldView] = Nil,
+    hasScalarOps: Boolean = false
 )
 
 final case class RenderResult(fileName: String, content: String)
@@ -75,7 +77,9 @@ object RenderContext:
       db = Dialect
         .forDatabase(profiled.profile.database)
         .deployment(Naming.toSnakeCase(svcName(profiled.ir))),
-      dafnyKernel = dafnyKernel
+      dafnyKernel = dafnyKernel,
+      scalarStateFields = ScalarOps.stateFields(profiled),
+      hasScalarOps = ScalarOps.views(profiled).nonEmpty
     )
 
   private def convertProfile(profile: DeploymentProfile): RenderProfile =

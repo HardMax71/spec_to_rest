@@ -9,6 +9,9 @@ import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
 import specrest.codegen.OperationContext
 import specrest.codegen.RenderContext
+import specrest.codegen.ScalarOpView
+import specrest.codegen.ScalarOps
+import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.TemplateEngine
 import specrest.codegen.migration.Revision
 import specrest.codegen.migration.SchemaCodec
@@ -117,6 +120,16 @@ final private case class GoDbView(
     dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 )
 
+final private case class GoScalarOpView(
+    handlerName: String,
+    methodPascal: String,
+    chiPath: String,
+    successStatus: Int,
+    setSql: String,
+    whereSql: String,
+    guardPretty: String
+)
+
 final private case class GoProjectCtx(
     service: GoServiceNames,
     module: String,
@@ -125,7 +138,8 @@ final private case class GoProjectCtx(
     needsUuid: Boolean,
     needsDecimal: Boolean,
     db: GoDbView,
-    dafnyKernel: Option[DafnyKernel]
+    dafnyKernel: Option[DafnyKernel],
+    scalarOps: List[GoScalarOpView]
 )
 
 object EmitGo:
@@ -169,6 +183,9 @@ object EmitGo:
     val needsUuid    = entities.exists(_.needsUuid)
     val needsDecimal = entities.exists(_.needsDecimal)
 
+    val scalarFields = ScalarOps.stateFields(profiled)
+    val scalarOps    = ScalarOps.views(profiled).map(goScalarOp)
+
     val projectCtx = GoProjectCtx(
       service = service,
       module = module,
@@ -177,7 +194,8 @@ object EmitGo:
       needsUuid = needsUuid,
       needsDecimal = needsDecimal,
       db = goDbView(profiled.profile.database, service.snakeName),
-      dafnyKernel = opts.dafnyKernel
+      dafnyKernel = opts.dafnyKernel,
+      scalarOps = scalarOps
     )
 
     val files        = List.newBuilder[EmittedFile]
@@ -259,6 +277,15 @@ object EmitGo:
         s"internal/services/${entityCtx.entitySnake}.go",
         engine.renderAny(templates.serviceEntity, perEntity)
       )
+
+    if scalarFields.nonEmpty then
+      files += EmittedFile("internal/models/service_state.go", goStateModel(scalarFields))
+    if scalarOps.nonEmpty then
+      files += EmittedFile(
+        "internal/services/state_ops.go",
+        goStateService(module, scalarFields, scalarOps)
+      )
+      files += EmittedFile("internal/handlers/state_ops.go", goStateHandler(module, scalarOps))
 
     emitMigrationFiles(profiled, opts, templates, engine, projectCtx.db, files)
 
@@ -418,8 +445,12 @@ object EmitGo:
       val tableOps   = SchemaDiff.topoSort(schemaTables(schema)).map(CreateTable.apply)
       val triggerOps = schemaTriggers(schema).map(AddTrigger.apply)
       val ops        = tableOps ++ triggerOps
+      val seeds = SchemaDiff
+        .topoSort(schemaTables(schema))
+        .filter(ScalarOps.isStateTable)
+        .map(t => ScalarOps.seedSqlFor(t) + ";")
       val view = SqlMigrationView(
-        upgradeStatements = SqlRenderer.upgrade(ops, dialect),
+        upgradeStatements = SqlRenderer.upgrade(ops, dialect) ++ seeds,
         downgradeStatements = SqlRenderer.downgrade(ops, dialect)
       )
       val scope = Map[String, Any](
@@ -472,15 +503,18 @@ object EmitGo:
       currentEntity: Option[GoEntityCtx] = None
   ): Map[String, Any] =
     val base = Map[String, Any](
-      "service"      -> proj.service,
-      "module"       -> proj.module,
-      "profile"      -> ctx.profile,
-      "entities"     -> proj.entities,
-      "needsTime"    -> proj.needsTime,
-      "needsUuid"    -> proj.needsUuid,
-      "needsDecimal" -> proj.needsDecimal,
-      "db"           -> proj.db,
-      "hasDafny"     -> proj.dafnyKernel.isDefined
+      "service"           -> proj.service,
+      "module"            -> proj.module,
+      "profile"           -> ctx.profile,
+      "entities"          -> proj.entities,
+      "needsTime"         -> proj.needsTime,
+      "needsUuid"         -> proj.needsUuid,
+      "needsDecimal"      -> proj.needsDecimal,
+      "db"                -> proj.db,
+      "hasDafny"          -> proj.dafnyKernel.isDefined,
+      "scalarOps"         -> proj.scalarOps,
+      "scalarStateFields" -> ctx.scalarStateFields,
+      "hasScalarOps"      -> ctx.hasScalarOps
     )
     currentEntity match
       case Some(e) =>
@@ -715,6 +749,150 @@ object EmitGo:
       lookupColumn = lookupCol,
       createAssigns = createAssigns
     )
+
+  private def goScalarOp(v: ScalarOpView): GoScalarOpView =
+    val ep = v.operation.endpoint
+    val methodPascal = ep.method match
+      case _: GET    => "Get"
+      case _: POST   => "Post"
+      case _: PUT    => "Put"
+      case _: PATCH  => "Patch"
+      case _: DELETE => "Delete"
+    val setSql = v.updates
+      .map(u => s"${u.columnName} = ${ScalarOps.renderRhs(u.rhs, u.columnName)}")
+      .mkString(", ")
+    val whereSql =
+      ("id = 1" :: v.guards.map(g => s"${g.columnName} ${ScalarOps.sqlCmp(g.cmp)} ${g.lit}"))
+        .mkString(" AND ")
+    GoScalarOpView(
+      handlerName = Naming.toPascalCase(v.operation.operationName, Naming.PascalStrategy.Go),
+      methodPascal = methodPascal,
+      chiPath = ep.path,
+      successStatus = ep.successStatus,
+      setSql = setSql,
+      whereSql = whereSql,
+      guardPretty = v.guardPretty
+    )
+
+  private def goStateModel(fields: List[ScalarStateFieldView]): String =
+    val cols = fields
+      .map: f =>
+        val goField = Naming.toPascalCase(f.columnName, Naming.PascalStrategy.Go)
+        s"""\t$goField int64 `bun:"${f.columnName}" json:"${f.specName}"`"""
+      .mkString("\n")
+    s"""|package models
+        |
+        |import "github.com/uptrace/bun"
+        |
+        |type ServiceState struct {
+        |\tbun.BaseModel `bun:"table:${ScalarOps.TableName}"`
+        |
+        |\tID int64 `bun:"id,pk" json:"id"`
+        |$cols
+        |}
+        |""".stripMargin
+
+  private def goStateService(
+      module: String,
+      fields: List[ScalarStateFieldView],
+      ops: List[GoScalarOpView]
+  ): String =
+    val snapshotPairs = fields
+      .map: f =>
+        val goField = Naming.toPascalCase(f.columnName, Naming.PascalStrategy.Go)
+        s"""\t\t"${f.specName}": st.$goField,"""
+      .mkString("\n")
+    val methods = ops
+      .map: op =>
+        s"""|func (s *StateOpsService) ${op.handlerName}(ctx context.Context) (map[string]int64, bool, error) {
+            |\tres, err := s.db.NewUpdate().Model((*models.ServiceState)(nil)).
+            |\t\tSet("${op.setSql}").
+            |\t\tWhere("${op.whereSql}").
+            |\t\tExec(ctx)
+            |\tif err != nil {
+            |\t\treturn nil, false, err
+            |\t}
+            |\tn, err := res.RowsAffected()
+            |\tif err != nil {
+            |\t\treturn nil, false, err
+            |\t}
+            |\tif n == 0 {
+            |\t\treturn nil, false, nil
+            |\t}
+            |\tsnap, err := s.snapshot(ctx)
+            |\tif err != nil {
+            |\t\treturn nil, false, err
+            |\t}
+            |\treturn snap, true, nil
+            |}
+            |""".stripMargin
+      .mkString("\n")
+    s"""|package services
+        |
+        |import (
+        |\t"context"
+        |
+        |\t"github.com/uptrace/bun"
+        |
+        |\t"$module/internal/config"
+        |\t"$module/internal/models"
+        |)
+        |
+        |type StateOpsService struct {
+        |\tdb  *bun.DB
+        |\tcfg *config.Config
+        |}
+        |
+        |func NewStateOpsService(db *bun.DB, cfg *config.Config) *StateOpsService {
+        |\treturn &StateOpsService{db: db, cfg: cfg}
+        |}
+        |
+        |func (s *StateOpsService) snapshot(ctx context.Context) (map[string]int64, error) {
+        |\tst := new(models.ServiceState)
+        |\tif err := s.db.NewSelect().Model(st).Where("id = 1").Limit(1).Scan(ctx); err != nil {
+        |\t\treturn nil, err
+        |\t}
+        |\treturn map[string]int64{
+        |$snapshotPairs
+        |\t}, nil
+        |}
+        |
+        |$methods""".stripMargin
+
+  private def goStateHandler(module: String, ops: List[GoScalarOpView]): String =
+    val methods = ops
+      .map: op =>
+        s"""|func (h *StateOpsHandler) ${op.handlerName}(w http.ResponseWriter, r *http.Request) {
+            |\tresult, ok, err := h.svc.${op.handlerName}(r.Context())
+            |\tif err != nil {
+            |\t\twriteError(w, http.StatusInternalServerError, err.Error())
+            |\t\treturn
+            |\t}
+            |\tif !ok {
+            |\t\twriteError(w, http.StatusConflict, "precondition failed: ${op.guardPretty}")
+            |\t\treturn
+            |\t}
+            |\twriteJSON(w, ${op.successStatus}, result)
+            |}
+            |""".stripMargin
+      .mkString("\n")
+    s"""|package handlers
+        |
+        |import (
+        |\t"net/http"
+        |
+        |\t"$module/internal/services"
+        |)
+        |
+        |type StateOpsHandler struct {
+        |\tsvc *services.StateOpsService
+        |}
+        |
+        |func NewStateOpsHandler(svc *services.StateOpsService) *StateOpsHandler {
+        |\treturn &StateOpsHandler{svc: svc}
+        |}
+        |
+        |$methods""".stripMargin
 
   private def redirectTarget(
       @scala.annotation.unused op: ProfiledOperation,

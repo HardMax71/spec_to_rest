@@ -114,19 +114,15 @@ class StructuralTest extends CatsEffectSuite:
       val out = Structural.emitFor(profiled)
       assert(!out.file.contains("schema.as_state_machine()"))
       assert(out.file.contains("def test_api_structural(case):"))
-      // `countNonNegative` reads unbacked scalar `count`; the admin /state projects it
-      // as null, so the global-invariant check must honest-skip rather than emit a
-      // `None >= 0` crash.
+      // `countNonNegative` reads the Int scalar `count`, backed by the
+      // service_state table since #407 - the invariant check is emitted.
       assert(
-        !out.file.contains("def _check_invariant_count_non_negative(ctx, response, case):"),
-        s"unbacked-state invariant check must not be emitted:\n${out.file}"
+        out.file.contains("def _check_invariant_count_non_negative("),
+        s"backed-scalar invariant check must be emitted:\n${out.file}"
       )
       assert(
-        out.skips.exists(s =>
-          s.kind.startsWith("structural_invariant") &&
-            s.reason.contains("not backed by an entity table")
-        ),
-        s"expected recorded structural_invariant skip for countNonNegative; got ${out.skips}"
+        !out.skips.exists(_.reason.contains("not backed by an entity table")),
+        s"no unbacked-state structural skips expected; got ${out.skips}"
       )
 
   test("invariant skips use <invariants> sentinel, not <service>"):

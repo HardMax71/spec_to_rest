@@ -393,6 +393,10 @@ export_code
     buildOperationClassification
     isCardinalityRhs
     isDirectEmitShape
+    scalarRhsOf
+    scalarUpdateOf
+    scalarGuardOf
+    isScalarUpdateClause
     classifyStrategy
     synthesisStrategyLabel
     signalsMutatedRelations

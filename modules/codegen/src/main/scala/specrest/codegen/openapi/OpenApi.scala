@@ -1,6 +1,9 @@
 package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
+import specrest.codegen.ScalarOpView
+import specrest.codegen.ScalarOps
+import specrest.codegen.ScalarStateFieldView
 import specrest.convention.ParamSpec
 import specrest.ir.Naming
 import specrest.ir.PrettyPrint
@@ -234,6 +237,12 @@ object Paths:
         val operation = buildOperation(op, entity, ctx)
         val existing  = paths.getOrElse(op.endpoint.path, PathItemObject())
         paths(op.endpoint.path) = setMethod(existing, op.endpoint.method, operation)
+    val scalarFields = ScalarOps.stateFields(profiled)
+    for v <- ScalarOps.views(profiled) do
+      val ep        = v.operation.endpoint
+      val operation = buildScalarOperation(v, scalarFields)
+      val existing  = paths.getOrElse(ep.path, PathItemObject())
+      paths(ep.path) = setMethod(existing, ep.method, operation)
     paths("/health") = setMethod(
       paths.getOrElse("/health", PathItemObject()),
       GET(),
@@ -448,6 +457,34 @@ object Paths:
               SchemaObject(ref = Some(s"#/components/schemas/${entity.readSchemaName}"))
             )
           else ResponseObject("Successful response", None, None)
+
+  private def buildScalarOperation(
+      v: ScalarOpView,
+      fields: List[ScalarStateFieldView]
+  ): OperationObject =
+    val stateSchema = SchemaObject(
+      `type` = Some(List("object")),
+      required = Some(fields.map(_.specName)),
+      properties = Some(
+        fields.map(f => f.specName -> SchemaObject(`type` = Some(List("integer")))).toMap
+      )
+    )
+    val ok = Map(
+      v.operation.endpoint.successStatus.toString ->
+        jsonResponse("Successful response", stateSchema)
+    )
+    val conflict =
+      if v.guards.nonEmpty then Map("409" -> errorResponseRef("Precondition failed"))
+      else Map.empty[String, ResponseObject]
+    OperationObject(
+      operationId = v.operation.handlerName,
+      summary = Some(v.operation.operationName),
+      description = None,
+      tags = List("state"),
+      parameters = None,
+      requestBody = None,
+      responses = ok ++ conflict
+    )
 
   private def jsonResponse(description: String, schema: SchemaObject): ResponseObject =
     ResponseObject(

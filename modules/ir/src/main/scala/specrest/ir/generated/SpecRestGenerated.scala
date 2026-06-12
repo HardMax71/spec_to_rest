@@ -762,6 +762,21 @@ object SpecRestGenerated {
   final case class VSeq(a: List[ir_value])                          extends ir_value
   final case class VMap(a: List[(ir_value, ir_value)])              extends ir_value
 
+  sealed abstract class scalar_cmp
+  final case class ScGt()  extends scalar_cmp
+  final case class ScGe()  extends scalar_cmp
+  final case class ScLt()  extends scalar_cmp
+  final case class ScLe()  extends scalar_cmp
+  final case class ScEq()  extends scalar_cmp
+  final case class ScNeq() extends scalar_cmp
+
+  sealed abstract class scalar_rhs
+  final case class SrLit(a: BigInt)                    extends scalar_rhs
+  final case class SrSelf()                            extends scalar_rhs
+  final case class SrAdd(a: scalar_rhs, b: scalar_rhs) extends scalar_rhs
+  final case class SrSub(a: scalar_rhs, b: scalar_rhs) extends scalar_rhs
+  final case class SrMul(a: scalar_rhs, b: scalar_rhs) extends scalar_rhs
+
   sealed abstract class http_method
   final case class GET()    extends http_method
   final case class POST()   extends http_method
@@ -792,6 +807,10 @@ object SpecRestGenerated {
       h: List[String],
       i: List[String]
   ) extends ident_ctx
+
+  sealed abstract class scalar_guard
+  final case class SgTrue()                                   extends scalar_guard
+  final case class SgCmp(a: String, b: scalar_cmp, c: BigInt) extends scalar_guard
 
   sealed abstract class sa_type
   final case class SaType(a: String, b: Option[String]) extends sa_type
@@ -4976,6 +4995,123 @@ object SpecRestGenerated {
       map_option[smt_term, smt_term]((a: smt_term) => TSome(a), translate(enums, e))
   }
 
+  def scalarCmpOf(x0: bin_op): Option[scalar_cmp] = x0 match {
+    case BGt()        => Some[scalar_cmp](ScGt())
+    case BGe()        => Some[scalar_cmp](ScGe())
+    case BLt()        => Some[scalar_cmp](ScLt())
+    case BLe()        => Some[scalar_cmp](ScLe())
+    case BEq()        => Some[scalar_cmp](ScEq())
+    case BNeq()       => Some[scalar_cmp](ScNeq())
+    case BAnd()       => None
+    case BOr()        => None
+    case BImplies()   => None
+    case BIff()       => None
+    case BIn()        => None
+    case BNotIn()     => None
+    case BSubset()    => None
+    case BUnion()     => None
+    case BIntersect() => None
+    case BDiff()      => None
+    case BAdd()       => None
+    case BSub()       => None
+    case BMul()       => None
+    case BDiv()       => None
+  }
+
+  def scalarRhsOf(n: String, x1: expr): Option[scalar_rhs] = (n, x1) match {
+    case (n, IntLitF(k, uu)) => Some[scalar_rhs](SrLit(k))
+    case (n, IdentifierF(m, uv)) =>
+      m == n match {
+        case true  => Some[scalar_rhs](SrSelf())
+        case false => None
+      }
+    case (n, PreF(e, uw)) =>
+      e match {
+        case BinaryOpF(_, _, _, _)         => None
+        case UnaryOpF(_, _, _)             => None
+        case QuantifierF(_, _, _, _)       => None
+        case SomeWrapF(_, _)               => None
+        case TheF(_, _, _, _)              => None
+        case FieldAccessF(_, _, _)         => None
+        case EnumAccessF(_, _, _)          => None
+        case IndexF(_, _, _)               => None
+        case CallF(_, _, _)                => None
+        case PrimeF(_, _)                  => None
+        case PreF(_, _)                    => None
+        case WithF(_, _, _)                => None
+        case IfF(_, _, _, _)               => None
+        case LetF(_, _, _, _)              => None
+        case LambdaF(_, _, _)              => None
+        case ConstructorF(_, _, _)         => None
+        case SetLiteralF(_, _)             => None
+        case MapLiteralF(_, _)             => None
+        case SetComprehensionF(_, _, _, _) => None
+        case SeqLiteralF(_, _)             => None
+        case MatchesF(_, _, _)             => None
+        case IntLitF(_, _)                 => None
+        case FloatLitF(_, _)               => None
+        case StringLitF(_, _)              => None
+        case BoolLitF(_, _)                => None
+        case NoneLitF(_)                   => None
+        case IdentifierF(m, _) =>
+          m == n match {
+            case true  => Some[scalar_rhs](SrSelf())
+            case false => None
+          }
+      }
+    case (n, BinaryOpF(op, l, r, ux)) =>
+      (scalarRhsOf(n, l), scalarRhsOf(n, r)) match {
+        case (None, _)       => None
+        case (Some(_), None) => None
+        case (Some(a), Some(b)) =>
+          op match {
+            case BAnd()       => None
+            case BOr()        => None
+            case BImplies()   => None
+            case BIff()       => None
+            case BEq()        => None
+            case BNeq()       => None
+            case BLt()        => None
+            case BGt()        => None
+            case BLe()        => None
+            case BGe()        => None
+            case BIn()        => None
+            case BNotIn()     => None
+            case BSubset()    => None
+            case BUnion()     => None
+            case BIntersect() => None
+            case BDiff()      => None
+            case BAdd()       => Some[scalar_rhs](SrAdd(a, b))
+            case BSub()       => Some[scalar_rhs](SrSub(a, b))
+            case BMul()       => Some[scalar_rhs](SrMul(a, b))
+            case BDiv()       => None
+          }
+      }
+    case (uy, UnaryOpF(v, va, vb))              => None
+    case (uy, QuantifierF(v, va, vb, vc))       => None
+    case (uy, SomeWrapF(v, va))                 => None
+    case (uy, TheF(v, va, vb, vc))              => None
+    case (uy, FieldAccessF(v, va, vb))          => None
+    case (uy, EnumAccessF(v, va, vb))           => None
+    case (uy, IndexF(v, va, vb))                => None
+    case (uy, CallF(v, va, vb))                 => None
+    case (uy, PrimeF(v, va))                    => None
+    case (uy, WithF(v, va, vb))                 => None
+    case (uy, IfF(v, va, vb, vc))               => None
+    case (uy, LetF(v, va, vb, vc))              => None
+    case (uy, LambdaF(v, va, vb))               => None
+    case (uy, ConstructorF(v, va, vb))          => None
+    case (uy, SetLiteralF(v, va))               => None
+    case (uy, MapLiteralF(v, va))               => None
+    case (uy, SetComprehensionF(v, va, vb, vc)) => None
+    case (uy, SeqLiteralF(v, va))               => None
+    case (uy, MatchesF(v, va, vb))              => None
+    case (uy, FloatLitF(v, va))                 => None
+    case (uy, StringLitF(v, va))                => None
+    case (uy, BoolLitF(v, va))                  => None
+    case (uy, NoneLitF(v))                      => None
+  }
+
   def enmName(x0: enum_decl): String = x0 match {
     case EnumDeclFull(x1, x2, x3) => x1
   }
@@ -5780,6 +5916,104 @@ object SpecRestGenerated {
         }
     }
 
+  def scalarGuardOf(scalars: List[String], x1: expr): Option[scalar_guard] =
+    (scalars, x1) match {
+      case (scalars, BoolLitF(b, uu)) =>
+        b match {
+          case true  => Some[scalar_guard](SgTrue())
+          case false => None
+        }
+      case (scalars, BinaryOpF(op, l, r, uv)) =>
+        scalarCmpOf(op) match {
+          case None => None
+          case Some(c) =>
+            (l, r) match {
+              case (BinaryOpF(_, _, _, _), _)                         => None
+              case (UnaryOpF(_, _, _), _)                             => None
+              case (QuantifierF(_, _, _, _), _)                       => None
+              case (SomeWrapF(_, _), _)                               => None
+              case (TheF(_, _, _, _), _)                              => None
+              case (FieldAccessF(_, _, _), _)                         => None
+              case (EnumAccessF(_, _, _), _)                          => None
+              case (IndexF(_, _, _), _)                               => None
+              case (CallF(_, _, _), _)                                => None
+              case (PrimeF(_, _), _)                                  => None
+              case (PreF(_, _), _)                                    => None
+              case (WithF(_, _, _), _)                                => None
+              case (IfF(_, _, _, _), _)                               => None
+              case (LetF(_, _, _, _), _)                              => None
+              case (LambdaF(_, _, _), _)                              => None
+              case (ConstructorF(_, _, _), _)                         => None
+              case (SetLiteralF(_, _), _)                             => None
+              case (MapLiteralF(_, _), _)                             => None
+              case (SetComprehensionF(_, _, _, _), _)                 => None
+              case (SeqLiteralF(_, _), _)                             => None
+              case (MatchesF(_, _, _), _)                             => None
+              case (IntLitF(_, _), _)                                 => None
+              case (FloatLitF(_, _), _)                               => None
+              case (StringLitF(_, _), _)                              => None
+              case (BoolLitF(_, _), _)                                => None
+              case (NoneLitF(_), _)                                   => None
+              case (IdentifierF(_, _), BinaryOpF(_, _, _, _))         => None
+              case (IdentifierF(_, _), UnaryOpF(_, _, _))             => None
+              case (IdentifierF(_, _), QuantifierF(_, _, _, _))       => None
+              case (IdentifierF(_, _), SomeWrapF(_, _))               => None
+              case (IdentifierF(_, _), TheF(_, _, _, _))              => None
+              case (IdentifierF(_, _), FieldAccessF(_, _, _))         => None
+              case (IdentifierF(_, _), EnumAccessF(_, _, _))          => None
+              case (IdentifierF(_, _), IndexF(_, _, _))               => None
+              case (IdentifierF(_, _), CallF(_, _, _))                => None
+              case (IdentifierF(_, _), PrimeF(_, _))                  => None
+              case (IdentifierF(_, _), PreF(_, _))                    => None
+              case (IdentifierF(_, _), WithF(_, _, _))                => None
+              case (IdentifierF(_, _), IfF(_, _, _, _))               => None
+              case (IdentifierF(_, _), LetF(_, _, _, _))              => None
+              case (IdentifierF(_, _), LambdaF(_, _, _))              => None
+              case (IdentifierF(_, _), ConstructorF(_, _, _))         => None
+              case (IdentifierF(_, _), SetLiteralF(_, _))             => None
+              case (IdentifierF(_, _), MapLiteralF(_, _))             => None
+              case (IdentifierF(_, _), SetComprehensionF(_, _, _, _)) => None
+              case (IdentifierF(_, _), SeqLiteralF(_, _))             => None
+              case (IdentifierF(_, _), MatchesF(_, _, _))             => None
+              case (IdentifierF(n, _), IntLitF(k, _)) =>
+                membera[String](scalars, n) match {
+                  case true  => Some[scalar_guard](SgCmp(n, c, k))
+                  case false => None
+                }
+              case (IdentifierF(_, _), FloatLitF(_, _))   => None
+              case (IdentifierF(_, _), StringLitF(_, _))  => None
+              case (IdentifierF(_, _), BoolLitF(_, _))    => None
+              case (IdentifierF(_, _), NoneLitF(_))       => None
+              case (IdentifierF(_, _), IdentifierF(_, _)) => None
+            }
+        }
+      case (uw, UnaryOpF(v, va, vb))              => None
+      case (uw, QuantifierF(v, va, vb, vc))       => None
+      case (uw, SomeWrapF(v, va))                 => None
+      case (uw, TheF(v, va, vb, vc))              => None
+      case (uw, FieldAccessF(v, va, vb))          => None
+      case (uw, EnumAccessF(v, va, vb))           => None
+      case (uw, IndexF(v, va, vb))                => None
+      case (uw, CallF(v, va, vb))                 => None
+      case (uw, PrimeF(v, va))                    => None
+      case (uw, PreF(v, va))                      => None
+      case (uw, WithF(v, va, vb))                 => None
+      case (uw, IfF(v, va, vb, vc))               => None
+      case (uw, LetF(v, va, vb, vc))              => None
+      case (uw, LambdaF(v, va, vb))               => None
+      case (uw, ConstructorF(v, va, vb))          => None
+      case (uw, SetLiteralF(v, va))               => None
+      case (uw, MapLiteralF(v, va))               => None
+      case (uw, SetComprehensionF(v, va, vb, vc)) => None
+      case (uw, SeqLiteralF(v, va))               => None
+      case (uw, MatchesF(v, va, vb))              => None
+      case (uw, IntLitF(v, va))                   => None
+      case (uw, FloatLitF(v, va))                 => None
+      case (uw, StringLitF(v, va))                => None
+      case (uw, NoneLitF(v))                      => None
+      case (uw, IdentifierF(v, va))               => None
+    }
+
   def entName(x0: entity_decl): String = x0 match {
     case EntityDeclFull(x1, x2, x3, x4, x5) => x1
   }
@@ -6275,6 +6509,121 @@ object SpecRestGenerated {
               case false => ClassificationResult(PartialUpdate(), PATCH(), "M4", updated)
             }
         }
+    }
+
+  def scalarUpdateOf(scalars: List[String], x1: expr): Option[(String, scalar_rhs)] =
+    (scalars, x1) match {
+      case (scalars, BinaryOpF(op, lhs, rhs, uu)) =>
+        op match {
+          case BAnd()     => None
+          case BOr()      => None
+          case BImplies() => None
+          case BIff()     => None
+          case BEq() =>
+            lhs match {
+              case BinaryOpF(_, _, _, _)                    => None
+              case UnaryOpF(_, _, _)                        => None
+              case QuantifierF(_, _, _, _)                  => None
+              case SomeWrapF(_, _)                          => None
+              case TheF(_, _, _, _)                         => None
+              case FieldAccessF(_, _, _)                    => None
+              case EnumAccessF(_, _, _)                     => None
+              case IndexF(_, _, _)                          => None
+              case CallF(_, _, _)                           => None
+              case PrimeF(BinaryOpF(_, _, _, _), _)         => None
+              case PrimeF(UnaryOpF(_, _, _), _)             => None
+              case PrimeF(QuantifierF(_, _, _, _), _)       => None
+              case PrimeF(SomeWrapF(_, _), _)               => None
+              case PrimeF(TheF(_, _, _, _), _)              => None
+              case PrimeF(FieldAccessF(_, _, _), _)         => None
+              case PrimeF(EnumAccessF(_, _, _), _)          => None
+              case PrimeF(IndexF(_, _, _), _)               => None
+              case PrimeF(CallF(_, _, _), _)                => None
+              case PrimeF(PrimeF(_, _), _)                  => None
+              case PrimeF(PreF(_, _), _)                    => None
+              case PrimeF(WithF(_, _, _), _)                => None
+              case PrimeF(IfF(_, _, _, _), _)               => None
+              case PrimeF(LetF(_, _, _, _), _)              => None
+              case PrimeF(LambdaF(_, _, _), _)              => None
+              case PrimeF(ConstructorF(_, _, _), _)         => None
+              case PrimeF(SetLiteralF(_, _), _)             => None
+              case PrimeF(MapLiteralF(_, _), _)             => None
+              case PrimeF(SetComprehensionF(_, _, _, _), _) => None
+              case PrimeF(SeqLiteralF(_, _), _)             => None
+              case PrimeF(MatchesF(_, _, _), _)             => None
+              case PrimeF(IntLitF(_, _), _)                 => None
+              case PrimeF(FloatLitF(_, _), _)               => None
+              case PrimeF(StringLitF(_, _), _)              => None
+              case PrimeF(BoolLitF(_, _), _)                => None
+              case PrimeF(NoneLitF(_), _)                   => None
+              case PrimeF(IdentifierF(n, _), _) =>
+                membera[String](scalars, n) match {
+                  case true => map_option[scalar_rhs, (String, scalar_rhs)](
+                      (a: scalar_rhs) => (n, a),
+                      scalarRhsOf(n, rhs)
+                    )
+                  case false => None
+                }
+              case PreF(_, _)                    => None
+              case WithF(_, _, _)                => None
+              case IfF(_, _, _, _)               => None
+              case LetF(_, _, _, _)              => None
+              case LambdaF(_, _, _)              => None
+              case ConstructorF(_, _, _)         => None
+              case SetLiteralF(_, _)             => None
+              case MapLiteralF(_, _)             => None
+              case SetComprehensionF(_, _, _, _) => None
+              case SeqLiteralF(_, _)             => None
+              case MatchesF(_, _, _)             => None
+              case IntLitF(_, _)                 => None
+              case FloatLitF(_, _)               => None
+              case StringLitF(_, _)              => None
+              case BoolLitF(_, _)                => None
+              case NoneLitF(_)                   => None
+              case IdentifierF(_, _)             => None
+            }
+          case BNeq()       => None
+          case BLt()        => None
+          case BGt()        => None
+          case BLe()        => None
+          case BGe()        => None
+          case BIn()        => None
+          case BNotIn()     => None
+          case BSubset()    => None
+          case BUnion()     => None
+          case BIntersect() => None
+          case BDiff()      => None
+          case BAdd()       => None
+          case BSub()       => None
+          case BMul()       => None
+          case BDiv()       => None
+        }
+      case (uv, UnaryOpF(v, va, vb))              => None
+      case (uv, QuantifierF(v, va, vb, vc))       => None
+      case (uv, SomeWrapF(v, va))                 => None
+      case (uv, TheF(v, va, vb, vc))              => None
+      case (uv, FieldAccessF(v, va, vb))          => None
+      case (uv, EnumAccessF(v, va, vb))           => None
+      case (uv, IndexF(v, va, vb))                => None
+      case (uv, CallF(v, va, vb))                 => None
+      case (uv, PrimeF(v, va))                    => None
+      case (uv, PreF(v, va))                      => None
+      case (uv, WithF(v, va, vb))                 => None
+      case (uv, IfF(v, va, vb, vc))               => None
+      case (uv, LetF(v, va, vb, vc))              => None
+      case (uv, LambdaF(v, va, vb))               => None
+      case (uv, ConstructorF(v, va, vb))          => None
+      case (uv, SetLiteralF(v, va))               => None
+      case (uv, MapLiteralF(v, va))               => None
+      case (uv, SetComprehensionF(v, va, vb, vc)) => None
+      case (uv, SeqLiteralF(v, va))               => None
+      case (uv, MatchesF(v, va, vb))              => None
+      case (uv, IntLitF(v, va))                   => None
+      case (uv, FloatLitF(v, va))                 => None
+      case (uv, StringLitF(v, va))                => None
+      case (uv, BoolLitF(v, va))                  => None
+      case (uv, NoneLitF(v))                      => None
+      case (uv, IdentifierF(v, va))               => None
     }
 
   def isSerial4(x0: canonical_type): Boolean = x0 match {
@@ -8123,6 +8472,9 @@ object SpecRestGenerated {
         }
     }
 
+  def isScalarUpdateClause(scalars: List[String], c: expr): Boolean =
+    !is_none[(String, scalar_rhs)](scalarUpdateOf(scalars, c))
+
   def mapEntryIsLeafLeaf(x0: map_entry): Boolean = x0 match {
     case MapEntryFull(k, v, uu) => isLeafValue(k) && isLeafValue(v)
   }
@@ -9243,18 +9595,41 @@ object SpecRestGenerated {
 
   def classifyStrategy(
       ensures: List[expr],
+      reqs: List[expr],
       stateFieldNames: List[String],
+      scalarFieldNames: List[String],
       outputNames: List[String]
   ): synthesis_strategy = {
     val clauses = flattenEnsures(ensures): List[expr];
-    !nulla[expr](clauses) &&
-      list_all[expr](
-        (c: expr) =>
-          isDirectEmitShape(c, stateFieldNames, outputNames),
-        clauses
-      ) match {
-      case true  => DirectEmit()
-      case false => LlmSynthesis()
+    nulla[expr](clauses) match {
+      case true => LlmSynthesis()
+      case false => list_ex[expr](
+          (a: expr) =>
+            isScalarUpdateClause(scalarFieldNames, a),
+          clauses
+        ) match {
+          case true => list_all[expr](
+              (a: expr) =>
+                isScalarUpdateClause(scalarFieldNames, a),
+              clauses
+            ) &&
+              list_all[expr](
+                (r: expr) =>
+                  !is_none[scalar_guard](scalarGuardOf(scalarFieldNames, r)),
+                flattenEnsures(reqs)
+              ) match {
+              case true  => DirectEmit()
+              case false => LlmSynthesis()
+            }
+          case false => list_all[expr](
+              (c: expr) =>
+                isDirectEmitShape(c, stateFieldNames, outputNames),
+              clauses
+            ) match {
+              case true  => DirectEmit()
+              case false => LlmSynthesis()
+            }
+        }
     }
   }
 

@@ -32,6 +32,8 @@ def upgrade() -> None:
 
 {{else}}
     pass
+{{/each}}{{#each migration.seedStatements}}
+    op.execute("{{{this}}}")
 {{/each}}
 {{#each migration.triggers}}
 {{#each this.upgradeStatements}}

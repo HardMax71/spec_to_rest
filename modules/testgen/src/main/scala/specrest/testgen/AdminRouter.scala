@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.convention.ScalarState
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledService
@@ -7,25 +8,42 @@ import specrest.profile.ProfiledService
 object AdminRouter:
 
   def emit(profiled: ProfiledService): String =
-    val ir       = profiled.ir
-    val entities = svcEntities(ir)
+    val ir         = profiled.ir
+    val entities   = svcEntities(ir)
+    val hasScalars = ScalarState.fields(ir).nonEmpty
 
     val entityImports = entities
       .map(e => s"from app.models.${Naming.toSnakeCase(entName(e))} import ${entName(e)}")
       .mkString("\n")
+    val stateImport =
+      if hasScalars then "\nfrom app.models.service_state import ServiceState" else ""
 
+    val scalarResets =
+      if hasScalars then
+        val zeros = ScalarState
+          .fields(ir)
+          .map(sf => s"${ScalarState.columnName(stfName(sf))}=0")
+          .mkString(", ")
+        s"\n    await session.execute(sa_update(ServiceState).values($zeros))"
+      else ""
     val deleteStatements =
-      if entities.isEmpty then "    pass"
+      if entities.isEmpty && !hasScalars then "    pass"
       else
         entities
           .map(e => s"    await session.execute(delete(${entName(e)}))")
-          .mkString("\n")
+          .mkString("\n") + scalarResets
 
     val stateFieldsList = irStateFields(ir)
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
-        val needsRows = stateFieldsList.exists(f => AdminModel.projectionFor(f, ir).isDefined)
+        val projections = stateFieldsList.map(f => f -> AdminModel.projectionFor(f, ir))
+        val needsRows = projections.exists:
+          case (_, Some(p)) =>
+            p.valueShape match
+              case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
+              case _                                               => true
+          case _ => false
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
@@ -37,10 +55,14 @@ object AdminRouter:
                 s"    $v = (await session.execute(select(${entName(e)}))).scalars().all()"
               .mkString("\n") + "\n"
           else ""
+        val stateRowLine =
+          if hasScalars then
+            "    state_row = (await session.execute(select(ServiceState))).scalar_one()\n"
+          else ""
 
         val pairs = stateFieldsList.map(f => projectionLine(f, ir, entities))
         val body  = pairs.mkString(",\n")
-        s"$rowsLine    return {\n$body,\n    }"
+        s"$rowsLine$stateRowLine    return {\n$body,\n    }"
 
     val seedEntities = svcTransitions(ir).map(trnEntity).toSet
     val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
@@ -53,11 +75,13 @@ object AdminRouter:
        |
        |from fastapi import APIRouter, Body, Depends, HTTPException
        |from fastapi.responses import Response
-       |from sqlalchemy import delete, select
+       |from sqlalchemy import delete, select${
+        if hasScalars then ", update as sa_update" else ""
+      }
        |from sqlalchemy.ext.asyncio import AsyncSession
        |
        |from app.database import get_session
-       |${if entityImports.nonEmpty then entityImports else ""}
+       |${if entityImports.nonEmpty then entityImports else ""}$stateImport
        |
        |router = APIRouter(prefix="/__test_admin__", tags=["test-admin"])
        |
@@ -130,14 +154,18 @@ object AdminRouter:
   ): String =
     AdminModel.projectionFor(f, ir) match
       case Some(p) =>
-        val rowsRef =
-          if entities.size <= 1 then "rows"
-          else s"rows_${Naming.toSnakeCase(p.entityName)}"
-        val valueExpr = p.valueShape match
-          case AdminModel.ProjectionValue.PrimitiveField(name) => s"row.$name"
-          case AdminModel.ProjectionValue.EntityRow            => "_row_to_dict(row)"
         val key = pyStringLit(stfName(f))
-        s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
+        p.valueShape match
+          case AdminModel.ProjectionValue.ScalarStateColumn(col) =>
+            s"        $key: state_row.$col"
+          case other =>
+            val rowsRef =
+              if entities.size <= 1 then "rows"
+              else s"rows_${Naming.toSnakeCase(p.entityName)}"
+            val valueExpr = other match
+              case AdminModel.ProjectionValue.PrimitiveField(name) => s"row.$name"
+              case _                                               => "_row_to_dict(row)"
+            s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
       case None =>
         val key = pyStringLit(stfName(f))
         s"        # M5.1: state field '${stfName(f)}' not backed by entity table\n        $key: None"

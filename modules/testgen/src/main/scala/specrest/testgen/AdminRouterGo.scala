@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.convention.ScalarState
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.entFields
 import specrest.ir.generated.SpecRestGenerated.entName
@@ -27,8 +28,18 @@ object AdminRouterGo:
 
     def tbl(e: entity_decl): String = Naming.toTableName(entName(e))
 
+    val scalarFields = ScalarState.fields(ir)
+    val scalarReset =
+      if scalarFields.isEmpty then ""
+      else
+        val sets = scalarFields
+          .map(sf => s"${ScalarState.columnName(stfName(sf))} = 0")
+          .mkString(", ")
+        s"""\n\t\tif _, err := db.ExecContext(ctx, ${GoLit.str(
+            s"UPDATE ${ScalarState.TableName} SET $sets WHERE id = 1"
+          )}); err != nil {\n\t\t\thttp.Error(w, err.Error(), 500)\n\t\t\treturn\n\t\t}"""
     val resetStmts =
-      if entities.isEmpty then "\t\t// no entities"
+      if entities.isEmpty && scalarFields.isEmpty then "\t\t// no entities"
       else
         entities.reverse
           .map(e =>
@@ -36,34 +47,51 @@ object AdminRouterGo:
                 s"DELETE FROM ${tbl(e)}"
               )}); err != nil {\n\t\t\thttp.Error(w, err.Error(), 500)\n\t\t\treturn\n\t\t}"""
           )
-          .mkString("\n")
+          .mkString("\n") + scalarReset
 
     val stateFields = irStateFields(ir)
     val stateAssigns = stateFields
       .map: f =>
         AdminModel.projectionFor(f, ir) match
           case Some(p) =>
-            val keyCol = Naming.toColumnName(p.keyFieldName)
-            val valExpr = p.valueShape match
-              case AdminModel.ProjectionValue.EntityRow => "row"
-              case AdminModel.ProjectionValue.PrimitiveField(name) =>
-                s"row[${GoLit.str(Naming.toColumnName(name))}]"
-            val srcTbl = entities
-              .find(e => entName(e) == p.entityName)
-              .map(tbl)
-              .getOrElse(Naming.toTableName(p.entityName))
-            s"""\t\t{
-               |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(s"SELECT * FROM $srcTbl")})
-               |\t\t\tif err != nil {
-               |\t\t\t\thttp.Error(w, err.Error(), 500)
-               |\t\t\t\treturn
-               |\t\t\t}
-               |\t\t\tm := map[string]any{}
-               |\t\t\tfor _, row := range rows {
-               |\t\t\t\tm[fmt.Sprintf("%v", row[${GoLit.str(keyCol)}])] = $valExpr
-               |\t\t\t}
-               |\t\t\tstate[${GoLit.str(stfName(f))}] = m
-               |\t\t}""".stripMargin
+            p.valueShape match
+              case AdminModel.ProjectionValue.ScalarStateColumn(col) =>
+                s"""\t\t{
+                   |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(
+                    s"SELECT $col FROM ${ScalarState.TableName} WHERE id = 1"
+                  )})
+                   |\t\t\tif err != nil {
+                   |\t\t\t\thttp.Error(w, err.Error(), 500)
+                   |\t\t\t\treturn
+                   |\t\t\t}
+                   |\t\t\tif len(rows) > 0 {
+                   |\t\t\t\tstate[${GoLit.str(stfName(f))}] = rows[0][${GoLit.str(col)}]
+                   |\t\t\t} else {
+                   |\t\t\t\tstate[${GoLit.str(stfName(f))}] = nil
+                   |\t\t\t}
+                   |\t\t}""".stripMargin
+              case shape =>
+                val keyCol = Naming.toColumnName(p.keyFieldName)
+                val valExpr = shape match
+                  case AdminModel.ProjectionValue.PrimitiveField(name) =>
+                    s"row[${GoLit.str(Naming.toColumnName(name))}]"
+                  case _ => "row"
+                val srcTbl = entities
+                  .find(e => entName(e) == p.entityName)
+                  .map(tbl)
+                  .getOrElse(Naming.toTableName(p.entityName))
+                s"""\t\t{
+                   |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(s"SELECT * FROM $srcTbl")})
+                   |\t\t\tif err != nil {
+                   |\t\t\t\thttp.Error(w, err.Error(), 500)
+                   |\t\t\t\treturn
+                   |\t\t\t}
+                   |\t\t\tm := map[string]any{}
+                   |\t\t\tfor _, row := range rows {
+                   |\t\t\t\tm[fmt.Sprintf("%v", row[${GoLit.str(keyCol)}])] = $valExpr
+                   |\t\t\t}
+                   |\t\t\tstate[${GoLit.str(stfName(f))}] = m
+                   |\t\t}""".stripMargin
           case None =>
             s"\t\tstate[${GoLit.str(stfName(f))}] = nil"
       .mkString("\n")

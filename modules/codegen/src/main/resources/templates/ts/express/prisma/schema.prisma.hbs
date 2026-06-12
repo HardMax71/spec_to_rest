@@ -16,4 +16,13 @@ model {{entity.modelClassName}} {
   @@map("{{entity.tableName}}")
 }
 
+{{/each}}{{#if scalarStateFields.length}}
+model ServiceState {
+  id BigInt @id
+{{#each scalarStateFields}}
+  {{this.camelName}} BigInt @map("{{this.columnName}}")
 {{/each}}
+
+  @@map("service_state")
+}
+{{/if}}

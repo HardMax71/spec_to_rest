@@ -1,9 +1,13 @@
 {{#each entities}}
 from app.services.{{snake_case this.entityName}} import {{this.entityName}}Service
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+from app.services.state_ops import StateOpsService
+{{/if}}
 
 __all__ = [
 {{#each entities}}
     "{{this.entityName}}Service",
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+    "StateOpsService",
+{{/if}}
 ]

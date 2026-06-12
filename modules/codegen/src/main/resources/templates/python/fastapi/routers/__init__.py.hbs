@@ -1,9 +1,13 @@
 {{#each entities}}
 from app.routers import {{snake_case (pluralize this.entityName)}}
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+from app.routers import state_ops
+{{/if}}
 
 __all__ = [
 {{#each entities}}
     "{{snake_case (pluralize this.entityName)}}",
-{{/each}}
+{{/each}}{{#if hasScalarOps}}
+    "state_ops",
+{{/if}}
 ]

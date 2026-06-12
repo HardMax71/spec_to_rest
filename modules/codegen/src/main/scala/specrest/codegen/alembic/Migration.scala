@@ -1,5 +1,6 @@
 package specrest.codegen.alembic
 
+import specrest.codegen.ScalarOps
 import specrest.codegen.migration.AlembicSyntax
 import specrest.codegen.migration.CanonicalType
 import specrest.codegen.migration.Dialect
@@ -57,6 +58,7 @@ final case class AlembicMigration(
     tablesReversed: List[AlembicTable],
     triggers: List[AlembicTrigger],
     triggersReversed: List[AlembicTrigger],
+    seedStatements: List[String],
     needsPostgresDialect: Boolean
 )
 
@@ -83,6 +85,7 @@ object Migration:
       tablesReversed = tables.reverse,
       triggers = triggers,
       triggersReversed = triggers.reverse,
+      seedStatements = sorted.filter(ScalarOps.isStateTable).map(ScalarOps.seedSqlFor),
       needsPostgresDialect = needsPostgresDialect
     )
 
