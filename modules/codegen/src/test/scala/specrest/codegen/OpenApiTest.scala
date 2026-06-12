@@ -45,8 +45,14 @@ class OpenApiTest extends CatsEffectSuite:
 
   test("auth_service: requires_auth emits per-operation security as OR-alternatives"):
     SpecFixtures.loadProfiled("auth_service").map: profiled =>
-      val doc  = OpenApi.buildOpenApiDocument(profiled)
-      val byId = allOperations(doc).map((_, op) => op.operationId -> op).toMap
+      val doc        = OpenApi.buildOpenApiDocument(profiled)
+      val operations = allOperations(doc)
+      assertEquals(
+        operations.map(_._2.operationId).distinct.size,
+        operations.size,
+        "duplicate operationId would hide an operation from this test"
+      )
+      val byId = operations.map((_, op) => op.operationId -> op).toMap
       assertEquals(
         byId("logout").security,
         Some(List(Map("bearer" -> List.empty[String])))
