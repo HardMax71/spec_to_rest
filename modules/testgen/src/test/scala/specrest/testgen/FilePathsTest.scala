@@ -15,8 +15,6 @@ class FilePathsTest extends CatsEffectSuite:
     assertEquals(FilePaths.StrategiesFile, "tests/strategies.py")
     assertEquals(FilePaths.PredicatesFile, "tests/predicates.py")
     assertEquals(FilePaths.SkipsFile, "tests/_testgen_skips.json")
-    assertEquals(FilePaths.AdminRouterFile, "app/routers/test_admin.py")
-    assertEquals(FilePaths.AdminRouterFileTs, "src/routes/testAdmin.ts")
 
   test("testgen supports every fastapi, ts-express and go-chi dialect"):
     List(

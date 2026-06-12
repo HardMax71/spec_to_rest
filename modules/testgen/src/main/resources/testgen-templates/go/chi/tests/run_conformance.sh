@@ -3,8 +3,8 @@
 #
 # Runs the conformance suite (structural + behavioral + stateful) against an
 # already-running service via `go test`, forwarding the profile. The caller is
-# responsible for bringing the service up with ENABLE_TEST_ADMIN=1 and a
-# binary built with `-tags conformance`.
+# responsible for bringing the service up with the same ADMIN_TOKEN this
+# process sees (the test files themselves build with `-tags conformance`).
 #
 # Usage: bash tests/run_conformance.sh [smoke|thorough|exhaustive]
 # Profile precedence: $1 > SPEC_TEST_PROFILE > "thorough".

@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.AdminModel
 import specrest.convention.EndpointSpec
 import specrest.ir.Naming
 import specrest.ir.PrettyPrint
@@ -637,7 +638,7 @@ object Stateful:
         sb.append(
           s"        ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(invBody(inv)))}$TQ\n"
         )
-        sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
+        sb.append("        post_state = client.get(\"/admin/state\").json()\n")
         sb.append(
           s"        assert $text, ${ExprToPython.pyString(s"invariant violated: $name")}\n"
         )
@@ -663,7 +664,7 @@ object Stateful:
             sb.append(
               s"        ${TQ}temporal always(${tmpName(decl)}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
             )
-            sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
+            sb.append("        post_state = client.get(\"/admin/state\").json()\n")
             sb.append(
               s"        assert $text, ${ExprToPython.pyString(s"temporal always violated: ${tmpName(decl)}")}\n"
             )
@@ -683,7 +684,7 @@ object Stateful:
             sb.append(
               s"        ${TQ}temporal eventually(${tmpName(decl)}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
             )
-            sb.append("        post_state = client.get(\"/__test_admin__/state\").json()\n")
+            sb.append("        post_state = client.get(\"/admin/state\").json()\n")
             sb.append(s"        if $text:\n")
             sb.append(s"            self.$flagName = True\n")
             TemporalEmission.Eventually(
@@ -792,9 +793,9 @@ object Stateful:
       .mkString("\n")
     val initializeBlock =
       val resetBody =
-        if eventuallyResetLines.isEmpty then "        client.post(\"/__test_admin__/reset\")\n"
+        if eventuallyResetLines.isEmpty then "        client.post(\"/admin/reset\")\n"
         else
-          s"""|        client.post("/__test_admin__/reset")
+          s"""|        client.post("/admin/reset")
               |$eventuallyResetLines
               |""".stripMargin
       s"""|    @initialize()
@@ -832,7 +833,7 @@ object Stateful:
         |Builds a Hypothesis RuleBasedStateMachine: each spec operation becomes a
         |@rule that performs the real HTTP call; entity ids returned from Create
         |operations flow through Bundles into Read/Update/Delete rules; global
-        |invariants are checked after every step against /__test_admin__/state.
+        |invariants are checked after every step against /admin/state.
         |
         |See tests/_testgen_skips.json for clauses skipped during translation.
         |${TQ}

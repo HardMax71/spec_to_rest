@@ -91,7 +91,7 @@ class StatefulTest extends CatsEffectSuite:
       assert(out.file.contains("@invariant()"))
       assert(out.file.contains("def invariant_all_ur_ls_valid(self):"))
       assert(out.file.contains("def invariant_metadata_consistent(self):"))
-      assert(out.file.contains("post_state = client.get(\"/__test_admin__/state\").json()"))
+      assert(out.file.contains("post_state = client.get(\"/admin/state\").json()"))
 
   test("file emits TestCase alias and settings"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -597,7 +597,7 @@ class StatefulTest extends CatsEffectSuite:
   test("@initialize() reset is emitted exactly once"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val out        = Stateful.emitFor(profiled)
-      val needle     = "client.post(\"/__test_admin__/reset\")"
+      val needle     = "client.post(\"/admin/reset\")"
       val resetCount = out.file.sliding(needle.length).count(_ == needle)
       assertEquals(resetCount, 1, "single @initialize reset call expected")
 

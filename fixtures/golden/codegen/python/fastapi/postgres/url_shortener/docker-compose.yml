@@ -25,7 +25,7 @@ services:
     build: .
     env_file: .env
     environment:
-      ENABLE_TEST_ADMIN: ${ENABLE_TEST_ADMIN:-}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     ports:
       - "8000:8000"
     depends_on:

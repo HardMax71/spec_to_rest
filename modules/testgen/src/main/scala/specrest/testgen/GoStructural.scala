@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.go.GoLit
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -83,7 +84,7 @@ object GoStructural:
       sb.append(s"func $name(t *testing.T) {\n")
       sb.append("\tensureAdmin(t)\n")
       sb.append("\trapid.Check(t, func(rt *rapid.T) {\n")
-      sb.append("\t\tclient.post(\"/__test_admin__/reset\")\n")
+      sb.append("\t\tclient.post(\"/admin/reset\")\n")
       arbs.foreach: (n, a) =>
         sb.append(s"\t\t$n := ($a).Draw(rt, ${GoLit.str(n)})\n")
         sb.append(s"\t\t_ = $n\n")
@@ -94,7 +95,7 @@ object GoStructural:
     else
       sb.append(s"func $name(t *testing.T) {\n")
       sb.append("\tensureAdmin(t)\n")
-      sb.append("\tclient.post(\"/__test_admin__/reset\")\n")
+      sb.append("\tclient.post(\"/admin/reset\")\n")
       sb.append(s"\tresponse := $call\n")
       sb.append(s"\tif response.Status() >= 500 {\n\t\tt.Fatalf($viol)\n\t}\n")
       sb.append("}\n")

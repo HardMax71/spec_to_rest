@@ -7,31 +7,22 @@ servers:
 - url: http://localhost:8080
   description: Local development
 paths:
-  /shorten:
-    post:
-      operationId: shorten
-      summary: Shorten
+  /urls:
+    get:
+      operationId: list_all
+      summary: ListAll
       tags:
       - url_mapping
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UrlMappingCreate'
       responses:
-        '201':
+        '200':
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UrlMappingRead'
-        '422':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type:
+                - array
+                items:
+                  $ref: '#/components/schemas/UrlMappingRead'
   /{code}:
     get:
       operationId: resolve
@@ -100,22 +91,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /urls:
-    get:
-      operationId: list_all
-      summary: ListAll
-      tags:
-      - url_mapping
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                type:
-                - array
-                items:
-                  $ref: '#/components/schemas/UrlMappingRead'
   /health:
     get:
       operationId: health_check
@@ -139,6 +114,98 @@ paths:
                     - string
                     enum:
                     - ok
+  /admin/state:
+    get:
+      operationId: admin_state
+      summary: Export spec-level state
+      description: Returns the service state projected onto the spec's state fields.
+      tags:
+      - admin
+      responses:
+        '200':
+          description: State projection
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                additionalProperties: true
+        '401':
+          description: Missing or invalid admin credential
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenge
+              schema:
+                type:
+                - string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Admin surface disabled (no ADMIN_TOKEN configured on the service)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - AdminBearer: []
+  /admin/reset:
+    post:
+      operationId: admin_reset
+      summary: Re-initialize service state
+      description: Deletes all entity rows and restores scalar state fields to their invariant-derived
+        seeds.
+      tags:
+      - admin
+      responses:
+        '204':
+          description: State re-initialized
+        '401':
+          description: Missing or invalid admin credential
+          headers:
+            WWW-Authenticate:
+              description: Bearer authentication challenge
+              schema:
+                type:
+                - string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Admin surface disabled (no ADMIN_TOKEN configured on the service)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security:
+      - AdminBearer: []
+  /shorten:
+    post:
+      operationId: shorten
+      summary: Shorten
+      tags:
+      - url_mapping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UrlMappingCreate'
+      responses:
+        '201':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UrlMappingRead'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
     ErrorResponse:
@@ -239,11 +306,19 @@ components:
           - 'null'
           minimum: 0.0
       description: Update payload for UrlMapping
+  securitySchemes:
+    AdminBearer:
+      type: http
+      scheme: bearer
+      description: Admin surface credential (ADMIN_TOKEN). With no token configured on the service, /admin
+        routes answer 404.
 tags:
 - name: url_mapping
   description: UrlMapping operations
 - name: infrastructure
   description: Health and metrics endpoints
+- name: admin
+  description: Bearer-guarded admin surface (state export / import / reset)
 x-invariant:
   allURLsValid: (all c in store | isValidURI(store[c]))
   metadataConsistent: (dom(store) = dom(metadata))

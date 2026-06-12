@@ -224,6 +224,7 @@ object EmitPython:
     files += EmittedFile("app/__init__.py", "")
     files += EmittedFile("app/main.py", engine.renderAny(templates.main, ctx))
     files += EmittedFile("app/config.py", engine.renderAny(templates.config, ctx))
+    files += EmittedFile("app/security.py", engine.renderAny(templates.security, ctx))
     files += EmittedFile("app/database.py", engine.renderAny(templates.database, ctx))
     files += EmittedFile("app/redaction.py", engine.renderAny(templates.redaction, ctx))
     files += EmittedFile("app/db/__init__.py", "")
@@ -237,6 +238,7 @@ object EmitPython:
       ExtensionStub.python,
       preserve = true
     )
+    files += EmittedFile("app/routers/admin.py", AdminRouter.emit(profiled))
 
     val scalarFields = ScalarOps.stateFields(profiled)
     val scalarOps    = ScalarOps.views(profiled)

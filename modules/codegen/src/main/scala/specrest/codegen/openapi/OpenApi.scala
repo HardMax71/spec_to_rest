@@ -109,7 +109,15 @@ final case class OperationObject(
     tags: List[String],
     parameters: Option[List[ParameterObject]],
     requestBody: Option[RequestBodyObject],
-    responses: Map[String, ResponseObject]
+    responses: Map[String, ResponseObject],
+    security: Option[List[Map[String, List[String]]]] = None
+)
+
+final case class SecuritySchemeObject(
+    `type`: String,
+    scheme: Option[String] = None,
+    bearerFormat: Option[String] = None,
+    description: Option[String] = None
 )
 
 final case class PathItemObject(
@@ -120,7 +128,10 @@ final case class PathItemObject(
     delete: Option[OperationObject] = None
 )
 
-final case class ComponentsObject(schemas: Map[String, SchemaObject])
+final case class ComponentsObject(
+    schemas: Map[String, SchemaObject],
+    securitySchemes: Option[Map[String, SecuritySchemeObject]] = None
+)
 final case class InfoObject(title: String, version: String, description: Option[String])
 final case class ServerObject(url: String, description: Option[String])
 final case class TagObject(name: String, description: Option[String])
@@ -190,7 +201,21 @@ object Components:
         schemas(entity.createSchemaName) = SchemaObjectAdapter.fromLifted(createL)
         schemas(entity.readSchemaName) = SchemaObjectAdapter.fromLifted(readL)
         schemas(entity.updateSchemaName) = SchemaObjectAdapter.fromLifted(updateL)
-    ComponentsObject(schemas.toMap)
+    ComponentsObject(
+      schemas = schemas.toMap,
+      securitySchemes = Some(
+        Map(
+          "AdminBearer" -> SecuritySchemeObject(
+            `type` = "http",
+            scheme = Some("bearer"),
+            description = Some(
+              "Admin surface credential (ADMIN_TOKEN). With no token configured " +
+                "on the service, /admin routes answer 404."
+            )
+          )
+        )
+      )
+    )
 
   private def decorateFields(
       entity: ProfiledEntity,
@@ -248,7 +273,116 @@ object Paths:
       GET(),
       healthOperation
     )
+    paths("/admin/reset") = PathItemObject(post = Some(adminResetOperation))
+    paths("/admin/state") = PathItemObject(get = Some(adminStateOperation))
+    val seedEntities = svcTransitions(profiled.ir).map(trnEntity).toSet
+    for e <- svcEntities(profiled.ir) if seedEntities.contains(entName(e)) do
+      val snake = Naming.toSnakeCase(entName(e))
+      paths(s"/admin/seed/$snake") = PathItemObject(post = Some(adminSeedOperation(snake)))
     paths.toMap
+
+  private val AdminSecurity: Option[List[Map[String, List[String]]]] =
+    Some(List(Map("AdminBearer" -> List.empty[String])))
+
+  private val adminErrorContent: Option[Map[String, MediaTypeObject]] =
+    Some(
+      Map(
+        "application/json" -> MediaTypeObject(
+          SchemaObject(ref = Some("#/components/schemas/ErrorResponse"))
+        )
+      )
+    )
+
+  private def adminErrorResponses: Map[String, ResponseObject] = Map(
+    "401" -> ResponseObject(
+      description = "Missing or invalid admin credential",
+      headers = Some(
+        Map(
+          "WWW-Authenticate" -> HeaderObject(
+            description = Some("Bearer authentication challenge"),
+            schema = SchemaObject(`type` = Some(List("string")))
+          )
+        )
+      ),
+      content = adminErrorContent
+    ),
+    "404" -> ResponseObject(
+      description = "Admin surface disabled (no ADMIN_TOKEN configured on the service)",
+      headers = None,
+      content = adminErrorContent
+    )
+  )
+
+  private def looseObjectSchema: SchemaObject =
+    SchemaObject(`type` = Some(List("object")), additionalProperties = Some(SOBBool(true)))
+
+  private def adminResetOperation: OperationObject =
+    OperationObject(
+      operationId = "admin_reset",
+      summary = Some("Re-initialize service state"),
+      description = Some(
+        "Deletes all entity rows and restores scalar state fields to their " +
+          "invariant-derived seeds."
+      ),
+      tags = List("admin"),
+      parameters = None,
+      requestBody = None,
+      responses = Map(
+        "204" -> ResponseObject(
+          description = "State re-initialized",
+          headers = None,
+          content = None
+        )
+      ) ++ adminErrorResponses,
+      security = AdminSecurity
+    )
+
+  private def adminStateOperation: OperationObject =
+    OperationObject(
+      operationId = "admin_state",
+      summary = Some("Export spec-level state"),
+      description = Some(
+        "Returns the service state projected onto the spec's state fields."
+      ),
+      tags = List("admin"),
+      parameters = None,
+      requestBody = None,
+      responses = Map(
+        "200" -> ResponseObject(
+          description = "State projection",
+          headers = None,
+          content = Some(Map("application/json" -> MediaTypeObject(looseObjectSchema)))
+        )
+      ) ++ adminErrorResponses,
+      security = AdminSecurity
+    )
+
+  private def adminSeedOperation(entitySnake: String): OperationObject =
+    OperationObject(
+      operationId = s"admin_seed_$entitySnake",
+      summary = Some(s"Import a $entitySnake row"),
+      description = Some(
+        "Inserts a row directly, bypassing operation preconditions, so " +
+          "arbitrary states (e.g. mid-transition) can be constructed."
+      ),
+      tags = List("admin"),
+      parameters = None,
+      requestBody = Some(
+        RequestBodyObject(
+          required = true,
+          description = None,
+          content = Map("application/json" -> MediaTypeObject(looseObjectSchema))
+        )
+      ),
+      responses = Map(
+        "201" -> ResponseObject(
+          description = "Row inserted; returns the primary key",
+          headers = None,
+          content = Some(Map("application/json" -> MediaTypeObject(looseObjectSchema)))
+        )
+      ) ++ adminErrorResponses,
+      security = AdminSecurity
+    )
 
   private def healthOperation: OperationObject =
     OperationObject(
@@ -565,6 +699,7 @@ object OpenApi:
     profiled.entities.map: e =>
       TagObject(Naming.toSnakeCase(e.entityName), Some(s"${e.entityName} operations"))
     :+ TagObject("infrastructure", Some("Health and metrics endpoints"))
+      :+ TagObject("admin", Some("Bearer-guarded admin surface (state export / import / reset)"))
 
   def serialize(doc: OpenApiDocument): String =
     val yaml = new org.yaml.snakeyaml.Yaml(customRepresenter, dumperOptions)

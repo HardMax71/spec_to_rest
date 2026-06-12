@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.go.GoLit
 import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val GoReservedNames: Set[String] = Set(
@@ -74,21 +75,6 @@ private[testgen] val GoReservedNames: Set[String] = Set(
   "recover"
 )
 
-object GoLit:
-  def str(s: String): String =
-    val sb = new StringBuilder
-    sb.append('"')
-    s.foreach:
-      case '"'                  => sb.append("\\\"")
-      case '\\'                 => sb.append("\\\\")
-      case '\n'                 => sb.append("\\n")
-      case '\r'                 => sb.append("\\r")
-      case '\t'                 => sb.append("\\t")
-      case c if c < 0x20.toChar => sb.append(f"\\u${c.toInt}%04x")
-      case c                    => sb.append(c)
-    sb.append('"')
-    sb.toString
-
 object GoIdent:
   def sanitize(s: String): String =
     val parts  = s.split("[^A-Za-z0-9]+").filter(_.nonEmpty).map(_.capitalize)
@@ -102,7 +88,7 @@ object GoIdent:
 // (_eq/_in/_lt/_add/_union/_len/_all/_filter/...). Function literals *are* Go
 // expressions, so quantifiers/comprehensions/`the` compose as
 // `_all(d, func(v any) bool { return _truthy(body) })`. State is read from the
-// parsed /__test_admin__/state JSON via `_field(postState|preState, "x")` and
+// parsed /admin/state JSON via `_field(postState|preState, "x")` and
 // the response body via `_field(responseData, "x")`.
 object GoExprBackend extends ExprBackend:
 

@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.go.GoLit
 import specrest.ir.generated.SpecRestGenerated.IntConstraint
 import specrest.ir.generated.SpecRestGenerated.StringConstraint
 import specrest.ir.generated.SpecRestGenerated.int_constraint

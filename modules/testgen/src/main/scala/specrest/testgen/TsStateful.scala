@@ -166,11 +166,11 @@ object TsStateful:
     sb.append("        { minLength: 1, maxLength: STEP_COUNT },\n")
     sb.append("      ),\n")
     sb.append("      async (steps) => {\n")
-    sb.append("        await client.post(\"/__test_admin__/reset\");\n")
+    sb.append("        await client.post(\"/admin/reset\");\n")
     sb.append("        for (const step of steps) {\n")
     sb.append("          await dispatch(step);\n")
     sb.append(
-      "          const postState = (await (await client.get(\"/__test_admin__/state\"))" +
+      "          const postState = (await (await client.get(\"/admin/state\"))" +
         ".json()) as any;\n"
     )
     sb.append(invChecks)

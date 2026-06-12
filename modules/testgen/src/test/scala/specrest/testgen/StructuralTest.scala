@@ -39,7 +39,7 @@ class StructuralTest extends CatsEffectSuite:
   test("url_shortener: parametrize body resets state then validates with checks"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val out         = Structural.emitFor(profiled)
-      val resetIdx    = out.file.indexOf("client.post(\"/__test_admin__/reset\")")
+      val resetIdx    = out.file.indexOf("client.post(\"/admin/reset\")")
       val callIdx     = out.file.indexOf("response = case.call(base_url=BASE_URL)")
       val validateIdx = out.file.indexOf("case.validate_response(response, checks=_ALL_CHECKS)")
       assert(resetIdx >= 0, s"missing reset call:\n${out.file}")
@@ -54,7 +54,7 @@ class StructuralTest extends CatsEffectSuite:
       assert(
         out.file.contains("def _check_invariant_click_count_non_negative(ctx, response, case):")
       )
-      assert(out.file.contains("post_state = client.get(\"/__test_admin__/state\").json()"))
+      assert(out.file.contains("post_state = client.get(\"/admin/state\").json()"))
 
   test("url_shortener: invariant checks gated by status < 500"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

@@ -62,9 +62,9 @@ jobs:
         run: uv run alembic upgrade head
       - name: Run unit tests
         run: uv run pytest -v tests/test_health.py
+      - name: Mint per-run admin token
+        run: echo "ADMIN_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Start app for conformance tests
-        env:
-          ENABLE_TEST_ADMIN: "1"
         run: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
       - name: Wait for /health
         run: timeout 30 bash -c 'until curl -fsS http://localhost:8000/health; do sleep 1; done'

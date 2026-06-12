@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.codegen.go.GoLit
 import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -136,7 +137,7 @@ object GoStateful:
     sb.append(s"func Test${GoIdent.sanitize(svcName(ir))}StatefulInvariants(t *testing.T) {\n")
     sb.append("\tensureAdmin(t)\n")
     sb.append("\trapid.Check(t, func(rt *rapid.T) {\n")
-    sb.append("\t\tclient.post(\"/__test_admin__/reset\")\n")
+    sb.append("\t\tclient.post(\"/admin/reset\")\n")
     sb.append(
       "\t\tnSteps := int(rapid.Int64Range(1, int64(confStepCount())).Draw(rt, \"steps\"))\n"
     )

@@ -24,6 +24,42 @@ class OpenApiTest extends CatsEffectSuite:
       val resolve = doc.paths.get("/{code}").flatMap(_.get)
       assert(resolve.isDefined, "expected GET /{code}")
 
+  test("components.securitySchemes declares AdminBearer (http bearer)"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val doc = OpenApi.buildOpenApiDocument(profiled)
+      val schemes =
+        doc.components.securitySchemes.getOrElse(fail("expected securitySchemes"))
+      val admin = schemes.getOrElse("AdminBearer", fail("expected AdminBearer scheme"))
+      assertEquals(admin.`type`, "http")
+      assertEquals(admin.scheme, Some("bearer"))
+
+  test("admin surface is documented: /admin/reset POST + /admin/state GET with security"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val doc   = OpenApi.buildOpenApiDocument(profiled)
+      val reset = doc.paths.get("/admin/reset").flatMap(_.post)
+      assert(reset.isDefined, s"expected POST /admin/reset; paths=${doc.paths.keys}")
+      assertEquals(reset.get.security, Some(List(Map("AdminBearer" -> List.empty[String]))))
+      assert(reset.get.responses.contains("204"))
+      assert(reset.get.responses.contains("401"))
+      assert(reset.get.responses.contains("404"))
+      val state = doc.paths.get("/admin/state").flatMap(_.get)
+      assert(state.isDefined, "expected GET /admin/state")
+      // url_shortener has no transitions, so no seed routes
+      assert(!doc.paths.keys.exists(_.startsWith("/admin/seed/")), s"paths=${doc.paths.keys}")
+
+  test("todo_list documents POST /admin/seed/todo (transition entity)"):
+    SpecFixtures.loadProfiled("todo_list").map: profiled =>
+      val doc  = OpenApi.buildOpenApiDocument(profiled)
+      val seed = doc.paths.get("/admin/seed/todo").flatMap(_.post)
+      assert(seed.isDefined, s"expected POST /admin/seed/todo; paths=${doc.paths.keys}")
+      assertEquals(seed.get.security, Some(List(Map("AdminBearer" -> List.empty[String]))))
+
+  test("security requirement serializes as `AdminBearer: []` and schemes reach YAML"):
+    SpecFixtures.loadProfiled("url_shortener").map: profiled =>
+      val yaml = OpenApi.serialize(OpenApi.buildOpenApiDocument(profiled))
+      assert(yaml.contains("securitySchemes:"), s"missing securitySchemes:\n$yaml")
+      assert(yaml.contains("AdminBearer: []"), s"missing empty-scope requirement:\n$yaml")
+
   test("temporal_demo: x-invariant carries one entry per invariant; YAML emits hyphenated key"):
     SpecFixtures.loadProfiled("temporal_demo").map: profiled =>
       val doc = OpenApi.buildOpenApiDocument(profiled)

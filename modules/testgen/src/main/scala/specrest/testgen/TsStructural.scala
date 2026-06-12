@@ -79,7 +79,7 @@ object TsStructural:
       sb.append(s"test(${TsLit.str(name)}, async () => {\n")
       sb.append("  await fc.assert(\n")
       sb.append(s"    fc.asyncProperty($arbList, async ($paramList) => {\n")
-      sb.append("      await client.post(\"/__test_admin__/reset\");\n")
+      sb.append("      await client.post(\"/admin/reset\");\n")
       sb.append(s"      const response = await $call;\n")
       sb.append(s"      if (response.status >= 500) { throw new Error($viol); }\n")
       sb.append("    }),\n")
@@ -88,7 +88,7 @@ object TsStructural:
       sb.append("});\n")
     else
       sb.append(s"test(${TsLit.str(name)}, async () => {\n")
-      sb.append("  await client.post(\"/__test_admin__/reset\");\n")
+      sb.append("  await client.post(\"/admin/reset\");\n")
       sb.append(s"  const response = await $call;\n")
       sb.append(s"  if (response.status >= 500) { throw new Error($viol); }\n")
       sb.append("});\n")

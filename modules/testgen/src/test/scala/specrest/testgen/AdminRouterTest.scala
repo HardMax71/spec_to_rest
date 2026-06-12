@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import munit.CatsEffectSuite
+import specrest.codegen.python.AdminRouter
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
@@ -16,12 +17,13 @@ class AdminRouterTest extends CatsEffectSuite:
           case Left(err) => fail(s"build error: $err")
       case Left(err) => fail(s"parse error: $err")
 
-  test("router is gated on ENABLE_TEST_ADMIN env var"):
+  test("router is bearer-guarded via the router-level require_admin dependency"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
-      assert(src.contains("ENABLE_TEST_ADMIN"))
-      assert(src.contains("status_code=403"))
-      assert(src.contains("prefix=\"/__test_admin__\""))
+      assert(src.contains("from app.security import require_admin"))
+      assert(src.contains("dependencies=[Depends(require_admin)]"))
+      assert(src.contains("prefix=\"/admin\""))
+      assert(!src.contains("ENABLE_TEST_ADMIN"))
 
   test("router uses async session pattern matching codegen output"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
@@ -78,7 +80,7 @@ class AdminRouterTest extends CatsEffectSuite:
 
   // ---------- M5.9: per-entity seed endpoint emission ----------
 
-  test("M5.9: todo_list emits POST /__test_admin__/seed/todo with DateTime coercion"):
+  test("M5.9: todo_list emits POST /admin/seed/todo with DateTime coercion"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
       assert(src.contains("@router.post(\"/seed/todo\""), s"src=$src")
@@ -90,12 +92,12 @@ class AdminRouterTest extends CatsEffectSuite:
       assert(src.contains("payload[\"completed_at\"] = _parse_iso"), s"src=$src")
       assert(src.contains("return {\"id\": obj.id}"), s"src=$src")
 
-  test("M5.9: seed endpoint guarded by ENABLE_TEST_ADMIN like the rest of the router"):
+  test("M5.9: seed endpoint inherits the router-level require_admin guard"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val src        = AdminRouter.emit(profiled)
-      val seedSlice  = src.indexOf("async def seed_todo")
-      val checkAfter = src.indexOf("_check_enabled()", seedSlice)
-      assert(seedSlice > 0 && checkAfter > seedSlice, "_check_enabled() must follow seed def")
+      val src = AdminRouter.emit(profiled)
+      assert(src.contains("async def seed_todo"), s"src=$src")
+      assert(src.contains("dependencies=[Depends(require_admin)]"), s"src=$src")
+      assert(!src.contains("_check_enabled"), "per-request checks were replaced by the dependency")
 
   test("M5.9: url_shortener (no transitions) emits NO seed endpoint"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

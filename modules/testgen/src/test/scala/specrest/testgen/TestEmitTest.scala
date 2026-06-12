@@ -39,14 +39,13 @@ class TestEmitTest extends CatsEffectSuite:
         "mysql testgen output diverges from postgres"
       )
 
-  test("emit produces 13 files at the locked paths"):
+  test("emit produces 12 files at the locked paths"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
       val paths = files.map(_.path).toSet
       assertEquals(
         paths,
         Set(
-          "app/routers/test_admin.py",
           "tests/__init__.py",
           "tests/conftest.py",
           "tests/predicates.py",
@@ -110,12 +109,10 @@ class TestEmitTest extends CatsEffectSuite:
       val parsed = io.circe.parser.parse(skips)
       assert(parsed.isRight, s"not valid JSON: ${parsed.left.toOption}")
 
-  test("admin router emitted at the expected file path with /__test_admin__ prefix"):
+  test("testgen no longer emits the admin router (codegen owns it)"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val files = TestEmit.emit(profiled)
-      val admin = files.find(_.path == "app/routers/test_admin.py").get.content
-      assert(admin.contains("prefix=\"/__test_admin__\""))
-      assert(admin.contains("ENABLE_TEST_ADMIN"))
+      assert(!files.exists(_.path.startsWith("app/routers/")), "admin router is codegen's")
 
   test("conftest, predicates, pytest.ini, run_conformance are byte-identical to bundled templates"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
@@ -140,7 +137,7 @@ class TestEmitTest extends CatsEffectSuite:
       assert(runner.contains("tests/test_stateful_*.py"))
       assert(runner.contains("--junitxml="))
       assert(runner.contains("SPEC_TEST_PROFILE"))
-      assert(runner.contains("/__test_admin__/reset"))
+      assert(runner.contains("/admin/reset"))
 
   test("run_conformance.py distinguishes infra failures (exit 2) from test failures (exit 1)"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>

@@ -42,7 +42,9 @@ object Check:
                     val buildMs = (System.nanoTime() - t1) / 1_000_000.0
                     log.verbose(f"Built IR in ${buildMs}%.0fms")
 
-                    val convDiags = Validate.validateConventions(svcConventions(ir), ir)
+                    val convDiags =
+                      Validate.validateConventions(svcConventions(ir), ir) ++
+                        Validate.validateRoutes(ir)
                     val lintDiags = Lint.run(ir)
 
                     val convErrors   = convDiags.filter(_.level == ConvDiagLevel.Error)
@@ -65,7 +67,7 @@ object Check:
           )
         }
 
-  private def renderConv(specFile: String, d: ConventionDiagnostic): String =
+  private[cli] def renderConv(specFile: String, d: ConventionDiagnostic): String =
     val loc =
       d.span.collect { case SpanT(line, col, _, _) =>
         s"$specFile:$line:$col: "

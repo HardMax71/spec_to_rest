@@ -5,7 +5,7 @@
 // Runtime helpers the generated assertions call. Go is statically typed, so
 // the set/relation/arithmetic semantics Python gets from built-ins (`in`, `==`
 // on sets, `<`, `+`, `|`/`&`/`-`, powerset) are delegated here, operating over
-// `any` values decoded from /__test_admin__/state and response bodies
+// `any` values decoded from /admin/state and response bodies
 // (objects -> map[string]any, arrays -> []any, numbers -> float64). `_Set` is
 // a named slice so equality is order-independent for sets and ordered for
 // sequences, matching the TypeScript Set-vs-Array distinction.

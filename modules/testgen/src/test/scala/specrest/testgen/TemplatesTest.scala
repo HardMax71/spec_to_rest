@@ -48,8 +48,9 @@ class TemplatesTest extends CatsEffectSuite:
 
   test("conftest template loads and contains the admin-availability fixture"):
     assert(Templates.conftest.contains("_admin_endpoint_available"))
-    assert(Templates.conftest.contains("/__test_admin__/reset"))
-    assert(Templates.conftest.contains("ENABLE_TEST_ADMIN"))
+    assert(Templates.conftest.contains("/admin/reset"))
+    assert(Templates.conftest.contains("ADMIN_TOKEN"))
+    assert(!Templates.conftest.contains("ENABLE_TEST_ADMIN"))
 
   test("predicates(ir) renders preamble predicates (is_valid_uri / is_valid_email) + _powerset"):
     loadIR("service Empty {}").map: ir =>

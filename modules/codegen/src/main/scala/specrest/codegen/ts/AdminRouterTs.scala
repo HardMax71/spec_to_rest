@@ -1,5 +1,6 @@
-package specrest.testgen
+package specrest.codegen.ts
 
+import specrest.codegen.AdminModel
 import specrest.convention.ScalarState
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.entFields
@@ -130,11 +131,7 @@ object AdminRouterTs:
               else s"""body[${jsStr(c.columnName)}]"""
             s"""          ${c.tsField}: $src,"""
           .mkString("\n")
-        s"""  app.post('/__test_admin__/seed/$snake', (req: Request, res: Response): void => {
-           |    if (!enabled()) {
-           |      res.status(403).json({ detail: 'test admin disabled' });
-           |      return;
-           |    }
+        s"""  app.post('/admin/seed/$snake', requireAdmin, (req: Request, res: Response): void => {
            |    void (async () => {
            |      const body = req.body as Record<string, unknown>;
            |      const created = await (prisma as unknown as AnyPrisma).${accessor(e)}.create({
@@ -153,11 +150,12 @@ object AdminRouterTs:
 
     s"""import type { Express, Request, Response } from 'express';
 
+import { requireAdmin } from '../middleware/auth.js';
 import { prisma } from '../prisma.js';
 
-// The conformance suite (tests/) is the spec-derived, language-agnostic HTTP black-box
-// driver shared with the fastapi target; this router exposes the identical test-admin
-// contract (reset / state / seed) so the same suite can run against ts-express.
+// Bearer-guarded admin surface (state export / data import / re-initialize). The
+// conformance suite is its primary client; the contract (reset / state / seed) is
+// identical across the fastapi / chi / express targets.
 
 type AnyPrisma = Record<string, {
   deleteMany: () => Promise<unknown>;
@@ -167,16 +165,10 @@ type AnyPrisma = Record<string, {
   updateMany: (args: { data: Record<string, unknown> }) => Promise<unknown>;
 }>;
 
-const enabled = (): boolean => process.env.ENABLE_TEST_ADMIN === '1';
-
 $rowToDictFns
 
-export const registerTestAdminRoutes = (app: Express): void => {
-  app.post('/__test_admin__/reset', (_req: Request, res: Response): void => {
-    if (!enabled()) {
-      res.status(403).json({ detail: 'test admin disabled' });
-      return;
-    }
+export const registerAdminRoutes = (app: Express): void => {
+  app.post('/admin/reset', requireAdmin, (_req: Request, res: Response): void => {
     void (async () => {
 $resetStmts
       res.status(204).end();
@@ -185,11 +177,7 @@ $resetStmts
     });
   });
 
-  app.get('/__test_admin__/state', (_req: Request, res: Response): void => {
-    if (!enabled()) {
-      res.status(403).json({ detail: 'test admin disabled' });
-      return;
-    }
+  app.get('/admin/state', requireAdmin, (_req: Request, res: Response): void => {
     void (async () => {
 $rowsDecls
       res.status(200).json({

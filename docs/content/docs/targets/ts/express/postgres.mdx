@@ -210,13 +210,16 @@ asserts no 5xx — schemathesis's core check minus full schema validation; fail-
 stubs are honest-skipped exactly as the Python schemathesis renderer excludes them,
 recorded in `tests/_testgen_skips.json`), plus the `_runtime.ts` / `_client.ts` /
 `_predicates.ts` / `_strategies.ts` harness and `vitest.config.ts`. The
-`/__test_admin__/*` reset/state/seed router is emitted as `src/routes/testAdmin.ts`,
-mounted only when `ENABLE_TEST_ADMIN=1` (the production build leaves it unmounted).
+`/admin/*` reset/state/seed router is emitted as `src/routes/admin.ts` and mounted
+unconditionally; every route requires `Authorization: Bearer $ADMIN_TOKEN`. When no
+`ADMIN_TOKEN` is configured (the production default) the routes answer 404, so a
+deployment that sets nothing exposes nothing.
 
 Run it against a running service:
 
 ```bash
-ENABLE_TEST_ADMIN=1 npm start &
+export ADMIN_TOKEN=$(openssl rand -hex 32)
+npm start &
 node tests/run_conformance.mjs smoke     # or: npm test
 ```
 

@@ -145,9 +145,9 @@ object TsBehavioral:
       sb.append(s"test(${TsLit.str(name)}, async () => {\n")
       sb.append("  await fc.assert(\n")
       sb.append(s"    fc.asyncProperty($arbList, async ($paramList) => {\n")
-      sb.append("      await client.post(\"/__test_admin__/reset\");\n")
+      sb.append("      await client.post(\"/admin/reset\");\n")
       sb.append(
-        "      const preState = (await (await client.get(\"/__test_admin__/state\"))" +
+        "      const preState = (await (await client.get(\"/admin/state\"))" +
           ".json()) as any;\n"
       )
       sb.append(s"      const response = await $call;\n")
@@ -155,7 +155,7 @@ object TsBehavioral:
       sb.append(s"      expect(response.status).toBe($ok);\n")
       sb.append("      const responseData = (await response.json()) as any;\n")
       sb.append(
-        "      const postState = (await (await client.get(\"/__test_admin__/state\"))" +
+        "      const postState = (await (await client.get(\"/admin/state\"))" +
           ".json()) as any;\n"
       )
       sb.append(s"      if (!($assertion)) { throw new Error($viol); }\n")
@@ -165,9 +165,9 @@ object TsBehavioral:
       sb.append("});\n")
     else
       sb.append(s"test(${TsLit.str(name)}, async () => {\n")
-      sb.append("  await client.post(\"/__test_admin__/reset\");\n")
+      sb.append("  await client.post(\"/admin/reset\");\n")
       sb.append(
-        "  const preState = (await (await client.get(\"/__test_admin__/state\"))" +
+        "  const preState = (await (await client.get(\"/admin/state\"))" +
           ".json()) as any;\n"
       )
       sb.append(s"  const response = await $call;\n")
@@ -176,7 +176,7 @@ object TsBehavioral:
       sb.append(s"  expect(response.status).toBe($ok);\n")
       sb.append("  const responseData = (await response.json()) as any;\n")
       sb.append(
-        "  const postState = (await (await client.get(\"/__test_admin__/state\"))" +
+        "  const postState = (await (await client.get(\"/admin/state\"))" +
           ".json()) as any;\n"
       )
       sb.append(s"  if (!($assertion)) { throw new Error($viol); }\n")

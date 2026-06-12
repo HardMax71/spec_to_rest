@@ -66,20 +66,24 @@ def select_profile() -> str:
 
 
 def reset_state() -> bool:
+    headers = {}
+    token = os.environ.get("ADMIN_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        r = httpx.post(f"{BASE_URL}/__test_admin__/reset", timeout=5.0)
+        r = httpx.post(f"{BASE_URL}/admin/reset", timeout=5.0, headers=headers)
     except httpx.HTTPError as e:
         sys.stderr.write(f"ERROR: service unreachable at {BASE_URL}: {e}\n")
         return False
-    if r.status_code == 403:
+    if r.status_code in (401, 404):
         sys.stderr.write(
-            "ERROR: /__test_admin__/reset returned 403; "
-            "start the service with ENABLE_TEST_ADMIN=1\n"
+            f"ERROR: /admin/reset returned {r.status_code}; "
+            "export the same ADMIN_TOKEN to the service and this process\n"
         )
         return False
     if r.status_code != 204:
         sys.stderr.write(
-            f"ERROR: /__test_admin__/reset returned {r.status_code}; "
+            f"ERROR: /admin/reset returned {r.status_code}; "
             f"expected 204\n"
         )
         return False

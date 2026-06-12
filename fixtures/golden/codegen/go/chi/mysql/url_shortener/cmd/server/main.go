@@ -13,12 +13,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/generated/url-shortener/internal/admin"
+	"github.com/generated/url-shortener/internal/auth"
 	"github.com/generated/url-shortener/internal/config"
 	"github.com/generated/url-shortener/internal/database"
 	"github.com/generated/url-shortener/internal/extensions"
 	"github.com/generated/url-shortener/internal/handlers"
 	"github.com/generated/url-shortener/internal/services"
-	"github.com/generated/url-shortener/internal/testadmin"
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	testadmin.Register(r, db)
+	admin.Register(r, db, auth.RequireAdmin(cfg.AdminToken))
 
 	r.Post("/shorten", urlMappingHandler.Shorten)
 	r.Get("/urls", urlMappingHandler.ListAll)

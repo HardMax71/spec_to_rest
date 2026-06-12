@@ -139,8 +139,8 @@ sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
   if omitted, each runner picks its own per-target default
   (`http://localhost:8000` for python-fastapi, `http://localhost:8080` for
   ts-express / go-chi). When set, exported as `SPEC_TEST_BASE_URL`. The
-  service must be running with `ENABLE_TEST_ADMIN=1` so the runner can hit
-  `/__test_admin__/reset` between phases.
+  service must be running with the same `ADMIN_TOKEN` that is exported to the
+  runner, so it can authenticate against `/admin/reset` between phases.
 - `--runner-bin <path>` — override the interpreter read from the runner's
   shebang.
 
