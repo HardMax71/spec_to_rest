@@ -83,9 +83,9 @@ jobs:
       - name: Audit dependencies (pip-audit)
         run: |
           uv export --format requirements-txt --no-emit-project > /tmp/requirements.txt
-          uvx pip-audit -r /tmp/requirements.txt
+          uvx pip-audit==2.10.1 -r /tmp/requirements.txt
       - name: Audit workflow files (zizmor)
-        run: uvx zizmor .github/workflows/
+        run: uvx zizmor==1.25.2 .github/workflows/
 
   docker:
     runs-on: ubuntu-latest

@@ -36,7 +36,7 @@ jobs:
         with:
           go-version: "1.22"
       - name: Audit dependencies (govulncheck)
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
       - name: Audit workflow files (zizmor)
-        run: uvx zizmor .github/workflows/
+        run: uvx zizmor==1.25.2 .github/workflows/
