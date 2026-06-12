@@ -64,15 +64,23 @@ object ScalarState:
     if parsed.exists(_.isEmpty) then None
     else
       val cmps = parsed.flatten.collect { case SgCmp(_, c, k) => (c, k) }
-      val lo = (BigInt(0) :: cmps.collect {
+      val lowers = cmps.collect:
         case (_: ScGe, k) => k
         case (_: ScGt, k) => k + 1
         case (_: ScEq, k) => k
-      }).max
-      // bump past != constraints, then require every atom to hold
-      Iterator
-        .iterate(lo)(_ + 1)
-        .take(cmps.size + 1)
+      val uppers = cmps.collect:
+        case (_: ScLe, k) => k
+        case (_: ScLt, k) => k - 1
+        case (_: ScEq, k) => k
+      // Prefer the value nearest 0 inside the bounds (so unconstrained and
+      // non-negative fields keep seeding 0, and negative-only invariants
+      // like `x < 0` seed -1), then search outward past any != atoms.
+      val clamped = (lowers.maxOption, uppers.minOption) match
+        case (Some(l), _) if l > 0 => l
+        case (_, Some(h)) if h < 0 => h
+        case _                     => BigInt(0)
+      (0 to cmps.size).iterator
+        .flatMap(i => List(clamped + i, clamped - i).distinct)
         .find(v => cmps.forall((c, k) => cmpHolds(v, c, k)))
 
   private def cmpHolds(v: BigInt, c: scalar_cmp, k: BigInt): Boolean = c match

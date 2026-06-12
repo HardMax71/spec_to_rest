@@ -244,6 +244,17 @@ fun scalarCmpOf :: "bin_op \<Rightarrow> scalar_cmp option" where
 | "scalarCmpOf BNeq = Some ScNeq"
 | "scalarCmpOf _    = None"
 
+text \<open>The parser renders a negative literal as \<open>UNegate (IntLitF k)\<close>,
+  so guard atoms accept both spellings.\<close>
+
+fun scalarLitOf :: "expr \<Rightarrow> int option" where
+  "scalarLitOf (IntLitF k _) = Some k"
+| "scalarLitOf (UnaryOpF op e _) =
+     (case op of
+        UNegate \<Rightarrow> (case e of IntLitF k _ \<Rightarrow> Some (- k) | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "scalarLitOf _ = None"
+
 fun scalarGuardOf ::
   "String.literal list \<Rightarrow> expr \<Rightarrow> scalar_guard option"
 where
@@ -252,9 +263,11 @@ where
      (case scalarCmpOf op of
         None \<Rightarrow> None
       | Some c \<Rightarrow>
-          (case (l, r) of
-             (IdentifierF n _, IntLitF k _) \<Rightarrow>
-               (if n \<in> set scalars then Some (SgCmp n c k) else None)
+          (case l of
+             IdentifierF n _ \<Rightarrow>
+               (if n \<in> set scalars
+                then map_option (SgCmp n c) (scalarLitOf r)
+                else None)
            | _ \<Rightarrow> None))"
 | "scalarGuardOf _ _ = None"
 
@@ -353,6 +366,7 @@ lemmas isDirectEmitShape_code [code] = isDirectEmitShape_def
 lemmas scalarRhsOf_code [code] = scalarRhsOf.simps
 lemmas scalarUpdateOf_code [code] = scalarUpdateOf.simps
 lemmas scalarCmpOf_code [code] = scalarCmpOf.simps
+lemmas scalarLitOf_code [code] = scalarLitOf.simps
 lemmas scalarGuardOf_code [code] = scalarGuardOf.simps
 lemmas isScalarUpdateClause_code [code] = isScalarUpdateClause_def
 lemmas scalarUpdatesConsistent_code [code] = scalarUpdatesConsistent.simps
