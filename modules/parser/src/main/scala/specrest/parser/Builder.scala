@@ -339,7 +339,11 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
               (if allowed.isEmpty then "" else s"; expected ${allowed.mkString(", ")}"),
             ctx
           ))
-        case None => Right(args.toMap)
+        case None =>
+          args.groupBy(_._1).collectFirst { case (k, vs) if vs.sizeIs > 1 => k } match
+            case Some(k) =>
+              Left(buildErr(s"security scheme '$name': duplicate argument '$k'", ctx))
+            case None => Right(args.toMap)
     val kindE: BuildResult[security_scheme_kind] = kind match
       case "Bearer" => only("bearer_format").map(m => SsBearer(m.get("bearer_format")))
       case "ApiKey" =>

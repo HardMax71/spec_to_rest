@@ -93,6 +93,15 @@ class SecurityGrammarTest extends CatsEffectSuite:
       .map: err =>
         assert(err.contains("ApiKey needs a location argument"), err)
 
+  test("duplicate scheme arguments are a build error (not silently last-wins)"):
+    SpecFixtures
+      .buildExpectingError(
+        "dup-arg",
+        service("  security {\n    k: ApiKey(header: \"A\", header: \"B\")\n  }\n")
+      )
+      .map: err =>
+        assert(err.contains("duplicate argument 'header'"), err)
+
   test("Bearer with an unknown argument is a build error"):
     SpecFixtures
       .buildExpectingError(
