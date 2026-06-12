@@ -16,11 +16,11 @@ class AuthWiringTest extends CatsEffectSuite:
       assert(sec.contains("import jwt"), sec)
       assert(sec.contains("def require_bearer("), sec)
       assert(sec.contains("def require_api_key("), sec)
-      assert(sec.contains("def require_bearer_or_api_key("), sec)
+      assert(sec.contains("def require_api_key_or_bearer("), sec)
       assert(sec.contains("jwt.decode("), sec)
       assert(sec.contains("APIKeyHeader(name=\"X-API-Key\", auto_error=False)"), sec)
       assert(sec.contains("def require_admin("), "admin guard must survive")
-      assert(sec.contains("if _check_bearer(bearer) or _check_api_key(api_key):"), sec)
+      assert(sec.contains("if _check_api_key(api_key) or _check_bearer(bearer):"), sec)
 
   test("protected routes carry route-level dependencies; public routes do not"):
     emitted("auth_service").map: files =>
@@ -28,7 +28,7 @@ class AuthWiringTest extends CatsEffectSuite:
       assert(users.contains("dependencies=[Depends(require_bearer)]"), users)
       assert(users.contains("from app.security import require_bearer"), users)
       val sessions = files("app/routers/sessions.py")
-      assert(sessions.contains("dependencies=[Depends(require_bearer_or_api_key)]"), sessions)
+      assert(sessions.contains("dependencies=[Depends(require_api_key_or_bearer)]"), sessions)
       // Register and Login are public
       val registerLine = users.linesIterator.find(_.contains("\"/auth/register\"")).getOrElse("")
       assert(!registerLine.contains("dependencies"), registerLine)
@@ -60,13 +60,13 @@ class AuthWiringTest extends CatsEffectSuite:
       val schemes = files("internal/auth/schemes.go")
       assert(schemes.contains("func RequireBearer(cfg *config.Config)"), schemes)
       assert(schemes.contains("func RequireApiKey(cfg *config.Config)"), schemes)
-      assert(schemes.contains("func RequireBearerOrApiKey(cfg *config.Config)"), schemes)
+      assert(schemes.contains("func RequireApiKeyOrBearer(cfg *config.Config)"), schemes)
       assert(schemes.contains("jwt.Parse("), schemes)
-      assert(schemes.contains("checkBearer(cfg, r) || checkApiKey(cfg, r)"), schemes)
+      assert(schemes.contains("checkApiKey(cfg, r) || checkBearer(cfg, r)"), schemes)
       val mainGo = files("cmd/server/main.go")
       assert(mainGo.contains("r.With(auth.RequireBearer(cfg)).Post(\"/auth/logout\""), mainGo)
       assert(
-        mainGo.contains("r.With(auth.RequireBearerOrApiKey(cfg)).Post(\"/auth/refresh\""),
+        mainGo.contains("r.With(auth.RequireApiKeyOrBearer(cfg)).Post(\"/auth/refresh\""),
         mainGo
       )
       assert(mainGo.contains("r.Post(\"/auth/register\""), mainGo)
@@ -80,7 +80,7 @@ class AuthWiringTest extends CatsEffectSuite:
       val schemes = files("src/middleware/schemes.ts")
       assert(schemes.contains("export const requireBearer"), schemes)
       assert(schemes.contains("export const requireApiKey"), schemes)
-      assert(schemes.contains("export const requireBearerOrApiKey"), schemes)
+      assert(schemes.contains("export const requireApiKeyOrBearer"), schemes)
       assert(schemes.contains("jwt.verify("), schemes)
       val users = files("src/routes/users.ts")
       assert(users.contains("requireBearer,"), users)

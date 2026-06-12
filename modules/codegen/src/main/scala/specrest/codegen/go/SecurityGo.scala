@@ -6,8 +6,9 @@ import specrest.profile.ProfiledService
 
 object SecurityGo:
 
+  // sorted so that equivalent OR-alternative sets share one middleware
   def middlewareName(requiresAuth: List[String]): String =
-    s"Require${requiresAuth.map(AuthSchemes.pascalName).mkString("Or")}"
+    s"Require${requiresAuth.sorted.map(AuthSchemes.pascalName).mkString("Or")}"
 
   def configLines(ir: ServiceIRFull): List[List[String]] =
     val schemes = svcSecurity(ir)
@@ -22,7 +23,7 @@ object SecurityGo:
       val p = AuthSchemes.pascalName(ssdName(s))
       val u = ssdName(s).toUpperCase
       ssdKind(s) match
-        case SsBearer(_) if AuthSchemes.isJwt(ssdKind(s)) => Nil
+        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
         case SsBearer(_) =>
           List(List(s"AuthToken$p", "string", s"`env:\"AUTH_TOKEN_$u\" envDefault:\"\"`"))
         case SsApiKey(_, _) =>
@@ -47,9 +48,9 @@ object SecurityGo:
     val needsJwt = AuthSchemes.needsJwt(ir)
 
     val combos = profiled.operations
-      .map(_.requiresAuth)
+      .map(_.requiresAuth.sorted)
       .filter(_.sizeIs > 1)
-      .distinctBy(middlewareName)
+      .distinct
 
     val checkers    = schemes.map(checker)
     val middlewares = schemes.map(s => middleware(List(ssdName(s))))
@@ -123,7 +124,7 @@ object SecurityGo:
     val n = ssdName(decl)
     val p = AuthSchemes.pascalName(n)
     val body = ssdKind(decl) match
-      case SsBearer(_) if AuthSchemes.isJwt(ssdKind(decl)) =>
+      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
         s"""|	header := r.Header.Get("Authorization")
             |	$bearerToken
             |	if token == "" || cfg.JwtSecret == "" {

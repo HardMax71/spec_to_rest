@@ -6,8 +6,9 @@ import specrest.profile.ProfiledService
 
 object SecurityTs:
 
+  // sorted so that equivalent OR-alternative sets share one middleware
   def middlewareName(requiresAuth: List[String]): String =
-    s"require${requiresAuth.map(AuthSchemes.pascalName).mkString("Or")}"
+    s"require${requiresAuth.sorted.map(AuthSchemes.pascalName).mkString("Or")}"
 
   def schemaLines(ir: ServiceIRFull): List[String] =
     val schemes = svcSecurity(ir)
@@ -21,9 +22,9 @@ object SecurityTs:
     jwtPair ++ schemes.flatMap: s =>
       val u = ssdName(s).toUpperCase
       ssdKind(s) match
-        case SsBearer(_) if AuthSchemes.isJwt(ssdKind(s)) => Nil
-        case SsBearer(_)                                  => List(s"AUTH_TOKEN_$u: z.string().optional(),")
-        case SsApiKey(_, _)                               => List(s"AUTH_KEY_$u: z.string().optional(),")
+        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
+        case SsBearer(_)                                                  => List(s"AUTH_TOKEN_$u: z.string().optional(),")
+        case SsApiKey(_, _)                                               => List(s"AUTH_KEY_$u: z.string().optional(),")
         case SsBasic() =>
           List(
             s"AUTH_BASIC_${u}_USERNAME: z.string().optional(),",
@@ -40,9 +41,9 @@ object SecurityTs:
       val c = AuthSchemes.pascalName(ssdName(s))
       val u = ssdName(s).toUpperCase
       ssdKind(s) match
-        case SsBearer(_) if AuthSchemes.isJwt(ssdKind(s)) => Nil
-        case SsBearer(_)                                  => List(s"authToken$c: parsed.AUTH_TOKEN_$u,")
-        case SsApiKey(_, _)                               => List(s"authKey$c: parsed.AUTH_KEY_$u,")
+        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
+        case SsBearer(_)                                                  => List(s"authToken$c: parsed.AUTH_TOKEN_$u,")
+        case SsApiKey(_, _)                                               => List(s"authKey$c: parsed.AUTH_KEY_$u,")
         case SsBasic() =>
           List(
             s"authBasic${c}Username: parsed.AUTH_BASIC_${u}_USERNAME,",
@@ -69,9 +70,9 @@ object SecurityTs:
     )
 
     val combos = profiled.operations
-      .map(_.requiresAuth)
+      .map(_.requiresAuth.sorted)
       .filter(_.sizeIs > 1)
-      .distinctBy(middlewareName)
+      .distinct
 
     val helpers = List(
       Option.when(needsSafeEqual)(
@@ -140,10 +141,10 @@ object SecurityTs:
     val n = ssdName(decl)
     val c = AuthSchemes.pascalName(n)
     ssdKind(decl) match
-      case SsBearer(_) if AuthSchemes.isJwt(ssdKind(decl)) =>
+      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
         s"""|const check$c = (req: Request): boolean => {
             |  const token = bearerToken(req);
-            |  if (token === '' || config.jwtSecret === undefined) {
+            |  if (token === '' || config.jwtSecret === undefined || config.jwtSecret === '') {
             |    return false;
             |  }
             |  try {
@@ -177,10 +178,13 @@ object SecurityTs:
             |  const credentials = basicCredentials(req);
             |  const username = config.authBasic${c}Username;
             |  const password = config.authBasic${c}Password;
+            |  // empty-string credentials are unconfigured, not valid
             |  return (
             |    credentials !== null
             |    && username !== undefined
+            |    && username !== ''
             |    && password !== undefined
+            |    && password !== ''
             |    && safeEqual(credentials[0], username)
             |    && safeEqual(credentials[1], password)
             |  );

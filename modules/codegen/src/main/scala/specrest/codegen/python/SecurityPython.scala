@@ -8,8 +8,9 @@ object SecurityPython:
 
   export AuthSchemes.isJwt
 
+  // sorted so that equivalent OR-alternative sets share one dependency
   def dependencyName(requiresAuth: List[String]): String =
-    s"require_${requiresAuth.mkString("_or_")}"
+    s"require_${requiresAuth.sorted.mkString("_or_")}"
 
   def settingLines(ir: ServiceIRFull): List[String] =
     val schemes = svcSecurity(ir)
@@ -23,9 +24,9 @@ object SecurityPython:
     jwtPair ++ schemes.flatMap: s =>
       val n = ssdName(s)
       ssdKind(s) match
-        case SsBearer(_) if isJwt(ssdKind(s)) => Nil
-        case SsBearer(_)                      => List(s"auth_token_$n: SecretStr | None = None")
-        case SsApiKey(_, _)                   => List(s"auth_key_$n: SecretStr | None = None")
+        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
+        case SsBearer(_)                                                  => List(s"auth_token_$n: SecretStr | None = None")
+        case SsApiKey(_, _)                                               => List(s"auth_key_$n: SecretStr | None = None")
         case SsBasic() =>
           List(
             s"auth_basic_${n}_username: str | None = None",
@@ -54,9 +55,9 @@ object SecurityPython:
         (if needsBasic then List("HTTPBasic", "HTTPBasicCredentials") else Nil)).distinct.sorted
 
     val combos = profiled.operations
-      .map(_.requiresAuth)
+      .map(_.requiresAuth.sorted)
       .filter(_.sizeIs > 1)
-      .distinctBy(dependencyName)
+      .distinct
 
     val schemeSections = schemes.map(schemeSection)
     val comboSections  = combos.map(comboSection(schemes, _))
@@ -114,7 +115,7 @@ object SecurityPython:
   private def schemeSection(decl: security_scheme_decl): String =
     val n = ssdName(decl)
     val (singletons, checker) = ssdKind(decl) match
-      case SsBearer(_) if isJwt(ssdKind(decl)) =>
+      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
         (
           "",
           s"""|def _check_$n(credentials: HTTPAuthorizationCredentials | None) -> bool:
