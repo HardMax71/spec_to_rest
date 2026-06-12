@@ -91,7 +91,11 @@ lazy val commonMainDeps = Seq(
 
 lazy val commonTestDeps = Seq(
   "org.scalameta" %% "munit"             % munitVersion   % Test,
-  "org.typelevel" %% "munit-cats-effect" % munitCEVersion % Test
+  "org.typelevel" %% "munit-cats-effect" % munitCEVersion % Test,
+  // Transitive deps (alloy, httpclient5) bind slf4j-api 1.7.x; without an
+  // implementation every forked test JVM prints the StaticLoggerBinder
+  // warning triple. The no-op binding is the intended resolution.
+  "org.slf4j" % "slf4j-nop" % "1.7.36" % Test
 )
 
 // The `dependsOn` graph below is the module architecture; it is asserted explicitly by
@@ -272,7 +276,17 @@ lazy val cli = (project in file("modules/cli"))
       // shared library can be loaded per-execution (build-time init fails since
       // the .so isn't available until the binary extracts it on first call).
       "--initialize-at-run-time=com.microsoft.z3.Native",
-      "--initialize-at-run-time=com.microsoft.z3.Version"
+      "--initialize-at-run-time=com.microsoft.z3.Version",
+      // openai-java-core ships agent-dumped native-image configs captured
+      // during its own Gradle test run: the proxy/serialization entries
+      // reference byte-buddy, gradle test workers, and junit - none on this
+      // classpath, so they can never apply and only emit ~46 build warnings.
+      // jni/reflect/resource configs stay (synth needs them at runtime).
+      // Still unfixed upstream as of openai-java 4.39.1.
+      "--exclude-config",
+      ".*openai-java-core.*\\.jar,META-INF/native-image/proxy-config\\.json",
+      "--exclude-config",
+      ".*openai-java-core.*\\.jar,META-INF/native-image/serialization-config\\.json"
     )
   )
 

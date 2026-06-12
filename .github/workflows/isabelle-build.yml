@@ -19,6 +19,9 @@ env:
   ISABELLE_VERSION: "2025-2"
   ML_OPTIONS: "--minheap 2000 --maxheap 6000 --gcthreads 4"
 
+permissions:
+  contents: read
+
 jobs:
   isabelle:
     runs-on: ubuntu-latest
