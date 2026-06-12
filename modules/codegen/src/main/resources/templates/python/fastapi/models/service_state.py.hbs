@@ -9,5 +9,5 @@ class ServiceState(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
 {{#each stateFields}}
-    {{this.columnName}}: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    {{this.columnName}}: Mapped[int] = mapped_column(BigInteger, nullable=False, default={{this.seed}})
 {{/each}}

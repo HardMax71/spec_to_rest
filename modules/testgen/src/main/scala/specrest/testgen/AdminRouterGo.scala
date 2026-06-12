@@ -32,8 +32,9 @@ object AdminRouterGo:
     val scalarReset =
       if scalarFields.isEmpty then ""
       else
-        val sets = scalarFields
-          .map(sf => s"${ScalarState.columnName(stfName(sf))} = 0")
+        val sets = ScalarState
+          .fieldsWithSeeds(ir)
+          .map((sf, seed) => s"${ScalarState.columnName(stfName(sf))} = $seed")
           .mkString(", ")
         s"""\n\t\tif _, err := db.ExecContext(ctx, ${GoLit.str(
             s"UPDATE ${ScalarState.TableName} SET $sets WHERE id = 1"

@@ -20,11 +20,11 @@ object AdminRouter:
 
     val scalarResets =
       if hasScalars then
-        val zeros = ScalarState
-          .fields(ir)
-          .map(sf => s"${ScalarState.columnName(stfName(sf))}=0")
+        val seeds = ScalarState
+          .fieldsWithSeeds(ir)
+          .map((sf, seed) => s"${ScalarState.columnName(stfName(sf))}=$seed")
           .mkString(", ")
-        s"\n    await session.execute(sa_update(ServiceState).values($zeros))"
+        s"\n    await session.execute(sa_update(ServiceState).values($seeds))"
       else ""
     val deleteStatements =
       if entities.isEmpty && !hasScalars then "    pass"

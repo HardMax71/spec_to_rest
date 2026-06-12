@@ -75,7 +75,12 @@ class SkipRateProbeTest extends CatsEffectSuite:
       1,
       "base_url is unbacked scalar state (String, outside the #407 Int scope)"
     ),
-    ("todo_list", 50, 0, "next_id is an Int scalar backed by service_state since #407"),
+    (
+      "todo_list",
+      50,
+      2,
+      "next_id stays unbacked: `next_id not in todos` is invariant-relevant but not a derivable seed bound, so #407 conservatively leaves it on the unbacked path"
+    ),
     (
       "ecommerce",
       76,

@@ -58,11 +58,12 @@ object AdminRouterTs:
         val scalarReset =
           if ScalarState.fields(ir).isEmpty then ""
           else
-            val zeros = ScalarState
-              .fields(ir)
-              .map(sf => s"${Naming.toCamelCase(ScalarState.columnName(stfName(sf)))}: 0")
+            val seeds = ScalarState
+              .fieldsWithSeeds(ir)
+              .map: (sf, seed) =>
+                s"${Naming.toCamelCase(ScalarState.columnName(stfName(sf)))}: $seed"
               .mkString(", ")
-            s"\n      await (prisma as unknown as AnyPrisma).serviceState.updateMany({ data: { $zeros } });"
+            s"\n      await (prisma as unknown as AnyPrisma).serviceState.updateMany({ data: { $seeds } });"
         entities.reverse
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n") + scalarReset

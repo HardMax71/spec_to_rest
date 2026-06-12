@@ -5,7 +5,12 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
-final case class ScalarStateFieldView(specName: String, columnName: String, camelName: String)
+final case class ScalarStateFieldView(
+    specName: String,
+    columnName: String,
+    camelName: String,
+    seed: BigInt
+)
 
 final case class ScalarUpdateView(specName: String, columnName: String, rhs: scalar_rhs)
 
@@ -33,9 +38,9 @@ object ScalarOps:
   val TableName: String = ScalarState.TableName
 
   def stateFields(p: ProfiledService): List[ScalarStateFieldView] =
-    ScalarState.fields(p.ir).map: sf =>
+    ScalarState.fieldsWithSeeds(p.ir).map: (sf, seed) =>
       val col = ScalarState.columnName(stfName(sf))
-      ScalarStateFieldView(stfName(sf), col, specrest.ir.Naming.toCamelCase(col))
+      ScalarStateFieldView(stfName(sf), col, specrest.ir.Naming.toCamelCase(col), seed)
 
   def views(p: ProfiledService): List[ScalarOpView] =
     val scalarNames = ScalarState.fieldNames(p.ir)
@@ -89,9 +94,12 @@ object ScalarOps:
     case other    => sqlCmp(other)
 
   def seedSqlFor(t: table_spec): String =
-    val cols = tableColumns(t).map(columnName)
-    val vals = cols.map(c => if c == "id" then "1" else "0")
-    s"INSERT INTO ${tableName(t)} (${cols.mkString(", ")}) VALUES (${vals.mkString(", ")})"
+    val cols  = tableColumns(t)
+    val names = cols.map(columnName)
+    val vals = cols.map: c =>
+      if columnName(c) == "id" then ScalarState.SingletonId.toString
+      else columnDefaultValue(c).getOrElse("0")
+    s"INSERT INTO ${tableName(t)} (${names.mkString(", ")}) VALUES (${vals.mkString(", ")})"
 
   def isStateTable(t: table_spec): Boolean =
     tableName(t) == TableName && tableEntityName(t).isEmpty
