@@ -513,10 +513,13 @@ function SpecEditor(props: {
         spec
       </div>
       <div className="relative flex-1 overflow-hidden bg-fd-background">
+        {/* not-fumadocs-codeblock: fumadocs' shiki.css pads every .line span,
+            which would shift the highlighted overlay right of the transparent
+            textarea's real glyphs and misalign selection. */}
         <div
           ref={overlayRef}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-[13px] leading-relaxed text-fd-foreground [&_code]:font-mono [&_pre]:m-0 [&_pre]:!bg-transparent [&_pre]:p-0"
+          className="not-fumadocs-codeblock pointer-events-none absolute inset-0 overflow-auto p-3 font-mono text-[13px] leading-relaxed text-fd-foreground [&_code]:font-mono [&_pre]:m-0 [&_pre]:!bg-transparent [&_pre]:p-0"
         >
           {html ? (
             <div dangerouslySetInnerHTML={{ __html: html }} />
@@ -678,10 +681,20 @@ function StatusLine({ state, target }: { state: RunState; target: Target }) {
         ? ` · ${state.totalFiles} files / ${Math.round((state.totalBytes ?? 0) / 1024)} KB`
         : "";
     return (
-      <p className="text-xs text-fd-muted-foreground">
-        <span className="text-green-600 dark:text-green-400">✓ ok</span> in {state.elapsedMs} ms
-        {extra}
-      </p>
+      <>
+        <p className="text-xs text-fd-muted-foreground">
+          <span className="text-green-600 dark:text-green-400">✓ ok</span> in {state.elapsedMs} ms
+          {extra}
+        </p>
+        {state.target === "ir" && (
+          <p className="text-xs text-fd-muted-foreground">
+            The IR dump is the raw verifier input. <code>SpanT(line, col, line, col)</code> nodes
+            are source positions (1-based lines, 0-based columns), and the{" "}
+            <code>isValidURI</code> / <code>isValidEmail</code> predicates are built-ins merged
+            from the parser preamble - their spans point into the preamble, not your spec.
+          </p>
+        )}
+      </>
     );
   }
   return (
