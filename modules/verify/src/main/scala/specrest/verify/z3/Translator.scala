@@ -315,13 +315,13 @@ object Translator:
         ctx.declareSort(sort)
         ctx.typeAliases(talName(t)) = TypeAliasInfo(sort)
 
-  // Z3 sort policy for the spec's built-in primitives. This is irreducibly
-  // verify-local: the proof's `ty` has only TInt/TBool (no fractional sort) and
-  // its numeric classifier lumps integral with fractional, so the Int-vs-Real
-  // split cannot be derived upstream. Integral and temporal types share Int
-  // (temporal values are epoch seconds); fractional types use Real. String and
-  // other opaque primitives are absent here and fall to uninterpreted in
-  // sortForNamedType (where String-refinement aliases get their own handling).
+  // Z3 sort policy for the spec's built-in primitives. Must stay aligned with
+  // the proof's `typeExprFullToTy` name policy (Semantics.thy): integral and
+  // temporal names share Int/TInt (temporal values are epoch seconds),
+  // fractional names map to Real/TReal, Bool/Boolean to Bool/TBool. String is
+  // handled in sortForNamedType (native string sort / TStr, where
+  // String-refinement aliases get their own handling); opaque primitives
+  // (Duration, UUID) are absent on both sides and fall to uninterpreted.
   private def primitiveSortOf(name: String): Option[Z3Sort] = name match
     case "Int" | "DateTime" | "Date"   => Some(Z3Sort.Int)
     case "Float" | "Decimal" | "Money" => Some(Z3Sort.Real)

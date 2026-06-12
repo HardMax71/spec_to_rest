@@ -216,9 +216,13 @@ datatype (plugins only: code size) ty =
     TBool
   | TInt
   | TReal
+  | TStr
   | TEnum "String.literal"
   | TEntity "String.literal"
   | TSet ty
+  | TOption ty
+  | TSeq ty
+  | TMap ty ty
 
 definition numeric_ty :: "ty \<Rightarrow> bool" where
   "numeric_ty t \<longleftrightarrow> t = TInt \<or> t = TReal"
@@ -249,15 +253,25 @@ fun typeExprFullToTy ::
   "String.literal list \<Rightarrow> String.literal list
      \<Rightarrow> type_expr \<Rightarrow> ty option" where
   "typeExprFullToTy enums entities (NamedTypeF n _) =
-     (if n = STR ''Bool'' then Some TBool
-      else if n = STR ''Int'' then Some TInt
-      else if n = STR ''Float'' \<or> n = STR ''Double''
-              \<or> n = STR ''Decimal'' \<or> n = STR ''Money'' then Some TReal
+     (if n = STR ''Bool'' \<or> n = STR ''Boolean'' then Some TBool
+      else if n = STR ''Int'' \<or> n = STR ''DateTime''
+              \<or> n = STR ''Date'' then Some TInt
+      else if n = STR ''Float'' \<or> n = STR ''Decimal''
+              \<or> n = STR ''Money'' then Some TReal
+      else if n = STR ''String'' then Some TStr
       else if n \<in> set enums then Some (TEnum n)
       else if n \<in> set entities then Some (TEntity n)
       else None)"
 | "typeExprFullToTy enums entities (SetTypeF inner _) =
      map_option TSet (typeExprFullToTy enums entities inner)"
+| "typeExprFullToTy enums entities (OptionTypeF inner _) =
+     map_option TOption (typeExprFullToTy enums entities inner)"
+| "typeExprFullToTy enums entities (SeqTypeF inner _) =
+     map_option TSeq (typeExprFullToTy enums entities inner)"
+| "typeExprFullToTy enums entities (MapTypeF k v _) =
+     (case (typeExprFullToTy enums entities k, typeExprFullToTy enums entities v) of
+        (Some tk, Some tv) \<Rightarrow> Some (TMap tk tv)
+      | _ \<Rightarrow> None)"
 | "typeExprFullToTy _ _ _ = None"
 
 definition schemaFieldType ::
@@ -304,6 +318,15 @@ inductive value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Right
                      \<Longrightarrow> value_has_ty \<Gamma> override ft
                      \<Longrightarrow> value_has_ty \<Gamma> (VEntityWith base fld override)
                                        (TEntity ename)"
+| vt_str:         "value_has_ty \<Gamma> (VStr s) TStr"
+| vt_none:        "value_has_ty \<Gamma> VNone (TOption t)"
+| vt_some:        "value_has_ty \<Gamma> v t
+                     \<Longrightarrow> value_has_ty \<Gamma> (VSome v) (TOption t)"
+| vt_seq:         "(\<forall>v \<in> set vs. value_has_ty \<Gamma> v t)
+                     \<Longrightarrow> value_has_ty \<Gamma> (VSeq vs) (TSeq t)"
+| vt_map:         "(\<forall>(k, w) \<in> set ps.
+                      value_has_ty \<Gamma> k tk \<and> value_has_ty \<Gamma> w tv)
+                     \<Longrightarrow> value_has_ty \<Gamma> (VMap ps) (TMap tk tv)"
 
 inductive_cases value_has_ty_bool_cases [elim!]: "value_has_ty \<Gamma> (VBool b) t"
 inductive_cases value_has_ty_int_cases [elim!]: "value_has_ty \<Gamma> (VInt n) t"
@@ -341,6 +364,14 @@ lemma value_has_ty_VEntity_iff [simp]:
   "value_has_ty \<Gamma> (VEntity ename eid) t \<longleftrightarrow> t = TEntity ename"
   by (auto intro: vt_entity)
 
+lemma value_has_ty_VStr_iff [simp]:
+  "value_has_ty \<Gamma> (VStr s) t \<longleftrightarrow> t = TStr"
+  by (auto intro: vt_str)
+
+lemma value_has_ty_VNone_iff [simp]:
+  "value_has_ty \<Gamma> VNone t \<longleftrightarrow> (\<exists>t'. t = TOption t')"
+  by (auto intro: vt_none)
+
 lemma schemaFieldType_tc_env_update [simp]:
   "schemaFieldType (\<Gamma>\<lparr>tc_env := xs\<rparr>) ename fname
      = schemaFieldType \<Gamma> ename fname"
@@ -369,49 +400,79 @@ qed
 text \<open>Executable equivalent of \<open>value_has_ty\<close>. The \<open>inductive\<close>
   form expresses the typing relation in HOL but is not by-default
   extractable by \<open>Code_Target_Scala\<close>; \<open>check_value_has_ty\<close>
-  enumerates the six rules as a mutual structural \<open>fun\<close>, so
+  enumerates the rules as a mutual structural \<open>fun\<close>, so
   Scala consumers (Z3 counterexample decoding, etc.) can decide
   typing at runtime. \<open>check_value_has_ty_iff\<close> bridges back to the
   inductive so proofs reading the \<open>value_has_ty\<close>-shaped form can
-  use either.\<close>
+  use either. The ctor-matched values dispatch on \<open>ty\<close> via a
+  \<open>case\<close> RHS (non-recursive \<open>False\<close> default) rather than
+  enumerated per-\<open>ty\<close> equations, so extending \<open>ty\<close> does not
+  multiply rows.\<close>
 
-fun check_value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Rightarrow> bool"
+function check_value_has_ty :: "tyctx \<Rightarrow> ir_value \<Rightarrow> ty \<Rightarrow> bool"
 and check_value_has_ty_list ::
   "tyctx \<Rightarrow> ir_value list \<Rightarrow> ty \<Rightarrow> bool"
+and check_value_has_ty_pairs ::
+  "tyctx \<Rightarrow> (ir_value \<times> ir_value) list \<Rightarrow> ty \<Rightarrow> ty \<Rightarrow> bool"
 where
   "check_value_has_ty \<Gamma> (VBool _) t = (t = TBool)"
 | "check_value_has_ty \<Gamma> (VInt _) t = (t = TInt)"
 | "check_value_has_ty \<Gamma> (VReal _) t = (t = TReal)"
+| "check_value_has_ty \<Gamma> (VStr _) t = (t = TStr)"
 | "check_value_has_ty \<Gamma> (VEnum ename _) t = (t = TEnum ename)"
 | "check_value_has_ty \<Gamma> (VEntity ename _) t = (t = TEntity ename)"
-| "check_value_has_ty \<Gamma> (VSet vs) (TSet t) = check_value_has_ty_list \<Gamma> vs t"
-| "check_value_has_ty \<Gamma> (VSet _) TBool = False"
-| "check_value_has_ty \<Gamma> (VSet _) TInt = False"
-| "check_value_has_ty \<Gamma> (VSet _) TReal = False"
-| "check_value_has_ty \<Gamma> (VSet _) (TEnum _) = False"
-| "check_value_has_ty \<Gamma> (VSet _) (TEntity _) = False"
-| "check_value_has_ty \<Gamma> (VEntityWith base fld override) (TEntity ename) =
-     (check_value_has_ty \<Gamma> base (TEntity ename) \<and>
-      (case schemaFieldType \<Gamma> ename fld of
-         None    \<Rightarrow> False
-       | Some ft \<Rightarrow> check_value_has_ty \<Gamma> override ft))"
-| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TBool = False"
-| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TInt = False"
-| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) TReal = False"
-| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TEnum _) = False"
-| "check_value_has_ty \<Gamma> (VEntityWith _ _ _) (TSet _) = False"
-| "check_value_has_ty \<Gamma> VNone _ = False"
-| "check_value_has_ty \<Gamma> (VSome _) _ = False"
-| "check_value_has_ty \<Gamma> (VStr _) _ = False"
-| "check_value_has_ty \<Gamma> (VSeq _) _ = False"
-| "check_value_has_ty \<Gamma> (VMap _) _ = False"
+| "check_value_has_ty \<Gamma> (VSet vs) t =
+     (case t of TSet t' \<Rightarrow> check_value_has_ty_list \<Gamma> vs t' | _ \<Rightarrow> False)"
+| "check_value_has_ty \<Gamma> (VEntityWith base fld override) t =
+     (case t of
+        TEntity ename \<Rightarrow>
+          check_value_has_ty \<Gamma> base (TEntity ename) \<and>
+          (case schemaFieldType \<Gamma> ename fld of
+             None    \<Rightarrow> False
+           | Some ft \<Rightarrow> check_value_has_ty \<Gamma> override ft)
+      | _ \<Rightarrow> False)"
+| "check_value_has_ty \<Gamma> VNone t =
+     (case t of TOption _ \<Rightarrow> True | _ \<Rightarrow> False)"
+| "check_value_has_ty \<Gamma> (VSome v) t =
+     (case t of TOption t' \<Rightarrow> check_value_has_ty \<Gamma> v t' | _ \<Rightarrow> False)"
+| "check_value_has_ty \<Gamma> (VSeq vs) t =
+     (case t of TSeq t' \<Rightarrow> check_value_has_ty_list \<Gamma> vs t' | _ \<Rightarrow> False)"
+| "check_value_has_ty \<Gamma> (VMap ps) t =
+     (case t of TMap tk tv \<Rightarrow> check_value_has_ty_pairs \<Gamma> ps tk tv
+      | _ \<Rightarrow> False)"
 | "check_value_has_ty_list _ [] _ = True"
 | "check_value_has_ty_list \<Gamma> (v # vs) t =
      (check_value_has_ty \<Gamma> v t \<and> check_value_has_ty_list \<Gamma> vs t)"
+| "check_value_has_ty_pairs _ [] _ _ = True"
+| "check_value_has_ty_pairs \<Gamma> ((k, w) # ps) tk tv =
+     (check_value_has_ty \<Gamma> k tk \<and> check_value_has_ty \<Gamma> w tv \<and>
+      check_value_has_ty_pairs \<Gamma> ps tk tv)"
+  by pat_completeness (auto split: ty.splits)
+
+text \<open>The lexicographic-order search cannot synthesise the
+  sum-of-components measure the \<open>check_value_has_ty_pairs\<close>
+  branch needs (\<open>check\<close> recurses into both the key and the value
+  of each pair), so the measure is given by hand, reusing the
+  datatype's own \<open>size_prod\<close> component so the \<open>VMap\<close> descent
+  matches \<open>ir_value.size\<close> verbatim.\<close>
+
+termination
+  by (relation "measure (case_sum
+        (\<lambda>(\<Gamma>, v, t). size v)
+        (case_sum
+          (\<lambda>(\<Gamma>, vs, t). size_list size vs)
+          (\<lambda>(\<Gamma>, ps, tk, tv). size_list (size_prod size size) ps)))")
+     auto
 
 lemma check_value_has_ty_list_all:
   "check_value_has_ty_list \<Gamma> vs t \<longleftrightarrow> (\<forall>v \<in> set vs. check_value_has_ty \<Gamma> v t)"
   by (induction vs) auto
+
+lemma check_value_has_ty_pairs_all:
+  "check_value_has_ty_pairs \<Gamma> ps tk tv
+     \<longleftrightarrow> (\<forall>(k, w) \<in> set ps.
+            check_value_has_ty \<Gamma> k tk \<and> check_value_has_ty \<Gamma> w tv)"
+  by (induction ps) auto
 
 lemma check_value_has_ty_sound_mutual:
   shows
@@ -420,15 +481,25 @@ lemma check_value_has_ty_sound_mutual:
   and check_list_imp_vty:
       "check_value_has_ty_list \<Gamma> vs t
          \<Longrightarrow> (\<forall>v \<in> set vs. value_has_ty \<Gamma> v t)"
-  by (induction rule: check_value_has_ty_check_value_has_ty_list.induct)
-     (auto intro: vt_bool vt_int vt_enum vt_entity vt_set vt_entity_with
-           split: option.splits)
+  and check_pairs_imp_vty:
+      "check_value_has_ty_pairs \<Gamma> ps tk tv
+         \<Longrightarrow> (\<forall>(k, w) \<in> set ps.
+               value_has_ty \<Gamma> k tk \<and> value_has_ty \<Gamma> w tv)"
+  by (induction
+        rule: check_value_has_ty_check_value_has_ty_list_check_value_has_ty_pairs.induct)
+     (auto intro: value_has_ty.intros split: option.splits ty.splits)
 
 lemma vty_imp_check_value_has_ty:
   "value_has_ty \<Gamma> v t \<Longrightarrow> check_value_has_ty \<Gamma> v t"
 proof (induction \<Gamma> v t rule: value_has_ty.induct)
   case (vt_set vs \<Gamma> t)
   thus ?case by (simp add: check_value_has_ty_list_all)
+next
+  case (vt_seq vs \<Gamma> t)
+  thus ?case by (simp add: check_value_has_ty_list_all)
+next
+  case (vt_map ps \<Gamma> tk tv)
+  thus ?case by (auto simp: check_value_has_ty_pairs_all)
 qed auto
 
 lemma check_value_has_ty_iff:
@@ -446,9 +517,17 @@ text \<open>Phase H2b (schema typing). A partial translation from
 fun typeExprToTy :: "schema_type \<Rightarrow> ty option" where
   "typeExprToTy BoolT           = Some TBool"
 | "typeExprToTy IntT            = Some TInt"
+| "typeExprToTy RealT           = Some TReal"
+| "typeExprToTy StrT            = Some TStr"
 | "typeExprToTy (EnumT n)       = Some (TEnum n)"
 | "typeExprToTy (EntityT n)     = Some (TEntity n)"
 | "typeExprToTy (RelationT _ _) = None"
+| "typeExprToTy (OptionT t)     = map_option TOption (typeExprToTy t)"
+| "typeExprToTy (SeqT t)        = map_option TSeq (typeExprToTy t)"
+| "typeExprToTy (MapT k v)      =
+     (case (typeExprToTy k, typeExprToTy v) of
+        (Some tk, Some tv) \<Rightarrow> Some (TMap tk tv)
+      | _ \<Rightarrow> None)"
 
 text \<open>The spec-level analogue of \<open>peel_relation_ref :: expr \<Rightarrow>
   String.literal option\<close>, lifted to \<open>expr\<close>. Recognises the
@@ -1070,6 +1149,35 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr \<Rightarrow> ty \<Rightarrow
                 (QuantifierBindingFull var (IdentifierF dnm sp_id) m sp_b
                   # b2 # rest_bs)
                 body sp) TBool"
+| T_StrLit:
+    "expr_has_ty \<Gamma> (StringLitF s sp) TStr"
+| T_NoneLit:
+    "expr_has_ty \<Gamma> (NoneLitF sp) (TOption t)"
+| T_SomeWrap:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (SomeWrapF e sp) (TOption t)"
+| T_SeqLit_Empty:
+    "expr_has_ty \<Gamma> (SeqLiteralF [] sp) (TSeq t)"
+| T_SeqLit_Cons:
+    "expr_has_ty \<Gamma> e t
+       \<Longrightarrow> expr_has_ty \<Gamma> (SeqLiteralF rest sp) (TSeq t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (SeqLiteralF (e # rest) sp) (TSeq t)"
+| T_MapLit_Empty:
+    "expr_has_ty \<Gamma> (MapLiteralF [] sp) (TMap tk tv)"
+| T_MapLit_Cons:
+    "expr_has_ty \<Gamma> k tk
+       \<Longrightarrow> expr_has_ty \<Gamma> w tv
+       \<Longrightarrow> expr_has_ty \<Gamma> (MapLiteralF rest sp) (TMap tk tv)
+       \<Longrightarrow> expr_has_ty \<Gamma>
+             (MapLiteralF (MapEntryFull k w sp' # rest) sp) (TMap tk tv)"
+| T_If:
+    "expr_has_ty \<Gamma> c TBool
+       \<Longrightarrow> expr_has_ty \<Gamma> a t
+       \<Longrightarrow> expr_has_ty \<Gamma> b t
+       \<Longrightarrow> expr_has_ty \<Gamma> (IfF c a b sp) t"
+| T_Matches:
+    "expr_has_ty \<Gamma> e TStr
+       \<Longrightarrow> expr_has_ty \<Gamma> (MatchesF e pat sp) TBool"
 
 lemmas expr_has_ty_intros [intro] =
   T_BoolLit T_IntLit T_FloatLit T_Ident_Lex T_Ident_State
@@ -1085,6 +1193,8 @@ lemmas expr_has_ty_intros [intro] =
   T_Forall_QExists_Enum_Cons T_Forall_QExists_Rel_Cons
   T_Forall_QSome_Enum T_Forall_QSome_Rel
   T_Forall_QSome_Enum_Cons T_Forall_QSome_Rel_Cons
+  T_StrLit T_NoneLit T_SomeWrap T_SeqLit_Empty T_SeqLit_Cons
+  T_MapLit_Empty T_MapLit_Cons T_If T_Matches
 
 fun as_bool :: "ir_value \<Rightarrow> bool option" where
   "as_bool (VBool b) = Some b"

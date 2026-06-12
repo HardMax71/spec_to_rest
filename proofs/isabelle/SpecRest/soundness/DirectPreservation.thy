@@ -389,6 +389,86 @@ next
 next
   case (T_Forall_QSome_Rel_Cons dnm \<Gamma> tv var b2 rest_bs body sp sp_id m sp_b)
   thus ?case by simp
+next
+  case (T_StrLit \<Gamma> s sp)
+  thus ?case by auto
+next
+  case (T_NoneLit \<Gamma> sp t)
+  thus ?case by auto
+next
+  case (T_SomeWrap \<Gamma> e t sp)
+  from T_SomeWrap.prems(2) obtain va where
+      ev: "eval fs ps fuel sch st env e = Some va" and veq: "v = VSome va"
+    by (auto split: option.splits)
+  have "value_has_ty \<Gamma> va t"
+    using T_SomeWrap.IH[OF T_SomeWrap.prems(1) ev] .
+  thus ?case using veq by (simp add: vt_some)
+next
+  case (T_SeqLit_Empty \<Gamma> sp t)
+  from T_SeqLit_Empty.prems(2) have "v = VSeq []" by simp
+  thus ?case by (simp add: vt_seq)
+next
+  case (T_SeqLit_Cons \<Gamma> e t rest sp)
+  from T_SeqLit_Cons.prems(2) obtain va vs where
+      ev_e: "eval fs ps fuel sch st env e = Some va"
+      and ev_rest: "eval_list fs ps fuel sch st env rest = Some vs"
+      and veq: "v = VSeq (va # vs)"
+    by (auto split: option.splits)
+  have va_ty: "value_has_ty \<Gamma> va t"
+    using T_SeqLit_Cons.IH(1)[OF T_SeqLit_Cons.prems(1) ev_e] .
+  have ev_rest_seq:
+      "eval fs ps fuel sch st env (SeqLiteralF rest sp) = Some (VSeq vs)"
+    using ev_rest by simp
+  have "value_has_ty \<Gamma> (VSeq vs) (TSeq t)"
+    using T_SeqLit_Cons.IH(2)[OF T_SeqLit_Cons.prems(1) ev_rest_seq] .
+  hence "\<forall>w \<in> set vs. value_has_ty \<Gamma> w t"
+    by (auto elim: value_has_ty_seq_cases)
+  thus ?case using va_ty veq by (auto intro!: vt_seq)
+next
+  case (T_MapLit_Empty \<Gamma> sp tk tv)
+  from T_MapLit_Empty.prems(2) have "v = VMap []" by simp
+  thus ?case by (auto intro: vt_map)
+next
+  case (T_MapLit_Cons \<Gamma> k tk w tv rest sp sp')
+  from T_MapLit_Cons.prems(2) obtain kv wv qs where
+      ev_k: "eval fs ps fuel sch st env k = Some kv"
+      and ev_w: "eval fs ps fuel sch st env w = Some wv"
+      and ev_rest: "eval_entries fs ps fuel sch st env rest = Some qs"
+      and veq: "v = VMap ((kv, wv) # qs)"
+    by (auto split: option.splits)
+  have k_ty: "value_has_ty \<Gamma> kv tk"
+    using T_MapLit_Cons.IH(1)[OF T_MapLit_Cons.prems(1) ev_k] .
+  have w_ty: "value_has_ty \<Gamma> wv tv"
+    using T_MapLit_Cons.IH(2)[OF T_MapLit_Cons.prems(1) ev_w] .
+  have ev_rest_map:
+      "eval fs ps fuel sch st env (MapLiteralF rest sp) = Some (VMap qs)"
+    using ev_rest by simp
+  have "value_has_ty \<Gamma> (VMap qs) (TMap tk tv)"
+    using T_MapLit_Cons.IH(3)[OF T_MapLit_Cons.prems(1) ev_rest_map] .
+  hence "\<forall>(kk, ww) \<in> set qs. value_has_ty \<Gamma> kk tk \<and> value_has_ty \<Gamma> ww tv"
+    by (auto elim: value_has_ty_map_cases)
+  thus ?case using k_ty w_ty veq by (auto intro!: vt_map)
+next
+  case (T_If \<Gamma> c a t b sp)
+  from T_If.prems(2) consider
+      (tt) "eval fs ps fuel sch st env c = Some (VBool True)"
+           "eval fs ps fuel sch st env a = Some v"
+    | (ff) "eval fs ps fuel sch st env c = Some (VBool False)"
+           "eval fs ps fuel sch st env b = Some v"
+    by (auto split: option.splits ir_value.splits bool.splits)
+  thus ?case
+  proof cases
+    case tt
+    show ?thesis using T_If.IH(2)[OF T_If.prems(1) tt(2)] .
+  next
+    case ff
+    show ?thesis using T_If.IH(3)[OF T_If.prems(1) ff(2)] .
+  qed
+next
+  case (T_Matches \<Gamma> e pat sp)
+  from T_Matches.prems(2) obtain b where "v = VBool b"
+    by (auto split: option.splits ir_value.splits)
+  thus ?case by simp
 qed
 
 theorem cat_h_progress_and_preservation_direct:

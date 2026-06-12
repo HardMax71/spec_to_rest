@@ -76,3 +76,42 @@ class CheckValueHasTyTest extends CatsEffectSuite:
     val badSet = VSet(List(VInt(mkInt(1)), VBool(true)))
     assert(check_value_has_ty(ctx, okSet, TSet(TInt())))
     assert(!check_value_has_ty(ctx, badSet, TSet(TInt())))
+
+  List(
+    ("VStr at TStr", VStr("hello"): ir_value, TStr(): ty, true),
+    ("VStr at TInt", VStr("hello"), TInt(), false),
+    ("VNone at any TOption", VNone(), TOption(TInt()), true),
+    ("VNone at non-option", VNone(), TInt(), false),
+    ("VSome wraps element type", VSome(VInt(mkInt(1))), TOption(TInt()), true),
+    ("VSome with mismatched element", VSome(VBool(true)), TOption(TInt()), false),
+    ("VSeq: all elements typed", VSeq(List(VStr("a"), VStr("b"))), TSeq(TStr()), true),
+    ("VSeq: mixed elements rejected", VSeq(List(VStr("a"), VInt(mkInt(1)))), TSeq(TStr()), false),
+    ("VSeq at TSet rejected", VSeq(List(VInt(mkInt(1)))), TSet(TInt()), false),
+    (
+      "VMap: keys and values typed",
+      VMap(List((VStr("k"), VInt(mkInt(1))))),
+      TMap(TStr(), TInt()),
+      true
+    ),
+    (
+      "VMap: mistyped value rejected",
+      VMap(List((VStr("k"), VBool(true)))),
+      TMap(TStr(), TInt()),
+      false
+    ),
+    (
+      "VMap: mistyped key rejected",
+      VMap(List((VInt(mkInt(1)), VInt(mkInt(2))))),
+      TMap(TStr(), TInt()),
+      false
+    )
+  ).foreach:
+    case (name, value, expected, ok) =>
+      test(s"native sorts: $name"):
+        assertEquals(check_value_has_ty(ctx, value, expected), ok)
+
+  test("nested native sorts compose"):
+    val v = VSome(VMap(List((VStr("k"), VSeq(List(VInt(mkInt(1))))))))
+    val t = TOption(TMap(TStr(), TSeq(TInt())))
+    assert(check_value_has_ty(ctx, v, t))
+    assert(!check_value_has_ty(ctx, v, TOption(TMap(TStr(), TSeq(TBool())))))
