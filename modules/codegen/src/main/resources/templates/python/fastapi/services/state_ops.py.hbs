@@ -1,4 +1,6 @@
-from sqlalchemy import select, update
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.service_state import ServiceState
@@ -29,7 +31,7 @@ class StateOpsService:
 {{/each}}
             .values({{{this.valuesArgs}}})
         )
-        if result.rowcount == 0:
+        if cast("CursorResult[Any]", result).rowcount == 0:
             return None
         return await self._snapshot()
 {{/each}}

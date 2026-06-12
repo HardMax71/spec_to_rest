@@ -28,8 +28,8 @@ object EnvExample:
         Entry("ADMIN_TOKEN", "", Some(AdminTokenComment))
       )
 
-  def render(in: Compose.Inputs): String =
-    val base = renderEntries(in.family, baseEntries(in))
+  def render(in: Compose.Inputs, extra: List[Entry] = Nil): String =
+    val base = renderEntries(in.family, baseEntries(in) ++ extra)
     val prod = if in.hasDbService then "\n" + prodAddendum(in) else ""
     base + prod
 

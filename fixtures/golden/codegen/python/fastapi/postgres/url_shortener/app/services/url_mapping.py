@@ -1,5 +1,7 @@
+from typing import Any, cast
+
+from sqlalchemy import CursorResult, select
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.url_mapping import UrlMapping
@@ -32,4 +34,4 @@ class UrlMappingService:
         result = await self._session.execute(
             sa_delete(UrlMapping).where(UrlMapping.code == code)
         )
-        return result.rowcount > 0
+        return cast("CursorResult[Any]", result).rowcount > 0

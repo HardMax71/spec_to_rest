@@ -46,12 +46,22 @@ object AdminRouter:
               case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
               case _                                               => true
           case _ => false
+        val neededEntityNames = projections
+          .collect:
+            case (_, Some(p))
+                if p.valueShape match
+                  case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
+                  case _                                               => true
+                =>
+              p.entityName
+          .distinct
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
             s"    rows = (await session.execute(select(${entName(e)}))).scalars().all()\n"
           else if entities.size > 1 && needsRows then
             entities
+              .filter(e => neededEntityNames.contains(entName(e)))
               .map: e =>
                 val v = s"rows_${Naming.toSnakeCase(entName(e))}"
                 s"    $v = (await session.execute(select(${entName(e)}))).scalars().all()"
@@ -80,6 +90,7 @@ object AdminRouter:
       case names => s"\nfrom sqlalchemy import ${names.mkString(", ")}"
 
     s"""from datetime import date, datetime
+       |from typing import Any
        |
        |from fastapi import APIRouter, ${if seedTargets.nonEmpty then "Body, " else ""}Depends
        |from fastapi.responses import Response$sqlalchemyImports${
@@ -92,8 +103,8 @@ object AdminRouter:
        |router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
        |
        |
-       |def _row_to_dict(row) -> dict:
-       |    out: dict = {}
+       |def _row_to_dict(row: Any) -> dict[str, Any]:
+       |    out: dict[str, Any] = {}
        |    for col in row.__table__.columns:
        |        v = getattr(row, col.name)
        |        if isinstance(v, (datetime, date)):
@@ -102,7 +113,7 @@ object AdminRouter:
        |    return out
        |
        |
-       |def _parse_iso(value):
+       |def _parse_iso(value: Any) -> Any:
        |    if isinstance(value, str):
        |        return datetime.fromisoformat(value)
        |    return value
@@ -115,7 +126,7 @@ object AdminRouter:
        |
        |
        |@router.get("/state")
-       |async def get_state(session: AsyncSession = Depends(get_session)) -> dict:
+       |async def get_state(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
        |$stateProjections$seedSection
        |""".stripMargin
 
@@ -134,9 +145,9 @@ object AdminRouter:
         lines.mkString("", "\n", "\n")
     s"""|@router.post("/seed/$snake", status_code=201)
         |async def seed_$snake(
-        |    payload: dict = Body(...),
+        |    payload: dict[str, Any] = Body(...),
         |    session: AsyncSession = Depends(get_session),
-        |) -> dict:
+        |) -> dict[str, Any]:
         |    payload = dict(payload)
         |$coercion    obj = ${entName(entity)}(**payload)
         |    session.add(obj)

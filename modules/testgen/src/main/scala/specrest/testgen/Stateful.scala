@@ -84,6 +84,13 @@ object Stateful:
             List(TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop)))
           )
         )
+      else if pop.requiresAuth.nonEmpty then
+        List(
+          (
+            Left(()),
+            List(TestSkip(pop.operationName, "stateful_rule", StubOps.authSkipReason(pop)))
+          )
+        )
       else
         opsConcrete.find(o => operName(o) == pop.operationName) match
           case Some(opDecl) => emitRules(pop, opDecl, ir, entityBundles)

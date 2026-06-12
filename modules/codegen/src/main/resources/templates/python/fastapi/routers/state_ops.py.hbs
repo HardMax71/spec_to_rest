@@ -2,13 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+{{#if authDeps.length}}
+from app.security import {{join authDeps ", "}}
+{{/if}}
 from app.services.state_ops import StateOpsService
 
 router = APIRouter(tags=["state"])
 {{#each scalarOps}}
 
 
-@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}})
+@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}}{{#if this.authDependency}}, dependencies=[Depends({{this.authDependency}})]{{/if}})
 async def {{this.handlerName}}(
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, int]:

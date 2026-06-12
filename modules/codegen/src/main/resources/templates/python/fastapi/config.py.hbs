@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     base_url: str = "http://localhost:8000"
     log_level: str = "info"
     admin_token: SecretStr | None = None
+{{#each authSettingLines}}
+    {{{this}}}
+{{/each}}
 
     model_config = SettingsConfigDict(
         env_file=".env",
