@@ -12,7 +12,8 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
     return;
   }
   const header = req.get('authorization') ?? '';
-  const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : '';
+  // Scheme match is case-insensitive (RFC 7235), like FastAPI's HTTPBearer.
+  const presented = /^bearer /i.test(header) ? header.slice('bearer '.length) : '';
   const a = Buffer.from(presented);
   const b = Buffer.from(token);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
