@@ -41,6 +41,57 @@ class CounterExampleTest extends CatsEffectSuite:
           decoded.inputs.nonEmpty
       assert(nonEmpty, s"counterexample should have at least one decoded component; got $decoded")
 
+  private val nativeSortSpec =
+    """service BrokenLinkRegistry {
+      |
+      |  entity Link {
+      |    url: String
+      |    label: Option[String]
+      |  }
+      |
+      |  state {
+      |    links: Int -> lone Link
+      |  }
+      |
+      |  operation Corrupt {
+      |    input: code: Int
+      |
+      |    requires:
+      |      code in links
+      |
+      |    ensures:
+      |      links'[code].url = ""
+      |  }
+      |
+      |  invariant urlsNonEmpty:
+      |    all c in links | links[c].url != ""
+      |}""".stripMargin
+
+  test("native-sort fields are decoded and type-checked in counterexamples"):
+    for
+      ir     <- SpecFixtures.buildFromSource("broken_link_registry", nativeSortSpec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val viol = report.checks.find(c =>
+        c.kind == CheckKind.Preservation &&
+          c.diagnostic.exists(_.category == DiagnosticCategory.InvariantViolationByOperation)
+      )
+      assert(
+        viol.isDefined,
+        s"expected a preservation violation; checks=${report.checks.map(c => c.id + "->" + c.status)}"
+      )
+      val ce = viol.flatMap(_.diagnostic).flatMap(_.counterexample)
+      assert(ce.isDefined, "expected a decoded counterexample attached to the diagnostic")
+      val decoded = ce.get
+      assert(
+        decoded.typingFailures.isEmpty,
+        s"native-sort values failed the runtime type check: ${decoded.typingFailures.mkString("; ")}"
+      )
+      assert(
+        decoded.entities.exists(_.fields.exists(_.name == "url")),
+        s"expected a decoded string-typed entity field; got $decoded"
+      )
+
   test("formatCounterExample renders a readable block"):
     val ce = DecodedCounterExample(
       entities = List(
