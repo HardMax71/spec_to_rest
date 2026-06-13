@@ -36,6 +36,25 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "ordering on Duration verifies via Z3 (Duration shares the Int sort, completing the #377 temporal lift)"
+  ):
+    val spec =
+      """service DurationDemo {
+        |  state {
+        |    timeouts: Map[Int, Duration]
+        |  }
+        |  invariant timeoutsNonNegative:
+        |    (the k in timeouts | timeouts[k] >= 0) >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("duration_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (Duration ordering must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

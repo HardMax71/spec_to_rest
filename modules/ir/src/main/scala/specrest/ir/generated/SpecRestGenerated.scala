@@ -10366,7 +10366,9 @@ object SpecRestGenerated {
       case (enums, entities, NamedTypeF(n, uu)) =>
         n == "Bool" || n == "Boolean" match {
           case true => Some[ty](TBool())
-          case false => n == "Int" || (n == "DateTime" || n == "Date") match {
+          case false => n == "Int" ||
+              (n == "DateTime" ||
+                (n == "Date" || n == "Duration")) match {
               case true => Some[ty](TInt())
               case false => n == "Float" ||
                   (n == "Decimal" || n == "Money") match {
