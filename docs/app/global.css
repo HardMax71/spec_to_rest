@@ -9,3 +9,20 @@
 details[open] > summary .fd-tree-chevron {
   rotate: 90deg;
 }
+
+.fd-mermaid svg,
+.fd-railroad svg {
+  display: block;
+  margin-inline: auto;
+  height: auto;
+  max-width: 100%;
+}
+
+/* Below the narrow breakpoint, shrinking a wide diagram to column width makes
+   its text illegible; keep intrinsic size and let the wrapper scroll instead. */
+@media (max-width: 640px) {
+  .fd-mermaid svg,
+  .fd-railroad svg {
+    max-width: none;
+  }
+}

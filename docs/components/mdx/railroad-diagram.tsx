@@ -1,15 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const RESPONSIVE_TWEAKS = `
-.fd-railroad svg {
-  display: block;
-  margin: 0 auto;
-  max-width: 100%;
-  height: auto;
-}
-`;
-
 const cache = new Map<string, string>();
 
 function readSvg(name: string): string {
@@ -30,11 +21,10 @@ export function RailroadDiagram({ name, alt }: Props) {
   const svg = readSvg(name);
   return (
     <div
-      className="fd-railroad not-prose my-4 w-full overflow-x-auto"
+      className="fd-railroad not-prose my-4 max-h-[80vh] overflow-auto"
       role="img"
       aria-label={alt}
     >
-      <style>{RESPONSIVE_TWEAKS}</style>
       <div dangerouslySetInnerHTML={{ __html: svg }} />
     </div>
   );
