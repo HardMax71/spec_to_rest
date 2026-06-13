@@ -198,8 +198,10 @@ naming (pluralization, kebab-case, snake_case, table names) lives in
 which carries explicit **uncountable** and **irregular** plural tables (`person -> people`,
 `data` -> `data`, etc.).
 
-Trigger and partial-index derivation are tracked in
-[#57](https://github.com/HardMax71/spec_to_rest/issues/57) (M7.6) and not yet emitted.
+Trigger and partial-index derivation shipped in
+[#57](https://github.com/HardMax71/spec_to_rest/issues/57) (M7.6): derived and
+recalculated fields emit `CREATE TRIGGER` statements, and `where`-qualified
+indexes emit as partial indexes, handled per-dialect by the `Dialect` strategy.
 
 ## Override system
 

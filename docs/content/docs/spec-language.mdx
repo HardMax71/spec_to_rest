@@ -136,9 +136,13 @@ one of them - OpenAPI security-array semantics). Operations without the clause
 are public. Referencing an undeclared scheme or declaring two schemes with the
 same name is a compile-time error.
 
-Auth is pure metadata at this stage: classification, verification, and test
-generation ignore it. OpenAPI `securitySchemes` emission and generated runtime
-guards build on these declarations (issues #54, #55).
+Operation classification and verification ignore auth: it changes neither the
+CRUD/synthesis routing nor the state-machine invariants the proofs cover. Codegen
+does consume it. Declared schemes emit into OpenAPI `securitySchemes`
+([#54](https://github.com/HardMax71/spec_to_rest/issues/54)), and operations with
+`requires_auth:` are enforced by per-scheme Bearer/ApiKey/Basic guards in the
+generated FastAPI, Go/chi, and TS/Express services
+([#55](https://github.com/HardMax71/spec_to_rest/issues/55)).
 
 ### Invariants
 
