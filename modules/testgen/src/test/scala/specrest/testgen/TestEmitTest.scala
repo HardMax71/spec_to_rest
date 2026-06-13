@@ -128,6 +128,16 @@ class TestEmitTest extends CatsEffectSuite:
         Templates.runConformance
       )
 
+  test("auth-protected operations are honest-skipped on python (runtime enforces; #26)"):
+    loadProfiled("fixtures/spec/auth_service.spec").map: profiled =>
+      val files = TestEmit.emit(profiled)
+      val skips = files.find(_.path == "tests/_testgen_skips.json").get.content
+      assert(skips.contains("protected by requires_auth"), skips)
+      assert(skips.contains("Logout"), skips)
+      assert(skips.contains("RefreshToken"), skips)
+      val behavioral = files.find(_.path == "tests/test_behavioral_auth_service.py").get.content
+      assert(!behavioral.contains("def test_logout_"), "no behavioral tests for protected ops")
+
   test("run_conformance.py orchestrates all three phases with JUnit XML"):
     loadProfiled("fixtures/spec/safe_counter.spec").map: profiled =>
       val files  = TestEmit.emit(profiled)

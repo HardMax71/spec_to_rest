@@ -25,6 +25,9 @@ object TsStateful:
       if StubOps.isStub(profiled, pop) then
         skips += TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop))
         None
+      else if pop.requiresAuth.nonEmpty then
+        skips += TestSkip(pop.operationName, "stateful_rule", StubOps.authSkipReason(pop))
+        None
       else
         tsInputArbs(pop, ir) match
           case Left(reason) =>

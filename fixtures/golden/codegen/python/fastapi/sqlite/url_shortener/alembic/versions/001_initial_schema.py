@@ -1,7 +1,7 @@
 """Initial schema for UrlShortener.
 
 Revision ID: 001
-Create Date: 2026-06-12
+Create Date: 2026-06-13
 """
 from collections.abc import Sequence
 

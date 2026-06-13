@@ -68,7 +68,7 @@ class AdminRouterTest extends CatsEffectSuite:
   test("_row_to_dict helper is generated and handles datetime"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
-      assert(src.contains("def _row_to_dict(row)"))
+      assert(src.contains("def _row_to_dict(row: Any)"))
       assert(src.contains("isinstance(v, (datetime, date))"))
       assert(src.contains(".isoformat()"))
 
@@ -86,7 +86,7 @@ class AdminRouterTest extends CatsEffectSuite:
       assert(src.contains("@router.post(\"/seed/todo\""), s"src=$src")
       assert(src.contains("async def seed_todo("), s"src=$src")
       assert(src.contains("Todo(**payload)"), s"src=$src")
-      assert(src.contains("def _parse_iso(value)"), s"src=$src")
+      assert(src.contains("def _parse_iso(value: Any)"), s"src=$src")
       assert(src.contains("payload[\"created_at\"] = _parse_iso"), s"src=$src")
       assert(src.contains("payload[\"updated_at\"] = _parse_iso"), s"src=$src")
       assert(src.contains("payload[\"completed_at\"] = _parse_iso"), s"src=$src")

@@ -25,6 +25,11 @@ object StubOps:
       case _         => false
     if isList && outs.sizeIs == 1 then outs.headOption else None
 
+  def authSkipReason(op: ProfiledOperation): String =
+    s"operation is protected by requires_auth (${op.requiresAuth.mkString(", ")}); " +
+      "the python runtime enforces credentials, and the auth-aware conformance " +
+      "harness lands with #26"
+
   def skipReason(op: ProfiledOperation): String =
     s"operation '${op.operationName}' is a fail-loud stub: the convention engine cannot " +
       "derive a body and synthesis produced no kernel method, so the generated handler " +

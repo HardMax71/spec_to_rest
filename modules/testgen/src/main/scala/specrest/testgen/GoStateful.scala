@@ -26,6 +26,9 @@ object GoStateful:
       if StubOps.isStub(profiled, pop) then
         skips += TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop))
         None
+      else if pop.requiresAuth.nonEmpty then
+        skips += TestSkip(pop.operationName, "stateful_rule", StubOps.authSkipReason(pop))
+        None
       else
         goInputArbs(pop, ir) match
           case Left(reason) =>

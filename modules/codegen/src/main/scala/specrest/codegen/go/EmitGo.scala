@@ -1,5 +1,6 @@
 package specrest.codegen.go
 
+import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
@@ -72,7 +73,8 @@ final private case class GoOperation(
     redirectField: Option[String],
     dafnyMethod: Option[String],
     lookupColumn: String,
-    createAssigns: List[String]
+    createAssigns: List[String],
+    authMiddleware: Option[String]
 )
 
 final private case class GoEntityCtx(
@@ -134,7 +136,8 @@ final private case class GoScalarOpView(
     successStatus: Int,
     setSql: String,
     whereSql: String,
-    guardPretty: String
+    guardPretty: String,
+    authMiddleware: Option[String]
 )
 
 final private case class GoProjectCtx(
@@ -146,7 +149,8 @@ final private case class GoProjectCtx(
     needsDecimal: Boolean,
     db: GoDbView,
     dafnyKernel: Option[DafnyKernel],
-    scalarOps: List[GoScalarOpView]
+    scalarOps: List[GoScalarOpView],
+    authConfigLines: List[String]
 )
 
 object EmitGo:
@@ -202,7 +206,8 @@ object EmitGo:
       needsDecimal = needsDecimal,
       db = goDbView(profiled.profile.database, service.snakeName),
       dafnyKernel = opts.dafnyKernel,
-      scalarOps = scalarOps
+      scalarOps = scalarOps,
+      authConfigLines = padCells(SecurityGo.configLines(profiled.ir))
     )
 
     val files        = List.newBuilder[EmittedFile]
@@ -241,7 +246,8 @@ object EmitGo:
       preserve = true
     )
     files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
-    files += EmittedFile(".env.example", EnvExample.render(composeIn))
+    val authEnv = AuthSchemes.envEntries(profiled.ir).map((k, v) => EnvExample.Entry(k, v))
+    files += EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
 
     files += EmittedFile(
       "internal/extensions/extensions.go",
@@ -250,6 +256,8 @@ object EmitGo:
     )
 
     files += EmittedFile("internal/admin/admin.go", AdminRouterGo.emit(profiled))
+    if svcSecurity(profiled.ir).nonEmpty then
+      files += EmittedFile("internal/auth/schemes.go", SecurityGo.emit(profiled, module))
 
     entities.foreach: entityCtx =>
       val perEntity = mergeProfile(ctx, projectCtx, Some(entityCtx))
@@ -507,7 +515,9 @@ object EmitGo:
       "hasDafny"          -> proj.dafnyKernel.isDefined,
       "scalarOps"         -> proj.scalarOps,
       "scalarStateFields" -> ctx.scalarStateFields,
-      "hasScalarOps"      -> ctx.hasScalarOps
+      "hasScalarOps"      -> ctx.hasScalarOps,
+      "needsJwt"          -> ctx.needsJwt,
+      "authConfigLines"   -> proj.authConfigLines
     )
     currentEntity match
       case Some(e) =>
@@ -783,7 +793,10 @@ object EmitGo:
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
       lookupColumn = lookupCol,
-      createAssigns = createAssigns
+      createAssigns = createAssigns,
+      authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
+        s"auth.${SecurityGo.middlewareName(op.requiresAuth)}(cfg)"
+      )
     )
 
   private def goScalarOp(v: ScalarOpView): GoScalarOpView =
@@ -807,7 +820,10 @@ object EmitGo:
       successStatus = ep.successStatus,
       setSql = setSql,
       whereSql = whereSql,
-      guardPretty = v.guardPretty
+      guardPretty = v.guardPretty,
+      authMiddleware = Option.when(v.operation.requiresAuth.nonEmpty)(
+        s"auth.${SecurityGo.middlewareName(v.operation.requiresAuth)}(cfg)"
+      )
     )
 
   private def goStateModel(fields: List[ScalarStateFieldView]): String =

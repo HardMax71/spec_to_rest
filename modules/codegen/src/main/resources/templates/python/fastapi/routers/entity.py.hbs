@@ -1,13 +1,15 @@
 {{#each routerImports.stdlibImports}}
 from {{this.module}} import {{join this.names ", "}}
 {{/each}}
-from fastapi import APIRouter, Depends{{#if routerImports.needsHttpException}}, HTTPException{{/if}}{{#if routerImports.needsResponse}}, Response{{/if}}
+from fastapi import APIRouter{{#if entityOperations.length}}, Depends{{/if}}{{#if routerImports.needsHttpException}}, HTTPException{{/if}}{{#if routerImports.needsResponse}}, Response{{/if}}
 {{#if routerImports.needsRedirectResponse}}
 from fastapi.responses import RedirectResponse
 {{/if}}
+{{#if entityOperations.length}}
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+{{/if}}
 {{#if routerImports.schemas.length}}
 from app.schemas.{{snake_case entity.entityName}} import (
 {{#each routerImports.schemas}}
@@ -15,13 +17,18 @@ from app.schemas.{{snake_case entity.entityName}} import (
 {{/each}}
 )
 {{/if}}
+{{#if routerImports.authDeps.length}}
+from app.security import {{join routerImports.authDeps ", "}}
+{{/if}}
+{{#if entityOperations.length}}
 from app.services.{{snake_case entity.entityName}} import {{entity.entityName}}Service
+{{/if}}
 
 router = APIRouter(tags=["{{snake_case entity.entityName}}"])
 
 {{#each entityOperations}}
 
-@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}})
+@router.{{this.method}}("{{this.path}}", status_code={{this.successStatus}}{{#if this.authDependency}}, dependencies=[Depends({{this.authDependency}})]{{/if}})
 async def {{this.handlerName}}(
 {{#each this.pathParamsWithTypes}}
     {{this.name}}: {{this.domainType}},
