@@ -284,9 +284,11 @@ lazy val cli = (project in file("modules/cli"))
       // jni/reflect/resource configs stay (synth needs them at runtime).
       // Still unfixed upstream as of openai-java 4.39.1.
       "--exclude-config",
-      ".*openai-java-core.*\\.jar,META-INF/native-image/proxy-config\\.json",
+      ".*openai-java-core.*\\.jar",
+      "META-INF/native-image/proxy-config\\.json",
       "--exclude-config",
-      ".*openai-java-core.*\\.jar,META-INF/native-image/serialization-config\\.json"
+      ".*openai-java-core.*\\.jar",
+      "META-INF/native-image/serialization-config\\.json"
     )
   )
 
