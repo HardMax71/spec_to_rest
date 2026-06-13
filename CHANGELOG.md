@@ -1,5 +1,58 @@
 # Changelog
 
+## [3.0.0](https://github.com/HardMax71/spec_to_rest/compare/v2.2.0...v3.0.0) (2026-06-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **proofs:** collapse the two-language IR into one verified IR ([#391](https://github.com/HardMax71/spec_to_rest/issues/391)) (#397)
+
+### Features
+
+* **codegen:** always-mounted bearer-guarded /admin surface (replaces ENABLE_TEST_ADMIN) ([#409](https://github.com/HardMax71/spec_to_rest/issues/409)) ([9226ed0](https://github.com/HardMax71/spec_to_rest/commit/9226ed04df778ce7b1929be68506cbf642c271d0))
+* **codegen:** direct-emit scalar state operations ([#407](https://github.com/HardMax71/spec_to_rest/issues/407)) ([#408](https://github.com/HardMax71/spec_to_rest/issues/408)) ([15f9d8f](https://github.com/HardMax71/spec_to_rest/commit/15f9d8f05cb15276c1f10a39e4adf6b78aeaf4cc))
+* **codegen:** emit spec-declared security schemes into OpenAPI (M8.2) ([#412](https://github.com/HardMax71/spec_to_rest/issues/412)) ([58796f8](https://github.com/HardMax71/spec_to_rest/commit/58796f81be2979fbb417be11d8d163b5d2ca9978))
+* **parser:** authentication DSL syntax + IR support (M8.1) ([#411](https://github.com/HardMax71/spec_to_rest/issues/411)) ([5c85c69](https://github.com/HardMax71/spec_to_rest/commit/5c85c6953972e323b888b03d409b236107e770fd))
+* playground archive download + scrollable output panes ([#374](https://github.com/HardMax71/spec_to_rest/issues/374)) ([e74128a](https://github.com/HardMax71/spec_to_rest/commit/e74128afa66fcfb1ec91bb021c249c57e048c9a2))
+* **proofs:** collapse the two-language IR into one verified IR ([#391](https://github.com/HardMax71/spec_to_rest/issues/391)) ([#397](https://github.com/HardMax71/spec_to_rest/issues/397)) ([0843cf4](https://github.com/HardMax71/spec_to_rest/commit/0843cf4e5037e1d1a524a850ab8ccf7b1553cb94))
+* **proofs:** extend H3 typing layer to the lifted native sorts ([#383](https://github.com/HardMax71/spec_to_rest/issues/383)) ([#404](https://github.com/HardMax71/spec_to_rest/issues/404)) ([2c2cd12](https://github.com/HardMax71/spec_to_rest/commit/2c2cd126836e6dee9c79d148395b9335458daf99))
+* **proofs:** lift CallF via trusted pre-lower inlining (function/predicate calls) ([#390](https://github.com/HardMax71/spec_to_rest/issues/390)) ([2947cb2](https://github.com/HardMax71/spec_to_rest/commit/2947cb2ae496651106bc7c6acdf81db20b8cf501))
+* **proofs:** lift If to a verified Ite construct (Z3 ite) ([#378](https://github.com/HardMax71/spec_to_rest/issues/378)) ([6a2042a](https://github.com/HardMax71/spec_to_rest/commit/6a2042ad13e5adca8eab25f3502e010a72e9797c))
+* **proofs:** lift Matches, TheF, ConstructorF to the verified subset ([#389](https://github.com/HardMax71/spec_to_rest/issues/389)) ([254fd56](https://github.com/HardMax71/spec_to_rest/commit/254fd560e707fd7226840ca48d1929ec5fcf7a2a))
+* **proofs:** lift Option (none/some) to a verified Z3 datatype ([#379](https://github.com/HardMax71/spec_to_rest/issues/379)) ([9ef8af7](https://github.com/HardMax71/spec_to_rest/commit/9ef8af786c581489c2e58b4309a6adb8d6639d41))
+* **proofs:** lift Seq + Map literals to Z3 native theories ([#381](https://github.com/HardMax71/spec_to_rest/issues/381)) ([c484a08](https://github.com/HardMax71/spec_to_rest/commit/c484a08c846a2386874afd5f2d7f67b599f82455))
+* **proofs:** lift set comprehension into the verified Z3 subset ([#386](https://github.com/HardMax71/spec_to_rest/issues/386)) ([6855539](https://github.com/HardMax71/spec_to_rest/commit/68555391c10c5e6f971da95aaf4e03c57779c415))
+* **proofs:** lift set subset to the verified Z3 subset ([#385](https://github.com/HardMax71/spec_to_rest/issues/385)) ([3a8fd05](https://github.com/HardMax71/spec_to_rest/commit/3a8fd05c08e860162ef6ab7213f520230b5e1f4c))
+* **proofs:** lift StringLit to the Z3 native String theory ([#380](https://github.com/HardMax71/spec_to_rest/issues/380)) ([062da04](https://github.com/HardMax71/spec_to_rest/commit/062da040a81f66af46345aac7444fca68c62ec53))
+* **proofs:** prove inline_calls meaning-preserving via eval_full ([#392](https://github.com/HardMax71/spec_to_rest/issues/392)) ([f9cbf55](https://github.com/HardMax71/spec_to_rest/commit/f9cbf55d7e2bf1f20fd9185f7551b5b79b64e1ef))
+* **verify:** model temporal and fractional types as Int/Real sorts ([#377](https://github.com/HardMax71/spec_to_rest/issues/377)) ([3f374b1](https://github.com/HardMax71/spec_to_rest/commit/3f374b15d5bfa53e33c2b90ae0004abe68faf44e))
+
+
+### Bug Fixes
+
+* **ci:** eliminate build warnings at their sources ([#403](https://github.com/HardMax71/spec_to_rest/issues/403)) ([61e6e66](https://github.com/HardMax71/spec_to_rest/commit/61e6e6691e9b04d76786abd96bf3caa9f680da8b))
+* **codegen:** lint-clean generated output + security audit jobs in generated CI ([#410](https://github.com/HardMax71/spec_to_rest/issues/410)) ([50f5125](https://github.com/HardMax71/spec_to_rest/commit/50f5125e082839c93b1cc64177e56d4ce6422ac3))
+* **verify:** decode and type-check native-sort counterexample values ([#383](https://github.com/HardMax71/spec_to_rest/issues/383)) ([#405](https://github.com/HardMax71/spec_to_rest/issues/405)) ([b5c106b](https://github.com/HardMax71/spec_to_rest/commit/b5c106bdf24d36c446c07d107f1e53fae129a084))
+* **verify:** normalize Z3 rationals at the decode boundary ([#402](https://github.com/HardMax71/spec_to_rest/issues/402)) ([f399942](https://github.com/HardMax71/spec_to_rest/commit/f39994236246b36fe25caff58045504bfcc9f2b8))
+
+
+### Code Refactoring
+
+* **proofs:** replace the reserved 0cmp binder with computed fresh names ([#398](https://github.com/HardMax71/spec_to_rest/issues/398)) ([8b3027b](https://github.com/HardMax71/spec_to_rest/commit/8b3027ba50fa05457645a944b1bc0cb1ba0793d6))
+* **proofs:** split the Soundness session into parallel branches ([#399](https://github.com/HardMax71/spec_to_rest/issues/399)) ([f0d69af](https://github.com/HardMax71/spec_to_rest/commit/f0d69af8eb1659686288cb73009915716711227c))
+
+
+### Performance
+
+* **proofs:** flatten re-detonated matches and factor the translate/wf_z3 RHS ([#400](https://github.com/HardMax71/spec_to_rest/issues/400)) ([f04cc30](https://github.com/HardMax71/spec_to_rest/commit/f04cc30a403d9235d0e04e4bf79b83594648261f))
+* **proofs:** flatten relation-reference recognisers (-30s build) ([#384](https://github.com/HardMax71/spec_to_rest/issues/384)) ([e978b0c](https://github.com/HardMax71/spec_to_rest/commit/e978b0ce425b0baa6c89a70ce7ce829a29edcf33))
+* **proofs:** parallelize CI build and cut the 89s preservation proof ([#393](https://github.com/HardMax71/spec_to_rest/issues/393)) ([9dccbc2](https://github.com/HardMax71/spec_to_rest/commit/9dccbc2b593745d81471ded07bbb6e99fc2bf7cd))
+
+
+### Documentation
+
+* add DeepWiki badge to README ([#382](https://github.com/HardMax71/spec_to_rest/issues/382)) ([c4e883e](https://github.com/HardMax71/spec_to_rest/commit/c4e883e0d932a417fcfd853a10f43cfe7261f8cf))
+
 ## [2.2.0](https://github.com/HardMax71/spec_to_rest/compare/v2.1.0...v2.2.0) (2026-05-31)
 
 
