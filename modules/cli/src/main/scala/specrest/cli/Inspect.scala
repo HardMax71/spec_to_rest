@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import io.circe.Json
 import io.circe.Printer
@@ -40,7 +39,7 @@ object Inspect:
       log: Logger,
       out: PrintStream = System.out,
       operation: Option[String] = None
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -49,16 +48,16 @@ object Inspect:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(err) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
+                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitStatus.Violations)
               case Right(ir) =>
                 renderIR(ir, format, operation) match
-                  case Right(text) => IO.blocking(out.println(text)).as(ExitCodes.Ok)
+                  case Right(text) => IO.blocking(out.println(text)).as(ExitStatus.Ok)
                   case Left(msg) =>
-                    IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Translator)
+                    IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Translator)
 
   private def renderIR(
       ir: ServiceIRFull,

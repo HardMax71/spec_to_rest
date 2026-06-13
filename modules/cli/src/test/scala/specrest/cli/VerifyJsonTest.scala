@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import io.circe.parser
 import munit.CatsEffectSuite
@@ -14,8 +13,8 @@ class VerifyJsonTest extends CatsEffectSuite:
   private def log: Logger = Logger.fromFlags(verbose = false, quiet = true)
 
   private def captureStdout(
-      run: PrintStream => IO[ExitCode]
-  ): IO[(ExitCode, String)] =
+      run: PrintStream => IO[ExitStatus]
+  ): IO[(ExitStatus, String)] =
     IO.delay {
       val buf = new ByteArrayOutputStream()
       val ps  = new PrintStream(buf, true, "UTF-8")
@@ -28,7 +27,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val cur    = parsed.hcursor
         assertEquals(cur.downField("schemaVersion").as[Int].toOption, Some(2))
@@ -58,7 +57,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Violations)
+        assertEquals(exit, ExitStatus.Violations)
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         assertEquals(parsed.hcursor.downField("ok").as[Boolean].toOption, Some(false))
         val categories = parsed.hcursor.downField("checks").values
@@ -82,7 +81,7 @@ class VerifyJsonTest extends CatsEffectSuite:
       captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
         .flatMap: (exit, out) =>
           IO.blocking(Files.readString(tmp)).map: content =>
-            assertEquals(exit, ExitCodes.Ok)
+            assertEquals(exit, ExitStatus.Ok)
             assertEquals(out, "", "stdout should be empty when --json-out is active")
             val parsed = parser.parse(content).toOption.getOrElse(fail("invalid JSON in file"))
             assertEquals(parsed.hcursor.downField("schemaVersion").as[Int].toOption, Some(2))
@@ -97,7 +96,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     )
     captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Violations)
+        assertEquals(exit, ExitStatus.Violations)
         assertEquals(out, "", "no stdout output when the combination is rejected")
 
   test("--no-suggestions sets diagnostic.suggestion to null in JSON"):
@@ -110,7 +109,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     )
     captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Violations)
+        assertEquals(exit, ExitStatus.Violations)
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val suggestions = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
           .flatMap(_.hcursor.downField("diagnostic").focus)
@@ -161,7 +160,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
     captureStdout(ps => Verify.run("fixtures/spec/safe_counter.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
         val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
         val nonSkipped = checks.filter: c =>
@@ -183,7 +182,7 @@ class VerifyJsonTest extends CatsEffectSuite:
     )
     captureStdout(ps => Verify.run("fixtures/spec/unsat_invariants.spec", opts, log, ps))
       .map: (exit, out) =>
-        assertEquals(exit, ExitCodes.Violations)
+        assertEquals(exit, ExitStatus.Violations)
         val parsed = parser.parse(out).toOption.getOrElse(fail("invalid JSON"))
         val cores = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
           .flatMap(_.hcursor.downField("diagnostic").downField("coreSpans").values)

@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 
 import java.io.PrintStream
@@ -9,7 +8,7 @@ object DiagInit:
 
   private val targetClass = "specrest.ir.generated.SpecRestGenerated$"
 
-  def run(out: PrintStream = System.err): IO[ExitCode] = IO.delay {
+  def run(out: PrintStream = System.err): IO[ExitStatus] = IO.delay {
     out.println("=== diag-init: substrate VM class-init probe ===")
     out.println(s"  jvm.name      = ${sysProp("java.vm.name")}")
     out.println(s"  jvm.vendor    = ${sysProp("java.vm.vendor")}")
@@ -70,7 +69,7 @@ object DiagInit:
     out.println(
       s"=== diag-init summary: resolve=${resolveOk.isDefined} init=$initOk call=$callOk ==="
     )
-    if initOk && callOk then ExitCodes.Ok else ExitCodes.Violations
+    if initOk && callOk then ExitStatus.Ok else ExitStatus.Violations
   }
 
   private def sysProp(key: String): String =

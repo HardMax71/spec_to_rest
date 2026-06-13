@@ -51,7 +51,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
       val opts = baseOpts(dir.toString, Some(dir.resolve("synth-cache").toString))
       Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
-        .map(code => assertEquals(code, ExitCodes.Violations))
+        .map(code => assertEquals(code, ExitStatus.Violations))
 
   test("--with-synthesis on a 0-LLM_SYNTHESIS spec emits no kernel/adapter files (#27 review)"):
     withTempDir: dir =>
@@ -63,7 +63,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
                    try stream.iterator.asScala.map(dir.relativize).map(_.toString).toSet
                    finally stream.close()
       yield
-        assertEquals(code, ExitCodes.Ok)
+        assertEquals(code, ExitStatus.Ok)
         assert(
           files.forall(p => !p.startsWith("app/dafny_kernel")),
           s"kernel files leaked into 0-LLM_SYNTHESIS output: ${files.filter(_.startsWith("app/dafny_kernel"))}"
@@ -106,7 +106,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
 
       seed *> Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
-        .map(code => assertEquals(code, ExitCodes.Violations))
+        .map(code => assertEquals(code, ExitStatus.Violations))
 
   test("--allow-skeletons + skeletons cache populated → compile succeeds with warning"):
     DafnyCli.resolveBinary(None).flatMap:
@@ -167,7 +167,7 @@ class CompileSynthesisTest extends CatsEffectSuite:
       seedAll *> Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
         .map: code =>
-          assertEquals(code, ExitCodes.Ok)
+          assertEquals(code, ExitStatus.Ok)
           val kernelDir = Paths.get(opts.outDir).resolve("app/dafny_kernel")
           assert(
             Files.isDirectory(kernelDir),
@@ -182,4 +182,4 @@ class CompileSynthesisTest extends CatsEffectSuite:
         )
       Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
-        .map(code => assertEquals(code, ExitCodes.Violations))
+        .map(code => assertEquals(code, ExitStatus.Violations))

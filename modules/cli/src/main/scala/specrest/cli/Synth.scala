@@ -1,9 +1,8 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.kernel.Resource
-import specrest.cli.ExitCodes.given
+import specrest.cli.ExitStatus.given
 import specrest.convention.Classify
 import specrest.dafny.DafnyMethodHeader
 import specrest.dafny.Generator as DafnyGenerator
@@ -83,7 +82,7 @@ object Synth:
       log: Logger,
       out: PrintStream = System.out,
       err: PrintStream = System.err
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -92,12 +91,12 @@ object Synth:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(buildErr) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitCodes.Violations)
+                  .as(ExitStatus.Violations)
               case Right(ir) =>
                 runWithIR(specFile, ir, opts, log, out, err)
 
@@ -116,30 +115,30 @@ object Synth:
       log: Logger,
       out: PrintStream,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val classifications = Classify.classifyOperations(ir)
     classifications.find(c => classificationOperationName(c) == opts.operation) match
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
-          .as(ExitCodes.Violations)
+          .as(ExitStatus.Violations)
       case Some(c) if isDirectEmit(classificationStrategy(c)) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
               "no LLM synthesis required"
           )
-        ).as(ExitCodes.Violations)
+        ).as(ExitStatus.Violations)
       case Some(c) =>
         DafnyGenerator.generate(ir) match
           case Left(dErr) =>
             IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-              .as(ExitCodes.Translator)
+              .as(ExitStatus.Translator)
           case Right(dafny) =>
             val opName = classificationOperationName(c)
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
-                  .as(ExitCodes.Translator)
+                  .as(ExitStatus.Translator)
               case Some(header) =>
                 executeSynth(specFile, c, header, dafny.text, opts, log, out, err)
 
@@ -152,7 +151,7 @@ object Synth:
       log: Logger,
       out: PrintStream,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val req    = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
     val opName = classificationOperationName(c)
     providerResource(opts.model).use: provider =>
@@ -162,8 +161,8 @@ object Synth:
           synth.synthesize(req).flatMap:
             case Left(synthErr) =>
               IO.delay(log.error(s"$specFile: synth $opName: ${synthErr.message}"))
-                .as(ExitCodes.forSynthError(synthErr))
-            case Right(result) => emitResult(result, opName, out, err).as(ExitCodes.Ok)
+                .as(ExitStatus.forSynthError(synthErr))
+            case Right(result) => emitResult(result, opName, out, err).as(ExitStatus.Ok)
 
   private def cacheResource(opts: SynthOptions): IO[Option[Cache]] =
     if opts.noCache then IO.pure(None)
@@ -199,7 +198,7 @@ object Synth:
       log: Logger,
       out: PrintStream = System.out,
       err: PrintStream = System.err
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -208,12 +207,12 @@ object Synth:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(buildErr) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitCodes.Violations)
+                  .as(ExitStatus.Violations)
               case Right(ir) => runVerifyWithIR(specFile, ir, opts, log, out, err)
 
   private def runVerifyWithIR(
@@ -223,30 +222,30 @@ object Synth:
       log: Logger,
       out: PrintStream,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val classifications = Classify.classifyOperations(ir)
     classifications.find(c => classificationOperationName(c) == opts.operation) match
       case None =>
         IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
-          .as(ExitCodes.Violations)
+          .as(ExitStatus.Violations)
       case Some(c) if isDirectEmit(classificationStrategy(c)) =>
         IO.delay(
           log.error(
             s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
               "no LLM synthesis required"
           )
-        ).as(ExitCodes.Violations)
+        ).as(ExitStatus.Violations)
       case Some(c) =>
         DafnyGenerator.generate(ir) match
           case Left(dErr) =>
             IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-              .as(ExitCodes.Translator)
+              .as(ExitStatus.Translator)
           case Right(dafny) =>
             val opName = classificationOperationName(c)
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
-                  .as(ExitCodes.Translator)
+                  .as(ExitStatus.Translator)
               case Some(header) =>
                 executeCegis(specFile, c, header, dafny.text, opts, log, out, err)
 
@@ -259,10 +258,10 @@ object Synth:
       log: Logger,
       out: PrintStream,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
       case Left(msg) =>
-        IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
+        IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Backend)
       case Right(binary) =>
         val req = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
         val budget = CegisBudget.Default.copy(
@@ -299,7 +298,7 @@ object Synth:
               orch.run(req).flatMap: outcome =>
                 emitFallbackOutcome(outcome, classificationOperationName(c), out, err) *>
                   tracker.summary.flatMap: s =>
-                    emitSummary(s, err).as(ExitCodes.forFallbackOutcome(outcome))
+                    emitSummary(s, err).as(ExitStatus.forFallbackOutcome(outcome))
             else
               val loop =
                 new CegisLoop(
@@ -314,7 +313,7 @@ object Synth:
               loop.run(req).flatMap: outcome =>
                 emitOutcome(outcome, classificationOperationName(c), out, err) *> tracker.summary
                   .flatMap: s =>
-                    emitSummary(s, err).as(ExitCodes.forCegisOutcome(outcome))
+                    emitSummary(s, err).as(ExitStatus.forCegisOutcome(outcome))
 
   private def verifiedCacheResource(opts: SynthVerifyOptions): IO[Option[Cache]] =
     if opts.noCache then IO.pure(None)
@@ -394,7 +393,7 @@ object Synth:
       opts: SynthVerifyAllOptions,
       log: Logger,
       err: PrintStream = System.err
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -403,12 +402,12 @@ object Synth:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(buildErr) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitCodes.Violations)
+                  .as(ExitStatus.Violations)
               case Right(ir) => runVerifyAllWithIR(specFile, ir, opts, log, err)
 
   private def runVerifyAllWithIR(
@@ -417,22 +416,22 @@ object Synth:
       opts: SynthVerifyAllOptions,
       log: Logger,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val classifications = Classify
       .classifyOperations(ir)
       .filter(c => isLlmSynthesis(classificationStrategy(c)))
     if classifications.isEmpty then
       IO.delay(
         log.warn(s"$specFile: no LLM_SYNTHESIS operations to verify; nothing to do")
-      ).as(ExitCodes.Ok)
+      ).as(ExitStatus.Ok)
     else
       DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
-        case Left(msg) => IO.delay(log.error(s"$specFile: $msg")).as(ExitCodes.Backend)
+        case Left(msg) => IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Backend)
         case Right(binary) =>
           DafnyGenerator.generate(ir) match
             case Left(dErr) =>
               IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-                .as(ExitCodes.Translator)
+                .as(ExitStatus.Translator)
             case Right(dafny) =>
               executeVerifyAll(specFile, classifications, dafny, opts, binary, log, err)
 
@@ -444,7 +443,7 @@ object Synth:
       binary: String,
       log: Logger,
       err: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val budget = CegisBudget.Default.copy(
       maxIterations = opts.maxIter,
       maxCostUsd = opts.maxCostUsd
@@ -497,9 +496,9 @@ object Synth:
       opts: SynthVerifyAllOptions,
       err: PrintStream,
       log: Logger
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     classifications
-      .foldLeft[IO[Either[ExitCode, List[OpOutcome]]]](IO.pure(Right(Nil))): (accIO, c) =>
+      .foldLeft[IO[Either[ExitStatus, List[OpOutcome]]]](IO.pure(Right(Nil))): (accIO, c) =>
         accIO.flatMap:
           case Left(code) => IO.pure(Left(code))
           case Right(acc) =>
@@ -507,7 +506,7 @@ object Synth:
             dafny.methods.find(_.name == opName) match
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
-                  .as(Left(ExitCodes.Translator))
+                  .as(Left(ExitStatus.Translator))
               case Some(header) =>
                 val req = SynthRequest(
                   c,
@@ -528,5 +527,5 @@ object Synth:
             err.println(rendered)
           }.as(exitCodeForReport(report))
 
-  private def exitCodeForReport(report: SynthesisReport): ExitCode =
-    if report.totals.skeleton == 0 then ExitCodes.Ok else ExitCodes.Violations
+  private def exitCodeForReport(report: SynthesisReport): ExitStatus =
+    if report.totals.skeleton == 0 then ExitStatus.Ok else ExitStatus.Violations

@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import specrest.convention.ConventionDiagnostic
 import specrest.convention.DiagnosticLevel as ConvDiagLevel
@@ -19,7 +18,7 @@ import java.nio.file.Paths
 
 object Check:
 
-  def run(specFile: String, log: Logger): IO[ExitCode] =
+  def run(specFile: String, log: Logger): IO[ExitStatus] =
     readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -31,12 +30,12 @@ object Check:
               IO.delay {
                 errors.foreach: e =>
                   log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-              }.as(ExitCodes.Violations)
+              }.as(ExitStatus.Violations)
             case Right(parsed) =>
               val t1 = System.nanoTime()
               Builder.buildIR(parsed.tree).flatMap:
                 case Left(err) =>
-                  IO.delay(log.error(renderBuildError(specFile, err))).as(ExitCodes.Violations)
+                  IO.delay(log.error(renderBuildError(specFile, err))).as(ExitStatus.Violations)
                 case Right(ir) =>
                   IO.delay {
                     val buildMs = (System.nanoTime() - t1) / 1_000_000.0
@@ -58,12 +57,12 @@ object Check:
                     convErrors.foreach(d => log.error(renderConv(specFile, d)))
                     lintErrors.foreach(d => log.error(renderLint(specFile, d)))
 
-                    if convErrors.nonEmpty || lintErrors.nonEmpty then ExitCodes.Violations
+                    if convErrors.nonEmpty || lintErrors.nonEmpty then ExitStatus.Violations
                     else
                       log.success(
                         s"$specFile: valid (${svcOperations(ir).length} operations, ${svcEntities(ir).length} entities, ${svcInvariants(ir).length} invariants)"
                       )
-                      ExitCodes.Ok
+                      ExitStatus.Ok
                   }
           )
         }
@@ -86,19 +85,19 @@ object Check:
       case LintLevel.Warning => s"${loc}warning: ${d.message} [${d.code}]"
       case LintLevel.Error   => s"${loc}${d.message} [${d.code}]"
 
-  private[cli] def readSource(specFile: String, log: Logger): IO[Either[ExitCode, String]] =
+  private[cli] def readSource(specFile: String, log: Logger): IO[Either[ExitStatus, String]] =
     IO.blocking(Files.readString(Paths.get(specFile)))
-      .map(src => Right(src): Either[ExitCode, String])
+      .map(src => Right(src): Either[ExitStatus, String])
       .handleErrorWith:
         case _: NoSuchFileException =>
           IO.delay(log.error(s"File not found: $specFile"))
-            .as(Left(ExitCodes.Violations))
+            .as(Left(ExitStatus.Violations))
         case e: java.nio.file.FileSystemException =>
           IO.delay(log.error(s"Cannot read $specFile: ${e.getMessage}"))
-            .as(Left(ExitCodes.Violations))
+            .as(Left(ExitStatus.Violations))
         case e: RuntimeException =>
           IO.delay(log.error(s"Cannot read $specFile: ${e.getMessage}"))
-            .as(Left(ExitCodes.Violations))
+            .as(Left(ExitStatus.Violations))
 
   private[cli] def renderBuildError(specFile: String, e: VerifyError.Build): String =
     e.span match

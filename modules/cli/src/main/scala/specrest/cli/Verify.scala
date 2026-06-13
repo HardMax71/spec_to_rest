@@ -1,9 +1,8 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import cats.effect.Resource
-import specrest.cli.ExitCodes.given
+import specrest.cli.ExitStatus.given
 import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
@@ -43,7 +42,7 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream = System.out
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val wantsJson = opts.json || opts.jsonOut.isDefined
     val wantsDump =
       opts.dumpSmt || opts.dumpSmtOut.isDefined || opts.dumpAlloy || opts.dumpAlloyOut.isDefined
@@ -53,7 +52,7 @@ object Verify:
           "--json / --json-out cannot be combined with --dump-smt / --dump-alloy " +
             "(dump flags short-circuit before checks run; JSON output requires a full run)"
         )
-      }.as(ExitCodes.Violations)
+      }.as(ExitStatus.Violations)
     else
       Check.readSource(specFile, log).flatMap:
         case Left(code) => IO.pure(code)
@@ -67,13 +66,13 @@ object Verify:
                     IO.delay {
                       errors.foreach: e =>
                         log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-                    }.as(ExitCodes.Violations)
+                    }.as(ExitStatus.Violations)
                   case Right(parsed) =>
                     val tBuild0 = System.nanoTime()
                     Builder.buildIR(parsed.tree).flatMap:
                       case Left(err) =>
                         IO.delay(log.error(Check.renderBuildError(specFile, err)))
-                          .as(ExitCodes.Violations)
+                          .as(ExitStatus.Violations)
                       case Right(ir) =>
                         IO.delay(
                           log.verbose(
@@ -88,7 +87,7 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     if opts.dumpSmt || opts.dumpSmtOut.isDefined then
       dumpSmtFlow(specFile, ir, opts, log, stdout)
     else if opts.dumpAlloy || opts.dumpAlloyOut.isDefined then
@@ -102,12 +101,12 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val tTrans0 = System.nanoTime()
     Translator.translate(ir).flatMap:
       case Left(err) =>
         IO.delay(log.error(s"$specFile: translator limitation: ${err.message}"))
-          .as(ExitCodes.Translator)
+          .as(ExitStatus.Translator)
       case Right(script) =>
         val transMs = (System.nanoTime() - tTrans0) / 1_000_000.0
         IO.delay(
@@ -121,9 +120,9 @@ object Verify:
             case Some(path) =>
               IO.blocking(Files.writeString(Paths.get(path), smt))
                 .productR(IO.delay(log.success(s"Wrote SMT-LIB to $path")))
-                .as(ExitCodes.Ok)
+                .as(ExitStatus.Ok)
             case None =>
-              IO.blocking { stdout.print(smt); stdout.flush() }.as(ExitCodes.Ok)
+              IO.blocking { stdout.print(smt); stdout.flush() }.as(ExitStatus.Ok)
         }
 
   private def dumpAlloyFlow(
@@ -132,26 +131,26 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     AlloyTranslator.translateGlobal(ir, opts.alloyScope).flatMap:
       case Left(err) =>
         IO.delay(log.error(s"$specFile: alloy translator: ${err.message}"))
-          .as(ExitCodes.Translator)
+          .as(ExitStatus.Translator)
       case Right(module) =>
         val source = AlloyRender.render(module)
         opts.dumpAlloyOut match
           case Some(path) =>
             IO.blocking(Files.writeString(Paths.get(path), source))
               .productR(IO.delay(log.success(s"Wrote Alloy source to $path")))
-              .as(ExitCodes.Ok)
+              .as(ExitStatus.Ok)
           case None =>
-            IO.blocking { stdout.print(source); stdout.flush() }.as(ExitCodes.Ok)
+            IO.blocking { stdout.print(source); stdout.flush() }.as(ExitStatus.Ok)
 
   private def openDumpSink(
       specFile: String,
       opts: VerifyOptions,
       log: Logger
-  ): Resource[IO, Either[ExitCode, Option[DumpSink]]] =
+  ): Resource[IO, Either[ExitStatus, Option[DumpSink]]] =
     opts.dumpVc match
       case None =>
         Resource.pure(Right(None))
@@ -159,7 +158,7 @@ object Verify:
         DumpSink.openResource(Paths.get(p)).evalMap:
           case Left(err) =>
             IO.delay(log.error(s"$specFile: ${err.message}"))
-              .as(Left(ExitCodes.Backend))
+              .as(Left(ExitStatus.Backend))
           case Right(sink) =>
             IO.delay(log.verbose(s"Writing per-check VC artifacts to ${sink.dir}"))
               .as(Right(Some(sink)))
@@ -170,7 +169,7 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     IO.delay(log.verbose(s"Timeout: ${opts.timeoutMs}ms")) >>
       IO.delay(log.verbose(s"Alloy scope: ${opts.alloyScope}")) >>
       openDumpSink(specFile, opts, log).use:
@@ -216,7 +215,7 @@ object Verify:
       opts: VerifyOptions,
       log: Logger,
       stdout: PrintStream
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val rendered = JsonReport.render(JsonReport.toJson(specFile, report, totalMs))
     val write = opts.jsonOut match
       case Some(path) =>
@@ -224,14 +223,14 @@ object Verify:
           IO.delay(log.success(s"Wrote JSON report to $path"))
       case None =>
         IO.blocking { stdout.print(rendered); stdout.flush() }
-    write.as(ExitCodes.forCheckResults(report.checks, report.ok))
+    write.as(ExitStatus.forCheckResults(report.checks, report.ok))
 
   def runGate(
       specFile: String,
       ir: service_ir,
       config: VerificationConfig,
       log: Logger
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val tRun0 = System.nanoTime()
     Consistency.runConsistencyChecks(ir, config, None).flatMap: report =>
       val totalMs = (System.nanoTime() - tRun0) / 1_000_000.0
@@ -243,12 +242,12 @@ object Verify:
       ok: Boolean,
       totalMs: Double,
       log: Logger
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     IO.delay {
       val passes   = checks.count(_.status == CheckOutcome.Sat)
       val skipped  = checks.count(_.status == CheckOutcome.Skipped)
       val failures = checks.length - passes - skipped
-      val exitCode = ExitCodes.forCheckResults(checks, ok)
+      val status   = ExitStatus.forCheckResults(checks, ok)
 
       val translatorSkipped = checks.count: c =>
         c.status == CheckOutcome.Skipped &&
@@ -265,7 +264,7 @@ object Verify:
             (if otherSkipped > 0 then List(s"$otherSkipped other") else Nil)
         if parts.isEmpty then "" else parts.mkString(" (", "; ", ")")
 
-      if exitCode == ExitCodes.Ok then
+      if status == ExitStatus.Ok then
         log.success(
           f"$specFile: $passes/${checks.length} consistency checks passed (${totalMs}%.0fms)"
         )
@@ -293,7 +292,12 @@ object Verify:
                   log.error(formatDiagnostic(diag, specFile))
               case None =>
                 log.error(formatCheckLine(c))
-      exitCode
+
+        val explain = s"$specFile: exit ${status.code} (${status.label}): ${status.meaning}"
+        if status == ExitStatus.Violations || status == ExitStatus.Backend then log.error(explain)
+        else log.warn(explain)
+        log.info(ExitStatus.legend)
+      status
     }
 
   private def formatCheckLine(c: CheckResult): String =
