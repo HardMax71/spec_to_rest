@@ -255,7 +255,7 @@ fun typeExprFullToTy ::
   "typeExprFullToTy enums entities (NamedTypeF n _) =
      (if n = STR ''Bool'' \<or> n = STR ''Boolean'' then Some TBool
       else if n = STR ''Int'' \<or> n = STR ''DateTime''
-              \<or> n = STR ''Date'' then Some TInt
+              \<or> n = STR ''Date'' \<or> n = STR ''Duration'' then Some TInt
       else if n = STR ''Float'' \<or> n = STR ''Decimal''
               \<or> n = STR ''Money'' then Some TReal
       else if n = STR ''String'' then Some TStr

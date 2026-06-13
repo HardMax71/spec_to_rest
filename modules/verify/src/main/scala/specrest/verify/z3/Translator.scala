@@ -320,13 +320,13 @@ object Translator:
   // temporal names share Int/TInt (temporal values are epoch seconds),
   // fractional names map to Real/TReal, Bool/Boolean to Bool/TBool. String is
   // handled in sortForNamedType (native string sort / TStr, where
-  // String-refinement aliases get their own handling); opaque primitives
-  // (Duration, UUID) are absent on both sides and fall to uninterpreted.
+  // String-refinement aliases get their own handling); UUID is absent on both
+  // sides and falls to an uninterpreted sort (equality only).
   private def primitiveSortOf(name: String): Option[Z3Sort] = name match
-    case "Int" | "DateTime" | "Date"   => Some(Z3Sort.Int)
-    case "Float" | "Decimal" | "Money" => Some(Z3Sort.Real)
-    case "Bool" | "Boolean"            => Some(Z3Sort.Bool)
-    case _                             => None
+    case "Int" | "DateTime" | "Date" | "Duration" => Some(Z3Sort.Int)
+    case "Float" | "Decimal" | "Money"            => Some(Z3Sort.Real)
+    case "Bool" | "Boolean"                       => Some(Z3Sort.Bool)
+    case _                                        => None
 
   private def primitiveUnderlyingSort(t: type_alias_decl): Option[Z3Sort] =
     talType(t) match
