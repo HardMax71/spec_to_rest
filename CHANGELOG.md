@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.1](https://github.com/HardMax71/spec_to_rest/compare/v3.0.0...v3.0.1) (2026-06-13)
+
+
+### Bug Fixes
+
+* **native-image:** pass --exclude-config as two args so release binaries build ([#417](https://github.com/HardMax71/spec_to_rest/issues/417)) ([a714f53](https://github.com/HardMax71/spec_to_rest/commit/a714f532d3ed9f9a6abcc1459b43bfe209801f69))
+
+
+### Documentation
+
+* fix diagram rendering (stretched width, no theme, mobile legibility) ([#414](https://github.com/HardMax71/spec_to_rest/issues/414)) ([52524a2](https://github.com/HardMax71/spec_to_rest/commit/52524a21ba817670afce6292726df52eb70752a7))
+
 ## [3.0.0](https://github.com/HardMax71/spec_to_rest/compare/v2.2.0...v3.0.0) (2026-06-12)
 
 
