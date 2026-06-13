@@ -22,11 +22,11 @@ object TestCmd:
     val outRoot = Paths.get(opts.outDir)
     if !Files.isDirectory(outRoot) then
       IO.delay(log.error(s"output directory not found: ${opts.outDir}"))
-        .as(ExitStatus.Translator)
+        .as(ExitStatus.Violations)
     else
       findRunner(outRoot.resolve("tests")) match
         case Left(msg) =>
-          IO.delay(log.error(msg)).as(ExitStatus.Translator)
+          IO.delay(log.error(msg)).as(ExitStatus.Violations)
         case Right(runner) =>
           opts.runnerBin.toRight(()).orElse(shebangInterpreter(runner).toRight(())).toOption match
             case None =>
@@ -34,7 +34,7 @@ object TestCmd:
                 log.error(
                   s"$runner has no shebang and --runner-bin was not given; cannot dispatch"
                 )
-              ).as(ExitStatus.Translator)
+              ).as(ExitStatus.Violations)
             case Some(interpreter) =>
               invokeRunner(outRoot, runner, interpreter, opts, log)
 
@@ -104,7 +104,7 @@ object TestCmd:
           s"failed to launch $interpreter: ${Option(e.getMessage).getOrElse(e.toString)}. " +
             "Pass --runner-bin to override."
         )
-      ).as(ExitStatus.Translator)
+      ).as(ExitStatus.Backend)
   }
 
   private def mapExit(rc: Int, log: Logger): ExitStatus = rc match
@@ -113,10 +113,10 @@ object TestCmd:
       ExitStatus.Ok
     case 1 =>
       log.error("conformance: one or more phases reported test failures")
-      ExitStatus.Tests
+      ExitStatus.Violations
     case 2 =>
       log.error("conformance: service unreachable or invalid profile")
-      ExitStatus.Translator
+      ExitStatus.Backend
     case other =>
       log.error(s"conformance runner exited with unexpected status $other")
       ExitStatus.Backend

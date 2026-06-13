@@ -20,19 +20,19 @@ enum ExitStatus(val code: Int, val label: String, val meaning: String) derives C
       extends ExitStatus(
         1,
         "violations",
-        "a check was violated (unsat or unknown), or the spec failed to parse or build"
+        "a check was violated, or a verification, synthesis, or test step failed (for example a parse or build error, an unsatisfiable invariant, an exhausted synthesis budget, or a conformance failure)"
       )
   case Translator
       extends ExitStatus(
         2,
         "translator-limit",
-        "a check uses a construct the SMT or Alloy translator cannot encode, so verification is incomplete; the skipped checks were not violated"
+        "verification or synthesis hit a translation limit (an unsupported construct, or an unparseable or rejected generated artifact); the affected verify check is skipped, not failed"
       )
   case Backend
       extends ExitStatus(
         3,
         "backend-error",
-        "the solver backend failed (timeout, crash, or unavailable)"
+        "a backend dependency failed (solver, LLM provider, cache, or an unreachable or crashed service)"
       )
   case Trust
       extends ExitStatus(
@@ -44,9 +44,6 @@ enum ExitStatus(val code: Int, val label: String, val meaning: String) derives C
   def exit: ExitCode = ExitCode(code)
 
 object ExitStatus:
-  // Test-run failures reuse the backend-error code; a named alias, not a distinct status.
-  val Tests: ExitStatus = Backend
-
   val legend: String =
     values.toList.map(s => s"${s.code} ${s.label}").mkString("exit codes: ", " | ", "")
 

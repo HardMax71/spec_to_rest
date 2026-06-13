@@ -21,6 +21,3 @@ class ExitStatusTest extends CatsEffectSuite:
   test("legend renders every status as 'code label'"):
     ExitStatus.values.foreach: s =>
       assert(ExitStatus.legend.contains(s"${s.code} ${s.label}"))
-
-  test("Tests is an alias for the backend-error status"):
-    assertEquals(ExitStatus.Tests, ExitStatus.Backend)

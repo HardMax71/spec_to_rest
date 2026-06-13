@@ -542,7 +542,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   TestOptions(outDir = outDir.toString),
                   log
                 )
-      yield assertEquals(exit, ExitStatus.Translator)
+      yield assertEquals(exit, ExitStatus.Violations)
 
   test("Palette honors NO_COLOR off-mode"):
     val plain = Palette.resolve(ColorMode.Off)
