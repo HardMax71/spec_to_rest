@@ -463,15 +463,6 @@ dialect, not just that it imports.
 
 What this target does **not** generate today, with tracking issues:
 
-- **Authentication / authorization.** DSL + runtime wiring tracked across
-  [M8.1 (#53)](https://github.com/HardMax71/spec_to_rest/issues/53),
-  [M8.2 (#54)](https://github.com/HardMax71/spec_to_rest/issues/54), and
-  [M8.3 (#55)](https://github.com/HardMax71/spec_to_rest/issues/55). Generated services are
-  currently open.
-- **Diff migrations.** Only the initial schema (`001_initial_schema.py`) is emitted. Spec
-  changes require regenerating and hand-writing the migration delta.
-  Tracked in [M7.5 (#56)](https://github.com/HardMax71/spec_to_rest/issues/56).
-- **Triggers & partial indexes.** Tracked in [M7.6 (#57)](https://github.com/HardMax71/spec_to_rest/issues/57).
 - **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
@@ -498,5 +489,6 @@ What this target does **not** generate today, with tracking issues:
   `synth verify-all`), emits a warning per op, and ships a project that compiles
   but halts at runtime inside the unverified handler with a
   `_dafny.HaltException` carrying the operation, strategy, model, and reason.
-  L2 (operation decomposition) is the only remaining graduated-fallback
-  level not yet shipped.
+  L2 (operation decomposition) was closed wontfix-with-pivot
+  ([#227](https://github.com/HardMax71/spec_to_rest/issues/227)), replaced by the
+  M6.7 hint-augmentation path.
