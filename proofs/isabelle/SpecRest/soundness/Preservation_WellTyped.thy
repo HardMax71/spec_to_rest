@@ -33,6 +33,9 @@ next
   case (T_Cmp_Ord \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
+  case (T_Cmp_Str_Ord \<Gamma> l r op sp)
+  thus ?case by (cases op) auto
+next
   case (T_Bool_Bin \<Gamma> l r op sp)
   thus ?case by (cases op) auto
 next

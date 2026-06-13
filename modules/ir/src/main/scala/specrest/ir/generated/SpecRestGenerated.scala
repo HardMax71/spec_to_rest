@@ -2231,7 +2231,19 @@ object SpecRestGenerated {
           case (Some(SEntityWith(_, _, _)), _)              => None
           case (Some(SNone()), _)                           => None
           case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
+          case (Some(SStr(_)), None)                        => None
+          case (Some(SStr(_)), Some(SBool(_)))              => None
+          case (Some(SStr(_)), Some(SInt(_)))               => None
+          case (Some(SStr(_)), Some(SReal(_)))              => None
+          case (Some(SStr(_)), Some(SEnumElem(_, _)))       => None
+          case (Some(SStr(_)), Some(SEntityElem(_, _)))     => None
+          case (Some(SStr(_)), Some(SSet(_)))               => None
+          case (Some(SStr(_)), Some(SEntityWith(_, _, _)))  => None
+          case (Some(SStr(_)), Some(SNone()))               => None
+          case (Some(SStr(_)), Some(SSome(_)))              => None
+          case (Some(SStr(a)), Some(SStr(b)))               => Some[smt_val](SBool(a < b))
+          case (Some(SStr(_)), Some(SSeq(_)))               => None
+          case (Some(SStr(_)), Some(SMap(_)))               => None
           case (Some(SSeq(_)), _)                           => None
           case (Some(SMap(_)), _)                           => None
         }

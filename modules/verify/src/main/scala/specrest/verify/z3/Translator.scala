@@ -888,6 +888,13 @@ object Translator:
         substituteVar(r, varName, replacement),
         sp
       )
+    case Z3Expr.StrCmp(op, l, r, sp) =>
+      Z3Expr.StrCmp(
+        op,
+        substituteVar(l, varName, replacement),
+        substituteVar(r, varName, replacement),
+        sp
+      )
     case Z3Expr.Arith(op, args, sp) =>
       Z3Expr.Arith(op, args.map(a => substituteVar(a, varName, replacement)), sp)
     case q @ Z3Expr.Quantifier(kind, bindings, body, sp) =>
@@ -1319,7 +1326,7 @@ object Translator:
     case Z3Expr.BoolLit(_, _)    => Some(Z3Sort.Bool)
     case Z3Expr.App(func, _, _)  => ctx.funcs.get(func).map(_.resultSort)
     case Z3Expr.And(_, _) | Z3Expr.Or(_, _) | Z3Expr.Not(_, _) | Z3Expr.Implies(_, _, _) |
-        Z3Expr.Cmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
+        Z3Expr.Cmp(_, _, _, _) | Z3Expr.StrCmp(_, _, _, _) | Z3Expr.Quantifier(_, _, _, _) =>
       Some(Z3Sort.Bool)
     case Z3Expr.Arith(_, args, _) =>
       val argSorts = args.map(inferSortOfZ3Expr(ctx, _))
@@ -1998,6 +2005,27 @@ object Translator:
       fail(ctx, "ordering/arithmetic requires a numeric type (Int or Real)")
     z
 
+  // Ordering: both operands numeric (Cmp, arithmetic <) or both String (StrCmp,
+  // str.</str.<=). A numeric/String mix is left to the skip path rather than
+  // handed to the solver ill-sorted.
+  private def encCmp(
+      ctx: TranslateCtx,
+      op: CmpOp,
+      l: smt_term,
+      r: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val lz = encodeFromSmtTerm(ctx, l, env)
+    val rz = encodeFromSmtTerm(ctx, r, env)
+    def isStr(z: Z3Expr): Boolean =
+      inferSortOfZ3Expr(ctx, z) match
+        case Some(Z3Sort.Str) => true
+        case _                => false
+    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+    if isStr(lz) && isStr(rz) then Z3Expr.StrCmp(op, lz, rz)
+    else if isNum(lz) && isNum(rz) then Z3Expr.Cmp(op, lz, rz)
+    else fail(ctx, "ordering requires two numeric (Int or Real) operands or two String operands")
+
   private def encodeSetEmptyCmp(
       ctx: TranslateCtx,
       op: CmpOp,
@@ -2041,9 +2069,9 @@ object Translator:
       case TNot(TEq(l, r)) =>
         Z3Expr.Cmp(CmpOp.Neq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
       case TOr(TLt(a1, b1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
-        Z3Expr.Cmp(CmpOp.Le, encNumeric(ctx, a1, env), encNumeric(ctx, b1, env))
+        encCmp(ctx, CmpOp.Le, a1, b1, env)
       case TOr(TLt(b1, a1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
-        Z3Expr.Cmp(CmpOp.Ge, encNumeric(ctx, a2, env), encNumeric(ctx, b2, env))
+        encCmp(ctx, CmpOp.Ge, a2, b2, env)
 
       case TNot(t) => Z3Expr.Not(encodeFromSmtTerm(ctx, t, env))
       case TAnd(l, r) =>
@@ -2055,7 +2083,7 @@ object Translator:
       case TEq(l, r) =>
         Z3Expr.Cmp(CmpOp.Eq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
       case TLt(l, r) =>
-        Z3Expr.Cmp(CmpOp.Lt, encNumeric(ctx, l, env), encNumeric(ctx, r, env))
+        encCmp(ctx, CmpOp.Lt, l, r, env)
       case TNeg(t) =>
         Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), encNumeric(ctx, t, env)))
       case TAdd(l, r) =>

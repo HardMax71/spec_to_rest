@@ -291,6 +291,7 @@ private object Backend:
     case Z3Expr.Implies(l, r, _) =>
       rctx.ctx.mkImplies(renderBool(rctx, l), renderBool(rctx, r))
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
+    case Z3Expr.StrCmp(op, l, r, _)        => renderStrCmp(rctx, op, l, r)
     case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
     case Z3Expr.EmptySet(elemSort, _) =>
@@ -398,6 +399,18 @@ private object Backend:
         case CmpOp.Gt => rctx.ctx.mkGt(l, r)
         case CmpOp.Ge => rctx.ctx.mkGe(l, r)
         case _        => backendFail(rctx, s"unreachable CmpOp: $op")
+
+  // Z3 exposes only str.</str.<=; > and >= are the swapped-operand forms.
+  private def renderStrCmp(rctx: RenderCtx, op: CmpOp, lhs: Z3Expr, rhs: Z3Expr): BoolExpr =
+    val l = renderExpr(rctx, lhs).asInstanceOf[Z3AstExpr[SeqSort[CharSort]]]
+    val r = renderExpr(rctx, rhs).asInstanceOf[Z3AstExpr[SeqSort[CharSort]]]
+    op match
+      case CmpOp.Lt  => rctx.ctx.MkStringLt(l, r)
+      case CmpOp.Le  => rctx.ctx.MkStringLe(l, r)
+      case CmpOp.Gt  => rctx.ctx.MkStringLt(r, l)
+      case CmpOp.Ge  => rctx.ctx.MkStringLe(r, l)
+      case CmpOp.Eq  => rctx.ctx.mkEq(l, r)
+      case CmpOp.Neq => rctx.ctx.mkNot(rctx.ctx.mkEq(l, r))
 
   private def renderArith(
       rctx: RenderCtx,
