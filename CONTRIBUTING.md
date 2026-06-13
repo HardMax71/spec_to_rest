@@ -17,6 +17,23 @@ notes. `feat` / `fix` / `refactor` / `perf` / `docs` are surfaced in the changel
 `build` / `test` / `style` go to hidden sections. Bot branches (`dependabot/...`,
 `release-please--...`) are exempt.
 
+## Continuous integration
+
+Every PR runs the meta checks (`check-branch-name`, `actionlint`, `zizmor`). The target builds
+(`go-build` / `python-build` / `ts-build`) and `isabelle-build` are path-filtered to the sources
+they cover, so they only run when those paths change.
+
+The heavy Scala checks (`build-and-test`, which does compile + scalafmt + scalafix + the full test
+suite; the `z3` / `cvc5` / `alloy` cross-checks; and `coverage`) are required, but they are skipped
+on docs-only PRs (changes confined to `docs/**`). A small reusable workflow
+(`.github/workflows/changes.yml`) detects whether the change set reaches outside `docs/`, and the
+heavy jobs gate on its output. A required job skipped this way reports as "Skipped", which GitHub
+counts as passing, so a docs-only PR shows those checks greyed out and still merges. That is
+expected, not a failure. The gate fails open: if detection cannot run, the full suite runs anyway.
+
+Pushing a new commit to a PR cancels that PR's in-progress runs (`concurrency` with
+`cancel-in-progress`); pushes to `main` always run to completion.
+
 ## Architecture enforcement
 
 The module dependency graph in `build.sbt` (`dependsOn`) _is_ the architecture — an illegal
