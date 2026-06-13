@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 import munit.CatsEffectSuite
 
@@ -9,7 +8,7 @@ class CliSmokeTest extends CatsEffectSuite:
   private def log: Logger = Logger.fromFlags(verbose = false, quiet = true)
 
   test("check url_shortener is valid"):
-    Check.run("fixtures/spec/url_shortener.spec", log).assertEquals(ExitCodes.Ok)
+    Check.run("fixtures/spec/url_shortener.spec", log).assertEquals(ExitStatus.Ok)
 
   test("__diag-init exits Ok on the JVM and prints the cause-walk header to stderr"):
     val buf = new java.io.ByteArrayOutputStream()
@@ -17,7 +16,7 @@ class CliSmokeTest extends CatsEffectSuite:
     DiagInit.run(ps).map: exit =>
       ps.flush()
       val out = buf.toString("UTF-8")
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assert(out.contains("=== diag-init: substrate VM class-init probe ==="), out)
       assert(out.contains("step A:"), out)
       assert(out.contains("step B:"), out)
@@ -25,28 +24,28 @@ class CliSmokeTest extends CatsEffectSuite:
       assert(out.contains("resolve=true init=true call=true"), out)
 
   test("check on missing file returns 1"):
-    Check.run("fixtures/does-not-exist.spec", log).assertEquals(ExitCodes.Violations)
+    Check.run("fixtures/does-not-exist.spec", log).assertEquals(ExitStatus.Violations)
 
   test("check exits 1 on lint error (undefined identifier)"):
     Check.run("fixtures/lint/l02_undefined_ref_bad.spec", log)
-      .assertEquals(ExitCodes.Violations)
+      .assertEquals(ExitStatus.Violations)
 
   test("check exits 0 on lint warning only (missing ensures)"):
     Check.run("fixtures/lint/l03_missing_ensures_bad.spec", log)
-      .assertEquals(ExitCodes.Ok)
+      .assertEquals(ExitStatus.Ok)
 
   test("check exits 0 on the all-lints-pass fixture"):
-    Check.run("fixtures/lint/passing.spec", log).assertEquals(ExitCodes.Ok)
+    Check.run("fixtures/lint/passing.spec", log).assertEquals(ExitStatus.Ok)
 
   test("inspect --format json returns 0 on valid spec"):
     Inspect.run("fixtures/spec/safe_counter.spec", InspectFormat.Json, log)
-      .assertEquals(ExitCodes.Ok)
+      .assertEquals(ExitStatus.Ok)
 
   private def captureInspect(
       spec: String,
       format: InspectFormat,
       op: Option[String] = None
-  ): IO[(ExitCode, String)] =
+  ): IO[(ExitStatus, String)] =
     val buf = new java.io.ByteArrayOutputStream()
     val ps  = new java.io.PrintStream(buf, true, "UTF-8")
     Inspect.run(spec, format, log, ps, op).map: exit =>
@@ -55,7 +54,7 @@ class CliSmokeTest extends CatsEffectSuite:
 
   test("inspect summary surfaces synthesis strategy per op (#31)"):
     captureInspect("fixtures/spec/url_shortener.spec", InspectFormat.Summary).map: (exit, out) =>
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assert(out.contains("Shorten: LLM_SYNTHESIS"), s"missing Shorten line:\n$out")
       assert(out.contains("Delete: DIRECT_EMIT"), s"missing Delete line:\n$out")
       assert(out.contains("DIRECT_EMIT"), s"summary should tally strategies:\n$out")
@@ -64,7 +63,7 @@ class CliSmokeTest extends CatsEffectSuite:
     captureInspect("fixtures/spec/url_shortener.spec", InspectFormat.Json).map: (exit, out) =>
       val parsed = io.circe.parser.parse(out).toOption.getOrElse(fail("invalid JSON"))
       val strat  = parsed.hcursor.downField("synthesis_strategy")
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assertEquals(strat.downField("Shorten").as[String].toOption, Some("LLM_SYNTHESIS"))
       assertEquals(strat.downField("Delete").as[String].toOption, Some("DIRECT_EMIT"))
 
@@ -74,7 +73,7 @@ class CliSmokeTest extends CatsEffectSuite:
 
   test("inspect --format dafny emits a Dafny skeleton for safe_counter (#32)"):
     captureInspect("fixtures/spec/safe_counter.spec", InspectFormat.Dafny).map: (exit, out) =>
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assert(
         out.contains("class ServiceState"),
         s"missing ServiceState class:\n$out"
@@ -107,7 +106,7 @@ class CliSmokeTest extends CatsEffectSuite:
       InspectFormat.DafnyPrompt,
       op = Some("Shorten")
     ).map: (exit, out) =>
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assert(out.contains("# Operation: Shorten"), s"missing operation header:\n$out")
       assert(out.contains("## Method Signature"), s"missing signature section:\n$out")
       assert(out.contains("## Similar Verified Examples"), s"missing few-shot section:\n$out")
@@ -117,7 +116,7 @@ class CliSmokeTest extends CatsEffectSuite:
       "fixtures/spec/url_shortener.spec",
       InspectFormat.DafnyPrompt
     ).map: (exit, out) =>
-      assertEquals(exit, ExitCodes.Ok)
+      assertEquals(exit, ExitStatus.Ok)
       assert(out.contains("# Operation: Shorten"), s"missing Shorten:\n$out")
 
   test("inspect --format dafny-prompt --operation unknown exits Translator"):
@@ -128,21 +127,21 @@ class CliSmokeTest extends CatsEffectSuite:
         log,
         operation = Some("DoesNotExist")
       )
-      .assertEquals(ExitCodes.Translator)
+      .assertEquals(ExitStatus.Translator)
 
   test("verify safe_counter returns exit 0"):
     Verify.run(
       "fixtures/spec/safe_counter.spec",
       VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None),
       log
-    ).assertEquals(ExitCodes.Ok)
+    ).assertEquals(ExitStatus.Ok)
 
   test("verify unsat_invariants returns exit 1 (violations)"):
     Verify.run(
       "fixtures/spec/unsat_invariants.spec",
       VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None),
       log
-    ).assertEquals(ExitCodes.Violations)
+    ).assertEquals(ExitStatus.Violations)
 
   test("verify --dump-smt writes SMT-LIB (via dumpSmtOut)"):
     val acquire = IO.blocking(java.nio.file.Files.createTempFile("smt-test-", ".smt2"))
@@ -157,7 +156,7 @@ class CliSmokeTest extends CatsEffectSuite:
                 )
         content <- IO.blocking(java.nio.file.Files.readString(tmp))
       yield
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(content.contains("(set-logic ALL)"))
         assert(content.contains("(check-sat)"))
 
@@ -186,7 +185,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   log
                 )
       yield
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
         assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
         assert(java.nio.file.Files.exists(outDir.resolve(".github/workflows/ci.yml")))
@@ -204,7 +203,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   log
                 )
       yield
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
         assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
         assert(java.nio.file.Files.exists(outDir.resolve("app/models/url_mapping.py")))
@@ -223,7 +222,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   log
                 )
       yield
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(java.nio.file.Files.exists(outDir.resolve("go.mod")))
         assert(java.nio.file.Files.exists(outDir.resolve("cmd/server/main.go")))
         assert(java.nio.file.Files.exists(outDir.resolve("internal/models/url_mapping.go")))
@@ -246,7 +245,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   log
                 )
       yield
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(java.nio.file.Files.exists(outDir.resolve("package.json")))
         assert(java.nio.file.Files.exists(outDir.resolve("tsconfig.json")))
         assert(java.nio.file.Files.exists(outDir.resolve("prisma/schema.prisma")))
@@ -291,8 +290,8 @@ class CliSmokeTest extends CatsEffectSuite:
         v2OnDisk           <- IO.blocking(java.nio.file.Files.readString(snapPath))
         initialBytesAfter  <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
       yield
-        assertEquals(first, ExitCodes.Ok)
-        assertEquals(second, ExitCodes.Ok)
+        assertEquals(first, ExitStatus.Ok)
+        assertEquals(second, ExitStatus.Ok)
         assert(
           v1OnDisk.contains("\"schemaVersion\" : 1") && !v1OnDisk.contains("triggers"),
           s"test setup: downgrade should produce a v1 snapshot with no triggers field; got:\n$v1OnDisk"
@@ -330,8 +329,8 @@ class CliSmokeTest extends CatsEffectSuite:
         initialBytesB  <- IO.blocking(java.nio.file.Files.readAllBytes(initialPath))
         snapshotBytesB <- IO.blocking(java.nio.file.Files.readAllBytes(snapshotPath))
       yield
-        assertEquals(a, ExitCodes.Ok)
-        assertEquals(b, ExitCodes.Ok)
+        assertEquals(a, ExitStatus.Ok)
+        assertEquals(b, ExitStatus.Ok)
         assert(java.util.Arrays.equals(initialBytes, initialBytesB), "001 file changed")
         assert(java.util.Arrays.equals(snapshotBytesA, snapshotBytesB), "snapshot changed")
         assert(
@@ -343,7 +342,7 @@ class CliSmokeTest extends CatsEffectSuite:
       name: String,
       spec: String,
       ignoreVerify: Boolean,
-      expectedExit: ExitCode,
+      expectedExit: ExitStatus,
       expectFiles: Boolean
   )
 
@@ -352,21 +351,21 @@ class CliSmokeTest extends CatsEffectSuite:
       "compile gate blocks on unsat invariants",
       "fixtures/spec/unsat_invariants.spec",
       ignoreVerify = false,
-      expectedExit = ExitCodes.Violations,
+      expectedExit = ExitStatus.Violations,
       expectFiles = false
     ),
     GateCase(
       "compile --ignore-verify bypasses gate on unsat invariants",
       "fixtures/spec/unsat_invariants.spec",
       ignoreVerify = true,
-      expectedExit = ExitCodes.Ok,
+      expectedExit = ExitStatus.Ok,
       expectFiles = true
     ),
     GateCase(
       "compile gate blocks on preservation failure (broken_url_shortener)",
       "fixtures/spec/broken_url_shortener.spec",
       ignoreVerify = false,
-      expectedExit = ExitCodes.Violations,
+      expectedExit = ExitStatus.Violations,
       expectFiles = false
     )
   ).foreach: c =>
@@ -407,7 +406,7 @@ class CliSmokeTest extends CatsEffectSuite:
         ),
         log
       ).map: exit =>
-        assertEquals(exit, ExitCodes.Violations)
+        assertEquals(exit, ExitStatus.Violations)
         assert(
           !java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
           "no files should be written when strict-strategies fails"
@@ -426,7 +425,7 @@ class CliSmokeTest extends CatsEffectSuite:
         ),
         log
       ).map: exit =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         val strategiesPy =
           java.nio.file.Files.readString(outDir.resolve("tests/strategies.py"))
         assert(
@@ -460,8 +459,8 @@ class CliSmokeTest extends CatsEffectSuite:
         secondExit   <- Compile.run("fixtures/spec/strict_strategies_positive.spec", opts, log)
         finalContent <- IO.blocking(java.nio.file.Files.readString(userPath))
       yield
-        assertEquals(firstExit, ExitCodes.Ok)
-        assertEquals(secondExit, ExitCodes.Ok)
+        assertEquals(firstExit, ExitStatus.Ok)
+        assertEquals(secondExit, ExitStatus.Ok)
         assert(finalContent.contains("# USER EDIT"), s"user edit was overwritten:\n$finalContent")
 
   test("compile --dry-run writes nothing but exits Ok and prints a plan"):
@@ -476,7 +475,7 @@ class CliSmokeTest extends CatsEffectSuite:
         ),
         log
       ).map: exit =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(
           !java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
           "dry-run must not write any files"
@@ -508,8 +507,8 @@ class CliSmokeTest extends CatsEffectSuite:
                       log
                     )
       yield
-        assertEquals(compileExit, ExitCodes.Ok)
-        assertEquals(diffExit, ExitCodes.Ok)
+        assertEquals(compileExit, ExitStatus.Ok)
+        assertEquals(diffExit, ExitStatus.Ok)
 
   test("diff reports drift when a generated file is missing"):
     tempOutPath.use: outDir =>
@@ -533,7 +532,7 @@ class CliSmokeTest extends CatsEffectSuite:
                       ),
                       log
                     )
-      yield assertEquals(diffExit, ExitCodes.Violations)
+      yield assertEquals(diffExit, ExitStatus.Violations)
 
   test("test command errors out when run_conformance.py is missing"):
     tempOutPath.use: outDir =>
@@ -543,7 +542,7 @@ class CliSmokeTest extends CatsEffectSuite:
                   TestOptions(outDir = outDir.toString),
                   log
                 )
-      yield assertEquals(exit, ExitCodes.Translator)
+      yield assertEquals(exit, ExitStatus.Translator)
 
   test("Palette honors NO_COLOR off-mode"):
     val plain = Palette.resolve(ColorMode.Off)
@@ -582,7 +581,7 @@ class CliSmokeTest extends CatsEffectSuite:
                    )
                  )
         yield
-          assertEquals(exit, ExitCodes.Ok)
+          assertEquals(exit, ExitStatus.Ok)
           assert(java.nio.file.Files.exists(outDir.resolve("pyproject.toml")))
           assert(java.nio.file.Files.exists(outDir.resolve("app/main.py")))
           assert(!mig.contains("timezone=True"), mig)
@@ -595,7 +594,7 @@ class CliSmokeTest extends CatsEffectSuite:
         CompileOptions("python-fastapi-postgres", outDir.toString, ignoreVerify = true),
         log
       ).map: exit =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(
           java.nio.file.Files.exists(outDir.resolve("tests/run_conformance.py")),
           "no flag (default-on) should emit tests/run_conformance.py"
@@ -617,7 +616,7 @@ class CliSmokeTest extends CatsEffectSuite:
         ),
         log
       ).map: exit =>
-        assertEquals(exit, ExitCodes.Ok)
+        assertEquals(exit, ExitStatus.Ok)
         assert(
           java.nio.file.Files.exists(outDir.resolve("pyproject.toml")),
           "non-test files still emitted"
@@ -679,8 +678,8 @@ class CliSmokeTest extends CatsEffectSuite:
           extAfter   <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(extPath)))
           regenAfter <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(regenPath)))
         yield
-          assertEquals(exit1, ExitCodes.Ok)
-          assertEquals(exit2, ExitCodes.Ok)
+          assertEquals(exit1, ExitStatus.Ok)
+          assertEquals(exit2, ExitStatus.Ok)
           assertEquals(extAfter, userMarker, s"$extPath should not be overwritten")
           assert(
             regenAfter != "garbage-to-be-overwritten",
@@ -722,8 +721,8 @@ class CliSmokeTest extends CatsEffectSuite:
           baseAfter     <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(base)))
           overrideAfter <- IO.blocking(java.nio.file.Files.readString(outDir.resolve(overrideEx)))
         yield
-          assertEquals(firstExit, ExitCodes.Ok)
-          assertEquals(secondExit, ExitCodes.Ok)
+          assertEquals(firstExit, ExitStatus.Ok)
+          assertEquals(secondExit, ExitStatus.Ok)
           assertEquals(stagingAfter, userMarker, s"$staging must be preserved")
           assertEquals(prodAfter, userMarker, s"$prod must be preserved")
           assert(baseAfter != "garbage", s"$base must be regenerated")

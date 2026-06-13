@@ -1,8 +1,7 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
-import specrest.cli.ExitCodes.given
+import specrest.cli.ExitStatus.given
 import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
 import specrest.codegen.migration.Revision
@@ -27,7 +26,7 @@ final case class DiffOptions(
 
 object Diff:
 
-  def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
+  def run(specFile: String, opts: DiffOptions, log: Logger): IO[ExitStatus] =
     val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
     val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
     val downgradeNotice =
@@ -41,7 +40,7 @@ object Diff:
       else IO.unit
     downgradeNotice *> runImpl(specFile, resolvedOpts, log)
 
-  private def runImpl(specFile: String, opts: DiffOptions, log: Logger): IO[ExitCode] =
+  private def runImpl(specFile: String, opts: DiffOptions, log: Logger): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -50,18 +49,18 @@ object Diff:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(err) =>
                 IO.delay(log.error(Check.renderBuildError(specFile, err)))
-                  .as(ExitCodes.Violations)
+                  .as(ExitStatus.Violations)
               case Right(ir) =>
                 val gate =
-                  if opts.ignoreVerify then IO.pure(ExitCodes.Ok)
+                  if opts.ignoreVerify then IO.pure(ExitStatus.Ok)
                   else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
                 gate.flatMap:
-                  case ok if ok == ExitCodes.Ok =>
+                  case ok if ok == ExitStatus.Ok =>
                     IO.blocking {
                       val profiled = Annotate.buildProfiledService(ir, opts.target)
                       val outRoot  = Paths.get(opts.outDir)
@@ -78,7 +77,7 @@ object Diff:
                         p.action == FileAction.Create || p.action == FileAction.Update
                       if changes.isEmpty then
                         log.success(s"no drift: ${plans.length} files match ${opts.outDir}")
-                        ExitCodes.Ok
+                        ExitStatus.Ok
                       else
                         log.data(Plan.render(changes, log.palette))
                         val t = Plan.tally(plans)
@@ -86,11 +85,11 @@ object Diff:
                           s"${changes.length} file(s) would change " +
                             s"(create=${t.create} update=${t.update}; ${t.unchanged} unchanged)"
                         )
-                        ExitCodes.Violations
+                        ExitStatus.Violations
                     }.handleErrorWith:
                       case NonFatal(e) =>
                         IO.delay(
                           log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
-                        ).as(ExitCodes.Violations)
+                        ).as(ExitStatus.Violations)
                       case e => IO.raiseError(e)
                   case gateCode => IO.pure(gateCode)

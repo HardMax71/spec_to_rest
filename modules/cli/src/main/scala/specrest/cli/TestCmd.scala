@@ -1,6 +1,5 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
 
 import java.nio.file.Files
@@ -19,15 +18,15 @@ object TestCmd:
 
   private val RunnerPrefix = "run_conformance."
 
-  def run(opts: TestOptions, log: Logger): IO[ExitCode] =
+  def run(opts: TestOptions, log: Logger): IO[ExitStatus] =
     val outRoot = Paths.get(opts.outDir)
     if !Files.isDirectory(outRoot) then
       IO.delay(log.error(s"output directory not found: ${opts.outDir}"))
-        .as(ExitCodes.Translator)
+        .as(ExitStatus.Translator)
     else
       findRunner(outRoot.resolve("tests")) match
         case Left(msg) =>
-          IO.delay(log.error(msg)).as(ExitCodes.Translator)
+          IO.delay(log.error(msg)).as(ExitStatus.Translator)
         case Right(runner) =>
           opts.runnerBin.toRight(()).orElse(shebangInterpreter(runner).toRight(())).toOption match
             case None =>
@@ -35,7 +34,7 @@ object TestCmd:
                 log.error(
                   s"$runner has no shebang and --runner-bin was not given; cannot dispatch"
                 )
-              ).as(ExitCodes.Translator)
+              ).as(ExitStatus.Translator)
             case Some(interpreter) =>
               invokeRunner(outRoot, runner, interpreter, opts, log)
 
@@ -84,7 +83,7 @@ object TestCmd:
       interpreter: String,
       opts: TestOptions,
       log: Logger
-  ): IO[ExitCode] = IO.blocking {
+  ): IO[ExitStatus] = IO.blocking {
     val relative = outRoot.relativize(runner).toString
     val urlLabel = opts.serverUrl.getOrElse("<runner default>")
     log.info(s"running $relative against $urlLabel (profile=${opts.profile})")
@@ -105,19 +104,19 @@ object TestCmd:
           s"failed to launch $interpreter: ${Option(e.getMessage).getOrElse(e.toString)}. " +
             "Pass --runner-bin to override."
         )
-      ).as(ExitCodes.Translator)
+      ).as(ExitStatus.Translator)
   }
 
-  private def mapExit(rc: Int, log: Logger): ExitCode = rc match
+  private def mapExit(rc: Int, log: Logger): ExitStatus = rc match
     case 0 =>
       log.success("conformance: all phases passed")
-      ExitCodes.Ok
+      ExitStatus.Ok
     case 1 =>
       log.error("conformance: one or more phases reported test failures")
-      ExitCodes.Tests
+      ExitStatus.Tests
     case 2 =>
       log.error("conformance: service unreachable or invalid profile")
-      ExitCodes.Translator
+      ExitStatus.Translator
     case other =>
       log.error(s"conformance runner exited with unexpected status $other")
-      ExitCodes.Backend
+      ExitStatus.Backend

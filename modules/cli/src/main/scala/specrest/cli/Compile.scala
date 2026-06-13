@@ -1,8 +1,7 @@
 package specrest.cli
 
-import cats.effect.ExitCode
 import cats.effect.IO
-import specrest.cli.ExitCodes.given
+import specrest.cli.ExitStatus.given
 import specrest.codegen.DafnyKernel
 import specrest.codegen.Emit
 import specrest.codegen.EmitOptions
@@ -65,7 +64,7 @@ object Compile:
     case _: LlmSynthesis => true
     case _               => false
 
-  def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
+  def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitStatus] =
     val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
     val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
     val downgradeNotice =
@@ -87,7 +86,7 @@ object Compile:
       else IO.unit
     downgradeNotice *> warnIfStrictWithoutTests *> runImpl(specFile, resolvedOpts, log)
 
-  private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitCode] =
+  private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitStatus] =
     Check.readSource(specFile, log).flatMap:
       case Left(code) => IO.pure(code)
       case Right(source) =>
@@ -96,27 +95,27 @@ object Compile:
             IO.delay {
               errors.foreach: e =>
                 log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitCodes.Violations)
+            }.as(ExitStatus.Violations)
           case Right(parsed) =>
             Builder.buildIR(parsed.tree).flatMap:
               case Left(err) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitCodes.Violations)
+                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitStatus.Violations)
               case Right(ir) =>
                 val routeDiags = Validate.validateRoutes(ir) ++ Validate.validateSecurity(ir)
                 val gate =
                   if routeDiags.nonEmpty then
                     IO.delay(routeDiags.foreach(d => log.error(Check.renderConv(specFile, d))))
-                      .as(ExitCodes.Violations)
+                      .as(ExitStatus.Violations)
                   else if opts.ignoreVerify then
                     IO.delay(log.warn("proceeding without verification (--ignore-verify)"))
-                      .as(ExitCodes.Ok)
+                      .as(ExitStatus.Ok)
                   else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
                 gate.flatMap:
-                  case ok if ok == ExitCodes.Ok =>
+                  case ok if ok == ExitStatus.Ok =>
                     val strictGate =
                       if opts.withTests && opts.strictStrategies then
                         val unhandled = Strategies.forIR(ir).filter(_.skipped.nonEmpty)
-                        if unhandled.isEmpty then IO.pure(ExitCodes.Ok)
+                        if unhandled.isEmpty then IO.pure(ExitStatus.Ok)
                         else
                           IO.delay {
                             log.error(
@@ -124,23 +123,29 @@ object Compile:
                             )
                             unhandled.foreach: s =>
                               log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
-                          }.as(ExitCodes.Violations)
-                      else IO.pure(ExitCodes.Ok)
+                          }.as(ExitStatus.Violations)
+                      else IO.pure(ExitStatus.Ok)
 
                     strictGate.flatMap:
-                      case strictOk if strictOk == ExitCodes.Ok =>
+                      case strictOk if strictOk == ExitStatus.Ok =>
                         emitProject(specFile, ir, opts, log)
                       case strictCode => IO.pure(strictCode)
-                  case gateCode => IO.pure(gateCode)
+                  case gateCode =>
+                    IO.delay(
+                      log.error(
+                        s"$specFile: code generation blocked by the verification gate (exit ${gateCode.code}); " +
+                          "re-run with --ignore-verify to generate without verifying"
+                      )
+                    ).as(gateCode)
 
   private def emitProject(
       specFile: String,
       ir: ServiceIRFull,
       opts: CompileOptions,
       log: Logger
-  ): IO[ExitCode] =
+  ): IO[ExitStatus] =
     val profiledBase = Annotate.buildProfiledService(ir, opts.target)
-    val kernelStep: IO[Either[ExitCode, Option[KernelBundle]]] =
+    val kernelStep: IO[Either[ExitStatus, Option[KernelBundle]]] =
       if !opts.withSynthesis then IO.pure(Right(None))
       else buildKernel(specFile, ir, opts, log)
 
@@ -176,7 +181,7 @@ object Compile:
               s"dry-run: ${t.total} files planned for ${opts.outDir} " +
                 s"(create=${t.create} update=${t.update} unchanged=${t.unchanged} preserve=${t.preserved})"
             )
-            ExitCodes.Ok
+            ExitStatus.Ok
           else
             Files.createDirectories(outRoot)
             files.foreach: f =>
@@ -191,12 +196,12 @@ object Compile:
                   StandardOpenOption.TRUNCATE_EXISTING
                 )
             log.success(s"wrote ${files.length} files to ${opts.outDir}")
-            ExitCodes.Ok
+            ExitStatus.Ok
         }.handleErrorWith:
           case NonFatal(e) =>
             IO.delay(
               log.error(s"$specFile: ${Option(e.getMessage).getOrElse(e.toString)}")
-            ).as(ExitCodes.Violations)
+            ).as(ExitStatus.Violations)
           case e => IO.raiseError(e)
 
   final private case class KernelBundle(
@@ -209,7 +214,7 @@ object Compile:
       ir: ServiceIRFull,
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, Option[KernelBundle]]] =
+  ): IO[Either[ExitStatus, Option[KernelBundle]]] =
     val classifications = Classify.classifyOperations(ir)
     val synthOps        = classifications.filter(c => isLlmSynthesis(classificationStrategy(c)))
     if synthOps.isEmpty then
@@ -222,7 +227,7 @@ object Compile:
       DafnyGenerator.generate(ir) match
         case Left(dErr) =>
           IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-            .as(Left(ExitCodes.Translator))
+            .as(Left(ExitStatus.Translator))
         case Right(dafny) =>
           val cacheRoot =
             opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
@@ -240,7 +245,7 @@ object Compile:
               FileAssembly.spliceAll(dafny.text, bodies) match
                 case Left(failure) =>
                   IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
-                    .as(Left(ExitCodes.Translator))
+                    .as(Left(ExitStatus.Translator))
                 case Right(fullDfy) =>
                   resolveDafnyAndTranslate(specFile, fullDfy, opts, log).map: r =>
                     r.map: translated =>
@@ -289,7 +294,7 @@ object Compile:
       verifiedRoot: Path,
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, Map[String, String]]] =
+  ): IO[Either[ExitStatus, Map[String, String]]] =
     val cacheRoot =
       opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
     val skeletonsRoot      = Cache.skeletonsRoot(cacheRoot)
@@ -303,7 +308,7 @@ object Compile:
         else
           s"$specFile: no verified-body cache at $verifiedRoot; run `synth verify` for each " +
             "LLM_SYNTHESIS op first (or pass --allow-skeletons to consume `synth verify --fallback` skeletons)"
-      IO.delay(log.error(msg)).as(Left(ExitCodes.Violations))
+      IO.delay(log.error(msg)).as(Left(ExitStatus.Violations))
     else
       val verifiedCacheIO: IO[Option[Cache]] =
         if Files.isDirectory(verifiedRoot) then Cache.make(verifiedRoot).map(Some(_))
@@ -333,8 +338,8 @@ object Compile:
       skeletonCache: Option[Cache],
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, Map[String, String]]] =
-    synthOps.foldLeft[IO[Either[ExitCode, Map[String, String]]]](IO.pure(Right(Map.empty))):
+  ): IO[Either[ExitStatus, Map[String, String]]] =
+    synthOps.foldLeft[IO[Either[ExitStatus, Map[String, String]]]](IO.pure(Right(Map.empty))):
       (accIO, c) =>
         accIO.flatMap:
           case Left(code) => IO.pure(Left(code))
@@ -346,7 +351,7 @@ object Compile:
                   log.error(
                     s"$specFile: Dafny header missing for synthesised op '$opName'"
                   )
-                ).as(Left(ExitCodes.Translator))
+                ).as(Left(ExitStatus.Translator))
               case Some(header) =>
                 val key = Cache.keyFor(header, opts.synthesisModel, opts.synthesisTemperature)
                 lookupOpBody(
@@ -370,11 +375,11 @@ object Compile:
       skeletonCache: Option[Cache],
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, Option[String]]] =
+  ): IO[Either[ExitStatus, Option[String]]] =
     val verifiedLookup = verifiedCache match
       case Some(c) => c.lookup(key)
       case None    => IO.pure(None)
-    def partialOrError: IO[Either[ExitCode, Option[String]]] =
+    def partialOrError: IO[Either[ExitStatus, Option[String]]] =
       if opts.synthesisPartial then
         IO.delay(
           log.warn(
@@ -384,7 +389,7 @@ object Compile:
         ).as(Right(None))
       else
         IO.delay(missingVerifiedBodyError(specFile, opName, opts, log))
-          .as(Left(ExitCodes.Violations))
+          .as(Left(ExitStatus.Violations))
     verifiedLookup.flatMap:
       case Some(entry) if entry.outcome == specrest.synth.CacheOutcome.Verified =>
         IO.pure(Right(Some(entry.body)))
@@ -423,17 +428,17 @@ object Compile:
       fullDfy: String,
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitCode, TranslatedDafny]] =
+  ): IO[Either[ExitStatus, TranslatedDafny]] =
     DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
       case Left(msg) =>
-        IO.delay(log.error(s"$specFile: $msg")).as(Left(ExitCodes.Backend))
+        IO.delay(log.error(s"$specFile: $msg")).as(Left(ExitStatus.Backend))
       case Right(binary) =>
         DafnyTranslateCli.make(binary).use: translator =>
           val lang = TargetLanguage.forCompileTarget(opts.target)
           translator.translate(fullDfy, lang, opts.dafnyTranslateTimeoutSec).map:
             case Left(err) =>
               log.error(s"$specFile: dafny translate failed: $err")
-              Left(ExitCodes.Backend)
+              Left(ExitStatus.Backend)
             case Right(out) => Right(out)
 
   private def dafnyCallable(opName: String): String = opName

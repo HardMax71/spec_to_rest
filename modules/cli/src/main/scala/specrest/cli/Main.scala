@@ -87,7 +87,7 @@ object Main
         case Left(err)   => cats.data.Validated.invalidNel(err)
     }
 
-  private val inspectCmd: Opts[IO[ExitCode]] =
+  private val inspectCmd: Opts[IO[ExitStatus]] =
     val format = Opts
       .option[String](
         "format",
@@ -106,12 +106,12 @@ object Main
       (specFile, format, operation, verbose, quiet, colorMode).mapN: (spec, fmt, op, v, q, c) =>
         Inspect.run(spec, fmt, Logger.fromFlags(verbose = v, quiet = q, color = c), operation = op)
 
-  private val checkCmd: Opts[IO[ExitCode]] =
+  private val checkCmd: Opts[IO[ExitStatus]] =
     Opts.subcommand("check", "Parse and validate a spec file"):
       (specFile, verbose, quiet, colorMode).mapN: (spec, v, q, c) =>
         Check.run(spec, Logger.fromFlags(verbose = v, quiet = q, color = c))
 
-  private val verifyCmd: Opts[IO[ExitCode]] =
+  private val verifyCmd: Opts[IO[ExitStatus]] =
     val timeout = Opts
       .option[Long]("timeout", "per-check timeout ms (0 = no timeout)")
       .withDefault(30_000L)
@@ -196,7 +196,7 @@ object Main
           Logger.fromFlags(verbose = v, quiet = q, color = c)
         )
 
-  private val compileCmd: Opts[IO[ExitCode]] =
+  private val compileCmd: Opts[IO[ExitStatus]] =
     val outDir = Opts.option[String]("out", "output directory", short = "o")
     val ignoreVerify = Opts
       .flag("ignore-verify", "skip verification gate (emit unverified code with a warning)")
@@ -303,7 +303,7 @@ object Main
           Logger.fromFlags(verbose = v, quiet = q, color = c)
         )
 
-  private val synthCmd: Opts[IO[ExitCode]] =
+  private val synthCmd: Opts[IO[ExitStatus]] =
     val operation = Opts.option[String]("operation", "operation to synthesize", short = "o")
     val model = Opts
       .option[String]("model", "LLM model (gpt-* routes to OpenAI; otherwise Anthropic)")
@@ -342,7 +342,7 @@ object Main
       .mapValidated: x =>
         if x > 0.0 then cats.data.Validated.valid(x)
         else cats.data.Validated.invalidNel(s"--cost-cap-usd must be > 0 (got $x)")
-    val tryCmd: Opts[IO[ExitCode]] =
+    val tryCmd: Opts[IO[ExitStatus]] =
       Opts.subcommand("try", "Generate one Dafny body candidate via LLM"):
         (
           specFile,
@@ -388,7 +388,7 @@ object Main
       case (true, false)  => cats.data.Validated.valid(Some(true))
       case (false, true)  => cats.data.Validated.valid(Some(false))
       case (false, false) => cats.data.Validated.valid(None)
-    val verifyCmd: Opts[IO[ExitCode]] =
+    val verifyCmd: Opts[IO[ExitStatus]] =
       Opts.subcommand(
         "verify",
         "Run the CEGIS loop: generate, dafny-verify, repair until verified"
@@ -417,7 +417,7 @@ object Main
             SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
-    val verifyAllCmd: Opts[IO[ExitCode]] =
+    val verifyAllCmd: Opts[IO[ExitStatus]] =
       Opts.subcommand(
         "verify-all",
         "Run the fallback orchestrator across every LLM_SYNTHESIS op and print a synthesis report"
@@ -447,7 +447,7 @@ object Main
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
       tryCmd orElse verifyCmd orElse verifyAllCmd
 
-  private val diffCmd: Opts[IO[ExitCode]] =
+  private val diffCmd: Opts[IO[ExitStatus]] =
     val outDir =
       Opts.option[String]("out", "existing output directory to compare against", short = "o")
     val ignoreVerify = Opts
@@ -473,7 +473,7 @@ object Main
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 
-  private val testCmd: Opts[IO[ExitCode]] =
+  private val testCmd: Opts[IO[ExitStatus]] =
     val outDir = Opts.option[String]("out", "generated project directory", short = "o")
     val profile = Opts
       .option[String]("profile", "conformance profile (smoke, thorough, exhaustive)")
@@ -501,7 +501,7 @@ object Main
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
 
-  private val diagInitCmd: Opts[IO[ExitCode]] =
+  private val diagInitCmd: Opts[IO[ExitStatus]] =
     Opts.subcommand(
       "__diag-init",
       "(internal) substrate-VM class-init probe; prints cause chain to stderr (issue #222)"
@@ -510,5 +510,5 @@ object Main
         DiagInit.run()
 
   override def main: Opts[IO[ExitCode]] =
-    inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse
-      diffCmd orElse testCmd orElse synthCmd orElse diagInitCmd
+    (inspectCmd orElse checkCmd orElse verifyCmd orElse compileCmd orElse
+      diffCmd orElse testCmd orElse synthCmd orElse diagInitCmd).map(_.map(_.exit))
