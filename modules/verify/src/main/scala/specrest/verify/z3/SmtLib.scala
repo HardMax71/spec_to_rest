@@ -93,6 +93,14 @@ object SmtLib:
     case Z3Expr.Cmp(op, l, r, _) =>
       val token = if op == CmpOp.Neq then "distinct" else CmpOp.token(op)
       s"($token ${renderExpr(l)} ${renderExpr(r)})"
+    case Z3Expr.StrCmp(op, l, r, _) =>
+      op match
+        case CmpOp.Lt  => s"(str.< ${renderExpr(l)} ${renderExpr(r)})"
+        case CmpOp.Le  => s"(str.<= ${renderExpr(l)} ${renderExpr(r)})"
+        case CmpOp.Gt  => s"(str.< ${renderExpr(r)} ${renderExpr(l)})"
+        case CmpOp.Ge  => s"(str.<= ${renderExpr(r)} ${renderExpr(l)})"
+        case CmpOp.Eq  => s"(= ${renderExpr(l)} ${renderExpr(r)})"
+        case CmpOp.Neq => s"(distinct ${renderExpr(l)} ${renderExpr(r)})"
     case Z3Expr.Arith(op, args, _) =>
       s"(${ArithOp.token(op)} ${args.map(renderExpr).mkString(" ")})"
     case Z3Expr.Quantifier(q, bindings, body, _) =>

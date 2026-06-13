@@ -559,21 +559,24 @@ mid-call abort details) are documented in
 
 Each spec primitive maps to a Z3 theory sort. Integral and temporal types share `Int`
 (`DateTime` / `Date` are epoch seconds and `Duration` is a second span, so ordering and
-arithmetic on them verify directly); fractional types use Z3 `Real`; everything else is an
-uninterpreted sort that supports equality only.
+arithmetic on them verify directly); fractional types use Z3 `Real`; `String` uses Z3's
+native string sort; `UUID`, entities, and enums are uninterpreted sorts that support
+equality only.
 
 | Spec type                              | Z3 sort                                    |
 | -------------------------------------- | ------------------------------------------ |
 | `Int`, `DateTime`, `Date`, `Duration`  | `Int`                                      |
 | `Float`, `Decimal`, `Money`            | `Real`                                     |
 | `Bool` / `Boolean`                     | `Bool`                                     |
-| `String`, `UUID`, entities, enums      | uninterpreted                              |
+| `String`                               | native string sort (`str.<`, regex)        |
+| `UUID`, entities, enums                | uninterpreted                              |
 | `Set[T]`                               | `(Set T)` (see [Set theory](#set-theory))  |
 
-Ordering (`<`, `<=`, `>`, `>=`) and arithmetic (`+`, `-`, `*`, `/`) require numeric operands
-(`Int` or `Real`); Z3 coerces `Int` to `Real` when the two are mixed (e.g. a `Money` field
-compared to an integer literal). Applied to a non-numeric sort, the check is reported as
-skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on any sort.
+Arithmetic (`+`, `-`, `*`, `/`) requires numeric operands (`Int` or `Real`); Z3 coerces
+`Int` to `Real` when the two are mixed (e.g. a `Money` field compared to an integer literal).
+Ordering (`<`, `<=`, `>`, `>=`) works on two numeric operands or two `String` operands
+(lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` mix or any other sort is
+reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on any sort.
 
 The integral-vs-fractional split is part of the proof: the Isabelle `ty` carries both
 `TInt` and `TReal`, and `typeExprFullToTy` (`Semantics.thy`) assigns fractional names to

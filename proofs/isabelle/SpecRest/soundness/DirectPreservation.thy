@@ -174,6 +174,21 @@ next
     using ev T_Cmp_Ord.hyps(5) by (cases op) auto
   from eval_cmp_preservation[OF evc] show ?case .
 next
+  case (T_Cmp_Str_Ord \<Gamma> l r op sp)
+  have deN: "dom_eq_domains fs ps st op l r = None"
+    by (rule typed_dom_eq_domains_None[OF T_Cmp_Str_Ord.hyps(1)])
+  have bcN: "beq_comp op r = None"
+    by (rule typed_beq_comp_None[OF T_Cmp_Str_Ord.hyps(2)])
+  have ev: "eval_bin op (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
+    using T_Cmp_Str_Ord.prems(2) deN bcN by simp
+  have evc: "eval_cmp (case op of BLt \<Rightarrow> LtOp | BLe \<Rightarrow> LeOp
+                         | BGt \<Rightarrow> GtOp | BGe \<Rightarrow> GeOp)
+               (eval fs ps fuel sch st env l)
+               (eval fs ps fuel sch st env r) = Some v"
+    using ev T_Cmp_Str_Ord.hyps(3) by (cases op) auto
+  from eval_cmp_preservation[OF evc] show ?case .
+next
   case (T_Bool_Bin \<Gamma> l r op sp)
   have deN: "dom_eq_domains fs ps st op l r = None"
     by (rule typed_dom_eq_domains_None[OF T_Bool_Bin.hyps(1)])

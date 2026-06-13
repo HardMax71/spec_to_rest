@@ -55,6 +55,25 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "lexicographic ordering on String verifies via Z3 (T_Cmp_Str_Ord, str.< encoding)"
+  ):
+    val spec =
+      """service StringOrderDemo {
+        |  state {
+        |    names: Map[Int, String]
+        |  }
+        |  invariant namesBelowM:
+        |    (the k in names | names[k] < "m") >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("string_order_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (String ordering must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

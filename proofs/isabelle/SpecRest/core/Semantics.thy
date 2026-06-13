@@ -142,6 +142,13 @@ fun real_cmp :: "cmp_op \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> ir_val
 | "real_cmp GeOp a b = Some (VBool (a \<ge> b))"
 | "real_cmp _ _ _ = None"
 
+fun str_cmp :: "cmp_op \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ir_value option" where
+  "str_cmp LtOp a b = Some (VBool (a < b))"
+| "str_cmp LeOp a b = Some (VBool (a \<le> b))"
+| "str_cmp GtOp a b = Some (VBool (a > b))"
+| "str_cmp GeOp a b = Some (VBool (a \<ge> b))"
+| "str_cmp _ _ _ = None"
+
 fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_cmp op x y =
      (case x of
@@ -162,6 +169,10 @@ fun eval_cmp :: "cmp_op \<Rightarrow> ir_value option \<Rightarrow> ir_value opt
                          (case b of
                             VInt bi  \<Rightarrow> real_cmp op ar (of_int bi)
                           | VReal br \<Rightarrow> real_cmp op ar br
+                          | _        \<Rightarrow> None)
+                     | VStr sa \<Rightarrow>
+                         (case b of
+                            VStr sb \<Rightarrow> str_cmp op sa sb
                           | _        \<Rightarrow> None)
                      | _ \<Rightarrow> None))
            | _ \<Rightarrow> None)
@@ -196,10 +207,11 @@ lemma eval_cmp_some_imp_defined:
   "eval_cmp op x y = Some v \<Longrightarrow> (\<exists>a. x = Some a) \<and> (\<exists>b. y = Some b)"
   by (auto split: option.splits ir_value.splits cmp_op.splits)
 
-lemma eval_cmp_order_imp_numeric:
+lemma eval_cmp_order_imp_numeric_or_str:
   "op \<in> {LtOp, LeOp, GtOp, GeOp} \<Longrightarrow> eval_cmp op x y = Some v \<Longrightarrow>
-     ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
-     \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
+     (((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
+      \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b))))
+     \<or> ((\<exists>a. x = Some (VStr a)) \<and> (\<exists>b. y = Some (VStr b)))"
   by (auto split: option.splits ir_value.splits cmp_op.splits if_splits)
 
 text \<open>Category H Phase H1 — value types and value typing.
@@ -929,6 +941,11 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr \<Rightarrow> ty \<Rightarrow
        \<Longrightarrow> expr_has_ty \<Gamma> r t2
        \<Longrightarrow> numeric_ty t1
        \<Longrightarrow> numeric_ty t2
+       \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
+| T_Cmp_Str_Ord:
+    "expr_has_ty \<Gamma> l TStr
+       \<Longrightarrow> expr_has_ty \<Gamma> r TStr
        \<Longrightarrow> op \<in> {BLt, BLe, BGt, BGe}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) TBool"
 | T_Bool_Bin:

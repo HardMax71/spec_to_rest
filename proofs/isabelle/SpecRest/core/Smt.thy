@@ -379,6 +379,7 @@ where
       | (Some (SReal a), Some (SReal b)) \<Rightarrow> Some (SBool (a < b))
       | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SBool (of_int a < b))
       | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SBool (a < of_int b))
+      | (Some (SStr a), Some (SStr b)) \<Rightarrow> Some (SBool (a < b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TNeg t) =
      (case smtEval m env t of
