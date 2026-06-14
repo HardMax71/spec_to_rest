@@ -44,6 +44,7 @@ datatype (plugins only: code size) smt_term =
   | TLetIn "String.literal" "smt_term" "smt_term"
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
+  | TExistsRel "String.literal" "String.literal" "smt_term"
   | TTheRel "String.literal" "String.literal" "smt_term"
   | TEntityBase "String.literal"
   | TForallSet "String.literal" "smt_term" "smt_term"
@@ -95,6 +96,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TLetIn v a b)        = v # smt_var_list a @ smt_var_list b"
 | "smt_var_list (TForallEnum v _ b)   = v # smt_var_list b"
 | "smt_var_list (TForallRel v _ b)    = v # smt_var_list b"
+| "smt_var_list (TExistsRel v _ b)    = v # smt_var_list b"
 | "smt_var_list (TTheRel v _ b)       = v # smt_var_list b"
 | "smt_var_list (TEntityBase _)       = []"
 | "smt_var_list (TForallSet v d b)    = v # smt_var_list d @ smt_var_list b"
@@ -442,6 +444,13 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow> smtEval_forall_rel m env var d body
       | None   \<Rightarrow> None)"
+| "smtEval m env (TExistsRel var rel_name body) =
+     (case smt_model_lookup_rel m rel_name of
+        Some d \<Rightarrow>
+          (case smtEval_the_rel m env var d body of
+             Some matches \<Rightarrow> Some (SBool (matches \<noteq> []))
+           | None         \<Rightarrow> None)
+      | None \<Rightarrow> None)"
 | "smtEval m env (TTheRel var rel_name body) =
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow>

@@ -557,6 +557,7 @@ object SpecRestGenerated {
   final case class TLetIn(a: String, b: smt_term, c: smt_term)     extends smt_term
   final case class TForallEnum(a: String, b: String, c: smt_term)  extends smt_term
   final case class TForallRel(a: String, b: String, c: smt_term)   extends smt_term
+  final case class TExistsRel(a: String, b: String, c: smt_term)   extends smt_term
   final case class TTheRel(a: String, b: String, c: smt_term)      extends smt_term
   final case class TEntityBase(a: String)                          extends smt_term
   final case class TForallSet(a: String, b: smt_term, c: smt_term) extends smt_term
@@ -1785,6 +1786,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
@@ -1835,6 +1837,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
@@ -2492,6 +2495,16 @@ object SpecRestGenerated {
         smt_model_lookup_rel(m, rel_name) match {
           case None    => None
           case Some(d) => smtEval_forall_rel(m, env, vara, d, body)
+        }
+      case (m, env, TExistsRel(vara, rel_name, body)) =>
+        smt_model_lookup_rel(m, rel_name) match {
+          case None => None
+          case Some(d) =>
+            smtEval_the_rel(m, env, vara, d, body) match {
+              case None => None
+              case Some(matches) =>
+                Some[smt_val](SBool(!nulla[smt_val](matches)))
+            }
         }
       case (m, env, TTheRel(vara, rel_name, body)) =>
         smt_model_lookup_rel(m, rel_name) match {
@@ -3226,11 +3239,12 @@ object SpecRestGenerated {
     case TLetIn(v, a, b)       => v :: smt_var_list(a) ++ smt_var_list(b)
     case TForallEnum(v, vb, b) => v :: smt_var_list(b)
     case TForallRel(v, vc, b)  => v :: smt_var_list(b)
-    case TTheRel(v, vd, b)     => v :: smt_var_list(b)
-    case TEntityBase(ve)       => Nil
+    case TExistsRel(v, vd, b)  => v :: smt_var_list(b)
+    case TTheRel(v, ve, b)     => v :: smt_var_list(b)
+    case TEntityBase(vf)       => Nil
     case TForallSet(v, d, b)   => v :: smt_var_list(d) ++ smt_var_list(b)
     case TIndexRel(b, k)       => smt_var_list(b) ++ smt_var_list(k)
-    case TFieldAccess(b, vf)   => smt_var_list(b)
+    case TFieldAccess(b, vg)   => smt_var_list(b)
     case TSetEmpty()           => Nil
     case TSetInsert(e, s)      => smt_var_list(e) ++ smt_var_list(s)
     case TSetMember(e, s)      => smt_var_list(e) ++ smt_var_list(s)
@@ -3239,13 +3253,13 @@ object SpecRestGenerated {
     case TSetDiff(l, r)        => smt_var_list(l) ++ smt_var_list(r)
     case TPrime(t)             => smt_var_list(t)
     case TPre(t)               => smt_var_list(t)
-    case TWithRec(b, vg, v)    => smt_var_list(b) ++ smt_var_list(v)
+    case TWithRec(b, vh, v)    => smt_var_list(b) ++ smt_var_list(v)
     case TIte(c, a, b)         => smt_var_list(c) ++ (smt_var_list(a) ++ smt_var_list(b))
     case TNone()               => Nil
     case TSome(t)              => smt_var_list(t)
-    case TStrLit(vh)           => Nil
-    case TMatches(t, vi)       => smt_var_list(t)
-    case TUStrPred(vj, t)      => smt_var_list(t)
+    case TStrLit(vi)           => Nil
+    case TMatches(t, vj)       => smt_var_list(t)
+    case TUStrPred(vk, t)      => smt_var_list(t)
     case TSeqEmpty()           => Nil
     case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
     case TMapEmpty()           => Nil
@@ -4884,6 +4898,94 @@ object SpecRestGenerated {
     case TableSpec(uu, uv, uw, ux, uy, uz, ixs) => ixs
   }
 
+  def range_arg(x0: expr): Option[String] = x0 match {
+    case CallF(IdentifierF(nm, uu), List(IdentifierF(rel, uv)), uw) =>
+      nm == "range" match {
+        case true  => Some[String](rel)
+        case false => None
+      }
+    case BinaryOpF(v, va, vb, vc)                              => None
+    case UnaryOpF(v, va, vb)                                   => None
+    case QuantifierF(v, va, vb, vc)                            => None
+    case SomeWrapF(v, va)                                      => None
+    case TheF(v, va, vb, vc)                                   => None
+    case FieldAccessF(v, va, vb)                               => None
+    case EnumAccessF(v, va, vb)                                => None
+    case IndexF(v, va, vb)                                     => None
+    case CallF(BinaryOpF(vc, vd, ve, vf), va, vb)              => None
+    case CallF(UnaryOpF(vc, vd, ve), va, vb)                   => None
+    case CallF(QuantifierF(vc, vd, ve, vf), va, vb)            => None
+    case CallF(SomeWrapF(vc, vd), va, vb)                      => None
+    case CallF(TheF(vc, vd, ve, vf), va, vb)                   => None
+    case CallF(FieldAccessF(vc, vd, ve), va, vb)               => None
+    case CallF(EnumAccessF(vc, vd, ve), va, vb)                => None
+    case CallF(IndexF(vc, vd, ve), va, vb)                     => None
+    case CallF(CallF(vc, vd, ve), va, vb)                      => None
+    case CallF(PrimeF(vc, vd), va, vb)                         => None
+    case CallF(PreF(vc, vd), va, vb)                           => None
+    case CallF(WithF(vc, vd, ve), va, vb)                      => None
+    case CallF(IfF(vc, vd, ve, vf), va, vb)                    => None
+    case CallF(LetF(vc, vd, ve, vf), va, vb)                   => None
+    case CallF(LambdaF(vc, vd, ve), va, vb)                    => None
+    case CallF(ConstructorF(vc, vd, ve), va, vb)               => None
+    case CallF(SetLiteralF(vc, vd), va, vb)                    => None
+    case CallF(MapLiteralF(vc, vd), va, vb)                    => None
+    case CallF(SetComprehensionF(vc, vd, ve, vf), va, vb)      => None
+    case CallF(SeqLiteralF(vc, vd), va, vb)                    => None
+    case CallF(MatchesF(vc, vd, ve), va, vb)                   => None
+    case CallF(IntLitF(vc, vd), va, vb)                        => None
+    case CallF(FloatLitF(vc, vd), va, vb)                      => None
+    case CallF(StringLitF(vc, vd), va, vb)                     => None
+    case CallF(BoolLitF(vc, vd), va, vb)                       => None
+    case CallF(NoneLitF(vc), va, vb)                           => None
+    case CallF(v, Nil, vb)                                     => None
+    case CallF(v, BinaryOpF(ve, vf, vg, vh) :: vd, vb)         => None
+    case CallF(v, UnaryOpF(ve, vf, vg) :: vd, vb)              => None
+    case CallF(v, QuantifierF(ve, vf, vg, vh) :: vd, vb)       => None
+    case CallF(v, SomeWrapF(ve, vf) :: vd, vb)                 => None
+    case CallF(v, TheF(ve, vf, vg, vh) :: vd, vb)              => None
+    case CallF(v, FieldAccessF(ve, vf, vg) :: vd, vb)          => None
+    case CallF(v, EnumAccessF(ve, vf, vg) :: vd, vb)           => None
+    case CallF(v, IndexF(ve, vf, vg) :: vd, vb)                => None
+    case CallF(v, CallF(ve, vf, vg) :: vd, vb)                 => None
+    case CallF(v, PrimeF(ve, vf) :: vd, vb)                    => None
+    case CallF(v, PreF(ve, vf) :: vd, vb)                      => None
+    case CallF(v, WithF(ve, vf, vg) :: vd, vb)                 => None
+    case CallF(v, IfF(ve, vf, vg, vh) :: vd, vb)               => None
+    case CallF(v, LetF(ve, vf, vg, vh) :: vd, vb)              => None
+    case CallF(v, LambdaF(ve, vf, vg) :: vd, vb)               => None
+    case CallF(v, ConstructorF(ve, vf, vg) :: vd, vb)          => None
+    case CallF(v, SetLiteralF(ve, vf) :: vd, vb)               => None
+    case CallF(v, MapLiteralF(ve, vf) :: vd, vb)               => None
+    case CallF(v, SetComprehensionF(ve, vf, vg, vh) :: vd, vb) => None
+    case CallF(v, SeqLiteralF(ve, vf) :: vd, vb)               => None
+    case CallF(v, MatchesF(ve, vf, vg) :: vd, vb)              => None
+    case CallF(v, IntLitF(ve, vf) :: vd, vb)                   => None
+    case CallF(v, FloatLitF(ve, vf) :: vd, vb)                 => None
+    case CallF(v, StringLitF(ve, vf) :: vd, vb)                => None
+    case CallF(v, BoolLitF(ve, vf) :: vd, vb)                  => None
+    case CallF(v, NoneLitF(ve) :: vd, vb)                      => None
+    case CallF(v, vc :: ve :: vf, vb)                          => None
+    case PrimeF(v, va)                                         => None
+    case PreF(v, va)                                           => None
+    case WithF(v, va, vb)                                      => None
+    case IfF(v, va, vb, vc)                                    => None
+    case LetF(v, va, vb, vc)                                   => None
+    case LambdaF(v, va, vb)                                    => None
+    case ConstructorF(v, va, vb)                               => None
+    case SetLiteralF(v, va)                                    => None
+    case MapLiteralF(v, va)                                    => None
+    case SetComprehensionF(v, va, vb, vc)                      => None
+    case SeqLiteralF(v, va)                                    => None
+    case MatchesF(v, va, vb)                                   => None
+    case IntLitF(v, va)                                        => None
+    case FloatLitF(v, va)                                      => None
+    case StringLitF(v, va)                                     => None
+    case BoolLitF(v, va)                                       => None
+    case NoneLitF(v)                                           => None
+    case IdentifierF(v, va)                                    => None
+  }
+
   def translate_forall_step(
       enums: List[String],
       x1: quantifier_binding,
@@ -4998,6 +5100,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
@@ -5048,6 +5151,7 @@ object SpecRestGenerated {
     case TLetIn(v, va, vb)      => None
     case TForallEnum(v, va, vb) => None
     case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
@@ -5070,6 +5174,16 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+  }
+
+  def translate_range_eq(setE: smt_term, rel: String): smt_term = {
+    val k    = fresh_var("k", smt_var_list(setE)): String
+    val vv   = fresh_var("v", k :: smt_var_list(setE)): String
+    val valK = TIndexRel(TVar(rel), TVar(k)): smt_term;
+    TAnd(
+      TForallRel(k, rel, TSetMember(valK, setE)),
+      TForallSet(vv, setE, TExistsRel(k, rel, TEq(valK, TVar(vv))))
+    )
   }
 
   def prime_rel_name(x0: expr): Option[String] = x0 match {
@@ -5477,22 +5591,31 @@ object SpecRestGenerated {
             case None =>
               rel_insert_parts(BEq(), l, r) match {
                 case None =>
-                  comp_parts(r) match {
+                  range_arg(r) match {
                     case None =>
-                      map2_opt(
-                        (a: smt_term) =>
-                          (b: smt_term) =>
-                            TEq(a, b),
-                        translate(enums, l),
-                        translate(enums, r)
-                      )
-                    case Some((vara, (dnm, p))) =>
-                      map2_opt(
-                        (a: smt_term) =>
-                          (b: smt_term) =>
-                            translate_set_comp_eq(enums, vara, dnm, a, b),
-                        translate(enums, l),
-                        translate(enums, p)
+                      comp_parts(r) match {
+                        case None =>
+                          map2_opt(
+                            (a: smt_term) =>
+                              (b: smt_term) =>
+                                TEq(a, b),
+                            translate(enums, l),
+                            translate(enums, r)
+                          )
+                        case Some((vara, (dnm, p))) =>
+                          map2_opt(
+                            (a: smt_term) =>
+                              (b: smt_term) =>
+                                translate_set_comp_eq(enums, vara, dnm, a, b),
+                            translate(enums, l),
+                            translate(enums, p)
+                          )
+                      }
+                    case Some(rel) =>
+                      map_option[smt_term, smt_term](
+                        (lt: smt_term) =>
+                          translate_range_eq(lt, rel),
+                        translate(enums, l)
                       )
                   }
                 case Some((rel, (kn, vn))) =>

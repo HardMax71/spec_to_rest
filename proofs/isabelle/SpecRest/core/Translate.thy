@@ -85,6 +85,19 @@ definition translate_beq_dom_or_none :: "expr \<Rightarrow> expr \<Rightarrow> s
      (case (dom_arg l, dom_arg r) of
         (Some x, Some y) \<Rightarrow> Some (translate_dom_eq x y) | _ \<Rightarrow> None)"
 
+fun range_arg :: "expr \<Rightarrow> String.literal option" where
+  "range_arg (CallF (IdentifierF nm _) [IdentifierF rel _] _) =
+     (if nm = STR ''range'' then Some rel else None)"
+| "range_arg _ = None"
+
+definition translate_range_eq :: "smt_term \<Rightarrow> String.literal \<Rightarrow> smt_term" where
+  "translate_range_eq setE rel =
+     (let k    = fresh_var (STR ''k'') (smt_var_list setE);
+          vv   = fresh_var (STR ''v'') (k # smt_var_list setE);
+          valK = TIndexRel (TVar rel) (TVar k)
+      in TAnd (TForallRel k rel (TSetMember valK setE))
+              (TForallSet vv setE (TExistsRel k rel (TEq valK (TVar vv)))))"
+
 fun prime_rel_name :: "expr \<Rightarrow> String.literal option" where
   "prime_rel_name (PrimeF e _) = identName e"
 | "prime_rel_name _ = None"
@@ -167,11 +180,15 @@ where
                   Some (rel, kn, vn) \<Rightarrow>
                     Some (TEq (TIndexRel (TPrime (TVar rel)) (TVar kn)) (TVar vn))
                 | None \<Rightarrow>
+                  (case range_arg r of
+                     Some rel \<Rightarrow>
+                       map_option (\<lambda>lt. translate_range_eq lt rel) (translate enums l)
+                   | None \<Rightarrow>
                   (case comp_parts r of
                      Some (var, dnm, p) \<Rightarrow>
                        map2_opt (translate_set_comp_eq enums var dnm)
                          (translate enums l) (translate enums p)
-                   | None \<Rightarrow> map2_opt TEq (translate enums l) (translate enums r))))
+                   | None \<Rightarrow> map2_opt TEq (translate enums l) (translate enums r)))))
       | BNeq \<Rightarrow>
           map2_opt (\<lambda>lt rt. TNot (TEq lt rt)) (translate enums l) (translate enums r)
       | BLt \<Rightarrow> map2_opt TLt (translate enums l) (translate enums r)
@@ -315,12 +332,13 @@ lemma translate_BEq_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
       and "dom_arg l = None \<or> dom_arg r = None"
       and "rel_insert_parts BEq l r = None"
+      and "range_arg r = None"
   shows "translate enums (BinaryOpF BEq l r sp)
            = map2_opt TEq (translate enums l) (translate enums r)"
 proof -
   have dn: "translate_beq_dom_or_none l r = None"
     using assms(2) by (auto simp: translate_beq_dom_or_none_def split: option.splits)
-  show ?thesis using dn comp_parts_None[OF assms(1)] assms(3) by simp
+  show ?thesis using dn comp_parts_None[OF assms(1)] assms(3) assms(4) by simp
 qed
 
 lemma translate_BIn_noncomp:

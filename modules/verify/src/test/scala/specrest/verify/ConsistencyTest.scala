@@ -171,6 +171,36 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "value-projection comprehension verifies via Z3 (entries = { m in rel | true } projects to rel's range)"
+  ):
+    val spec =
+      """service RangeCompDemo {
+        |  entity Item {
+        |    size: Int
+        |  }
+        |  state {
+        |    rel: Int -> lone Item
+        |  }
+        |  operation ListAll {
+        |    output: entries: Set[Item]
+        |    requires:
+        |      true
+        |    ensures:
+        |      entries = { m in rel | true }
+        |      rel' = rel
+        |  }
+        |  invariant cardNonNeg:
+        |    #rel >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("range_comp_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (value-projection comprehension must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

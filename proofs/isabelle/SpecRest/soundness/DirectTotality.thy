@@ -366,8 +366,18 @@ proof (induction e rule: measure_induct_rule[where f = size])
             show ?thesis using BinaryOpF BEq tbn ri by simp
           next
             case None
-            then show ?thesis
-              using BinaryOpF BEq translate_BEq_noncomp[OF nc dnone None] hl hr by auto
+            note riNone = this
+            show ?thesis
+            proof (cases "range_arg r2")
+              case (Some rel)
+              have tbn: "translate_beq_dom_or_none l2 r2 = None"
+                using dnone by (auto simp: translate_beq_dom_or_none_def split: option.splits)
+              show ?thesis using BinaryOpF BEq tbn riNone Some hl by simp
+            next
+              case None
+              show ?thesis
+                using BinaryOpF BEq translate_BEq_noncomp[OF nc dnone riNone None] hl hr by auto
+            qed
           qed
         qed
       qed
