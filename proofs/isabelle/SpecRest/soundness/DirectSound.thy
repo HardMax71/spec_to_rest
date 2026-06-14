@@ -8,6 +8,7 @@ section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 lemma binop_noncomp_step:
   assumes deN: "dom_eq_domains fs ps st bop l r = None"
       and bcN: "beq_comp bop r = None"
+      and riN: "rel_insert_parts bop l r = None"
       and IHl: "\<And>vl lt. eval fs ps fuel s st env l = Some vl
                   \<Longrightarrow> translate enums l = Some lt
                   \<Longrightarrow> smtEval (correlate_model s st) (correlate_env env) lt
@@ -80,7 +81,7 @@ next
     hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
     thus False using efl by simp
   qed
-  from tt[unfolded BEq translate_BEq_noncomp[OF rnc dnone]] obtain lt rt
+  from tt[unfolded BEq translate_BEq_noncomp[OF rnc dnone riN[unfolded BEq]]] obtain lt rt
       where tl: "translate enums l = Some lt"
         and tr: "translate enums r = Some rt"
         and teq: "t = TEq lt rt"
@@ -258,6 +259,26 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
         rule: eval_eval_list_eval_entries_eval_fields_eval_the_eval_forall.induct)
   case (6 fs ps fuel s st env bop l r sp v t)
   note IHl = "6.IH"(1) and IHr = "6.IH"(2)
+  have riN: "rel_insert_parts bop l r = None"
+  proof (rule ccontr)
+    assume "rel_insert_parts bop l r \<noteq> None"
+    then obtain rel kn vn where ri: "rel_insert_parts bop l r = Some (rel, kn, vn)"
+      by (cases "rel_insert_parts bop l r") auto
+    from rel_insert_parts_SomeD[OF ri]
+      have bopeq: "bop = BEq"
+       and pin: "prime_ident_name l = Some rel"
+       and rrhs: "rel_insert_rhs r = Some (rel, kn, vn)" by auto
+    have dal: "dom_arg l = None" using pin by (cases l) auto
+    hence dn: "dom_eq_domains fs ps st bop l r = None"
+      by (simp add: dom_eq_domains_def split: option.splits)
+    obtain base es esp bsp where rshape: "r = BinaryOpF BAdd base (MapLiteralF es esp) bsp"
+      using rel_insert_rhs_SomeD[OF rrhs] by blast
+    have bcn: "beq_comp bop r = None" using rshape by simp
+    have er: "eval fs ps fuel s st env r = None" using rel_insert_rhs_eval_None[OF rrhs] .
+    have "eval fs ps fuel s st env (BinaryOpF bop l r sp) = None"
+      using dn bcn er bopeq by (simp split: option.splits)
+    thus False using "6.prems"(1) by simp
+  qed
   show ?case
   proof (cases "dom_eq_domains fs ps st bop l r")
     case (Some p)
@@ -281,7 +302,7 @@ proof (induction fs ps fuel s st env e and fs ps fuel s st env es and fs ps fuel
     proof (cases "beq_comp bop r")
     case None
     show ?thesis
-      by (rule binop_noncomp_step[OF deN None
+      by (rule binop_noncomp_step[OF deN None riN
             IHl[OF deN None _ _ "6.prems"(3) "6.prems"(4)]
             IHr[OF deN None _ _ "6.prems"(3) "6.prems"(4)]
             "6.prems"(1) "6.prems"(2) "6.prems"(4)])

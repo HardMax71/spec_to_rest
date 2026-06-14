@@ -116,6 +116,33 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "relation literal-insert verifies via Z3 (rel' = pre(rel) + {k -> v} desugars to rel'[k] = v)"
+  ):
+    val spec =
+      """service InsertDemo {
+        |  state {
+        |    store: Int -> lone Int
+        |  }
+        |  operation Put {
+        |    input:  v: Int
+        |    output: k: Int
+        |    ensures:
+        |      k not in pre(store)
+        |      store' = pre(store) + {k -> v}
+        |      #store' = #pre(store) + 1
+        |  }
+        |  invariant cardNonNeg:
+        |    #store >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("insert_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (relation insert must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

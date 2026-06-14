@@ -357,7 +357,18 @@ proof (induction e rule: measure_induct_rule[where f = size])
           obtain rt where hr: "translate enums r2 = Some rt"
             using less.IH[OF sr wr] by blast
           show ?thesis
-            using BinaryOpF BEq translate_BEq_noncomp[OF nc dnone] hl hr by auto
+          proof (cases "rel_insert_parts BEq l2 r2")
+            case (Some q)
+            obtain rel kn vn where ri: "rel_insert_parts BEq l2 r2 = Some (rel, kn, vn)"
+              using Some by (cases q) auto
+            have tbn: "translate_beq_dom_or_none l2 r2 = None"
+              using dnone by (auto simp: translate_beq_dom_or_none_def split: option.splits)
+            show ?thesis using BinaryOpF BEq tbn ri by simp
+          next
+            case None
+            then show ?thesis
+              using BinaryOpF BEq translate_BEq_noncomp[OF nc dnone None] hl hr by auto
+          qed
         qed
       qed
     next
