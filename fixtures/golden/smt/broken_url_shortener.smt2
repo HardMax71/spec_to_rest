@@ -9,6 +9,6 @@
 (declare-fun state_totalClicks () Int)
 (declare-fun UrlMapping_click_count (UrlMapping) Int)
 ;; assertions
-(assert (forall ((c Int)) (=> (metadata_dom c) (>= (UrlMapping_click_count (metadata_map c)) 0))))
+(assert (forall ((c Int)) (! (=> (metadata_dom c) (>= (UrlMapping_click_count (metadata_map c)) 0)) :pattern ((metadata_dom c)))))
 (assert (>= state_totalClicks 0))
 (check-sat)

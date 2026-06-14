@@ -326,6 +326,7 @@ object Translator:
     case "Int" | "DateTime" | "Date" | "Duration" => Some(Z3Sort.Int)
     case "Float" | "Decimal" | "Money"            => Some(Z3Sort.Real)
     case "Bool" | "Boolean"                       => Some(Z3Sort.Bool)
+    case "String"                                 => Some(Z3Sort.Str)
     case _                                        => None
 
   private def primitiveUnderlyingSort(t: type_alias_decl): Option[Z3Sort] =

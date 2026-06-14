@@ -108,7 +108,11 @@ object SmtLib:
     case Z3Expr.Quantifier(q, bindings, body, _) =>
       val qTok    = if q == QKind.ForAll then "forall" else "exists"
       val binders = bindings.map(b => s"(${b.name} ${renderSort(b.sort)})").mkString(" ")
-      s"($qTok ($binders) ${renderExpr(body)})"
+      Z3Trigger.infer(bindings, body) match
+        case Nil => s"($qTok ($binders) ${renderExpr(body)})"
+        case pats =>
+          val patStr = pats.map(t => s":pattern (${renderExpr(t)})").mkString(" ")
+          s"($qTok ($binders) (! ${renderExpr(body)} $patStr))"
     case Z3Expr.EmptySet(elemSort, _) => emptySetLit(elemSort)
     case Z3Expr.SetLit(elemSort, members, _) =>
       members.foldLeft(emptySetLit(elemSort))((acc, m) => s"(store $acc ${renderExpr(m)} true)")
