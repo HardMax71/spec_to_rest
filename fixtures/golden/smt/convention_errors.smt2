@@ -13,5 +13,5 @@
 (declare-fun widgets_map (Int) Widget)
 ;; assertions
 (assert (not (= Status_ACTIVE Status_INACTIVE)))
-(assert (forall ((k_widgets Int)) (widgets_dom k_widgets)))
+(assert (forall ((k_widgets Int)) (! (widgets_dom k_widgets) :pattern ((widgets_dom k_widgets)))))
 (check-sat)

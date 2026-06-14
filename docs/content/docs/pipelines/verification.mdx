@@ -565,7 +565,10 @@ Each spec primitive maps to a Z3 theory sort. Integral and temporal types share 
 (`DateTime` / `Date` are epoch seconds and `Duration` is a second span, so ordering and
 arithmetic on them verify directly); fractional types use Z3 `Real`; `String` uses Z3's
 native string sort; `UUID`, entities, and enums are uninterpreted sorts that support
-equality only.
+equality only. A named primitive alias inherits its base type's sort, so a String-refinement
+type (`type Code = String where P`) resolves to the native string sort -- with `P` applied at
+use sites -- rather than to an uninterpreted sort, and all first-class string operations
+(concatenation, ordering, regex membership) apply to its values.
 
 | Spec type                              | Z3 sort                                    |
 | -------------------------------------- | ------------------------------------------ |
@@ -583,6 +586,13 @@ integer literal). Ordering (`<`, `<=`, `>`, `>=`) works on two numeric operands 
 operands (lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` mix or any other
 sort is reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on
 any sort.
+
+Universal facts over the native string sort -- relation domain, frame, and refinement axioms
+quantified over a String-keyed relation -- are emitted with E-matching **patterns** (`:pattern`
+on the relation lookup), so Z3 instantiates them on the ground keys appearing in the goal
+instead of falling back to model-based instantiation over the infinite string domain. Without
+the patterns, String-keyed relations push Z3 into the string theory under unbounded
+quantification and time out; with them they discharge in milliseconds.
 
 The integral-vs-fractional split is part of the proof: the Isabelle `ty` carries both
 `TInt` and `TReal`, and `typeExprFullToTy` (`Semantics.thy`) assigns fractional names to

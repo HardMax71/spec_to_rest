@@ -14,6 +14,7 @@ import com.microsoft.z3.DatatypeSort
 import com.microsoft.z3.Expr as Z3AstExpr
 import com.microsoft.z3.FuncDecl
 import com.microsoft.z3.Model
+import com.microsoft.z3.Pattern
 import com.microsoft.z3.ReExpr
 import com.microsoft.z3.ReSort
 import com.microsoft.z3.SeqExpr
@@ -452,8 +453,12 @@ private object Backend:
     try
       val body     = renderBool(rctx, e.body)
       val boundArr = consts.toArray
+      val patArr: Array[Pattern] | Null =
+        Z3Trigger.infer(e.bindings, e.body) match
+          case Nil  => null
+          case pats => pats.map(t => rctx.ctx.mkPattern(renderExpr(rctx, t))).toArray
       if e.q == QKind.ForAll then
-        rctx.ctx.mkForall(boundArr, body, 0, null, null, null, null)
+        rctx.ctx.mkForall(boundArr, body, 0, patArr, null, null, null)
       else
-        rctx.ctx.mkExists(boundArr, body, 0, null, null, null, null)
+        rctx.ctx.mkExists(boundArr, body, 0, patArr, null, null, null)
     finally rctx.varStack.dropRightInPlace(1)

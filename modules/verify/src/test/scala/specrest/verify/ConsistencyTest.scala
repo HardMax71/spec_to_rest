@@ -143,6 +143,34 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "String-refinement alias relations verify on the native String sort (E-matching triggers keep them tractable)"
+  ):
+    val spec =
+      """service StringAliasDemo {
+        |  type Code = String where len(value) >= 3 and len(value) <= 8
+        |  state {
+        |    store: Code -> lone String
+        |  }
+        |  operation Put {
+        |    input:  v: String
+        |    output: k: Code, label: String
+        |    ensures:
+        |      k not in pre(store)
+        |      store' = pre(store) + {k -> v}
+        |      label = "id:" + k
+        |  }
+        |  invariant cardNonNeg:
+        |    #store >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("string_alias_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (String-refinement alias on relations must verify on the String sort, not time out); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

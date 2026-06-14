@@ -44,7 +44,7 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
     val out = SmtLib.renderSmtLib(script)
     assert(out.contains("(declare-sort User 0)"))
     assert(out.contains("(declare-fun age (User) Int)"))
-    assert(out.contains("(assert (forall ((u User)) (>= (age u) 0)))"))
+    assert(out.contains("(assert (forall ((u User)) (! (>= (age u) 0) :pattern ((age u)))))"))
     assert(out.endsWith("(check-sat)\n"))
 
   test("renderExpr covers every Z3Expr kind"):
