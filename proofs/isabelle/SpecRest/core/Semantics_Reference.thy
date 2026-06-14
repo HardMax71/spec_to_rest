@@ -310,6 +310,33 @@ lemma quant_dom_inline_calls:
      \<Longrightarrow> quant_dom s st k (inline_calls_bindings fs ps bs) = Some (var, dmv)"
   by (erule quant_dom.elims; auto split: option.splits)
 
+lemma eval_BAdd_MapLiteralF_None:
+  "eval fs ps fuel s st env (BinaryOpF BAdd base (MapLiteralF es sp) bsp) = None"
+proof (rule ccontr)
+  assume "eval fs ps fuel s st env (BinaryOpF BAdd base (MapLiteralF es sp) bsp) \<noteq> None"
+  then obtain v where
+    v: "eval fs ps fuel s st env (BinaryOpF BAdd base (MapLiteralF es sp) bsp) = Some v" by auto
+  have "eval fs ps fuel s st env (BinaryOpF BAdd base (MapLiteralF es sp) bsp)
+        = eval_arith AddOp (eval fs ps fuel s st env base)
+                           (map_option VMap (eval_entries fs ps fuel s st env es))"
+    by simp
+  with v have arith: "eval_arith AddOp (eval fs ps fuel s st env base)
+                        (map_option VMap (eval_entries fs ps fuel s st env es)) = Some v" by simp
+  show False
+    using eval_arith_some_imp_numeric_or_str[OF arith]
+    by (cases "eval_entries fs ps fuel s st env es") auto
+qed
+
+lemma rel_insert_rhs_eval_None:
+  "rel_insert_rhs r = Some (rel, kn, vn)
+     \<Longrightarrow> eval fs ps fuel s st env r = None"
+proof -
+  assume "rel_insert_rhs r = Some (rel, kn, vn)"
+  then obtain base es sp bsp where "r = BinaryOpF BAdd base (MapLiteralF es sp) bsp"
+    using rel_insert_rhs_SomeD by blast
+  thus ?thesis by (simp only: eval_BAdd_MapLiteralF_None)
+qed
+
 lemma eval_coincidence:
   "(\<forall>y. string_in_list y (free_vars e) \<longrightarrow> env_lookup env1 y = env_lookup env2 y)
      \<Longrightarrow> eval fs ps fuel s st env1 e = eval fs ps fuel s st env2 e"

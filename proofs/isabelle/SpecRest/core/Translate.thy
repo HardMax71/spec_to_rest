@@ -163,11 +163,15 @@ where
           (case translate_beq_dom_or_none l r of
              Some t \<Rightarrow> Some t
            | None \<Rightarrow>
-               (case comp_parts r of
-                  Some (var, dnm, p) \<Rightarrow>
-                    map2_opt (translate_set_comp_eq enums var dnm)
-                      (translate enums l) (translate enums p)
-                | None \<Rightarrow> map2_opt TEq (translate enums l) (translate enums r)))
+               (case rel_insert_parts BEq l r of
+                  Some (rel, kn, vn) \<Rightarrow>
+                    Some (TEq (TIndexRel (TPrime (TVar rel)) (TVar kn)) (TVar vn))
+                | None \<Rightarrow>
+                  (case comp_parts r of
+                     Some (var, dnm, p) \<Rightarrow>
+                       map2_opt (translate_set_comp_eq enums var dnm)
+                         (translate enums l) (translate enums p)
+                   | None \<Rightarrow> map2_opt TEq (translate enums l) (translate enums r))))
       | BNeq \<Rightarrow>
           map2_opt (\<lambda>lt rt. TNot (TEq lt rt)) (translate enums l) (translate enums r)
       | BLt \<Rightarrow> map2_opt TLt (translate enums l) (translate enums r)
@@ -310,12 +314,13 @@ lemma comp_parts_None:
 lemma translate_BEq_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
       and "dom_arg l = None \<or> dom_arg r = None"
+      and "rel_insert_parts BEq l r = None"
   shows "translate enums (BinaryOpF BEq l r sp)
            = map2_opt TEq (translate enums l) (translate enums r)"
 proof -
   have dn: "translate_beq_dom_or_none l r = None"
     using assms(2) by (auto simp: translate_beq_dom_or_none_def split: option.splits)
-  show ?thesis using dn comp_parts_None[OF assms(1)] by simp
+  show ?thesis using dn comp_parts_None[OF assms(1)] assms(3) by simp
 qed
 
 lemma translate_BIn_noncomp:

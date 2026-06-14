@@ -506,7 +506,10 @@ contradictions return populated cores.
 The translator's correctness is mechanically validated by the universal `soundness` theorem in
 `proofs/isabelle/SpecRest/Soundness.thy`. The theorem closes with **zero `sorry`** for the
 verified subset (atoms; logical/arithmetic/comparison operators; state-relation
-membership/cardinality (pre- and post-state, e.g. `c in rel'`, `#rel'`, `#pre(rel)`)/lookup/subset; set
+membership/cardinality (pre- and post-state, e.g. `c in rel'`, `#rel'`, `#pre(rel)`)/lookup/subset;
+relation literal-insert (`rel' = pre(rel) + {k -> v}`, recognised and desugared to the in-subset
+indexed assignment `rel'[k] = v`, with the unverified encoder synthesising the surrounding
+domain/frame axioms); set
 literals and set-valued operations; FieldAccess on
 entity-typed values; single-state `Prime`/`Pre` collapse; quantifiers over enums and
 state-relations; record-update via Skolem encoding).

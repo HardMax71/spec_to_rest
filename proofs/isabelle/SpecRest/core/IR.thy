@@ -741,6 +741,68 @@ lemma dom_arg_SomeD:
      \<Longrightarrow> \<exists>sp1 sp2 sp. e = CallF (IdentifierF (STR ''dom'') sp1) [IdentifierF x sp2] sp"
   by (erule dom_arg.elims; auto split: expr.splits list.splits if_splits prod.splits)
 
+fun prime_ident_name :: "expr \<Rightarrow> String.literal option" where
+  "prime_ident_name (PrimeF e _) = identName e"
+| "prime_ident_name _            = None"
+
+fun base_ident_name :: "expr \<Rightarrow> String.literal option" where
+  "base_ident_name (PreF e _)        = identName e"
+| "base_ident_name (PrimeF e _)      = identName e"
+| "base_ident_name (IdentifierF x _) = Some x"
+| "base_ident_name _                 = None"
+
+fun map_single_entry :: "expr \<Rightarrow> (String.literal \<times> String.literal) option" where
+  "map_single_entry (MapLiteralF es _) =
+     (case es of
+        [MapEntryFull kE vE _] \<Rightarrow>
+          (case (identName kE, identName vE) of
+             (Some kn, Some vn) \<Rightarrow> Some (kn, vn)
+           | _ \<Rightarrow> None)
+      | _ \<Rightarrow> None)"
+| "map_single_entry _ = None"
+
+fun rel_insert_rhs :: "expr \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option" where
+  "rel_insert_rhs (BinaryOpF bop base mlit _) =
+     (if bop = BAdd
+      then (case (base_ident_name base, map_single_entry mlit) of
+              (Some brel, Some (kn, vn)) \<Rightarrow> Some (brel, kn, vn)
+            | _ \<Rightarrow> None)
+      else None)"
+| "rel_insert_rhs _ = None"
+
+definition rel_insert_parts ::
+  "bin_op \<Rightarrow> expr \<Rightarrow> expr \<Rightarrow> (String.literal \<times> String.literal \<times> String.literal) option" where
+  "rel_insert_parts op l r =
+     (if op = BEq
+      then (case (prime_ident_name l, rel_insert_rhs r) of
+              (Some lrel, Some (brel, kn, vn)) \<Rightarrow>
+                (if lrel = brel then Some (lrel, kn, vn) else None)
+            | _ \<Rightarrow> None)
+      else None)"
+
+lemma rel_insert_parts_SomeD:
+  "rel_insert_parts op l r = Some (rel, kn, vn)
+     \<Longrightarrow> op = BEq \<and> prime_ident_name l = Some rel \<and> rel_insert_rhs r = Some (rel, kn, vn)"
+  by (auto simp: rel_insert_parts_def split: option.splits if_splits prod.splits)
+
+lemma rel_insert_parts_non_BEq [simp]:
+  "op \<noteq> BEq \<Longrightarrow> rel_insert_parts op l r = None"
+  by (simp add: rel_insert_parts_def)
+
+lemma rel_insert_parts_SetComp_None [simp]:
+  "rel_insert_parts op l (SetComprehensionF v d p sp) = None"
+  by (simp add: rel_insert_parts_def split: option.splits)
+
+lemma map_single_entry_MapLitD:
+  "map_single_entry e = Some kv \<Longrightarrow> \<exists>es sp. e = MapLiteralF es sp"
+  by (cases e) auto
+
+lemma rel_insert_rhs_SomeD:
+  "rel_insert_rhs r = Some (brel, kn, vn)
+     \<Longrightarrow> \<exists>base es sp bsp. r = BinaryOpF BAdd base (MapLiteralF es sp) bsp"
+  by (erule rel_insert_rhs.elims;
+      auto dest!: map_single_entry_MapLitD split: if_splits option.splits prod.splits)
+
 lemmas allSubexprs_code [code]            = allSubexprs.simps allSubexprs_list.simps
                                              allSubexprs_fields.simps
                                              allSubexprs_entries.simps
