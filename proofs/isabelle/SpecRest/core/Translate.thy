@@ -85,6 +85,14 @@ definition translate_beq_dom_or_none :: "expr \<Rightarrow> expr \<Rightarrow> s
      (case (dom_arg l, dom_arg r) of
         (Some x, Some y) \<Rightarrow> Some (translate_dom_eq x y) | _ \<Rightarrow> None)"
 
+fun prime_rel_name :: "expr \<Rightarrow> String.literal option" where
+  "prime_rel_name (PrimeF e _) = identName e"
+| "prime_rel_name _ = None"
+
+fun pre_rel_name :: "expr \<Rightarrow> String.literal option" where
+  "pre_rel_name (PreF e _) = identName e"
+| "pre_rel_name _ = None"
+
 function (sequential) translate ::
     "String.literal list \<Rightarrow> expr \<Rightarrow> smt_term option"
 and translateSetList ::
@@ -139,6 +147,8 @@ where
       | UCardinality \<Rightarrow>
           (case e of
              IdentifierF x _ \<Rightarrow> Some (TCardRel x)
+           | PrimeF (IdentifierF x _) _ \<Rightarrow> Some (TPrime (TCardRel x))
+           | PreF (IdentifierF x _) _ \<Rightarrow> Some (TPre (TCardRel x))
            | _ \<Rightarrow> None)
       | UPower \<Rightarrow> None)"
 | "translate enums (BinaryOpF op l r _) =
@@ -176,24 +186,43 @@ where
       | BIntersect \<Rightarrow> map2_opt TSetIntersect (translate enums l) (translate enums r)
       | BDiff \<Rightarrow> map2_opt TSetDiff (translate enums l) (translate enums r)
       | BIn \<Rightarrow>
-          (case identName r of
-             Some rel \<Rightarrow> map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
-           | None \<Rightarrow>
-               (case comp_parts r of
-                  Some (var, dnm, p) \<Rightarrow>
-                    map2_opt (\<lambda>lt pt.
-                        TLetIn var lt
-                          (if string_in_list dnm enums then pt
-                           else TAnd (TInDom dnm (TVar var)) pt))
-                      (translate enums l) (translate enums p)
+          (case translate enums l of
+             None \<Rightarrow> None
+           | Some lt \<Rightarrow>
+               (case prime_rel_name r of
+                  Some rel \<Rightarrow> Some (TPrime (TInDom rel lt))
                 | None \<Rightarrow>
-                    map2_opt TSetMember (translate enums l) (translate enums r)))
+                    (case pre_rel_name r of
+                       Some rel \<Rightarrow> Some (TPre (TInDom rel lt))
+                     | None \<Rightarrow>
+                         (case identName r of
+                            Some rel \<Rightarrow> Some (TInDom rel lt)
+                          | None \<Rightarrow>
+                              (case comp_parts r of
+                                 Some (var, dnm, p) \<Rightarrow>
+                                   map_option (\<lambda>pt.
+                                       TLetIn var lt
+                                         (if string_in_list dnm enums then pt
+                                          else TAnd (TInDom dnm (TVar var)) pt))
+                                     (translate enums p)
+                               | None \<Rightarrow>
+                                   map_option (\<lambda>rt. TSetMember lt rt)
+                                     (translate enums r))))))
       | BNotIn \<Rightarrow>
-          (case identName r of
-             Some rel \<Rightarrow> map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l)
-           | None \<Rightarrow>
-               map2_opt (\<lambda>lt rt. TNot (TSetMember lt rt))
-                 (translate enums l) (translate enums r))
+          (case translate enums l of
+             None \<Rightarrow> None
+           | Some lt \<Rightarrow>
+               (case prime_rel_name r of
+                  Some rel \<Rightarrow> Some (TNot (TPrime (TInDom rel lt)))
+                | None \<Rightarrow>
+                    (case pre_rel_name r of
+                       Some rel \<Rightarrow> Some (TNot (TPre (TInDom rel lt)))
+                     | None \<Rightarrow>
+                         (case identName r of
+                            Some rel \<Rightarrow> Some (TNot (TInDom rel lt))
+                          | None \<Rightarrow>
+                              map_option (\<lambda>rt. TNot (TSetMember lt rt))
+                                (translate enums r)))))
       | BSubset \<Rightarrow>
           map2_opt (\<lambda>lt rt. TEq (TSetDiff lt rt) TSetEmpty)
             (translate enums l) (translate enums r))"
@@ -292,9 +321,19 @@ qed
 lemma translate_BIn_noncomp:
   assumes "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
   shows "translate enums (BinaryOpF BIn l r sp)
-           = (case identName r of
-                Some rel \<Rightarrow> map_option (\<lambda>lt. TInDom rel lt) (translate enums l)
-              | None \<Rightarrow> map2_opt TSetMember (translate enums l) (translate enums r))"
+           = (case translate enums l of
+                None \<Rightarrow> None
+              | Some lt \<Rightarrow>
+                  (case prime_rel_name r of
+                     Some rel \<Rightarrow> Some (TPrime (TInDom rel lt))
+                   | None \<Rightarrow>
+                       (case pre_rel_name r of
+                          Some rel \<Rightarrow> Some (TPre (TInDom rel lt))
+                        | None \<Rightarrow>
+                            (case identName r of
+                               Some rel \<Rightarrow> Some (TInDom rel lt)
+                             | None \<Rightarrow>
+                                 map_option (\<lambda>rt. TSetMember lt rt) (translate enums r)))))"
   using comp_parts_None[OF assms] by (auto split: option.splits)
 
 end

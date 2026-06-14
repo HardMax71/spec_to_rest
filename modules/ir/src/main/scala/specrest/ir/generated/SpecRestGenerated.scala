@@ -4516,6 +4516,66 @@ object SpecRestGenerated {
     case TMapCons(v, va, vb)    => None
   }
 
+  def prime_rel_name(x0: expr): Option[String] = x0 match {
+    case PrimeF(e, uu)                    => identName(e)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
+  def pre_rel_name(x0: expr): Option[String] = x0 match {
+    case PreF(e, uu)                      => identName(e)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case IntLitF(v, va)                   => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
   def comp_parts(x0: expr): Option[(String, (String, expr))] = x0 match {
     case SetComprehensionF(vara, d, p, uu) =>
       d match {
@@ -4745,33 +4805,86 @@ object SpecRestGenerated {
           map_option[smt_term, smt_term]((a: smt_term) => TNeg(a), translate(enums, e))
         case UCardinality() =>
           e match {
-            case BinaryOpF(_, _, _, _)         => None
-            case UnaryOpF(_, _, _)             => None
-            case QuantifierF(_, _, _, _)       => None
-            case SomeWrapF(_, _)               => None
-            case TheF(_, _, _, _)              => None
-            case FieldAccessF(_, _, _)         => None
-            case EnumAccessF(_, _, _)          => None
-            case IndexF(_, _, _)               => None
-            case CallF(_, _, _)                => None
-            case PrimeF(_, _)                  => None
-            case PreF(_, _)                    => None
-            case WithF(_, _, _)                => None
-            case IfF(_, _, _, _)               => None
-            case LetF(_, _, _, _)              => None
-            case LambdaF(_, _, _)              => None
-            case ConstructorF(_, _, _)         => None
-            case SetLiteralF(_, _)             => None
-            case MapLiteralF(_, _)             => None
-            case SetComprehensionF(_, _, _, _) => None
-            case SeqLiteralF(_, _)             => None
-            case MatchesF(_, _, _)             => None
-            case IntLitF(_, _)                 => None
-            case FloatLitF(_, _)               => None
-            case StringLitF(_, _)              => None
-            case BoolLitF(_, _)                => None
-            case NoneLitF(_)                   => None
-            case IdentifierF(x, _)             => Some[smt_term](TCardRel(x))
+            case BinaryOpF(_, _, _, _)                    => None
+            case UnaryOpF(_, _, _)                        => None
+            case QuantifierF(_, _, _, _)                  => None
+            case SomeWrapF(_, _)                          => None
+            case TheF(_, _, _, _)                         => None
+            case FieldAccessF(_, _, _)                    => None
+            case EnumAccessF(_, _, _)                     => None
+            case IndexF(_, _, _)                          => None
+            case CallF(_, _, _)                           => None
+            case PrimeF(BinaryOpF(_, _, _, _), _)         => None
+            case PrimeF(UnaryOpF(_, _, _), _)             => None
+            case PrimeF(QuantifierF(_, _, _, _), _)       => None
+            case PrimeF(SomeWrapF(_, _), _)               => None
+            case PrimeF(TheF(_, _, _, _), _)              => None
+            case PrimeF(FieldAccessF(_, _, _), _)         => None
+            case PrimeF(EnumAccessF(_, _, _), _)          => None
+            case PrimeF(IndexF(_, _, _), _)               => None
+            case PrimeF(CallF(_, _, _), _)                => None
+            case PrimeF(PrimeF(_, _), _)                  => None
+            case PrimeF(PreF(_, _), _)                    => None
+            case PrimeF(WithF(_, _, _), _)                => None
+            case PrimeF(IfF(_, _, _, _), _)               => None
+            case PrimeF(LetF(_, _, _, _), _)              => None
+            case PrimeF(LambdaF(_, _, _), _)              => None
+            case PrimeF(ConstructorF(_, _, _), _)         => None
+            case PrimeF(SetLiteralF(_, _), _)             => None
+            case PrimeF(MapLiteralF(_, _), _)             => None
+            case PrimeF(SetComprehensionF(_, _, _, _), _) => None
+            case PrimeF(SeqLiteralF(_, _), _)             => None
+            case PrimeF(MatchesF(_, _, _), _)             => None
+            case PrimeF(IntLitF(_, _), _)                 => None
+            case PrimeF(FloatLitF(_, _), _)               => None
+            case PrimeF(StringLitF(_, _), _)              => None
+            case PrimeF(BoolLitF(_, _), _)                => None
+            case PrimeF(NoneLitF(_), _)                   => None
+            case PrimeF(IdentifierF(x, _), _) =>
+              Some[smt_term](TPrime(TCardRel(x)))
+            case PreF(BinaryOpF(_, _, _, _), _)         => None
+            case PreF(UnaryOpF(_, _, _), _)             => None
+            case PreF(QuantifierF(_, _, _, _), _)       => None
+            case PreF(SomeWrapF(_, _), _)               => None
+            case PreF(TheF(_, _, _, _), _)              => None
+            case PreF(FieldAccessF(_, _, _), _)         => None
+            case PreF(EnumAccessF(_, _, _), _)          => None
+            case PreF(IndexF(_, _, _), _)               => None
+            case PreF(CallF(_, _, _), _)                => None
+            case PreF(PrimeF(_, _), _)                  => None
+            case PreF(PreF(_, _), _)                    => None
+            case PreF(WithF(_, _, _), _)                => None
+            case PreF(IfF(_, _, _, _), _)               => None
+            case PreF(LetF(_, _, _, _), _)              => None
+            case PreF(LambdaF(_, _, _), _)              => None
+            case PreF(ConstructorF(_, _, _), _)         => None
+            case PreF(SetLiteralF(_, _), _)             => None
+            case PreF(MapLiteralF(_, _), _)             => None
+            case PreF(SetComprehensionF(_, _, _, _), _) => None
+            case PreF(SeqLiteralF(_, _), _)             => None
+            case PreF(MatchesF(_, _, _), _)             => None
+            case PreF(IntLitF(_, _), _)                 => None
+            case PreF(FloatLitF(_, _), _)               => None
+            case PreF(StringLitF(_, _), _)              => None
+            case PreF(BoolLitF(_, _), _)                => None
+            case PreF(NoneLitF(_), _)                   => None
+            case PreF(IdentifierF(x, _), _)             => Some[smt_term](TPre(TCardRel(x)))
+            case WithF(_, _, _)                         => None
+            case IfF(_, _, _, _)                        => None
+            case LetF(_, _, _, _)                       => None
+            case LambdaF(_, _, _)                       => None
+            case ConstructorF(_, _, _)                  => None
+            case SetLiteralF(_, _)                      => None
+            case MapLiteralF(_, _)                      => None
+            case SetComprehensionF(_, _, _, _)          => None
+            case SeqLiteralF(_, _)                      => None
+            case MatchesF(_, _, _)                      => None
+            case IntLitF(_, _)                          => None
+            case FloatLitF(_, _)                        => None
+            case StringLitF(_, _)                       => None
+            case BoolLitF(_, _)                         => None
+            case NoneLitF(_)                            => None
+            case IdentifierF(x, _)                      => Some[smt_term](TCardRel(x))
           }
         case UPower() => None
       }
@@ -4859,51 +4972,64 @@ object SpecRestGenerated {
             translate(enums, r)
           )
         case BIn() =>
-          identName(r) match {
-            case None =>
-              comp_parts(r) match {
+          translate(enums, l) match {
+            case None => None
+            case Some(lt) =>
+              prime_rel_name(r) match {
                 case None =>
-                  map2_opt(
-                    (a: smt_term) =>
-                      (b: smt_term) =>
-                        TSetMember(a, b),
-                    translate(enums, l),
-                    translate(enums, r)
-                  )
-                case Some((vara, (dnm, p))) =>
-                  map2_opt(
-                    (lt: smt_term) =>
-                      (pt: smt_term) =>
-                        TLetIn(
-                          vara,
-                          lt,
-                          string_in_list(dnm, enums) match {
-                            case true  => pt
-                            case false => TAnd(TInDom(dnm, TVar(vara)), pt)
+                  pre_rel_name(r) match {
+                    case None =>
+                      identName(r) match {
+                        case None =>
+                          comp_parts(r) match {
+                            case None =>
+                              map_option[smt_term, smt_term](
+                                (a: smt_term) => TSetMember(lt, a),
+                                translate(enums, r)
+                              )
+                            case Some((vara, (dnm, p))) =>
+                              map_option[smt_term, smt_term](
+                                (pt: smt_term) =>
+                                  TLetIn(
+                                    vara,
+                                    lt,
+                                    string_in_list(dnm, enums) match {
+                                      case true  => pt
+                                      case false => TAnd(TInDom(dnm, TVar(vara)), pt)
+                                    }
+                                  ),
+                                translate(enums, p)
+                              )
                           }
-                        ),
-                    translate(enums, l),
-                    translate(enums, p)
-                  )
+                        case Some(rel) => Some[smt_term](TInDom(rel, lt))
+                      }
+                    case Some(rel) => Some[smt_term](TPre(TInDom(rel, lt)))
+                  }
+                case Some(rel) => Some[smt_term](TPrime(TInDom(rel, lt)))
               }
-            case Some(rel) =>
-              map_option[smt_term, smt_term]((a: smt_term) => TInDom(rel, a), translate(enums, l))
           }
         case BNotIn() =>
-          identName(r) match {
-            case None =>
-              map2_opt(
-                (lt: smt_term) =>
-                  (rt: smt_term) =>
-                    TNot(TSetMember(lt, rt)),
-                translate(enums, l),
-                translate(enums, r)
-              )
-            case Some(rel) =>
-              map_option[smt_term, smt_term](
-                (lt: smt_term) => TNot(TInDom(rel, lt)),
-                translate(enums, l)
-              )
+          translate(enums, l) match {
+            case None => None
+            case Some(lt) =>
+              prime_rel_name(r) match {
+                case None =>
+                  pre_rel_name(r) match {
+                    case None =>
+                      identName(r) match {
+                        case None =>
+                          map_option[smt_term, smt_term](
+                            (rt: smt_term) => TNot(TSetMember(lt, rt)),
+                            translate(enums, r)
+                          )
+                        case Some(rel) =>
+                          Some[smt_term](TNot(TInDom(rel, lt)))
+                      }
+                    case Some(rel) =>
+                      Some[smt_term](TNot(TPre(TInDom(rel, lt))))
+                  }
+                case Some(rel) => Some[smt_term](TNot(TPrime(TInDom(rel, lt))))
+              }
           }
         case BSubset() =>
           map2_opt(
