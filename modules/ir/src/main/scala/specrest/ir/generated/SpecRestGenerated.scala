@@ -578,6 +578,7 @@ object SpecRestGenerated {
   final case class TStrLit(a: String)                              extends smt_term
   final case class TMatches(a: smt_term, b: String)                extends smt_term
   final case class TUStrPred(a: String, b: smt_term)               extends smt_term
+  final case class TUConst(a: String)                              extends smt_term
   final case class TSeqEmpty()                                     extends smt_term
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
   final case class TMapEmpty()                                     extends smt_term
@@ -1807,6 +1808,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -1856,6 +1858,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -2733,6 +2736,7 @@ object SpecRestGenerated {
           case Some(SSeq(_))              => None
           case Some(SMap(_))              => None
         }
+      case (m, env, TUConst(nm)) => Some[smt_val](SInt(BigInt(nm.hashCode)))
       case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
       case (m, env, TSeqCons(e, rest)) =>
         (smtEval(m, env, e), smtEval(m, env, rest)) match {
@@ -3260,6 +3264,7 @@ object SpecRestGenerated {
     case TStrLit(vi)           => Nil
     case TMatches(t, vj)       => smt_var_list(t)
     case TUStrPred(vk, t)      => smt_var_list(t)
+    case TUConst(vl)           => Nil
     case TSeqEmpty()           => Nil
     case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
     case TMapEmpty()           => Nil
@@ -4608,6 +4613,8 @@ object SpecRestGenerated {
       case (Some(x), Some(y)) => Some[smt_term](f(x)(y))
     }
 
+  def is_builtin_const(nm: String): Boolean = nm == "now"
+
   def mpeKey(x0: map_entry): expr = x0 match {
     case MapEntryFull(x1, x2, x3) => x1
   }
@@ -5121,6 +5128,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -5170,6 +5178,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
@@ -5393,7 +5402,11 @@ object SpecRestGenerated {
         case (StringLitF(_, _), _)              => None
         case (BoolLitF(_, _), _)                => None
         case (NoneLitF(_), _)                   => None
-        case (IdentifierF(_, _), Nil)           => None
+        case (IdentifierF(nm, _), Nil) =>
+          is_builtin_const(nm) match {
+            case true  => Some[smt_term](TUConst(nm))
+            case false => None
+          }
         case (IdentifierF(nm, _), List(arg)) =>
           is_builtin_pred(nm) match {
             case true => map_option[smt_term, smt_term](

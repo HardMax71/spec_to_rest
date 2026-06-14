@@ -17,6 +17,7 @@ text \<open>\<open>eval\<close> is a reference semantics for the surface IR (\<o
 definition builtins_reserved ::
   "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> bool" where
   "builtins_reserved fs ps \<equiv> (\<forall>nm. is_builtin_pred nm \<longrightarrow> lookup_callee fs ps nm = None)
+                              \<and> (\<forall>nm. is_builtin_const nm \<longrightarrow> lookup_callee fs ps nm = None)
                               \<and> lookup_callee fs ps (STR ''dom'') = None
                               \<and> lookup_callee fs ps (STR ''range'') = None"
 
@@ -166,7 +167,10 @@ and eval_forall ::
                        else None)
                 | None \<Rightarrow>
                     (case args of
-                       [arg] \<Rightarrow>
+                       [] \<Rightarrow>
+                         (if is_builtin_const nm
+                            then Some (VInt (builtin_const_val nm)) else None)
+                     | [arg] \<Rightarrow>
                          (if is_builtin_pred nm
                             then (case eval fs ps fuel s st env arg of
                                     Some (VStr str) \<Rightarrow> Some (VBool (str_predicate nm str))
@@ -1331,18 +1335,27 @@ next
   show ?case
   proof (cases "lookup_callee fs ps nm")
     case None
-    obtain arg str where aeq: "args = [arg]" and bip: "is_builtin_pred nm"
-        and ea: "eval fs ps fuel s st env arg = Some (VStr str)"
-        and w_eq: "w = VBool (str_predicate nm str)"
-      using "15.prems" fuel idc None
-      by (auto split: option.splits list.splits ir_value.splits if_splits)
-    have ea': "eval fs ps fuel s st env (inline_calls fs ps arg) = Some (VStr str)"
-      using "15.IH" fuel idc None aeq ea bip by (auto split: if_splits)
-    have inl: "inline_calls fs ps (CallF callee args sp)
-                 = CallF callee [inline_calls fs ps arg] sp"
-      using idc None aeq by (auto simp: lookup_callee_def split: option.splits)
-    show ?thesis using inl ea' w_eq fuel idc None aeq bip
-      by (simp split: option.splits ir_value.splits)
+    show ?thesis
+    proof (cases args)
+      case Nil
+      have inl: "inline_calls fs ps (CallF callee args sp) = CallF callee args sp"
+        using idc None Nil by (auto simp: lookup_callee_def split: option.splits)
+      show ?thesis using inl "15.prems" by simp
+    next
+      case (Cons arg rest)
+      obtain str where aeq: "args = [arg]" and bip: "is_builtin_pred nm"
+          and ea: "eval fs ps fuel s st env arg = Some (VStr str)"
+          and w_eq: "w = VBool (str_predicate nm str)"
+        using "15.prems" fuel idc None Cons
+        by (cases rest) (auto split: option.splits ir_value.splits if_splits)
+      have ea': "eval fs ps fuel s st env (inline_calls fs ps arg) = Some (VStr str)"
+        using "15.IH" fuel idc None aeq ea bip by (auto split: if_splits)
+      have inl: "inline_calls fs ps (CallF callee args sp)
+                   = CallF callee [inline_calls fs ps arg] sp"
+        using idc None aeq by (auto simp: lookup_callee_def split: option.splits)
+      show ?thesis using inl ea' w_eq fuel idc None aeq bip
+        by (simp split: option.splits ir_value.splits)
+    qed
   next
     case (Some pb)
     obtain params body where lc: "lookup_callee fs ps nm = Some (params, body)"

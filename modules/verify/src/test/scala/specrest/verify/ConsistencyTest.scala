@@ -169,6 +169,26 @@ class ConsistencyTest extends CatsEffectSuite:
         |    dbl(3) = 6 and isPos(dbl(1))
         |}""".stripMargin,
       "calls must inline + verify, not skip"
+    ),
+    (
+      "0-arg reserved builtin now() verifies via Z3 (uninterpreted Int constant)",
+      "now_demo",
+      """service NowDemo {
+        |  state {
+        |    log: Int -> lone Int
+        |  }
+        |  operation Stamp {
+        |    output: t: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      t = now()
+        |      log' = log
+        |  }
+        |  invariant cardNonNeg:
+        |    #log >= 0
+        |}""".stripMargin,
+      "now() must verify, not skip"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
