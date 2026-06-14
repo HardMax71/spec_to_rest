@@ -106,6 +106,10 @@ fun real_arith :: "arith_op \<Rightarrow> rat \<Rightarrow> rat \<Rightarrow> ir
 | "real_arith MulOp a b = Some (VReal (a * b))"
 | "real_arith DivOp a b = (if b = 0 then None else Some (VReal (a / b)))"
 
+fun str_arith :: "arith_op \<Rightarrow> String.literal \<Rightarrow> String.literal \<Rightarrow> ir_value option" where
+  "str_arith AddOp a b = Some (VStr (a + b))"
+| "str_arith _ _ _ = None"
+
 fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_arith op x y =
      (case x of
@@ -119,6 +123,10 @@ fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value
              Some (VInt b)  \<Rightarrow> real_arith op a (of_int b)
            | Some (VReal b) \<Rightarrow> real_arith op a b
            | _              \<Rightarrow> None)
+      | Some (VStr a) \<Rightarrow>
+          (case y of
+             Some (VStr b) \<Rightarrow> str_arith op a b
+           | _             \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
 definition ir_val_eq :: "ir_value \<Rightarrow> ir_value \<Rightarrow> bool" where
@@ -188,10 +196,11 @@ text \<open>Category H — first proven bricks of the spec front-half (the
   it is *false* here because \<open>eval\<close>'s \<open>Ident\<close> arm legitimately resolves
   from \<open>state\<close>, not only \<open>env\<close>.\<close>
 
-lemma eval_arith_some_imp_numeric:
+lemma eval_arith_some_imp_numeric_or_str:
   "eval_arith op x y = Some v \<Longrightarrow>
-     ((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
-     \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b)))"
+     (((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
+      \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b))))
+     \<or> ((\<exists>a. x = Some (VStr a)) \<and> (\<exists>b. y = Some (VStr b)))"
   by (auto split: option.splits ir_value.splits if_splits)
 
 lemma eval_arith_div_zero:
@@ -567,6 +576,15 @@ lemma eval_arith_preservation:
       auto split: option.splits ir_value.splits if_splits
            simp: numeric_ty_def numeric_join_def intro: vt_int vt_real)
 
+lemma eval_arith_str_preservation:
+  assumes "eval_arith op x y = Some v"
+      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a TStr"
+      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b TStr"
+  shows "value_has_ty \<Gamma> v TStr"
+  using assms
+  by (cases op;
+      auto split: option.splits ir_value.splits if_splits intro: vt_str)
+
 lemma eval_cmp_preservation:
   assumes "eval_cmp op x y = Some v"
   shows "value_has_ty \<Gamma> v TBool"
@@ -930,6 +948,10 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr \<Rightarrow> ty \<Rightarrow
        \<Longrightarrow> numeric_ty t2
        \<Longrightarrow> op \<in> {BAdd, BSub, BMul, BDiv}
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF op l r sp) (numeric_join t1 t2)"
+| T_Str_Concat:
+    "expr_has_ty \<Gamma> l TStr
+       \<Longrightarrow> expr_has_ty \<Gamma> r TStr
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BAdd l r sp) TStr"
 | T_Cmp_Eq:
     "expr_has_ty \<Gamma> l t1
        \<Longrightarrow> expr_has_ty \<Gamma> r t2

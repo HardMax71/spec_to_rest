@@ -89,6 +89,7 @@ enum Z3Expr derives CanEqual:
   case Implies(lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case Cmp(op: CmpOp, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case StrCmp(op: CmpOp, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
+  case StrConcat(lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case Arith(op: ArithOp, args: List[Z3Expr], span: Option[span_t] = None)
   case Quantifier(
       q: QKind,
@@ -125,6 +126,7 @@ enum Z3Expr derives CanEqual:
     case e: Implies    => e.span
     case e: Cmp        => e.span
     case e: StrCmp     => e.span
+    case e: StrConcat  => e.span
     case e: Arith      => e.span
     case e: Quantifier => e.span
     case e: EmptySet   => e.span
@@ -154,6 +156,7 @@ enum Z3Expr derives CanEqual:
         case e: Implies    => e.copy(span = s)
         case e: Cmp        => e.copy(span = s)
         case e: StrCmp     => e.copy(span = s)
+        case e: StrConcat  => e.copy(span = s)
         case e: Arith      => e.copy(span = s)
         case e: Quantifier => e.copy(span = s)
         case e: EmptySet   => e.copy(span = s)
