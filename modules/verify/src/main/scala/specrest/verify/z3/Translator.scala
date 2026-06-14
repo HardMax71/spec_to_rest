@@ -640,17 +640,18 @@ object Translator:
   private def rewriteRangeComprehension(ctx: TranslateCtx, e: expr): expr = e match
     case BinaryOpF(BEq(), l, SetComprehensionF(_, IdentifierF(rel, spRel), pred, spSc), spEq)
         if isTrueLit(pred) && isValueProjection(ctx, l, rel) =>
-      BinaryOpF(
-        BEq(),
-        l,
-        CallF(IdentifierF("range", spRel), List(IdentifierF(rel, spRel)), spSc),
-        spEq
-      )
+      BinaryOpF(BEq(), l, rangeOf(rel, spRel, spSc), spEq)
+    case BinaryOpF(BEq(), SetComprehensionF(_, IdentifierF(rel, spRel), pred, spSc), r, spEq)
+        if isTrueLit(pred) && isValueProjection(ctx, r, rel) =>
+      BinaryOpF(BEq(), r, rangeOf(rel, spRel, spSc), spEq)
     case BinaryOpF(op, l, r, sp) if isBoolConnective(op) =>
       BinaryOpF(op, rewriteRangeComprehension(ctx, l), rewriteRangeComprehension(ctx, r), sp)
     case UnaryOpF(op, x, sp) =>
       UnaryOpF(op, rewriteRangeComprehension(ctx, x), sp)
     case other => other
+
+  private def rangeOf(rel: String, spRel: Option[span_t], spSc: Option[span_t]): expr =
+    CallF(IdentifierF("range", spRel), List(IdentifierF(rel, spRel)), spSc)
 
   private def isTrueLit(e: expr): Boolean = e match
     case BoolLitF(true, _) => true
