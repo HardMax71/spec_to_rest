@@ -93,6 +93,29 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "cardinality on primed/pre-state relations verifies via Z3 (#rel' / #pre(rel) translate)"
+  ):
+    val spec =
+      """service CardDemo {
+        |  state {
+        |    items: Int -> lone Int
+        |  }
+        |  operation Touch {
+        |    ensures:
+        |      #items' = #pre(items)
+        |  }
+        |  invariant cardNonNeg:
+        |    #items >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("card_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (cardinality on primed/pre must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

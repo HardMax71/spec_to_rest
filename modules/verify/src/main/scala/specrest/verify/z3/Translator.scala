@@ -2066,6 +2066,45 @@ object Translator:
       case _ =>
         fail(ctx, "equality with an empty set literal requires a set-sorted operand")
 
+  // Domain membership `elem in rel`, where `relMode` is the relation's state mode
+  // (Post/Pre for `rel'`/`pre(rel)`). The element is encoded in the ambient
+  // `ctx.stateMode`; only the relation/const lookup takes `relMode`.
+  private def encInDom(
+      ctx: TranslateCtx,
+      rel: String,
+      elem: smt_term,
+      relMode: StateMode,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val key = encodeFromSmtTerm(ctx, elem, env)
+    ctx.state.get(rel) match
+      case Some(r: StateRelationInfo) =>
+        Z3Expr.App(domFuncFor(r, relMode), List(key))
+      case Some(c: StateConstInfo) =>
+        val rhs = Z3Expr.App(constFuncFor(c, relMode), Nil)
+        inferSortOfZ3Expr(ctx, rhs) match
+          case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, rhs)
+          case _                     => fail(ctx, s"membership '$rel' requires a relation or set-typed constant")
+      case _ if ctx.entities.contains(rel) =>
+        val entitySort = ctx.entities(rel).sort
+        inferSortOfZ3Expr(ctx, key) match
+          case Some(s) if Z3Sort.eq(s, entitySort) => Z3Expr.BoolLit(true)
+          case Some(s) =>
+            fail(
+              ctx,
+              s"membership '$rel' requires an element of the entity sort $entitySort; got $s"
+            )
+          case None =>
+            fail(ctx, s"membership '$rel' requires an element with an inferrable sort")
+      case _ =>
+        env.get(rel) match
+          case Some(bound) =>
+            inferSortOfZ3Expr(ctx, bound) match
+              case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, bound)
+              case _                     => fail(ctx, s"membership '$rel' requires a set-typed binding")
+          case None =>
+            fail(ctx, s"membership '$rel' requires a state relation or set-typed value")
+
   private def encodeFromSmtTerm(
       ctx: TranslateCtx,
       term: smt_term,
@@ -2123,35 +2162,7 @@ object Translator:
         Z3Expr.Arith(ArithOp.Div, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
 
       case TInDom(rel, elem) =>
-        val key = encodeFromSmtTerm(ctx, elem, env)
-        ctx.state.get(rel) match
-          case Some(r: StateRelationInfo) =>
-            Z3Expr.App(domFuncFor(r, ctx.stateMode), List(key))
-          case Some(c: StateConstInfo) =>
-            val rhs = Z3Expr.App(constFuncFor(c, ctx.stateMode), Nil)
-            inferSortOfZ3Expr(ctx, rhs) match
-              case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, rhs)
-              case _                     => fail(ctx, s"membership '$rel' requires a relation or set-typed constant")
-          case _ if ctx.entities.contains(rel) =>
-            // entity domain is the whole sort (as `resolveBindingDomain` treats `forall u in <Entity>`), so a value OF that sort is a member; a cross-sort element is a type confusion the verified `T_BIn_Rel` rule does not exclude
-            val entitySort = ctx.entities(rel).sort
-            inferSortOfZ3Expr(ctx, key) match
-              case Some(s) if Z3Sort.eq(s, entitySort) => Z3Expr.BoolLit(true)
-              case Some(s) =>
-                fail(
-                  ctx,
-                  s"membership '$rel' requires an element of the entity sort $entitySort; got $s"
-                )
-              case None =>
-                fail(ctx, s"membership '$rel' requires an element with an inferrable sort")
-          case _ =>
-            env.get(rel) match
-              case Some(bound) =>
-                inferSortOfZ3Expr(ctx, bound) match
-                  case Some(Z3Sort.SetOf(_)) => Z3Expr.SetMember(key, bound)
-                  case _                     => fail(ctx, s"membership '$rel' requires a set-typed binding")
-              case None =>
-                fail(ctx, s"membership '$rel' requires a state relation or set-typed value")
+        encInDom(ctx, rel, elem, ctx.stateMode, env)
       case TCardRel(rel) => cardinalityRefFor(ctx, rel, ctx.stateMode)
 
       case TLetIn(name, value, body) =>
@@ -2310,6 +2321,11 @@ object Translator:
       case TSetIntersect(l, r) => encodeSetBinOp(ctx, SetOpKind.Intersect, l, r, env)
       case TSetDiff(l, r)      => encodeSetBinOp(ctx, SetOpKind.Diff, l, r, env)
 
+      // Membership on a primed/pre relation: the prime/pre applies to the relation's
+      // domain only, not to the element (encInDom encodes the element in the ambient
+      // mode and takes only the domain/const lookup at the given mode).
+      case TPrime(TInDom(rel, elem)) => encInDom(ctx, rel, elem, StateMode.Post, env)
+      case TPre(TInDom(rel, elem))   => encInDom(ctx, rel, elem, StateMode.Pre, env)
       case TPrime(inner) =>
         withStateMode(ctx, StateMode.Post, () => encodeFromSmtTerm(ctx, inner, env))
       case TPre(inner) =>

@@ -403,11 +403,20 @@ proof (induction e rule: measure_induct_rule[where f = size])
     next
       case BNotIn
       have beq: "translate enums e
-                   = (case identName r2 of
-                        Some rel \<Rightarrow>
-                          map_option (\<lambda>lt. TNot (TInDom rel lt)) (translate enums l2)
-                      | None \<Rightarrow> map2_opt (\<lambda>lt rt. TNot (TSetMember lt rt))
-                                  (translate enums l2) (translate enums r2))"
+                   = (case translate enums l2 of
+                        None \<Rightarrow> None
+                      | Some lt \<Rightarrow>
+                          (case prime_rel_name r2 of
+                             Some rel \<Rightarrow> Some (TNot (TPrime (TInDom rel lt)))
+                           | None \<Rightarrow>
+                               (case pre_rel_name r2 of
+                                  Some rel \<Rightarrow> Some (TNot (TPre (TInDom rel lt)))
+                                | None \<Rightarrow>
+                                    (case identName r2 of
+                                       Some rel \<Rightarrow> Some (TNot (TInDom rel lt))
+                                     | None \<Rightarrow>
+                                         map_option (\<lambda>rt. TNot (TSetMember lt rt))
+                                           (translate enums r2)))))"
         using BinaryOpF BNotIn by simp
       have wl: "wf_z3 l2" using less.prems BinaryOpF BNotIn by simp
       obtain lt where hl: "translate enums l2 = Some lt"
