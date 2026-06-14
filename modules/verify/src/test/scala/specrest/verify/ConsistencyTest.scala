@@ -74,6 +74,25 @@ class ConsistencyTest extends CatsEffectSuite:
     )
 
   test(
+    "string concatenation verifies via Z3 (T_Str_Concat, str.++ encoding)"
+  ):
+    val spec =
+      """service StringConcatDemo {
+        |  state {
+        |    names: Map[Int, String]
+        |  }
+        |  invariant concatMatches:
+        |    (the k in names | "a" + names[k] = "ab") >= 0
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("string_concat_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield assert(
+      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+      s"expected every check Sat (String concat must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+    )
+
+  test(
     "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
   ):
     val spec =

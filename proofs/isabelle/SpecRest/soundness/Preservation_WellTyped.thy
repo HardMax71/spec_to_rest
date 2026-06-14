@@ -16,6 +16,9 @@ proof (induction rule: expr_has_ty.induct)
   case (T_Arith \<Gamma> l t1 r t2 op sp)
   thus ?case by (cases op) auto
 next
+  case (T_Str_Concat \<Gamma> l r sp)
+  thus ?case by auto
+next
   case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
   have rnc: "\<nexists>var dnm sp2 p sp3. r = SetComprehensionF var (IdentifierF dnm sp2) p sp3"
     using T_Cmp_Eq.hyps(2) by (auto dest: not_expr_has_ty_set_comp)

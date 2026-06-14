@@ -572,11 +572,13 @@ equality only.
 | `UUID`, entities, enums                | uninterpreted                              |
 | `Set[T]`                               | `(Set T)` (see [Set theory](#set-theory))  |
 
-Arithmetic (`+`, `-`, `*`, `/`) requires numeric operands (`Int` or `Real`); Z3 coerces
-`Int` to `Real` when the two are mixed (e.g. a `Money` field compared to an integer literal).
-Ordering (`<`, `<=`, `>`, `>=`) works on two numeric operands or two `String` operands
-(lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` mix or any other sort is
-reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on any sort.
+Arithmetic `-`, `*`, `/` requires numeric operands (`Int` or `Real`); `+` is numeric addition
+on two numeric operands or string concatenation on two `String` operands (Z3 `str.++`). Z3
+coerces `Int` to `Real` when numeric operands are mixed (e.g. a `Money` field compared to an
+integer literal). Ordering (`<`, `<=`, `>`, `>=`) works on two numeric operands or two `String`
+operands (lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` mix or any other
+sort is reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on
+any sort.
 
 The integral-vs-fractional split is part of the proof: the Isabelle `ty` carries both
 `TInt` and `TReal`, and `typeExprFullToTy` (`Semantics.thy`) assigns fractional names to

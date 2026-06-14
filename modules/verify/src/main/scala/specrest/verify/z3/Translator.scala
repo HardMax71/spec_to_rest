@@ -895,6 +895,12 @@ object Translator:
         substituteVar(r, varName, replacement),
         sp
       )
+    case Z3Expr.StrConcat(l, r, sp) =>
+      Z3Expr.StrConcat(
+        substituteVar(l, varName, replacement),
+        substituteVar(r, varName, replacement),
+        sp
+      )
     case Z3Expr.Arith(op, args, sp) =>
       Z3Expr.Arith(op, args.map(a => substituteVar(a, varName, replacement)), sp)
     case q @ Z3Expr.Quantifier(kind, bindings, body, sp) =>
@@ -1347,6 +1353,7 @@ object Translator:
     case Z3Expr.OptNone(elemSort, _)   => Some(Z3Sort.OptionOf(elemSort))
     case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
+    case Z3Expr.StrConcat(_, _, _)     => Some(Z3Sort.Str)
     case Z3Expr.InRe(_, _, _)          => Some(Z3Sort.Bool)
     case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
     case Z3Expr.MapLit(keySort, valueSort, _, _) =>
@@ -2026,6 +2033,26 @@ object Translator:
     else if isNum(lz) && isNum(rz) then Z3Expr.Cmp(op, lz, rz)
     else fail(ctx, "ordering requires two numeric (Int or Real) operands or two String operands")
 
+  // Addition: both operands numeric (Arith Add) or both String (StrConcat, str.++);
+  // a numeric/String mix is left to the skip path rather than handed to the solver
+  // ill-sorted.
+  private def encAdd(
+      ctx: TranslateCtx,
+      l: smt_term,
+      r: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val lz = encodeFromSmtTerm(ctx, l, env)
+    val rz = encodeFromSmtTerm(ctx, r, env)
+    def isStr(z: Z3Expr): Boolean =
+      inferSortOfZ3Expr(ctx, z) match
+        case Some(Z3Sort.Str) => true
+        case _                => false
+    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+    if isStr(lz) && isStr(rz) then Z3Expr.StrConcat(lz, rz)
+    else if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Add, List(lz, rz))
+    else fail(ctx, "addition requires two numeric (Int or Real) operands or two String operands")
+
   private def encodeSetEmptyCmp(
       ctx: TranslateCtx,
       op: CmpOp,
@@ -2087,7 +2114,7 @@ object Translator:
       case TNeg(t) =>
         Z3Expr.Arith(ArithOp.Sub, List(Z3Expr.IntLit(BigInt(0)), encNumeric(ctx, t, env)))
       case TAdd(l, r) =>
-        Z3Expr.Arith(ArithOp.Add, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
+        encAdd(ctx, l, r, env)
       case TSub(l, r) =>
         Z3Expr.Arith(ArithOp.Sub, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
       case TMul(l, r) =>

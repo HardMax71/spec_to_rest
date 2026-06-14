@@ -101,6 +101,8 @@ object SmtLib:
         case CmpOp.Ge  => s"(str.<= ${renderExpr(r)} ${renderExpr(l)})"
         case CmpOp.Eq  => s"(= ${renderExpr(l)} ${renderExpr(r)})"
         case CmpOp.Neq => s"(distinct ${renderExpr(l)} ${renderExpr(r)})"
+    case Z3Expr.StrConcat(l, r, _) =>
+      s"(str.++ ${renderExpr(l)} ${renderExpr(r)})"
     case Z3Expr.Arith(op, args, _) =>
       s"(${ArithOp.token(op)} ${args.map(renderExpr).mkString(" ")})"
     case Z3Expr.Quantifier(q, bindings, body, _) =>
