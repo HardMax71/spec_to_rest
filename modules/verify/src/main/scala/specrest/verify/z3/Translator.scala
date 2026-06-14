@@ -2310,6 +2310,21 @@ object Translator:
       case TSetIntersect(l, r) => encodeSetBinOp(ctx, SetOpKind.Intersect, l, r, env)
       case TSetDiff(l, r)      => encodeSetBinOp(ctx, SetOpKind.Diff, l, r, env)
 
+      // Membership on a primed/pre relation: the prime/pre applies to the relation's
+      // domain only, not to the element. The element is unprimed, so encode it in the
+      // ambient mode and take just the domain function at the post/pre mode.
+      case TPrime(TInDom(rel, elem)) =>
+        ctx.state.get(rel) match
+          case Some(r: StateRelationInfo) =>
+            Z3Expr.App(domFuncFor(r, StateMode.Post), List(encodeFromSmtTerm(ctx, elem, env)))
+          case _ =>
+            withStateMode(ctx, StateMode.Post, () => encodeFromSmtTerm(ctx, TInDom(rel, elem), env))
+      case TPre(TInDom(rel, elem)) =>
+        ctx.state.get(rel) match
+          case Some(r: StateRelationInfo) =>
+            Z3Expr.App(domFuncFor(r, StateMode.Pre), List(encodeFromSmtTerm(ctx, elem, env)))
+          case _ =>
+            withStateMode(ctx, StateMode.Pre, () => encodeFromSmtTerm(ctx, TInDom(rel, elem), env))
       case TPrime(inner) =>
         withStateMode(ctx, StateMode.Post, () => encodeFromSmtTerm(ctx, inner, env))
       case TPre(inner) =>
