@@ -506,20 +506,34 @@ next
 next
   case (15 fs ps fuel s st env callee args sp v t)
   obtain fuel' where fuel: "fuel = Suc fuel'" using "15.prems"(1) by (cases fuel) auto
-  from "15.prems"(2) obtain nm sp1 arg argt where
-      ceq: "callee = IdentifierF nm sp1" and aeq: "args = [arg]" and bip: "is_builtin_pred nm"
-      and ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
-    by (cases callee; cases args) (auto split: if_splits list.splits option.splits)
-  have lc_none: "lookup_callee fs ps nm = None"
-    using "15.prems"(4) bip by (simp add: builtins_reserved_def)
-  from "15.prems"(1) fuel ceq aeq lc_none bip obtain str where
-      ea: "eval fs ps fuel s st env arg = Some (VStr str)"
-      and veq: "v = VBool (str_predicate nm str)"
-    by (auto split: option.splits ir_value.splits if_splits)
-  have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
-    using "15.IH" fuel ceq aeq lc_none bip ea ta "15.prems"(3) "15.prems"(4)
-    by (auto split: if_splits)
-  show ?case using teq veq ev by simp
+  obtain nm sp1 where ceq: "callee = IdentifierF nm sp1"
+    using "15.prems"(2) by (cases callee) (auto split: list.splits if_splits option.splits)
+  show ?case
+  proof (cases args)
+    case Nil
+    have bic: "is_builtin_const nm" and teq: "t = TUConst nm"
+      using "15.prems"(2) ceq Nil by (auto split: if_splits)
+    have lc_none: "lookup_callee fs ps nm = None"
+      using "15.prems"(4) bic by (simp add: builtins_reserved_def)
+    have veq: "v = VInt (builtin_const_val nm)"
+      using "15.prems"(1) fuel ceq Nil lc_none bic by (auto split: option.splits)
+    show ?thesis using teq veq by simp
+  next
+    case (Cons arg rest)
+    obtain argt where aeq: "args = [arg]" and bip: "is_builtin_pred nm"
+        and ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
+      using "15.prems"(2) ceq Cons by (cases rest) (auto split: if_splits option.splits)
+    have lc_none: "lookup_callee fs ps nm = None"
+      using "15.prems"(4) bip by (simp add: builtins_reserved_def)
+    from "15.prems"(1) fuel ceq aeq lc_none bip obtain str where
+        ea: "eval fs ps fuel s st env arg = Some (VStr str)"
+        and veq: "v = VBool (str_predicate nm str)"
+      by (auto split: option.splits ir_value.splits if_splits)
+    have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
+      using "15.IH" fuel ceq aeq lc_none bip ea ta "15.prems"(3) "15.prems"(4)
+      by (auto split: if_splits)
+    show ?thesis using teq veq ev by simp
+  qed
 next
   case (17 fs ps fuel s st env es sp v t)
   from "17.prems"(1) obtain vs where efl: "eval_list fs ps fuel s st env es = Some vs"

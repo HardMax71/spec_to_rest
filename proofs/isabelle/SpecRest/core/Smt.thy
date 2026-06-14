@@ -65,6 +65,7 @@ datatype (plugins only: code size) smt_term =
   | TStrLit "String.literal"
   | TMatches "smt_term" "String.literal"
   | TUStrPred "String.literal" "smt_term"
+  | TUConst "String.literal"
   | TSeqEmpty
   | TSeqCons "smt_term" "smt_term"
   | TMapEmpty
@@ -117,6 +118,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TStrLit _)           = []"
 | "smt_var_list (TMatches t _)        = smt_var_list t"
 | "smt_var_list (TUStrPred _ t)       = smt_var_list t"
+| "smt_var_list (TUConst _)           = []"
 | "smt_var_list TSeqEmpty             = []"
 | "smt_var_list (TSeqCons e r)        = smt_var_list e @ smt_var_list r"
 | "smt_var_list TMapEmpty             = []"
@@ -514,6 +516,7 @@ where
      (case smtEval m env t of
         Some (SStr str) \<Rightarrow> Some (SBool (str_predicate name str))
       | _ \<Rightarrow> None)"
+| "smtEval m env (TUConst nm) = Some (SInt (builtin_const_val nm))"
 | "smtEval m env TSeqEmpty = Some (SSeq [])"
 | "smtEval m env (TSeqCons e rest) =
      (case (smtEval m env e, smtEval m env rest) of

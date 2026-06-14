@@ -2458,6 +2458,13 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
         Z3Expr.App(funcName, List(strZ))
+      // 0-arg reserved builtin (e.g. now()): an uninterpreted Int constant. The `${name}_0`
+      // name matches translateCall's argSortsMangled, so the in-subset and raw paths share it.
+      case TUConst(name) =>
+        val funcName = s"${name}_0"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Int))
+        Z3Expr.App(funcName, Nil)
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>

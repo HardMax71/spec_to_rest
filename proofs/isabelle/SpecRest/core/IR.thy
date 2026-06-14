@@ -95,6 +95,16 @@ text \<open>\<open>is_builtin_pred nm\<close> marks \<open>nm\<close> as a reser
 definition is_builtin_pred :: "String.literal \<Rightarrow> bool" where
   "is_builtin_pred nm \<longleftrightarrow> nm = STR ''isValidURI'' \<or> nm = STR ''isValidEmail''"
 
+text \<open>\<open>builtin_const_val name\<close> is the uninterpreted value of the reserved 0-argument
+  built-in \<open>name\<close> (e.g.\ \<open>now\<close>, the current timestamp). Like \<open>str_predicate\<close> it is
+  abstract: the trusted translator emits it as a Z3 uninterpreted constant, so soundness
+  stays parametric in the value and any realisation \<open>eval\<close>/\<open>smtEval\<close> share is sound by
+  construction - a proof for every interpretation soundly over-approximates the builtin.\<close>
+consts builtin_const_val :: "String.literal \<Rightarrow> int"
+
+definition is_builtin_const :: "String.literal \<Rightarrow> bool" where
+  "is_builtin_const nm \<longleftrightarrow> nm = STR ''now''"
+
 record schema_field_decl =
   fd_name :: "String.literal"
   fd_ty   :: "schema_type"

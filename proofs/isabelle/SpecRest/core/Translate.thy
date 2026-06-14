@@ -130,6 +130,8 @@ where
           (if is_builtin_pred nm
              then map_option (\<lambda>a'. TUStrPred nm a') (translate enums arg)
              else None)
+      | (IdentifierF nm _, []) \<Rightarrow>
+          (if is_builtin_const nm then Some (TUConst nm) else None)
       | _ \<Rightarrow> None)"
 | "translate enums (ConstructorF name fas _) =
      translate_with_assigns enums fas (TEntityBase name)"
