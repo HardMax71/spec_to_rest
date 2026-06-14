@@ -16,86 +16,59 @@ class ConsistencyTest extends CatsEffectSuite:
         ).map(_.id)}"
     )
 
-  test(
-    "definite description (the v in rel | P) verifies via Z3 (TheF lifted to the verified subset)"
-  ):
-    val spec =
+  // Each verified-subset lift: a focused spec whose every check must verify (Sat), not skip.
+  List(
+    (
+      "definite description (the v in rel | P) verifies via Z3 (TheF lifted to the verified subset)",
+      "the_demo",
       """service TheDemo {
         |  state {
         |    scores: Map[Int, Int]
         |  }
         |  invariant pivotNonNegative:
         |    (the k in scores | scores[k] = 100) >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("the_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (the must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "ordering on Duration verifies via Z3 (Duration shares the Int sort, completing the #377 temporal lift)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "the must verify, not skip"
+    ),
+    (
+      "ordering on Duration verifies via Z3 (Duration shares the Int sort, completing the #377 temporal lift)",
+      "duration_demo",
       """service DurationDemo {
         |  state {
         |    timeouts: Map[Int, Duration]
         |  }
         |  invariant timeoutsNonNegative:
         |    (the k in timeouts | timeouts[k] >= 0) >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("duration_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (Duration ordering must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "lexicographic ordering on String verifies via Z3 (T_Cmp_Str_Ord, str.< encoding)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "Duration ordering must verify, not skip"
+    ),
+    (
+      "lexicographic ordering on String verifies via Z3 (T_Cmp_Str_Ord, str.< encoding)",
+      "string_order_demo",
       """service StringOrderDemo {
         |  state {
         |    names: Map[Int, String]
         |  }
         |  invariant namesBelowM:
         |    (the k in names | names[k] < "m") >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("string_order_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (String ordering must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "string concatenation verifies via Z3 (T_Str_Concat, str.++ encoding)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "String ordering must verify, not skip"
+    ),
+    (
+      "string concatenation verifies via Z3 (T_Str_Concat, str.++ encoding)",
+      "string_concat_demo",
       """service StringConcatDemo {
         |  state {
         |    names: Map[Int, String]
         |  }
         |  invariant concatMatches:
         |    (the k in names | "a" + names[k] = "ab") >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("string_concat_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (String concat must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "cardinality on primed/pre-state relations verifies via Z3 (#rel' / #pre(rel) translate)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "String concat must verify, not skip"
+    ),
+    (
+      "cardinality on primed/pre-state relations verifies via Z3 (#rel' / #pre(rel) translate)",
+      "card_demo",
       """service CardDemo {
         |  state {
         |    items: Int -> lone Int
@@ -106,19 +79,12 @@ class ConsistencyTest extends CatsEffectSuite:
         |  }
         |  invariant cardNonNeg:
         |    #items >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("card_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (cardinality on primed/pre must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "relation literal-insert verifies via Z3 (rel' = pre(rel) + {k -> v} desugars to rel'[k] = v)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "cardinality on primed/pre must verify, not skip"
+    ),
+    (
+      "relation literal-insert verifies via Z3 (rel' = pre(rel) + {k -> v} desugars to rel'[k] = v)",
+      "insert_demo",
       """service InsertDemo {
         |  state {
         |    store: Int -> lone Int
@@ -133,19 +99,12 @@ class ConsistencyTest extends CatsEffectSuite:
         |  }
         |  invariant cardNonNeg:
         |    #store >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("insert_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (relation insert must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "String-refinement alias relations verify on the native String sort (E-matching triggers keep them tractable)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "relation insert must verify, not skip"
+    ),
+    (
+      "String-refinement alias relations verify on the native String sort (E-matching triggers keep them tractable)",
+      "string_alias_demo",
       """service StringAliasDemo {
         |  type Code = String where len(value) >= 3 and len(value) <= 8
         |  state {
@@ -161,19 +120,35 @@ class ConsistencyTest extends CatsEffectSuite:
         |  }
         |  invariant cardNonNeg:
         |    #store >= 0
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("string_alias_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (String-refinement alias on relations must verify on the String sort, not time out); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test(
-    "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)"
-  ):
-    val spec =
+        |}""".stripMargin,
+      "String-refinement alias on relations must verify on the String sort, not time out"
+    ),
+    (
+      "value-projection comprehension verifies via Z3 (entries = { m in rel | true } projects to rel's range)",
+      "range_comp_demo",
+      """service RangeCompDemo {
+        |  entity Item {
+        |    size: Int
+        |  }
+        |  state {
+        |    rel: Int -> lone Item
+        |  }
+        |  operation ListAll {
+        |    output: entries: Set[Item]
+        |    requires:
+        |      true
+        |    ensures:
+        |      entries = { m in rel | true }
+        |      rel' = rel
+        |  }
+        |  invariant cardNonNeg:
+        |    #rel >= 0
+        |}""".stripMargin,
+      "value-projection comprehension must verify, not skip"
+    ),
+    (
+      "entity construction (Entity{...}) verifies via Z3 (ConstructorF lifted to the verified subset)",
+      "constructor_demo",
       """service ConstructorDemo {
         |  entity Point {
         |    x: Int
@@ -181,30 +156,29 @@ class ConsistencyTest extends CatsEffectSuite:
         |  }
         |  invariant ctorFieldRoundtrips:
         |    (Point { x = 5, y = 7 }).x = 5
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("constructor_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (Entity{...} must verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
-    )
-
-  test("function/predicate calls inline + verify via Z3 (CallF lifted to the verified subset)"):
-    val spec =
+        |}""".stripMargin,
+      "Entity{...} must verify, not skip"
+    ),
+    (
+      "function/predicate calls inline + verify via Z3 (CallF lifted to the verified subset)",
+      "call_demo",
       """service CallDemo {
         |  function dbl(n: Int): Int = n + n
         |  predicate isPos(n: Int) = n > 0
         |  invariant callsInline:
         |    dbl(3) = 6 and isPos(dbl(1))
-        |}""".stripMargin
-    for
-      ir     <- SpecFixtures.buildFromSource("call_demo", spec)
-      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
-    yield assert(
-      report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
-      s"expected every check Sat (calls must inline + verify, not skip); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+        |}""".stripMargin,
+      "calls must inline + verify, not skip"
     )
+  ).foreach: (name, fixture, spec, reason) =>
+    test(name):
+      for
+        ir     <- SpecFixtures.buildFromSource(fixture, spec)
+        report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+      yield assert(
+        report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
+        s"expected every check Sat ($reason); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+      )
 
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for

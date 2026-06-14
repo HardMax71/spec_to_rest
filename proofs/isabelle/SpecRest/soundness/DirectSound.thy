@@ -5,6 +5,22 @@ theory DirectSound
 begin
 section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 
+lemma range_eval_None:
+  assumes "builtins_reserved fs ps"
+      and "range_arg r = Some rel"
+  shows "eval fs ps fuel s st env r = None"
+proof -
+  from assms(2) obtain sp1 sp2 sp3
+    where req: "r = CallF (IdentifierF (STR ''range'') sp1) [IdentifierF rel sp2] sp3"
+    by (cases r rule: range_arg.cases) (auto split: if_splits)
+  have lk: "lookup_callee fs ps (STR ''range'') = None"
+    using assms(1) by (simp add: builtins_reserved_def)
+  have nb: "\<not> is_builtin_pred (STR ''range'')"
+    by (simp add: is_builtin_pred_def)
+  show ?thesis
+    unfolding req by (cases fuel) (simp_all add: lk nb)
+qed
+
 lemma binop_noncomp_step:
   assumes deN: "dom_eq_domains fs ps st bop l r = None"
       and bcN: "beq_comp bop r = None"
@@ -81,7 +97,14 @@ next
     hence "eval fs ps fuel s st env l = None" using eval_dom_CallF[OF lcdom] by simp
     thus False using efl by simp
   qed
-  from tt[unfolded BEq translate_BEq_noncomp[OF rnc dnone riN[unfolded BEq]]] obtain lt rt
+  have raN: "range_arg r = None"
+  proof (rule ccontr)
+    assume "range_arg r \<noteq> None"
+    then obtain rel where ra: "range_arg r = Some rel" by (cases "range_arg r") auto
+    have "eval fs ps fuel s st env r = None" using range_eval_None[OF br ra] .
+    thus False using efr by simp
+  qed
+  from tt[unfolded BEq translate_BEq_noncomp[OF rnc dnone riN[unfolded BEq] raN]] obtain lt rt
       where tl: "translate enums l = Some lt"
         and tr: "translate enums r = Some rt"
         and teq: "t = TEq lt rt"

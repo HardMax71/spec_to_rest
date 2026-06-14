@@ -629,10 +629,58 @@ object Translator:
 
   def translateExpr(ctx: TranslateCtx, expr: expr, env: mutable.Map[String, Z3Expr]): Z3Expr =
     val enums = ctx.enums.keys.toList
-    val out = SpecRestGenerated.translate(enums, expr) match
+    val out = SpecRestGenerated.translate(enums, rewriteRangeComprehension(ctx, expr)) match
       case Some(smtTerm) => encodeFromSmtTerm(ctx, smtTerm, env)
       case None          => translateExprRaw(ctx, expr, env)
     out.withSpan(expr.spanOpt)
+
+  // `translate` is untyped: it projects `{ x in rel | true }` onto rel's keys (domain). When the
+  // receiver is sorted by rel's value type the intended projection is the range (values); decide
+  // that here, where the receiver's sort is known, by rewriting to the verified `range(rel)` form.
+  private def rewriteRangeComprehension(ctx: TranslateCtx, e: expr): expr = e match
+    case BinaryOpF(BEq(), l, SetComprehensionF(_, IdentifierF(rel, spRel), pred, spSc), spEq)
+        if isTrueLit(pred) && isValueProjection(ctx, l, rel) =>
+      BinaryOpF(BEq(), l, rangeOf(rel, spRel, spSc), spEq)
+    case BinaryOpF(BEq(), SetComprehensionF(_, IdentifierF(rel, spRel), pred, spSc), r, spEq)
+        if isTrueLit(pred) && isValueProjection(ctx, r, rel) =>
+      BinaryOpF(BEq(), r, rangeOf(rel, spRel, spSc), spEq)
+    case BinaryOpF(op, l, r, sp) if isBoolConnective(op) =>
+      BinaryOpF(op, rewriteRangeComprehension(ctx, l), rewriteRangeComprehension(ctx, r), sp)
+    case UnaryOpF(op, x, sp) =>
+      UnaryOpF(op, rewriteRangeComprehension(ctx, x), sp)
+    case other => other
+
+  private def rangeOf(rel: String, spRel: Option[span_t], spSc: Option[span_t]): expr =
+    CallF(IdentifierF("range", spRel), List(IdentifierF(rel, spRel)), spSc)
+
+  private def isTrueLit(e: expr): Boolean = e match
+    case BoolLitF(true, _) => true
+    case _                 => false
+
+  private def isBoolConnective(op: bin_op): Boolean = op match
+    case BAnd() | BOr() | BImplies() | BIff() => true
+    case _                                    => false
+
+  private def isValueProjection(ctx: TranslateCtx, receiver: expr, rel: String): Boolean =
+    (relKeyValueSorts(ctx, rel), receiverSetElemSort(ctx, receiver)) match
+      case (Some((keySort, valueSort)), Some(elemSort)) =>
+        elemSort == valueSort && valueSort != keySort
+      case _ => false
+
+  private def relKeyValueSorts(ctx: TranslateCtx, rel: String): Option[(Z3Sort, Z3Sort)] =
+    ctx.state.get(rel).collect { case r: StateRelationInfo => (r.keySort, r.valueSort) }
+
+  private def receiverSetElemSort(ctx: TranslateCtx, e: expr): Option[Z3Sort] = e match
+    case IdentifierF(name, _) =>
+      ctx.state
+        .get(name)
+        .collect { case c: StateConstInfo => c.sort }
+        .orElse(ctx.outputs.find(_.name == name).map(_.sort))
+        .orElse(ctx.inputs.find(_.name == name).map(_.sort))
+        .collect { case Z3Sort.SetOf(elem) => elem }
+    case PrimeF(inner, _) => receiverSetElemSort(ctx, inner)
+    case PreF(inner, _)   => receiverSetElemSort(ctx, inner)
+    case _                => None
 
   private def translateExprRaw(
       ctx: TranslateCtx,
@@ -2191,6 +2239,20 @@ object Translator:
           case None    => inner
         Z3Expr.Quantifier(
           QKind.ForAll,
+          List(Z3Binding(varName, sort)),
+          guarded
+        )
+
+      case TExistsRel(varName, rel, body) =>
+        val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
+        val newEnv        = env.clone()
+        newEnv(varName) = Z3Expr.Var(varName, sort)
+        val inner = encodeFromSmtTerm(ctx, body, newEnv)
+        val guarded = guard match
+          case Some(g) => Z3Expr.And(List(g, inner))
+          case None    => inner
+        Z3Expr.Quantifier(
+          QKind.Exists,
           List(Z3Binding(varName, sort)),
           guarded
         )

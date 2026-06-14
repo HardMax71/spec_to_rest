@@ -193,6 +193,7 @@ fun smt_uses_var :: "String.literal \<Rightarrow> smt_term \<Rightarrow> bool" w
 | "smt_uses_var x (TLetIn y v b)         = (smt_uses_var x v \<or> (y \<noteq> x \<and> smt_uses_var x b))"
 | "smt_uses_var x (TForallEnum y _ b)    = (y \<noteq> x \<and> smt_uses_var x b)"
 | "smt_uses_var x (TForallRel y _ b)     = (y \<noteq> x \<and> smt_uses_var x b)"
+| "smt_uses_var x (TExistsRel y _ b)     = (y \<noteq> x \<and> smt_uses_var x b)"
 | "smt_uses_var x (TTheRel y _ b)        = (y \<noteq> x \<and> smt_uses_var x b)"
 | "smt_uses_var x (TEntityBase _)        = False"
 | "smt_uses_var x (TForallSet y setT b)  = (smt_uses_var x setT \<or> (y \<noteq> x \<and> smt_uses_var x b))"
@@ -308,6 +309,33 @@ next
       have hb: "smtEval m (((y, v) # pre) @ (x, xv) # post) b
               = smtEval m (((y, v) # pre) @ post) b"
         using TTheRel.prems by (intro TTheRel.IH) auto
+      show ?case
+      proof (cases "smtEval m ((y, v) # pre @ post) b")
+        case None
+        thus ?thesis using hb by simp
+      next
+        case (Some bv)
+        show ?thesis using hb Some Cons.IH by (cases bv) simp_all
+      qed
+    qed
+  qed
+  thus ?case by (simp split: option.splits)
+next
+  case (TExistsRel y rel b)
+  have "\<And>d. smtEval_the_rel m (pre @ (x, xv) # post) y d b
+          = smtEval_the_rel m (pre @ post) y d b"
+  proof -
+    fix d
+    show "smtEval_the_rel m (pre @ (x, xv) # post) y d b
+            = smtEval_the_rel m (pre @ post) y d b"
+    proof (induction d)
+      case Nil
+      show ?case by simp
+    next
+      case (Cons v rest)
+      have hb: "smtEval m (((y, v) # pre) @ (x, xv) # post) b
+              = smtEval m (((y, v) # pre) @ post) b"
+        using TExistsRel.prems by (intro TExistsRel.IH) auto
       show ?case
       proof (cases "smtEval m ((y, v) # pre @ post) b")
         case None

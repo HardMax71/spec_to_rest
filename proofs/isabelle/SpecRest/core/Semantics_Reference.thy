@@ -17,7 +17,8 @@ text \<open>\<open>eval\<close> is a reference semantics for the surface IR (\<o
 definition builtins_reserved ::
   "function_decl list \<Rightarrow> predicate_decl list \<Rightarrow> bool" where
   "builtins_reserved fs ps \<equiv> (\<forall>nm. is_builtin_pred nm \<longrightarrow> lookup_callee fs ps nm = None)
-                              \<and> lookup_callee fs ps (STR ''dom'') = None"
+                              \<and> lookup_callee fs ps (STR ''dom'') = None
+                              \<and> lookup_callee fs ps (STR ''range'') = None"
 
 fun quant_dom ::
   "schema \<Rightarrow> state \<Rightarrow> quant_kind \<Rightarrow> quantifier_binding list
