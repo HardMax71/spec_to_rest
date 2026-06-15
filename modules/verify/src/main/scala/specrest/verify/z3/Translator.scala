@@ -2511,6 +2511,12 @@ object Translator:
                   ctx,
                   s"membership operator 'in' requires the left-hand side sort to match the set's element sort; got $es against a set of $rs"
                 )
+              case (_, Some(Z3Sort.SetOf(_))) => Z3Expr.SetMember(elemZ, rhs)
+              case (_, Some(other)) =>
+                fail(
+                  ctx,
+                  s"membership operator 'in' requires a set-typed right operand; got $other"
+                )
               case _ => Z3Expr.SetMember(elemZ, rhs)
       case TSetUnion(l, r)     => encodeSetBinOp(ctx, SetOpKind.Union, l, r, env)
       case TSetIntersect(l, r) => encodeSetBinOp(ctx, SetOpKind.Intersect, l, r, env)
