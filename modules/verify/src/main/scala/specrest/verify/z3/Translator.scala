@@ -2337,14 +2337,17 @@ object Translator:
         // interpretation is trusted frame synthesis (like the #428 range projection).
         env.get(rel).flatMap(z => inferSortOfZ3Expr(ctx, z)) match
           case Some(Z3Sort.SeqOf(elem)) =>
-            val seqZ   = env(rel)
-            val newEnv = env.clone()
-            newEnv(varName) = Z3Expr.Var(varName, elem)
+            val seqZ = env(rel)
+            // fresh binder so an outer identifier of the same name inside `seqZ` is not captured
+            val freshName = ctx.freshSkolem(s"forall_seq_$varName")
+            val binderVar = Z3Expr.Var(freshName, elem)
+            val newEnv    = env.clone()
+            newEnv(varName) = binderVar
             val inner = encodeFromSmtTerm(ctx, body, newEnv)
             Z3Expr.Quantifier(
               QKind.ForAll,
-              List(Z3Binding(varName, elem)),
-              Z3Expr.Implies(Z3Expr.SeqContains(seqZ, Z3Expr.Var(varName, elem)), inner)
+              List(Z3Binding(freshName, elem)),
+              Z3Expr.Implies(Z3Expr.SeqContains(seqZ, binderVar), inner)
             )
           case _ =>
             val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
