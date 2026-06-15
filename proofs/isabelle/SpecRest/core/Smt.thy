@@ -399,6 +399,7 @@ where
       | (Some (SInt a), Some (SReal b)) \<Rightarrow> Some (SReal (of_int a + b))
       | (Some (SReal a), Some (SInt b)) \<Rightarrow> Some (SReal (a + of_int b))
       | (Some (SStr a), Some (SStr b)) \<Rightarrow> Some (SStr (a + b))
+      | (Some (SSeq a), Some (SSeq b)) \<Rightarrow> Some (SSeq (a @ b))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TSub l r) =
      (case (smtEval m env l, smtEval m env r) of

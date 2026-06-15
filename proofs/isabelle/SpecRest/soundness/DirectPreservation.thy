@@ -165,6 +165,26 @@ next
     thus "value_has_ty \<Gamma> b TStr" using T_Str_Concat.IH(2)[OF T_Str_Concat.prems(1)] by blast
   qed
 next
+  case (T_Seq_Concat \<Gamma> l t r sp)
+  have deN: "dom_eq_domains fs ps st BAdd l r = None"
+    by (rule typed_dom_eq_domains_None[OF T_Seq_Concat.hyps(1)])
+  have bcN: "beq_comp BAdd r = None"
+    by (rule typed_beq_comp_None[OF T_Seq_Concat.hyps(2)])
+  have ev: "eval_bin BAdd (eval fs ps fuel sch st env l)
+              (eval fs ps fuel sch st env r) = Some v"
+    using T_Seq_Concat.prems(2) deN bcN by simp
+  have eva: "eval_arith AddOp (eval fs ps fuel sch st env l)
+               (eval fs ps fuel sch st env r) = Some v"
+    using ev by simp
+  show ?case
+  proof (rule eval_arith_seq_preservation[OF eva])
+    fix a assume "eval fs ps fuel sch st env l = Some a"
+    thus "value_has_ty \<Gamma> a (TSeq t)" using T_Seq_Concat.IH(1)[OF T_Seq_Concat.prems(1)] by blast
+  next
+    fix b assume "eval fs ps fuel sch st env r = Some b"
+    thus "value_has_ty \<Gamma> b (TSeq t)" using T_Seq_Concat.IH(2)[OF T_Seq_Concat.prems(1)] by blast
+  qed
+next
   case (T_Cmp_Eq \<Gamma> l t1 r t2 op sp)
   have deN: "dom_eq_domains fs ps st op l r = None"
     by (rule typed_dom_eq_domains_None[OF T_Cmp_Eq.hyps(1)])
