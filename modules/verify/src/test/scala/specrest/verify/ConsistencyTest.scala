@@ -309,6 +309,26 @@ class ConsistencyTest extends CatsEffectSuite:
         |    a = b
         |}""".stripMargin,
       "hash(pw) must verify as a deterministic uninterpreted function (a' = b'), not skip"
+    ),
+    (
+      "sequence-append (seq + [elem]) verifies via Z3 (BAdd on seqs -> seq.++, the auth login_attempts shape)",
+      "seq_append_demo",
+      """service SeqAppendDemo {
+        |  entity Ev {
+        |    tag: Int
+        |  }
+        |  state {
+        |    log: Seq[Ev]
+        |  }
+        |  operation Record {
+        |    input: t: Int
+        |    ensures:
+        |      log' = pre(log) + [Ev { tag = t }]
+        |  }
+        |  invariant trivial:
+        |    true
+        |}""".stripMargin,
+      "seq-append (log' = pre(log) + [Ev{...}]) must verify, not skip on 'addition requires numeric'"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

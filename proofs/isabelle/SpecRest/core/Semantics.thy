@@ -110,6 +110,10 @@ fun str_arith :: "arith_op \<Rightarrow> String.literal \<Rightarrow> String.lit
   "str_arith AddOp a b = Some (VStr (a + b))"
 | "str_arith _ _ _ = None"
 
+fun seq_arith :: "arith_op \<Rightarrow> ir_value list \<Rightarrow> ir_value list \<Rightarrow> ir_value option" where
+  "seq_arith AddOp a b = Some (VSeq (a @ b))"
+| "seq_arith _ _ _ = None"
+
 fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value option \<Rightarrow> ir_value option" where
   "eval_arith op x y =
      (case x of
@@ -126,6 +130,10 @@ fun eval_arith :: "arith_op \<Rightarrow> ir_value option \<Rightarrow> ir_value
       | Some (VStr a) \<Rightarrow>
           (case y of
              Some (VStr b) \<Rightarrow> str_arith op a b
+           | _             \<Rightarrow> None)
+      | Some (VSeq a) \<Rightarrow>
+          (case y of
+             Some (VSeq b) \<Rightarrow> seq_arith op a b
            | _             \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 
@@ -200,7 +208,8 @@ lemma eval_arith_some_imp_numeric_or_str:
   "eval_arith op x y = Some v \<Longrightarrow>
      (((\<exists>a. x = Some (VInt a)) \<or> (\<exists>a. x = Some (VReal a)))
       \<and> ((\<exists>b. y = Some (VInt b)) \<or> (\<exists>b. y = Some (VReal b))))
-     \<or> ((\<exists>a. x = Some (VStr a)) \<and> (\<exists>b. y = Some (VStr b)))"
+     \<or> ((\<exists>a. x = Some (VStr a)) \<and> (\<exists>b. y = Some (VStr b)))
+     \<or> ((\<exists>a. x = Some (VSeq a)) \<and> (\<exists>b. y = Some (VSeq b)))"
   by (auto split: option.splits ir_value.splits if_splits)
 
 lemma eval_arith_div_zero:
@@ -585,6 +594,16 @@ lemma eval_arith_str_preservation:
   by (cases op;
       auto split: option.splits ir_value.splits if_splits intro: vt_str)
 
+lemma eval_arith_seq_preservation:
+  assumes "eval_arith op x y = Some v"
+      and "\<And>a. x = Some a \<Longrightarrow> value_has_ty \<Gamma> a (TSeq t)"
+      and "\<And>b. y = Some b \<Longrightarrow> value_has_ty \<Gamma> b (TSeq t)"
+  shows "value_has_ty \<Gamma> v (TSeq t)"
+  using assms
+  by (cases op;
+      auto split: option.splits ir_value.splits if_splits
+           elim!: value_has_ty_seq_cases intro!: vt_seq)
+
 lemma eval_cmp_preservation:
   assumes "eval_cmp op x y = Some v"
   shows "value_has_ty \<Gamma> v TBool"
@@ -952,6 +971,10 @@ inductive expr_has_ty :: "tyctx \<Rightarrow> expr \<Rightarrow> ty \<Rightarrow
     "expr_has_ty \<Gamma> l TStr
        \<Longrightarrow> expr_has_ty \<Gamma> r TStr
        \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BAdd l r sp) TStr"
+| T_Seq_Concat:
+    "expr_has_ty \<Gamma> l (TSeq t)
+       \<Longrightarrow> expr_has_ty \<Gamma> r (TSeq t)
+       \<Longrightarrow> expr_has_ty \<Gamma> (BinaryOpF BAdd l r sp) (TSeq t)"
 | T_Cmp_Eq:
     "expr_has_ty \<Gamma> l t1
        \<Longrightarrow> expr_has_ty \<Gamma> r t2

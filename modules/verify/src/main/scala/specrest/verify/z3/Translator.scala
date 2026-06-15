@@ -966,6 +966,12 @@ object Translator:
         substituteVar(r, varName, replacement),
         sp
       )
+    case Z3Expr.SeqConcat(l, r, sp) =>
+      Z3Expr.SeqConcat(
+        substituteVar(l, varName, replacement),
+        substituteVar(r, varName, replacement),
+        sp
+      )
     case Z3Expr.Arith(op, args, sp) =>
       Z3Expr.Arith(op, args.map(a => substituteVar(a, varName, replacement)), sp)
     case q @ Z3Expr.Quantifier(kind, bindings, body, sp) =>
@@ -1443,6 +1449,7 @@ object Translator:
     case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
     case Z3Expr.StrConcat(_, _, _)     => Some(Z3Sort.Str)
+    case Z3Expr.SeqConcat(l, _, _)     => inferSortOfZ3Expr(ctx, l)
     case Z3Expr.InRe(_, _, _)          => Some(Z3Sort.Bool)
     case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
     case Z3Expr.MapLit(keySort, valueSort, _, _) =>
@@ -2181,9 +2188,15 @@ object Translator:
         case Some(Z3Sort.Str) => true
         case _                => false
     def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+    def isSeq(z: Z3Expr): Boolean =
+      inferSortOfZ3Expr(ctx, z) match
+        case Some(Z3Sort.SeqOf(_)) => true
+        case _                     => false
     if isStr(lz) && isStr(rz) then Z3Expr.StrConcat(lz, rz)
+    else if isSeq(lz) && isSeq(rz) then Z3Expr.SeqConcat(lz, rz)
     else if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Add, List(lz, rz))
-    else fail(ctx, "addition requires two numeric (Int or Real) operands or two String operands")
+    else
+      fail(ctx, "addition requires two numeric (Int or Real), two String, or two Seq operands")
 
   private def encodeSetEmptyCmp(
       ctx: TranslateCtx,

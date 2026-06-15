@@ -294,6 +294,7 @@ private object Backend:
     case Z3Expr.Cmp(op, l, r, _)           => renderCmp(rctx, op, l, r)
     case Z3Expr.StrCmp(op, l, r, _)        => renderStrCmp(rctx, op, l, r)
     case Z3Expr.StrConcat(l, r, _)         => renderStrConcat(rctx, l, r)
+    case Z3Expr.SeqConcat(l, r, _)         => renderSeqConcat(rctx, l, r)
     case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
     case Z3Expr.EmptySet(elemSort, _) =>
@@ -421,6 +422,15 @@ private object Backend:
   ): Z3AstExpr[SeqSort[CharSort]] =
     val l = renderExpr(rctx, lhs).asInstanceOf[Z3AstExpr[SeqSort[CharSort]]]
     val r = renderExpr(rctx, rhs).asInstanceOf[Z3AstExpr[SeqSort[CharSort]]]
+    rctx.ctx.mkConcat(l, r)
+
+  private def renderSeqConcat(
+      rctx: RenderCtx,
+      lhs: Z3Expr,
+      rhs: Z3Expr
+  ): SeqExpr[Sort] =
+    val l = renderExpr(rctx, lhs).asInstanceOf[SeqExpr[Sort]]
+    val r = renderExpr(rctx, rhs).asInstanceOf[SeqExpr[Sort]]
     rctx.ctx.mkConcat(l, r)
 
   private def renderArith(
