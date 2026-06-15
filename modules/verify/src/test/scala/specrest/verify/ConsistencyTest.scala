@@ -455,6 +455,29 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "#contents on an entity-field Set (an Order's `#items` shape) must verify, not skip on 'cardinality requires a state relation' - it gets the uninterpreted setCard model"
+    ),
+    (
+      "#(expr) on a set-valued field-access verifies via Z3 (the ecommerce #(orders[oid].items) shape)",
+      "set_term_card_demo",
+      """service SetTermCardDemo {
+        |  entity Box {
+        |    contents: Set[Int]
+        |  }
+        |  state {
+        |    boxes: Int -> lone Box
+        |  }
+        |  operation Touch {
+        |    input: bid: Int
+        |    requires:
+        |      bid in boxes
+        |      #(boxes[bid].contents) >= 0
+        |    ensures:
+        |      boxes' = pre(boxes)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "#(boxes[bid].contents) - cardinality of a set-valued field-access (not a bare relation identifier) - must verify: `#expr` lowers to TCard and gets the uninterpreted setCard model"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
