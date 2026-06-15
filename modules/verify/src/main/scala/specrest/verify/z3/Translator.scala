@@ -1084,6 +1084,31 @@ object Translator:
           s"cardinality '#$targetName' requires a state relation; '$targetName' is not declared as one"
         )
 
+  // Cardinality of a set-valued operand (an entity-field `Set` or a local set binder):
+  // an uninterpreted `setCard : SetOf(elem) -> Int` with a one-off `forall s. setCard(s) >= 0`
+  // axiom. Z3's set theory has no native cardinality, so this is the same uninterpreted,
+  // functional (same set => same count) model used for state-relation cardinality; `#x` is
+  // vacuous under the reference semantics (`eval_un` has no cardinality case), so any
+  // non-negative interpretation is sound.
+  private def entitySetCardinality(ctx: TranslateCtx, setExpr: Z3Expr): Z3Expr =
+    inferSortOfZ3Expr(ctx, setExpr) match
+      case Some(Z3Sort.SetOf(elem)) =>
+        val funcName = s"setCard_${sortNameOf(elem)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(Z3Sort.SetOf(elem)), Z3Sort.Int))
+          ctx.assertions += Z3Expr.Quantifier(
+            QKind.ForAll,
+            List(Z3Binding("setcard_s", Z3Sort.SetOf(elem))),
+            Z3Expr.Cmp(
+              CmpOp.Ge,
+              Z3Expr.App(funcName, List(Z3Expr.Var("setcard_s", Z3Sort.SetOf(elem)))),
+              Z3Expr.IntLit(BigInt(0))
+            )
+          )
+        Z3Expr.App(funcName, List(setExpr))
+      case _ =>
+        fail(ctx, "cardinality '#' on a non-relation operand requires a set-typed value")
+
   private def translateQuantifier(
       ctx: TranslateCtx,
       q: QuantifierF,
@@ -2313,7 +2338,13 @@ object Translator:
 
       case TInDom(rel, elem) =>
         encInDom(ctx, rel, elem, ctx.stateMode, env)
-      case TCardRel(rel) => cardinalityRefFor(ctx, rel, ctx.stateMode)
+      // `#x`: a state relation gets its cardinality constant; an `x` bound in `env`
+      // (an entity-field `Set`, e.g. `#items` inside an Order invariant, or a local
+      // set binder) is a set-valued operand and gets the uninterpreted setCard model.
+      case TCardRel(rel) =>
+        env.get(rel) match
+          case Some(setExpr) => entitySetCardinality(ctx, setExpr)
+          case None          => cardinalityRefFor(ctx, rel, ctx.stateMode)
 
       case TLetIn(name, value, body) =>
         val v      = encodeFromSmtTerm(ctx, value, env)
