@@ -268,6 +268,40 @@ class ConsistencyTest extends CatsEffectSuite:
         s"expected every check Sat ($reason); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
       )
 
+  test("ambiguous bare enum member is a translator limit, not a solver crash"):
+    val spec =
+      """service AmbiguousEnumDemo {
+        |  enum Color {
+        |    RED,
+        |    GREEN
+        |  }
+        |  enum Signal {
+        |    RED,
+        |    AMBER
+        |  }
+        |  state {
+        |    c: Color
+        |  }
+        |  invariant pinned:
+        |    c = RED
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("ambiguous_enum_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val crashed =
+        report.checks.filter(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
+      assert(
+        crashed.isEmpty,
+        s"ambiguous bare enum must not crash the solver; got: ${crashed.map(c => s"${c.id}->${c.diagnostic.map(_.message)}")}"
+      )
+      assert(
+        report.checks.exists(
+          _.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
+        ),
+        s"expected a TranslatorLimitation skip; got: ${report.checks.map(c => s"${c.id}->${c.status}/${c.diagnostic.map(_.category)}")}"
+      )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")

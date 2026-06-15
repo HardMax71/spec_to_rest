@@ -1350,8 +1350,10 @@ object Translator:
 
   // A bare enum member (e.g. `DONE`, not `Status.DONE`) parses as an identifier; resolve it to the
   // same constant translateEnumAccess emits so `status = DONE` is well-sorted, rather than comparing
-  // against an Uninterp("Any") placeholder (which makes the solver reject the query). Only resolves
-  // when exactly one enum declares the member (otherwise it stays an unresolved identifier).
+  // against an Uninterp("Any") placeholder (which makes the solver reject the query). A unique match
+  // resolves; no match leaves it a free identifier; multiple matches are an ambiguity the bare syntax
+  // cannot resolve without type context, so we bail as a translator limit rather than fall through to
+  // the Any placeholder and recreate the sort clash.
   private def enumMemberConst(ctx: TranslateCtx, name: String): Option[Z3Expr] =
     ctx.enums.toList.filter((_, info) => info.members.contains(name)) match
       case (enumName, info) :: Nil =>
@@ -1359,7 +1361,12 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, Nil, info.sort))
         Some(Z3Expr.App(funcName, Nil))
-      case _ => None
+      case Nil => None
+      case matches =>
+        fail(
+          ctx,
+          s"bare enum member '$name' is ambiguous (declared by ${matches.map(_._1).mkString(", ")}); qualify it as 'Enum.$name'"
+        )
 
   private def inferSort(
       ctx: TranslateCtx,
