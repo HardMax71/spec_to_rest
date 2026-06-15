@@ -1187,8 +1187,11 @@ object Translator:
     expr.a match
       case IdentifierF(name, _) =>
         val args = expr.b.map(a => translateExpr(ctx, a, env))
+        // Derive arg sorts from the translated terms, not a second inferSort pass on the source:
+        // the declared parameter sorts then match the applied arguments by construction (e.g. a bare
+        // enum member resolves to its enum sort here, where source inferSort would miss it and pick Any).
         val argSorts =
-          expr.b.map(a => inferSort(ctx, a, env, None).getOrElse(Z3Sort.Uninterp("Any")))
+          args.map(a => inferSortOfZ3Expr(ctx, a).getOrElse(Z3Sort.Uninterp("Any")))
         val resultSort = callReturnSort(name, ctx)
         val funcName   = s"${name}_${argSortsMangled(argSorts)}"
         if !ctx.funcs.contains(funcName) then

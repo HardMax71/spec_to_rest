@@ -302,6 +302,31 @@ class ConsistencyTest extends CatsEffectSuite:
         s"expected a TranslatorLimitation skip; got: ${report.checks.map(c => s"${c.id}->${c.status}/${c.diagnostic.map(_.category)}")}"
       )
 
+  test("bare enum member as a call argument stays well-sorted (no solver crash)"):
+    val spec =
+      """service CallEnumDemo {
+        |  enum Status {
+        |    DONE,
+        |    TODO
+        |  }
+        |  predicate isDone(s: Status) = s = DONE
+        |  state {
+        |    cur: Status
+        |  }
+        |  invariant pinned:
+        |    isDone(DONE)
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("call_enum_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val crashed =
+        report.checks.filter(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
+      assert(
+        crashed.isEmpty,
+        s"bare enum member as a call argument must not crash the solver; got: ${crashed.map(c => s"${c.id}->${c.diagnostic.map(_.message)}")}"
+      )
+
   test("unsat_invariants has contradictory_invariants diagnostic"):
     for
       ir     <- SpecFixtures.loadIR("unsat_invariants")
