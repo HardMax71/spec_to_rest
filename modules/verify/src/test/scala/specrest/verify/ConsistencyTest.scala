@@ -302,7 +302,9 @@ class ConsistencyTest extends CatsEffectSuite:
         s"expected a TranslatorLimitation skip; got: ${report.checks.map(c => s"${c.id}->${c.status}/${c.diagnostic.map(_.category)}")}"
       )
 
-  test("bare enum member as a call argument stays well-sorted (no solver crash)"):
+  test(
+    "bare enum member as a call argument is never mis-resolved (no crash, no false contradiction)"
+  ):
     val spec =
       """service CallEnumDemo {
         |  enum Status {
@@ -320,11 +322,17 @@ class ConsistencyTest extends CatsEffectSuite:
       ir     <- SpecFixtures.buildFromSource("call_enum_demo", spec)
       report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
     yield
-      val crashed =
-        report.checks.filter(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
+      // isDone(DONE) inlines to the tautology DONE = DONE, which is outside the verified subset, so
+      // the check is soundness-skipped rather than Sat. Guard the real failure modes instead: a solver
+      // crash (BackendError) or a false contradiction (Unsat) from mis-sorting the bare enum argument.
+      assert(report.checks.nonEmpty, "expected at least one check")
+      val bad = report.checks.filter(c =>
+        c.status == CheckOutcome.Unsat ||
+          c.diagnostic.exists(_.category == DiagnosticCategory.BackendError)
+      )
       assert(
-        crashed.isEmpty,
-        s"bare enum member as a call argument must not crash the solver; got: ${crashed.map(c => s"${c.id}->${c.diagnostic.map(_.message)}")}"
+        bad.isEmpty,
+        s"bare enum call-arg must not crash or be mis-resolved to Unsat; got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
       )
 
   test("unsat_invariants has contradictory_invariants diagnostic"):
