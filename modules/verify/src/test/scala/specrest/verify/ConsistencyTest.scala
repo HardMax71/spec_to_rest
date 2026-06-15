@@ -227,6 +227,36 @@ class ConsistencyTest extends CatsEffectSuite:
         |    #store >= 0
         |}""".stripMargin,
       "repeated-key chained insert must be last-write-wins (Sat), not UNSAT"
+    ),
+    (
+      "bare enum member resolves to the enum sort (c = RED, not c = Uninterp(Any))",
+      "bare_enum_demo",
+      """service EnumDemo {
+        |  enum Color {
+        |    RED,
+        |    GREEN,
+        |    BLUE
+        |  }
+        |  state {
+        |    c: Color
+        |  }
+        |  invariant pinned:
+        |    c = RED implies c != GREEN
+        |}""".stripMargin,
+      "bare enum member must verify, not crash on Sorts Color/Any"
+    ),
+    (
+      "base-vs-optional comparison verifies (chosen = fallback where chosen: Option[Int])",
+      "optional_eq_demo",
+      """service OptDemo {
+        |  state {
+        |    chosen: Option[Int]
+        |    fallback: Int
+        |  }
+        |  invariant chosenOrFallback:
+        |    chosen = none or chosen = fallback
+        |}""".stripMargin,
+      "base-vs-optional equality must verify, not crash on incompatible sorts"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

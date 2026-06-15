@@ -733,6 +733,21 @@ object Translator:
         case _         => default
       (rel, mode)
 
+  // Comparing a base value with an optional (e.g. `todo.title = title` where `title: Option[String]`)
+  // lifts the base to `some(base)` so the comparison is Option[T] = Option[T], not a sort clash the
+  // solver rejects. Other operand pairs are left untouched.
+  private def coerceOptionalEquality(
+      ctx: TranslateCtx,
+      left: Z3Expr,
+      right: Z3Expr
+  ): (Z3Expr, Z3Expr) =
+    (inferSortOfZ3Expr(ctx, left), inferSortOfZ3Expr(ctx, right)) match
+      case (Some(Z3Sort.OptionOf(elem)), Some(rs)) if Z3Sort.eq(rs, elem) =>
+        (left, Z3Expr.OptSome(right))
+      case (Some(ls), Some(Z3Sort.OptionOf(elem))) if Z3Sort.eq(ls, elem) =>
+        (Z3Expr.OptSome(left), right)
+      case _ => (left, right)
+
   private def translateBinaryOp(
       ctx: TranslateCtx,
       op: bin_op,
@@ -763,7 +778,8 @@ object Translator:
       case BIff() =>
         Z3Expr.And(List(Z3Expr.Implies(left, right), Z3Expr.Implies(right, left)))
       case BEq() | BNeq() =>
-        Z3Expr.Cmp(if isEq then CmpOp.Eq else CmpOp.Neq, left, right)
+        val (l2, r2) = coerceOptionalEquality(ctx, left, right)
+        Z3Expr.Cmp(if isEq then CmpOp.Eq else CmpOp.Neq, l2, r2)
       case BLt() | BLe() | BGt() | BGe() =>
         requireNumericOperands(ctx, op, leftExpr, rightExpr, left, right, env)
         val cmp = op match
@@ -1326,10 +1342,24 @@ object Translator:
                   ctx.declareFunc(Z3FunctionDecl(funcName, Nil, entity.sort))
                 Z3Expr.App(funcName, Nil)
               case None =>
-                val funcName = s"id_$name"
-                if !ctx.funcs.contains(funcName) then
-                  ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Uninterp("Any")))
-                Z3Expr.App(funcName, Nil)
+                enumMemberConst(ctx, name).getOrElse:
+                  val funcName = s"id_$name"
+                  if !ctx.funcs.contains(funcName) then
+                    ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Uninterp("Any")))
+                  Z3Expr.App(funcName, Nil)
+
+  // A bare enum member (e.g. `DONE`, not `Status.DONE`) parses as an identifier; resolve it to the
+  // same constant translateEnumAccess emits so `status = DONE` is well-sorted, rather than comparing
+  // against an Uninterp("Any") placeholder (which makes the solver reject the query). Only resolves
+  // when exactly one enum declares the member (otherwise it stays an unresolved identifier).
+  private def enumMemberConst(ctx: TranslateCtx, name: String): Option[Z3Expr] =
+    ctx.enums.toList.filter((_, info) => info.members.contains(name)) match
+      case (enumName, info) :: Nil =>
+        val funcName = s"${enumName}_$name"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, info.sort))
+        Some(Z3Expr.App(funcName, Nil))
+      case _ => None
 
   private def inferSort(
       ctx: TranslateCtx,
@@ -2111,6 +2141,20 @@ object Translator:
     else if isNum(lz) && isNum(rz) then Z3Expr.Cmp(op, lz, rz)
     else fail(ctx, "ordering requires two numeric (Int or Real) operands or two String operands")
 
+  // Equality/inequality of a verified TEq: coerce a base-vs-optional pair (e.g. `todo.title = title`
+  // where title is Option[String]) by lifting the base to some(base), so the solver sees
+  // Option[T] = Option[T] instead of an incompatible-sorts clash.
+  private def encEq(
+      ctx: TranslateCtx,
+      op: CmpOp,
+      l: smt_term,
+      r: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val (lz, rz) =
+      coerceOptionalEquality(ctx, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+    Z3Expr.Cmp(op, lz, rz)
+
   // Addition: both operands numeric (Arith Add) or both String (StrConcat, str.++);
   // a numeric/String mix is left to the skip path rather than handed to the solver
   // ill-sorted.
@@ -2210,8 +2254,7 @@ object Translator:
           ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
         Z3Expr.App(funcName, Nil)
 
-      case TNot(TEq(l, r)) =>
-        Z3Expr.Cmp(CmpOp.Neq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TNot(TEq(l, r)) => encEq(ctx, CmpOp.Neq, l, r, env)
       case TOr(TLt(a1, b1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
         encCmp(ctx, CmpOp.Le, a1, b1, env)
       case TOr(TLt(b1, a1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
@@ -2224,8 +2267,7 @@ object Translator:
         Z3Expr.Or(List(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env)))
       case TImplies(l, r) =>
         Z3Expr.Implies(encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
-      case TEq(l, r) =>
-        Z3Expr.Cmp(CmpOp.Eq, encodeFromSmtTerm(ctx, l, env), encodeFromSmtTerm(ctx, r, env))
+      case TEq(l, r) => encEq(ctx, CmpOp.Eq, l, r, env)
       case TLt(l, r) =>
         encCmp(ctx, CmpOp.Lt, l, r, env)
       case TNeg(t) =>
