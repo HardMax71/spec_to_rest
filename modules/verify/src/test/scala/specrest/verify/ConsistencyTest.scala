@@ -257,6 +257,39 @@ class ConsistencyTest extends CatsEffectSuite:
         |    chosen = none or chosen = fallback
         |}""".stripMargin,
       "base-vs-optional equality must verify, not crash on incompatible sorts"
+    ),
+    (
+      "none in a with-record-update verifies (the target field's Option sort supplies the element sort)",
+      "with_none_demo",
+      """service WithNoneDemo {
+        |  enum Status {
+        |    OPEN,
+        |    CLOSED
+        |  }
+        |  entity Rec {
+        |    id: Int
+        |    status: Status
+        |    done_at: Option[Int]
+        |  }
+        |  state {
+        |    recs: Int -> lone Rec
+        |  }
+        |  operation Reopen {
+        |    input: id: Int
+        |    output: r: Rec
+        |    requires:
+        |      id in recs
+        |    ensures:
+        |      r = pre(recs)[id] with {
+        |        status = OPEN,
+        |        done_at = none
+        |      }
+        |      recs' = pre(recs) + {id -> r}
+        |  }
+        |  invariant cardNonNeg:
+        |    #recs >= 0
+        |}""".stripMargin,
+      "none in a with-update must verify (field Option sort gives the element sort), not skip"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

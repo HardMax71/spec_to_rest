@@ -2486,7 +2486,11 @@ object Translator:
                 val skolemName = ctx.freshSkolem(s"with_$name")
                 ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, Z3Sort.Uninterp(name)))
                 val skolemRef = Z3Expr.App(skolemName, Nil)
-                val v         = encodeFromSmtTerm(ctx, value, env)
+                // A bare `none` carries no element sort; in a record-update the target field's
+                // declared sort supplies it (e.g. `completed_at = none`, completed_at: Option[DateTime]).
+                val v = (value, entity.fields.get(fld).map(_._1)) match
+                  case (TNone(), Some(Z3Sort.OptionOf(elem))) => Z3Expr.OptNone(elem)
+                  case _                                      => encodeFromSmtTerm(ctx, value, env)
                 for (fname, (_, funcName)) <- entity.fields do
                   if fname == fld then
                     ctx.assertions += Z3Expr.Cmp(
