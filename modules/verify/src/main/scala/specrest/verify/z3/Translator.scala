@@ -2493,13 +2493,25 @@ object Translator:
             val rhs    = encodeFromSmtTerm(ctx, set, env)
             val rhSort = inferSortOfZ3Expr(ctx, rhs)
             (elemSort, rhSort) match
+              case (Some(Z3Sort.OptionOf(es)), Some(Z3Sort.SetOf(rs))) if Z3Sort.eq(es, rs) =>
+                // optional-vs-base membership (e.g. `tag_filter in t.tags`, tag_filter: Option[T]):
+                // `opt in S` iff some x in S has opt = some(x) (none is never a member).
+                val xName = ctx.freshSkolem("opt_in")
+                val xVar  = Z3Expr.Var(xName, rs)
+                Z3Expr.Quantifier(
+                  QKind.Exists,
+                  List(Z3Binding(xName, rs)),
+                  Z3Expr.And(List(
+                    Z3Expr.SetMember(xVar, rhs),
+                    Z3Expr.Cmp(CmpOp.Eq, elemZ, Z3Expr.OptSome(xVar))
+                  ))
+                )
               case (Some(es), Some(Z3Sort.SetOf(rs))) if !Z3Sort.eq(es, rs) =>
                 fail(
                   ctx,
                   s"membership operator 'in' requires the left-hand side sort to match the set's element sort; got $es against a set of $rs"
                 )
-              case _ => ()
-            Z3Expr.SetMember(elemZ, rhs)
+              case _ => Z3Expr.SetMember(elemZ, rhs)
       case TSetUnion(l, r)     => encodeSetBinOp(ctx, SetOpKind.Union, l, r, env)
       case TSetIntersect(l, r) => encodeSetBinOp(ctx, SetOpKind.Intersect, l, r, env)
       case TSetDiff(l, r)      => encodeSetBinOp(ctx, SetOpKind.Diff, l, r, env)

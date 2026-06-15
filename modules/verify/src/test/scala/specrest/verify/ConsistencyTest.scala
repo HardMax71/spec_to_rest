@@ -381,6 +381,32 @@ class ConsistencyTest extends CatsEffectSuite:
         |    ctr >= 0
         |}""".stripMargin,
       "universal-over-Seq (all t in xs | ...) must verify, not skip on 'field access requires entity sort'"
+    ),
+    (
+      "the ListTodos filter shape verifies: range-membership + optional-vs-base membership under all-in-Seq",
+      "list_filter_demo",
+      """service ListFilterDemo {
+        |  entity It {
+        |    tags: Set[String]
+        |  }
+        |  state {
+        |    rel: Int -> lone It
+        |  }
+        |  operation Filter {
+        |    input: tag_filter: Option[String]
+        |    output: results: Seq[It]
+        |    requires:
+        |      true
+        |    ensures:
+        |      all t in results |
+        |        t in ran(rel)
+        |        and (tag_filter = none or tag_filter in t.tags)
+        |      rel' = rel
+        |  }
+        |  invariant cardNonNeg:
+        |    #rel >= 0
+        |}""".stripMargin,
+      "ListTodos shape (range-membership `t in ran(rel)` + optional membership `tag_filter in t.tags`) must verify, not skip"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
