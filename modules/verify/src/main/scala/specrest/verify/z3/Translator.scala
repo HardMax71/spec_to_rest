@@ -1504,6 +1504,17 @@ object Translator:
   ): Z3Expr = expr match
     case BinaryOpF(BEq(), l, r, _) =>
       tryLowerRelationEquality(ctx, l, r, env).getOrElse(translateExpr(ctx, expr, env))
+    // Recurse through the conjunction/let structure so a relation-assignment nested inside a
+    // `let ... in (... and X' = rhs)` still gets its frame axiom (the dispatcher would otherwise
+    // only fire on a top-level `X' = rhs`, leaving the post-state relation under-constrained).
+    case BinaryOpF(BAnd(), a, b, _) =>
+      Z3Expr.And(
+        List(translateEnsuresClause(ctx, a, env), translateEnsuresClause(ctx, b, env))
+      )
+    case LetF(x, v, body, _) =>
+      val newEnv = env.clone()
+      newEnv(x) = translateExpr(ctx, v, env)
+      translateEnsuresClause(ctx, body, newEnv)
     case _ => translateExpr(ctx, expr, env)
 
   private def tryLowerRelationEquality(
@@ -1539,21 +1550,33 @@ object Translator:
       expr: expr,
       targetInfo: StateRelationInfo,
       env: mutable.Map[String, Z3Expr]
-  ): Option[RelationRhsLowering] = expr match
+  ): Option[RelationRhsLowering] =
+    collectInsertChain(ctx, expr).map: (base, entries) =>
+      (lhsInfo: StateRelationInfo, lhsMode: StateMode) =>
+        relationInsertionAxiom(
+          ctx,
+          lhsInfo,
+          lhsMode,
+          base._1,
+          base._2,
+          entries,
+          env,
+          targetInfo
+        )
+
+  // Flatten a chained insert `base + {k1->v1} + ... + {kn->vn}` (left-assoc `+`, each operand a
+  // MapLiteral) into the base relation plus all entries; relationInsertionAxiom emits the
+  // multi-entry frame as a single axiom. A single insert is the one-step base case.
+  private def collectInsertChain(
+      ctx: TranslateCtx,
+      expr: expr
+  ): Option[((StateRelationInfo, StateMode), List[KeyValueEntry])] = expr match
     case BinaryOpF(_: (BAdd | BUnion), left, right, _) =>
-      resolveStateRelationReference(ctx, left).flatMap: base =>
-        extractMapEntries(right).filter(_.nonEmpty).map: entries =>
-          (lhsInfo: StateRelationInfo, lhsMode: StateMode) =>
-            relationInsertionAxiom(
-              ctx,
-              lhsInfo,
-              lhsMode,
-              base._1,
-              base._2,
-              entries,
-              env,
-              targetInfo
-            )
+      extractMapEntries(right).filter(_.nonEmpty).flatMap: entries =>
+        resolveStateRelationReference(ctx, left) match
+          case Some(base) => Some((base, entries))
+          case None =>
+            collectInsertChain(ctx, left).map((base, acc) => (base, acc ++ entries))
     case _ => None
 
   private def tryLowerSingleMinusRhs(
