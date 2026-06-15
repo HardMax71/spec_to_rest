@@ -220,6 +220,7 @@ fun smt_uses_var :: "String.literal \<Rightarrow> smt_term \<Rightarrow> bool" w
 | "smt_uses_var x (TSeqCons e r)         = (smt_uses_var x e \<or> smt_uses_var x r)"
 | "smt_uses_var x TMapEmpty              = False"
 | "smt_uses_var x (TMapCons k v r)       = (smt_uses_var x k \<or> smt_uses_var x v \<or> smt_uses_var x r)"
+| "smt_uses_var x (TSum c _)             = smt_uses_var x c"
 
 lemma smtEval_drop_irrelevant:
   "\<not> smt_uses_var x t \<or> map_of pre x \<noteq> None

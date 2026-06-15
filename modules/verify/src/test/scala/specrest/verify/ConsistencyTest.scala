@@ -407,6 +407,30 @@ class ConsistencyTest extends CatsEffectSuite:
         |    #rel >= 0
         |}""".stripMargin,
       "ListTodos shape (range-membership `t in ran(rel)` + optional membership `tag_filter in t.tags`) must verify, not skip"
+    ),
+    (
+      "sum(coll, i => i.field) aggregate verifies via Z3 as an uninterpreted function (the ecommerce subtotal shape)",
+      "sum_demo",
+      """service SumDemo {
+        |  entity LineItem {
+        |    line_total: Int
+        |  }
+        |  state {
+        |    items: Set[LineItem]
+        |    subtotal: Int
+        |  }
+        |  operation Relabel {
+        |    input: x: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      items' = pre(items)
+        |      subtotal' = pre(subtotal)
+        |  }
+        |  invariant subtotalIsSum:
+        |    subtotal = sum(items, i => i.line_total)
+        |}""".stripMargin,
+      "sum(items, i => i.line_total) must verify: as an uninterpreted function keyed by collection and field, the invariant `subtotal = sum(items, _)` is preserved when items is unchanged (same collection => same sum)"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
