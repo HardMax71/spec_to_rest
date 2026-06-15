@@ -87,7 +87,7 @@ definition translate_beq_dom_or_none :: "expr \<Rightarrow> expr \<Rightarrow> s
 
 fun range_arg :: "expr \<Rightarrow> String.literal option" where
   "range_arg (CallF (IdentifierF nm _) [IdentifierF rel _] _) =
-     (if nm = STR ''range'' then Some rel else None)"
+     (if nm = STR ''range'' \<or> nm = STR ''ran'' then Some rel else None)"
 | "range_arg _ = None"
 
 definition translate_range_eq :: "smt_term \<Rightarrow> String.literal \<Rightarrow> smt_term" where

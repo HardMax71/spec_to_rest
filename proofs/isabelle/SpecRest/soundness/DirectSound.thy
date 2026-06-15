@@ -10,15 +10,16 @@ lemma range_eval_None:
       and "range_arg r = Some rel"
   shows "eval fs ps fuel s st env r = None"
 proof -
-  from assms(2) obtain sp1 sp2 sp3
-    where req: "r = CallF (IdentifierF (STR ''range'') sp1) [IdentifierF rel sp2] sp3"
+  from assms(2) obtain nm sp1 sp2 sp3
+    where req: "r = CallF (IdentifierF nm sp1) [IdentifierF rel sp2] sp3"
+      and nmv: "nm = STR ''range'' \<or> nm = STR ''ran''"
     by (cases r rule: range_arg.cases) (auto split: if_splits)
-  have lk: "lookup_callee fs ps (STR ''range'') = None"
-    using assms(1) by (simp add: builtins_reserved_def)
-  have nb: "\<not> is_builtin_pred (STR ''range'')"
-    by (simp add: is_builtin_pred_def)
-  have nf: "\<not> is_builtin_func (STR ''range'')"
-    by (simp add: is_builtin_func_def)
+  have lk: "lookup_callee fs ps nm = None"
+    using assms(1) nmv by (auto simp: builtins_reserved_def)
+  have nb: "\<not> is_builtin_pred nm"
+    using nmv by (auto simp: is_builtin_pred_def)
+  have nf: "\<not> is_builtin_func nm"
+    using nmv by (auto simp: is_builtin_func_def)
   show ?thesis
     unfolding req by (cases fuel) (simp_all add: lk nb nf)
 qed

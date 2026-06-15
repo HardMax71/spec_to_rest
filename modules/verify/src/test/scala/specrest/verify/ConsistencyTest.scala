@@ -329,6 +329,58 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "seq-append (log' = pre(log) + [Ev{...}]) must verify, not skip on 'addition requires numeric'"
+    ),
+    (
+      "ran(rel) verifies via Z3 (the user-facing value-set builtin reuses #428's range projection)",
+      "ran_demo",
+      """service RanDemo {
+        |  entity It {
+        |    v: Int
+        |  }
+        |  state {
+        |    rel: Int -> lone It
+        |  }
+        |  operation Values {
+        |    output: xs: Set[It]
+        |    requires:
+        |      true
+        |    ensures:
+        |      xs = ran(rel)
+        |      rel' = rel
+        |  }
+        |  invariant cardNonNeg:
+        |    #rel >= 0
+        |}""".stripMargin,
+      "ran(rel) must verify (reuses #428 range projection), not skip as an unrecognized builtin"
+    ),
+    (
+      "universal quantification over a Seq output verifies via Z3 (all t in xs | P, the ListTodos shape)",
+      "seq_forall_demo",
+      """service SeqForallDemo {
+        |  enum St { A, B }
+        |  entity It {
+        |    st: St
+        |    tags: Set[String]
+        |  }
+        |  state {
+        |    ctr: Int
+        |  }
+        |  operation Emit {
+        |    input: sf: Option[St], tf: String
+        |    output: xs: Seq[It]
+        |    requires:
+        |      true
+        |    ensures:
+        |      all t in xs |
+        |        t.st = A
+        |        and (sf = none or t.st = sf)
+        |        and tf in t.tags
+        |      ctr' = pre(ctr)
+        |  }
+        |  invariant nonneg:
+        |    ctr >= 0
+        |}""".stripMargin,
+      "universal-over-Seq (all t in xs | ...) must verify, not skip on 'field access requires entity sort'"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

@@ -12,6 +12,7 @@ object Z3Trigger:
     case Z3Expr.StrCmp(_, l, r, _)     => List(l, r)
     case Z3Expr.StrConcat(l, r, _)     => List(l, r)
     case Z3Expr.SeqConcat(l, r, _)     => List(l, r)
+    case Z3Expr.SeqContains(s, e, _)   => List(s, e)
     case Z3Expr.Arith(_, args, _)      => args
     case Z3Expr.Quantifier(_, _, b, _) => List(b)
     case Z3Expr.SetLit(_, ms, _)       => ms

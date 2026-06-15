@@ -295,6 +295,7 @@ private object Backend:
     case Z3Expr.StrCmp(op, l, r, _)        => renderStrCmp(rctx, op, l, r)
     case Z3Expr.StrConcat(l, r, _)         => renderStrConcat(rctx, l, r)
     case Z3Expr.SeqConcat(l, r, _)         => renderSeqConcat(rctx, l, r)
+    case Z3Expr.SeqContains(s, e, _)       => renderSeqContains(rctx, s, e)
     case Z3Expr.Arith(op, args, _)         => renderArith(rctx, op, args)
     case q @ Z3Expr.Quantifier(_, _, _, _) => renderQuantifier(rctx, q)
     case Z3Expr.EmptySet(elemSort, _) =>
@@ -432,6 +433,16 @@ private object Backend:
     val l = renderExpr(rctx, lhs).asInstanceOf[SeqExpr[Sort]]
     val r = renderExpr(rctx, rhs).asInstanceOf[SeqExpr[Sort]]
     rctx.ctx.mkConcat(l, r)
+
+  private def renderSeqContains(
+      rctx: RenderCtx,
+      seq: Z3Expr,
+      elem: Z3Expr
+  ): BoolExpr =
+    val s = renderExpr(rctx, seq).asInstanceOf[SeqExpr[Sort]]
+    val unit = rctx.ctx.mkUnit(renderExpr(rctx, elem).asInstanceOf[Z3AstExpr[Sort]])
+      .asInstanceOf[SeqExpr[Sort]]
+    rctx.ctx.mkContains(s, unit)
 
   private def renderArith(
       rctx: RenderCtx,
