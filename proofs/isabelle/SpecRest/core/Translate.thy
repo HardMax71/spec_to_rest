@@ -170,7 +170,7 @@ where
              IdentifierF x _ \<Rightarrow> Some (TCardRel x)
            | PrimeF (IdentifierF x _) _ \<Rightarrow> Some (TPrime (TCardRel x))
            | PreF (IdentifierF x _) _ \<Rightarrow> Some (TPre (TCardRel x))
-           | _ \<Rightarrow> None)
+           | _ \<Rightarrow> map_option TCard (translate enums e))
       | UPower \<Rightarrow> None)"
 | "translate enums (BinaryOpF op l r _) =
      (case op of

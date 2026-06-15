@@ -2345,6 +2345,10 @@ object Translator:
         env.get(rel) match
           case Some(setExpr) => entitySetCardinality(ctx, setExpr)
           case None          => cardinalityRefFor(ctx, rel, ctx.stateMode)
+      // `#<set-valued expr>` (e.g. `#(orders[oid].items)`): encode the operand and apply the same
+      // uninterpreted setCard model as an entity-field set. Non-set operands fail in setCard.
+      case TCard(t) =>
+        entitySetCardinality(ctx, encodeFromSmtTerm(ctx, t, env))
 
       case TLetIn(name, value, body) =>
         val v      = encodeFromSmtTerm(ctx, value, env)

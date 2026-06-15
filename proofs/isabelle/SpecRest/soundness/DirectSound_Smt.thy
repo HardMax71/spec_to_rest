@@ -190,6 +190,7 @@ fun smt_uses_var :: "String.literal \<Rightarrow> smt_term \<Rightarrow> bool" w
 | "smt_uses_var x (TDiv l r)             = (smt_uses_var x l \<or> smt_uses_var x r)"
 | "smt_uses_var x (TInDom _ t)           = smt_uses_var x t"
 | "smt_uses_var x (TCardRel _)           = False"
+| "smt_uses_var x (TCard t)              = smt_uses_var x t"
 | "smt_uses_var x (TLetIn y v b)         = (smt_uses_var x v \<or> (y \<noteq> x \<and> smt_uses_var x b))"
 | "smt_uses_var x (TForallEnum y _ b)    = (y \<noteq> x \<and> smt_uses_var x b)"
 | "smt_uses_var x (TForallRel y _ b)     = (y \<noteq> x \<and> smt_uses_var x b)"

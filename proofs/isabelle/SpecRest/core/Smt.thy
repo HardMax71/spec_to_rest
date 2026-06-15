@@ -41,6 +41,7 @@ datatype (plugins only: code size) smt_term =
   | TDiv "smt_term" "smt_term"
   | TInDom "String.literal" "smt_term"
   | TCardRel "String.literal"
+  | TCard "smt_term"
   | TLetIn "String.literal" "smt_term" "smt_term"
   | TForallEnum "String.literal" "String.literal" "smt_term"
   | TForallRel "String.literal" "String.literal" "smt_term"
@@ -96,6 +97,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TDiv l r)            = smt_var_list l @ smt_var_list r"
 | "smt_var_list (TInDom _ t)          = smt_var_list t"
 | "smt_var_list (TCardRel _)          = []"
+| "smt_var_list (TCard t)             = smt_var_list t"
 | "smt_var_list (TLetIn v a b)        = v # smt_var_list a @ smt_var_list b"
 | "smt_var_list (TForallEnum v _ b)   = v # smt_var_list b"
 | "smt_var_list (TForallRel v _ b)    = v # smt_var_list b"
@@ -447,6 +449,10 @@ where
      (case smt_model_lookup_rel m rel_name of
         Some d \<Rightarrow> Some (SInt (int (length d)))
       | None   \<Rightarrow> None)"
+| "smtEval m env (TCard t) =
+     (case smtEval m env t of
+        Some (SSet xs) \<Rightarrow> Some (SInt (int (length xs)))
+      | _              \<Rightarrow> None)"
 | "smtEval m env (TLetIn x v body) =
      (case smtEval m env v of
         Some va \<Rightarrow> smtEval m ((x, va) # env) body
