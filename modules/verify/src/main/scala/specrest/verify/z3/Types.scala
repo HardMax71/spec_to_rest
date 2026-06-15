@@ -91,6 +91,7 @@ enum Z3Expr derives CanEqual:
   case StrCmp(op: CmpOp, lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case StrConcat(lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
   case SeqConcat(lhs: Z3Expr, rhs: Z3Expr, span: Option[span_t] = None)
+  case SeqContains(seq: Z3Expr, elem: Z3Expr, span: Option[span_t] = None)
   case Arith(op: ArithOp, args: List[Z3Expr], span: Option[span_t] = None)
   case Quantifier(
       q: QKind,
@@ -116,63 +117,65 @@ enum Z3Expr derives CanEqual:
   )
 
   def spanOpt: Option[span_t] = this match
-    case e: Var        => e.span
-    case e: App        => e.span
-    case e: IntLit     => e.span
-    case e: RealLit    => e.span
-    case e: BoolLit    => e.span
-    case e: And        => e.span
-    case e: Or         => e.span
-    case e: Not        => e.span
-    case e: Implies    => e.span
-    case e: Cmp        => e.span
-    case e: StrCmp     => e.span
-    case e: StrConcat  => e.span
-    case e: SeqConcat  => e.span
-    case e: Arith      => e.span
-    case e: Quantifier => e.span
-    case e: EmptySet   => e.span
-    case e: SetLit     => e.span
-    case e: SetMember  => e.span
-    case e: SetBinOp   => e.span
-    case e: Ite        => e.span
-    case e: OptNone    => e.span
-    case e: OptSome    => e.span
-    case e: StrLit     => e.span
-    case e: InRe       => e.span
-    case e: SeqLit     => e.span
-    case e: MapLit     => e.span
+    case e: Var         => e.span
+    case e: App         => e.span
+    case e: IntLit      => e.span
+    case e: RealLit     => e.span
+    case e: BoolLit     => e.span
+    case e: And         => e.span
+    case e: Or          => e.span
+    case e: Not         => e.span
+    case e: Implies     => e.span
+    case e: Cmp         => e.span
+    case e: StrCmp      => e.span
+    case e: StrConcat   => e.span
+    case e: SeqConcat   => e.span
+    case e: SeqContains => e.span
+    case e: Arith       => e.span
+    case e: Quantifier  => e.span
+    case e: EmptySet    => e.span
+    case e: SetLit      => e.span
+    case e: SetMember   => e.span
+    case e: SetBinOp    => e.span
+    case e: Ite         => e.span
+    case e: OptNone     => e.span
+    case e: OptSome     => e.span
+    case e: StrLit      => e.span
+    case e: InRe        => e.span
+    case e: SeqLit      => e.span
+    case e: MapLit      => e.span
 
   def withSpan(s: Option[span_t]): Z3Expr =
     if s.isEmpty then this
     else
       this match
-        case e: Var        => e.copy(span = s)
-        case e: App        => e.copy(span = s)
-        case e: IntLit     => e.copy(span = s)
-        case e: RealLit    => e.copy(span = s)
-        case e: BoolLit    => e.copy(span = s)
-        case e: And        => e.copy(span = s)
-        case e: Or         => e.copy(span = s)
-        case e: Not        => e.copy(span = s)
-        case e: Implies    => e.copy(span = s)
-        case e: Cmp        => e.copy(span = s)
-        case e: StrCmp     => e.copy(span = s)
-        case e: StrConcat  => e.copy(span = s)
-        case e: SeqConcat  => e.copy(span = s)
-        case e: Arith      => e.copy(span = s)
-        case e: Quantifier => e.copy(span = s)
-        case e: EmptySet   => e.copy(span = s)
-        case e: SetLit     => e.copy(span = s)
-        case e: SetMember  => e.copy(span = s)
-        case e: SetBinOp   => e.copy(span = s)
-        case e: Ite        => e.copy(span = s)
-        case e: OptNone    => e.copy(span = s)
-        case e: OptSome    => e.copy(span = s)
-        case e: StrLit     => e.copy(span = s)
-        case e: InRe       => e.copy(span = s)
-        case e: SeqLit     => e.copy(span = s)
-        case e: MapLit     => e.copy(span = s)
+        case e: Var         => e.copy(span = s)
+        case e: App         => e.copy(span = s)
+        case e: IntLit      => e.copy(span = s)
+        case e: RealLit     => e.copy(span = s)
+        case e: BoolLit     => e.copy(span = s)
+        case e: And         => e.copy(span = s)
+        case e: Or          => e.copy(span = s)
+        case e: Not         => e.copy(span = s)
+        case e: Implies     => e.copy(span = s)
+        case e: Cmp         => e.copy(span = s)
+        case e: StrCmp      => e.copy(span = s)
+        case e: StrConcat   => e.copy(span = s)
+        case e: SeqConcat   => e.copy(span = s)
+        case e: SeqContains => e.copy(span = s)
+        case e: Arith       => e.copy(span = s)
+        case e: Quantifier  => e.copy(span = s)
+        case e: EmptySet    => e.copy(span = s)
+        case e: SetLit      => e.copy(span = s)
+        case e: SetMember   => e.copy(span = s)
+        case e: SetBinOp    => e.copy(span = s)
+        case e: Ite         => e.copy(span = s)
+        case e: OptNone     => e.copy(span = s)
+        case e: OptSome     => e.copy(span = s)
+        case e: StrLit      => e.copy(span = s)
+        case e: InRe        => e.copy(span = s)
+        case e: SeqLit      => e.copy(span = s)
+        case e: MapLit      => e.copy(span = s)
 
 enum Z3Regex derives CanEqual:
   case Str(s: String)

@@ -4941,7 +4941,7 @@ object SpecRestGenerated {
 
   def range_arg(x0: expr): Option[String] = x0 match {
     case CallF(IdentifierF(nm, uu), List(IdentifierF(rel, uv)), uw) =>
-      nm == "range" match {
+      nm == "range" || nm == "ran" match {
         case true  => Some[String](rel)
         case false => None
       }

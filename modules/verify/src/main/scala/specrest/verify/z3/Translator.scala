@@ -972,6 +972,12 @@ object Translator:
         substituteVar(r, varName, replacement),
         sp
       )
+    case Z3Expr.SeqContains(s, e, sp) =>
+      Z3Expr.SeqContains(
+        substituteVar(s, varName, replacement),
+        substituteVar(e, varName, replacement),
+        sp
+      )
     case Z3Expr.Arith(op, args, sp) =>
       Z3Expr.Arith(op, args.map(a => substituteVar(a, varName, replacement)), sp)
     case q @ Z3Expr.Quantifier(kind, bindings, body, sp) =>
@@ -1450,6 +1456,7 @@ object Translator:
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
     case Z3Expr.StrConcat(_, _, _)     => Some(Z3Sort.Str)
     case Z3Expr.SeqConcat(l, _, _)     => inferSortOfZ3Expr(ctx, l)
+    case Z3Expr.SeqContains(_, _, _)   => Some(Z3Sort.Bool)
     case Z3Expr.InRe(_, _, _)          => Some(Z3Sort.Bool)
     case Z3Expr.SeqLit(elemSort, _, _) => Some(Z3Sort.SeqOf(elemSort))
     case Z3Expr.MapLit(keySort, valueSort, _, _) =>
@@ -2324,18 +2331,34 @@ object Translator:
           encodeFromSmtTerm(ctx, body, newEnv)
         )
       case TForallRel(varName, rel, body) =>
-        val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
-        val newEnv        = env.clone()
-        newEnv(varName) = Z3Expr.Var(varName, sort)
-        val inner = encodeFromSmtTerm(ctx, body, newEnv)
-        val guarded = guard match
-          case Some(g) => Z3Expr.Implies(g, inner)
-          case None    => inner
-        Z3Expr.Quantifier(
-          QKind.ForAll,
-          List(Z3Binding(varName, sort)),
-          guarded
-        )
+        // `translate` emits TForallRel for any identifier domain. When the domain is actually a
+        // Seq-sorted value (e.g. an operation output Seq[T]) rather than a state relation, quantify
+        // over the sequence's elements. eval is vacuous on a non-relation domain, so the seq
+        // interpretation is trusted frame synthesis (like the #428 range projection).
+        env.get(rel).flatMap(z => inferSortOfZ3Expr(ctx, z)) match
+          case Some(Z3Sort.SeqOf(elem)) =>
+            val seqZ   = env(rel)
+            val newEnv = env.clone()
+            newEnv(varName) = Z3Expr.Var(varName, elem)
+            val inner = encodeFromSmtTerm(ctx, body, newEnv)
+            Z3Expr.Quantifier(
+              QKind.ForAll,
+              List(Z3Binding(varName, elem)),
+              Z3Expr.Implies(Z3Expr.SeqContains(seqZ, Z3Expr.Var(varName, elem)), inner)
+            )
+          case _ =>
+            val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
+            val newEnv        = env.clone()
+            newEnv(varName) = Z3Expr.Var(varName, sort)
+            val inner = encodeFromSmtTerm(ctx, body, newEnv)
+            val guarded = guard match
+              case Some(g) => Z3Expr.Implies(g, inner)
+              case None    => inner
+            Z3Expr.Quantifier(
+              QKind.ForAll,
+              List(Z3Binding(varName, sort)),
+              guarded
+            )
 
       case TExistsRel(varName, rel, body) =>
         val (sort, guard) = quantifierDomainFor(ctx, rel, varName)
