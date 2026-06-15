@@ -2543,6 +2543,15 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
         Z3Expr.App(funcName, List(strZ))
+      // 1-arg reserved builtin string function (e.g. hash(x)): an uninterpreted Str-valued function.
+      // Same name mangling as TUStrPred; determinism (same input -> same output) is the functionality.
+      case TUStrFunc(name, t) =>
+        val strZ     = encodeFromSmtTerm(ctx, t, env)
+        val s        = inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str)
+        val funcName = s"${name}_${sortNameOf(s)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Str))
+        Z3Expr.App(funcName, List(strZ))
       // 0-arg reserved builtin (e.g. now()): an uninterpreted Int constant. The `${name}_0`
       // name matches translateCall's argSortsMangled, so the in-subset and raw paths share it.
       case TUConst(name) =>

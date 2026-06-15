@@ -105,6 +105,17 @@ consts builtin_const_val :: "String.literal \<Rightarrow> int"
 definition is_builtin_const :: "String.literal \<Rightarrow> bool" where
   "is_builtin_const nm \<longleftrightarrow> nm = STR ''now''"
 
+text \<open>\<open>builtin_str_func name s\<close> is the uninterpreted value of the reserved 1-argument
+  built-in string function \<open>name\<close> (e.g.\ \<open>hash\<close>) applied to string \<open>s\<close>. Like
+  \<open>str_predicate\<close> it is abstract - the trusted translator emits it as a Z3 uninterpreted
+  string function - so soundness stays parametric in the function and any realisation
+  \<open>eval\<close>/\<open>smtEval\<close> share is sound by construction. \<open>is_builtin_func nm\<close> gates lifting
+  \<open>CallF (IdentifierF nm) [arg]\<close> to \<open>UStrFunc\<close>: only reserved built-ins are lifted.\<close>
+consts builtin_str_func :: "String.literal \<Rightarrow> String.literal \<Rightarrow> String.literal"
+
+definition is_builtin_func :: "String.literal \<Rightarrow> bool" where
+  "is_builtin_func nm \<longleftrightarrow> nm = STR ''hash''"
+
 record schema_field_decl =
   fd_name :: "String.literal"
   fd_ty   :: "schema_type"

@@ -290,6 +290,25 @@ class ConsistencyTest extends CatsEffectSuite:
         |    #recs >= 0
         |}""".stripMargin,
       "none in a with-update must verify (field Option sort gives the element sort), not skip"
+    ),
+    (
+      "1-arg builtin hash(x) verifies via Z3 as an uninterpreted String function (determinism preserved)",
+      "hash_demo",
+      """service HashDemo {
+        |  state {
+        |    a: String
+        |    b: String
+        |  }
+        |  operation Both {
+        |    input: pw: String
+        |    ensures:
+        |      a' = hash(pw)
+        |      b' = hash(pw)
+        |  }
+        |  invariant equalHashes:
+        |    a = b
+        |}""".stripMargin,
+      "hash(pw) must verify as a deterministic uninterpreted function (a' = b'), not skip"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
