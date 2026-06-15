@@ -231,8 +231,14 @@ where
                                           else TAnd (TInDom dnm (TVar var)) pt))
                                      (translate enums p)
                                | None \<Rightarrow>
-                                   map_option (\<lambda>rt. TSetMember lt rt)
-                                     (translate enums r))))))
+                                   (case range_arg r of
+                                      Some rel \<Rightarrow>
+                                        (let k = fresh_var (STR ''k'') (rel # smt_var_list lt)
+                                         in Some (TExistsRel k rel
+                                                    (TEq (TIndexRel (TVar rel) (TVar k)) lt)))
+                                    | None \<Rightarrow>
+                                        map_option (\<lambda>rt. TSetMember lt rt)
+                                          (translate enums r)))))))
       | BNotIn \<Rightarrow>
           (case translate enums l of
              None \<Rightarrow> None
@@ -360,7 +366,13 @@ lemma translate_BIn_noncomp:
                             (case identName r of
                                Some rel \<Rightarrow> Some (TInDom rel lt)
                              | None \<Rightarrow>
-                                 map_option (\<lambda>rt. TSetMember lt rt) (translate enums r)))))"
+                                 (case range_arg r of
+                                    Some rel \<Rightarrow>
+                                      (let k = fresh_var (STR ''k'') (rel # smt_var_list lt)
+                                       in Some (TExistsRel k rel
+                                                  (TEq (TIndexRel (TVar rel) (TVar k)) lt)))
+                                  | None \<Rightarrow>
+                                      map_option (\<lambda>rt. TSetMember lt rt) (translate enums r))))))"
   using comp_parts_None[OF assms] by (auto split: option.splits)
 
 end

@@ -5724,10 +5724,20 @@ object SpecRestGenerated {
                         case None =>
                           comp_parts(r) match {
                             case None =>
-                              map_option[smt_term, smt_term](
-                                (a: smt_term) => TSetMember(lt, a),
-                                translate(enums, r)
-                              )
+                              range_arg(r) match {
+                                case None =>
+                                  map_option[smt_term, smt_term](
+                                    (a: smt_term) => TSetMember(lt, a),
+                                    translate(enums, r)
+                                  )
+                                case Some(rel) =>
+                                  val k = fresh_var("k", rel :: smt_var_list(lt)): String;
+                                  Some[smt_term](TExistsRel(
+                                    k,
+                                    rel,
+                                    TEq(TIndexRel(TVar(rel), TVar(k)), lt)
+                                  ))
+                              }
                             case Some((vara, (dnm, p))) =>
                               map_option[smt_term, smt_term](
                                 (pt: smt_term) =>

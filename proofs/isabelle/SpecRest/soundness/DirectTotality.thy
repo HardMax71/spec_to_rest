@@ -418,7 +418,8 @@ proof (induction e rule: measure_induct_rule[where f = size])
           show ?thesis
             using hl hr translate_BIn_noncomp[OF nc]
             by (cases r2)
-               (auto simp: BinaryOpF BIn del: translate.simps split: option.splits)
+               (auto simp: BinaryOpF BIn Let_def del: translate.simps
+                     split: option.splits if_splits)
         qed
       qed
     next
