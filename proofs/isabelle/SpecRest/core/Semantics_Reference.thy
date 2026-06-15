@@ -21,7 +21,8 @@ definition builtins_reserved ::
                               \<and> (\<forall>nm. is_builtin_func nm \<longrightarrow> lookup_callee fs ps nm = None)
                               \<and> lookup_callee fs ps (STR ''dom'') = None
                               \<and> lookup_callee fs ps (STR ''range'') = None
-                              \<and> lookup_callee fs ps (STR ''ran'') = None"
+                              \<and> lookup_callee fs ps (STR ''ran'') = None
+                              \<and> lookup_callee fs ps (STR ''sum'') = None"
 
 fun quant_dom ::
   "schema \<Rightarrow> state \<Rightarrow> quant_kind \<Rightarrow> quantifier_binding list

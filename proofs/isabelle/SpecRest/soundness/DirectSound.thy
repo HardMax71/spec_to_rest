@@ -24,6 +24,18 @@ proof -
     unfolding req by (cases fuel) (simp_all add: lk nb nf)
 qed
 
+lemma sum_eval_None:
+  assumes res: "builtins_reserved fs ps"
+      and tr: "translate enums (CallF (IdentifierF nm sp1) (arg # a # list) sp) = Some t"
+  shows "eval fs ps fuel s st env (CallF (IdentifierF nm sp1) (arg # a # list) sp) = None"
+proof -
+  have nmsum: "nm = STR ''sum''"
+    using tr by (auto split: if_splits option.splits list.splits expr.splits)
+  have lk: "lookup_callee fs ps nm = None"
+    using res nmsum by (simp add: builtins_reserved_def)
+  show ?thesis by (cases fuel) (simp_all add: lk)
+qed
+
 lemma binop_noncomp_step:
   assumes deN: "dom_eq_domains fs ps st bop l r = None"
       and bcN: "beq_comp bop r = None"
@@ -523,39 +535,51 @@ next
     show ?thesis using teq veq by simp
   next
     case (Cons arg rest)
-    have aeq: "args = [arg]"
-      using "15.prems"(2) ceq Cons by (cases rest) (auto split: if_splits option.splits)
+    note args_eq = Cons
     show ?thesis
-    proof (cases "is_builtin_pred nm")
-      case True
-      obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
-        using "15.prems"(2) ceq aeq True by (auto split: if_splits option.splits)
-      have lc_none: "lookup_callee fs ps nm = None"
-        using "15.prems"(4) True by (simp add: builtins_reserved_def)
-      from "15.prems"(1) fuel ceq aeq lc_none True obtain str where
-          ea: "eval fs ps fuel s st env arg = Some (VStr str)"
-          and veq: "v = VBool (str_predicate nm str)"
-        by (auto split: option.splits ir_value.splits if_splits)
-      have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
-        using "15.IH" fuel ceq aeq lc_none True ea ta "15.prems"(3) "15.prems"(4)
-        by (auto split: if_splits)
-      show ?thesis using teq veq ev by simp
+    proof (cases rest)
+      case Nil
+      have aeq: "args = [arg]" using args_eq Nil by simp
+      show ?thesis
+      proof (cases "is_builtin_pred nm")
+        case True
+        obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUStrPred nm argt"
+          using "15.prems"(2) ceq aeq True by (auto split: if_splits option.splits)
+        have lc_none: "lookup_callee fs ps nm = None"
+          using "15.prems"(4) True by (simp add: builtins_reserved_def)
+        from "15.prems"(1) fuel ceq aeq lc_none True obtain str where
+            ea: "eval fs ps fuel s st env arg = Some (VStr str)"
+            and veq: "v = VBool (str_predicate nm str)"
+          by (auto split: option.splits ir_value.splits if_splits)
+        have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
+          using "15.IH" fuel ceq aeq lc_none True ea ta "15.prems"(3) "15.prems"(4)
+          by (auto split: if_splits)
+        show ?thesis using teq veq ev by simp
+      next
+        case False
+        have bif: "is_builtin_func nm"
+          using "15.prems"(2) ceq aeq False by (auto split: if_splits option.splits)
+        obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUStrFunc nm argt"
+          using "15.prems"(2) ceq aeq False bif by (auto split: if_splits option.splits)
+        have lc_none: "lookup_callee fs ps nm = None"
+          using "15.prems"(4) bif by (simp add: builtins_reserved_def)
+        from "15.prems"(1) fuel ceq aeq lc_none False bif obtain str where
+            ea: "eval fs ps fuel s st env arg = Some (VStr str)"
+            and veq: "v = VStr (builtin_str_func nm str)"
+          by (auto split: option.splits ir_value.splits if_splits)
+        have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
+          using "15.IH" fuel ceq aeq lc_none False bif ea ta "15.prems"(3) "15.prems"(4)
+          by (auto split: if_splits)
+        show ?thesis using teq veq ev by simp
+      qed
     next
-      case False
-      have bif: "is_builtin_func nm"
-        using "15.prems"(2) ceq aeq False by (auto split: if_splits option.splits)
-      obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUStrFunc nm argt"
-        using "15.prems"(2) ceq aeq False bif by (auto split: if_splits option.splits)
-      have lc_none: "lookup_callee fs ps nm = None"
-        using "15.prems"(4) bif by (simp add: builtins_reserved_def)
-      from "15.prems"(1) fuel ceq aeq lc_none False bif obtain str where
-          ea: "eval fs ps fuel s st env arg = Some (VStr str)"
-          and veq: "v = VStr (builtin_str_func nm str)"
-        by (auto split: option.splits ir_value.splits if_splits)
-      have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SStr str)"
-        using "15.IH" fuel ceq aeq lc_none False bif ea ta "15.prems"(3) "15.prems"(4)
-        by (auto split: if_splits)
-      show ?thesis using teq veq ev by simp
+      case (Cons b list)
+      have args2: "args = arg # b # list" using args_eq Cons by simp
+      have tr2: "translate enums (CallF (IdentifierF nm sp1) (arg # b # list) sp) = Some t"
+        using "15.prems"(2) ceq args2 by simp
+      have "eval fs ps fuel s st env (CallF (IdentifierF nm sp1) (arg # b # list) sp) = None"
+        by (rule sum_eval_None[OF "15.prems"(4) tr2])
+      then show ?thesis using "15.prems"(1) ceq args2 by simp
     qed
   qed
 next

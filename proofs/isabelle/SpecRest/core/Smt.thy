@@ -71,6 +71,7 @@ datatype (plugins only: code size) smt_term =
   | TSeqCons "smt_term" "smt_term"
   | TMapEmpty
   | TMapCons "smt_term" "smt_term" "smt_term"
+  | TSum "smt_term" "String.literal"
 
 text \<open>\<open>smt_var_list\<close>: every variable name occurring anywhere in a term,
   binders included. Over-approximates the free variables, so a name not in
@@ -125,6 +126,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TSeqCons e r)        = smt_var_list e @ smt_var_list r"
 | "smt_var_list TMapEmpty             = []"
 | "smt_var_list (TMapCons k v r)      = smt_var_list k @ smt_var_list v @ smt_var_list r"
+| "smt_var_list (TSum c _)            = smt_var_list c"
 
 text \<open>\<open>fresh_var base avoid\<close>: the first of \<open>base\<close>, \<open>base_\<close>, \<open>base__\<close>, ...
   not in \<open>avoid\<close>. The candidates have strictly increasing lengths, so among
@@ -332,6 +334,14 @@ definition set_diff_smt_vals ::
   "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
   "set_diff_smt_vals l r \<equiv> dedupe_smt_vals (filter (\<lambda>v. \<not> contains_smt_val r v) l)"
 
+text \<open>\<open>agg_sum coll field\<close> is the uninterpreted value of \<open>sum(coll, i => i.field)\<close>: abstract, like
+  \<open>str_predicate\<close>, so the trusted translator emits it as a Z3 uninterpreted function of the
+  collection (same collection + field \<Rightarrow> same sum). It captures the functional dependency of the
+  aggregate on its collection, not the arithmetic of summation (finite sums are not expressible in
+  first-order SMT); the obligation is vacuous on the reference \<open>eval\<close> (a 2-arg \<open>CallF\<close> evaluates to
+  \<open>None\<close>), so any realisation is sound.\<close>
+consts agg_sum :: "smt_val \<Rightarrow> String.literal \<Rightarrow> int"
+
 function (sequential) smtEval :: "smt_model \<Rightarrow> smt_env \<Rightarrow> smt_term \<Rightarrow> smt_val option"
 and smtEval_forall_enum ::
   "smt_model \<Rightarrow> smt_env \<Rightarrow> String.literal \<Rightarrow> String.literal
@@ -534,6 +544,10 @@ where
      (case (smtEval m env k, smtEval m env v, smtEval m env rest) of
         (Some kv, Some vv, Some (SMap ps)) \<Rightarrow> Some (SMap ((kv, vv) # ps))
       | _ \<Rightarrow> None)"
+| "smtEval m env (TSum c f) =
+     (case smtEval m env c of
+        Some cv \<Rightarrow> Some (SInt (agg_sum cv f))
+      | None    \<Rightarrow> None)"
 
 | "smtEval_forall_enum m env var sort_name [] body = Some (SBool True)"
 | "smtEval_forall_enum m env var sort_name (mem # rest) body =

@@ -584,6 +584,7 @@ object SpecRestGenerated {
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
   final case class TMapEmpty()                                     extends smt_term
   final case class TMapCons(a: smt_term, b: smt_term, c: smt_term) extends smt_term
+  final case class TSum(a: smt_term, b: String)                    extends smt_term
 
   sealed abstract class field_decl
   final case class FieldDeclFull(a: String, b: type_expr, c: Option[expr], d: Option[span_t])
@@ -1815,6 +1816,7 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
   }
 
   def peelSmtRelationRef(x0: smt_term): Option[String] = x0 match {
@@ -1866,6 +1868,7 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
   }
 
   def set_diff_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
@@ -2806,6 +2809,11 @@ object SpecRestGenerated {
           case (Some(kv), (Some(vv), Some(SMap(ps)))) =>
             Some[smt_val](SMap((kv, vv) :: ps))
         }
+      case (m, env, TSum(c, f)) =>
+        smtEval(m, env, c) match {
+          case None     => None
+          case Some(cv) => Some[smt_val](SInt(BigInt(cv.hashCode + f.hashCode)))
+        }
     }
 
   def binOpToTs(x0: bin_op): String = x0 match {
@@ -3302,6 +3310,7 @@ object SpecRestGenerated {
     case TMapEmpty()           => Nil
     case TMapCons(k, v, r) =>
       smt_var_list(k) ++ (smt_var_list(v) ++ smt_var_list(r))
+    case TSum(c, vn) => smt_var_list(c)
   }
 
   def isIntLit(x0: expr): Boolean = x0 match {
@@ -5168,6 +5177,7 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
   }
 
   def peel_relation_ref_smt(x0: smt_term): Option[String] = x0 match {
@@ -5219,6 +5229,7 @@ object SpecRestGenerated {
     case TSeqCons(v, va)        => None
     case TMapEmpty()            => None
     case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
   }
 
   def translate_range_eq(setE: smt_term, rel: String): smt_term = {
@@ -5458,7 +5469,153 @@ object SpecRestGenerated {
                 case false => None
               }
           }
-        case (IdentifierF(_, _), _ :: _ :: _) => None
+        case (IdentifierF(_, _), _ :: BinaryOpF(_, _, _, _) :: _)                => None
+        case (IdentifierF(_, _), _ :: UnaryOpF(_, _, _) :: _)                    => None
+        case (IdentifierF(_, _), _ :: QuantifierF(_, _, _, _) :: _)              => None
+        case (IdentifierF(_, _), _ :: SomeWrapF(_, _) :: _)                      => None
+        case (IdentifierF(_, _), _ :: TheF(_, _, _, _) :: _)                     => None
+        case (IdentifierF(_, _), _ :: FieldAccessF(_, _, _) :: _)                => None
+        case (IdentifierF(_, _), _ :: EnumAccessF(_, _, _) :: _)                 => None
+        case (IdentifierF(_, _), _ :: IndexF(_, _, _) :: _)                      => None
+        case (IdentifierF(_, _), _ :: CallF(_, _, _) :: _)                       => None
+        case (IdentifierF(_, _), _ :: PrimeF(_, _) :: _)                         => None
+        case (IdentifierF(_, _), _ :: PreF(_, _) :: _)                           => None
+        case (IdentifierF(_, _), _ :: WithF(_, _, _) :: _)                       => None
+        case (IdentifierF(_, _), _ :: IfF(_, _, _, _) :: _)                      => None
+        case (IdentifierF(_, _), _ :: LetF(_, _, _, _) :: _)                     => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, BinaryOpF(_, _, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, UnaryOpF(_, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, QuantifierF(_, _, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, SomeWrapF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, TheF(_, _, _, _), _) :: _) =>
+          None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(BinaryOpF(_, _, _, _), _, _), _) ::
+              _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(UnaryOpF(_, _, _), _, _), _) :: _) =>
+          None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(QuantifierF(_, _, _, _), _, _), _) ::
+              _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SomeWrapF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(TheF(_, _, _, _), _, _), _) :: _) =>
+          None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(FieldAccessF(_, _, _), _, _), _) ::
+              _
+            ) => None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(EnumAccessF(_, _, _), _, _), _) :: _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IndexF(_, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(CallF(_, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(PrimeF(_, _), _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(PreF(_, _), _, _), _) :: _)   => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(WithF(_, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IfF(_, _, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(LetF(_, _, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(LambdaF(_, _, _), _, _), _) :: _) =>
+          None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(ConstructorF(_, _, _), _, _), _) ::
+              _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SetLiteralF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(MapLiteralF(_, _), _, _), _) :: _) =>
+          None
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(SetComprehensionF(_, _, _, _), _, _), _) ::
+              _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SeqLiteralF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(MatchesF(_, _, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IntLitF(_, _), _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(FloatLitF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(StringLitF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(BoolLitF(_, _), _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(NoneLitF(_), _, _), _) :: _) => None
+        case (
+              IdentifierF(nm, _),
+              List(arg, LambdaF(p, FieldAccessF(IdentifierF(q, _), field, _), _))
+            ) => nm == "sum" && p == q match {
+            case true => map_option[smt_term, smt_term](
+                (c: smt_term) =>
+                  TSum(c, field),
+                translate(enums, arg)
+              )
+            case false => None
+          }
+        case (
+              IdentifierF(_, _),
+              _ :: LambdaF(_, FieldAccessF(IdentifierF(_, _), _, _), _) ::
+              _ :: _
+            ) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, EnumAccessF(_, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, IndexF(_, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, CallF(_, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, PrimeF(_, _), _) :: _)   => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, PreF(_, _), _) :: _)     => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, WithF(_, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, IfF(_, _, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, LetF(_, _, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, LambdaF(_, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, ConstructorF(_, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, SetLiteralF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, MapLiteralF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, SetComprehensionF(_, _, _, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, SeqLiteralF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, MatchesF(_, _, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, IntLitF(_, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, FloatLitF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, StringLitF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, BoolLitF(_, _), _) :: _) => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, NoneLitF(_), _) :: _)    => None
+        case (IdentifierF(_, _), _ :: LambdaF(_, IdentifierF(_, _), _) :: _) =>
+          None
+        case (IdentifierF(_, _), _ :: ConstructorF(_, _, _) :: _)         => None
+        case (IdentifierF(_, _), _ :: SetLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), _ :: MapLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), _ :: SetComprehensionF(_, _, _, _) :: _) => None
+        case (IdentifierF(_, _), _ :: SeqLiteralF(_, _) :: _)             => None
+        case (IdentifierF(_, _), _ :: MatchesF(_, _, _) :: _)             => None
+        case (IdentifierF(_, _), _ :: IntLitF(_, _) :: _)                 => None
+        case (IdentifierF(_, _), _ :: FloatLitF(_, _) :: _)               => None
+        case (IdentifierF(_, _), _ :: StringLitF(_, _) :: _)              => None
+        case (IdentifierF(_, _), _ :: BoolLitF(_, _) :: _)                => None
+        case (IdentifierF(_, _), _ :: NoneLitF(_) :: _)                   => None
+        case (IdentifierF(_, _), _ :: IdentifierF(_, _) :: _)             => None
       }
     case (enums, ConstructorF(name, fas, vl)) =>
       translate_with_assigns(enums, fas, TEntityBase(name))
