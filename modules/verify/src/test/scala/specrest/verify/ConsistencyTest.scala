@@ -189,6 +189,44 @@ class ConsistencyTest extends CatsEffectSuite:
         |    #log >= 0
         |}""".stripMargin,
       "now() must verify, not skip"
+    ),
+    (
+      "chained relation literal-insert verifies via Z3 (rel' = pre(rel) + {a->x} + {b->y})",
+      "chain_insert_demo",
+      """service ChainInsertDemo {
+        |  state {
+        |    store: Int -> lone Int
+        |  }
+        |  operation Put2 {
+        |    input:  a: Int, b: Int, va: Int, vb: Int
+        |    requires:
+        |      a != b
+        |    ensures:
+        |      store' = pre(store) + {a -> va} + {b -> vb}
+        |  }
+        |  invariant cardNonNeg:
+        |    #store >= 0
+        |}""".stripMargin,
+      "chained relation insert must verify, not skip"
+    ),
+    (
+      "chained insert with a repeated key is last-write-wins, not UNSAT",
+      "dup_key_insert_demo",
+      """service DupKeyDemo {
+        |  state {
+        |    store: Int -> lone Int
+        |  }
+        |  operation Put {
+        |    input:  a: Int, va: Int, vb: Int
+        |    requires:
+        |      va != vb
+        |    ensures:
+        |      store' = pre(store) + {a -> va} + {a -> vb}
+        |  }
+        |  invariant cardNonNeg:
+        |    #store >= 0
+        |}""".stripMargin,
+      "repeated-key chained insert must be last-write-wins (Sat), not UNSAT"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
