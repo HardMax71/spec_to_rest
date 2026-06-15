@@ -227,6 +227,36 @@ class ConsistencyTest extends CatsEffectSuite:
         |    #store >= 0
         |}""".stripMargin,
       "repeated-key chained insert must be last-write-wins (Sat), not UNSAT"
+    ),
+    (
+      "bare enum member resolves to the enum sort (c = RED, not c = Uninterp(Any))",
+      "bare_enum_demo",
+      """service EnumDemo {
+        |  enum Color {
+        |    RED,
+        |    GREEN,
+        |    BLUE
+        |  }
+        |  state {
+        |    c: Color
+        |  }
+        |  invariant pinned:
+        |    c = RED implies c != GREEN
+        |}""".stripMargin,
+      "bare enum member must verify, not crash on Sorts Color/Any"
+    ),
+    (
+      "base-vs-optional comparison verifies (chosen = fallback where chosen: Option[Int])",
+      "optional_eq_demo",
+      """service OptDemo {
+        |  state {
+        |    chosen: Option[Int]
+        |    fallback: Int
+        |  }
+        |  invariant chosenOrFallback:
+        |    chosen = none or chosen = fallback
+        |}""".stripMargin,
+      "base-vs-optional equality must verify, not crash on incompatible sorts"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
@@ -236,6 +266,73 @@ class ConsistencyTest extends CatsEffectSuite:
       yield assert(
         report.checks.nonEmpty && report.checks.forall(_.status == CheckOutcome.Sat),
         s"expected every check Sat ($reason); got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
+      )
+
+  test("ambiguous bare enum member is a translator limit, not a solver crash"):
+    val spec =
+      """service AmbiguousEnumDemo {
+        |  enum Color {
+        |    RED,
+        |    GREEN
+        |  }
+        |  enum Signal {
+        |    RED,
+        |    AMBER
+        |  }
+        |  state {
+        |    c: Color
+        |  }
+        |  invariant pinned:
+        |    c = RED
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("ambiguous_enum_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      val crashed =
+        report.checks.filter(_.diagnostic.exists(_.category == DiagnosticCategory.BackendError))
+      assert(
+        crashed.isEmpty,
+        s"ambiguous bare enum must not crash the solver; got: ${crashed.map(c => s"${c.id}->${c.diagnostic.map(_.message)}")}"
+      )
+      assert(
+        report.checks.exists(
+          _.diagnostic.exists(_.category == DiagnosticCategory.TranslatorLimitation)
+        ),
+        s"expected a TranslatorLimitation skip; got: ${report.checks.map(c => s"${c.id}->${c.status}/${c.diagnostic.map(_.category)}")}"
+      )
+
+  test(
+    "bare enum member as a call argument is never mis-resolved (no crash, no false contradiction)"
+  ):
+    val spec =
+      """service CallEnumDemo {
+        |  enum Status {
+        |    DONE,
+        |    TODO
+        |  }
+        |  predicate isDone(s: Status) = s = DONE
+        |  state {
+        |    cur: Status
+        |  }
+        |  invariant pinned:
+        |    isDone(DONE)
+        |}""".stripMargin
+    for
+      ir     <- SpecFixtures.buildFromSource("call_enum_demo", spec)
+      report <- Consistency.runConsistencyChecks(ir, VerificationConfig.Default)
+    yield
+      // isDone(DONE) inlines to the tautology DONE = DONE, which is outside the verified subset, so
+      // the check is soundness-skipped rather than Sat. Guard the real failure modes instead: a solver
+      // crash (BackendError) or a false contradiction (Unsat) from mis-sorting the bare enum argument.
+      assert(report.checks.nonEmpty, "expected at least one check")
+      val bad = report.checks.filter(c =>
+        c.status == CheckOutcome.Unsat ||
+          c.diagnostic.exists(_.category == DiagnosticCategory.BackendError)
+      )
+      assert(
+        bad.isEmpty,
+        s"bare enum call-arg must not crash or be mis-resolved to Unsat; got: ${report.checks.map(c => s"${c.id}->${c.status}")}"
       )
 
   test("unsat_invariants has contradictory_invariants diagnostic"):
