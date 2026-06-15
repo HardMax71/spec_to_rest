@@ -114,15 +114,16 @@ code_printing
 | class_instance Int.int :: ord \<rightharpoonup> (Scala) -
 | class_instance Int.int :: equal \<rightharpoonup> (Scala) -
 
-text \<open>\<open>string_matches\<close>, \<open>str_predicate\<close>, and \<open>builtin_const_val\<close> are abstract (see \<open>IR\<close>);
-  the real semantics is Z3's (regex \<open>str.in_re\<close>, an uninterpreted predicate / constant) in
-  the hand-written translator. The extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters are not
-  called by Scala consumers, so these serialisations are never-evaluated stubs that only have
+text \<open>\<open>string_matches\<close>, \<open>str_predicate\<close>, \<open>builtin_const_val\<close>, and \<open>builtin_str_func\<close> are abstract
+  (see \<open>IR\<close>); the real semantics is Z3's (regex \<open>str.in_re\<close>, an uninterpreted predicate / constant /
+  function) in the hand-written translator. The extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters are
+  not called by Scala consumers, so these serialisations are never-evaluated stubs that only have
   to type-check.\<close>
 code_printing
   constant string_matches \<rightharpoonup> (Scala) "((_) == (_))"
 | constant str_predicate \<rightharpoonup> (Scala) "((_) == (_))"
 | constant builtin_const_val \<rightharpoonup> (Scala) "(BigInt((_).hashCode))"
+| constant builtin_str_func \<rightharpoonup> (Scala) "((_) + (_))"
 
 export_code
     translate

@@ -578,6 +578,7 @@ object SpecRestGenerated {
   final case class TStrLit(a: String)                              extends smt_term
   final case class TMatches(a: smt_term, b: String)                extends smt_term
   final case class TUStrPred(a: String, b: smt_term)               extends smt_term
+  final case class TUStrFunc(a: String, b: smt_term)               extends smt_term
   final case class TUConst(a: String)                              extends smt_term
   final case class TSeqEmpty()                                     extends smt_term
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
@@ -1808,6 +1809,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -1858,6 +1860,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -2736,6 +2739,22 @@ object SpecRestGenerated {
           case Some(SSeq(_))              => None
           case Some(SMap(_))              => None
         }
+      case (m, env, TUStrFunc(name, t)) =>
+        smtEval(m, env, t) match {
+          case None                       => None
+          case Some(SBool(_))             => None
+          case Some(SInt(_))              => None
+          case Some(SReal(_))             => None
+          case Some(SEnumElem(_, _))      => None
+          case Some(SEntityElem(_, _))    => None
+          case Some(SSet(_))              => None
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(str))            => Some[smt_val](SStr(name + str))
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
       case (m, env, TUConst(nm)) => Some[smt_val](SInt(BigInt(nm.hashCode)))
       case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
       case (m, env, TSeqCons(e, rest)) =>
@@ -3264,7 +3283,8 @@ object SpecRestGenerated {
     case TStrLit(vi)           => Nil
     case TMatches(t, vj)       => smt_var_list(t)
     case TUStrPred(vk, t)      => smt_var_list(t)
-    case TUConst(vl)           => Nil
+    case TUStrFunc(vl, t)      => smt_var_list(t)
+    case TUConst(vm)           => Nil
     case TSeqEmpty()           => Nil
     case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
     case TMapEmpty()           => Nil
@@ -4038,6 +4058,8 @@ object SpecRestGenerated {
   def fkRefTable(x0: foreign_key_spec): String = x0 match {
     case ForeignKeySpec(uu, rt, uv, uw) => rt
   }
+
+  def is_builtin_func(nm: String): Boolean = nm == "hash"
 
   def is_builtin_pred(nm: String): Boolean =
     nm == "isValidURI" || nm == "isValidEmail"
@@ -5128,6 +5150,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5178,6 +5201,7 @@ object SpecRestGenerated {
     case TStrLit(v)             => None
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5414,7 +5438,13 @@ object SpecRestGenerated {
                   TUStrPred(nm, a),
                 translate(enums, arg)
               )
-            case false => None
+            case false => is_builtin_func(nm) match {
+                case true => map_option[smt_term, smt_term](
+                    (a: smt_term) => TUStrFunc(nm, a),
+                    translate(enums, arg)
+                  )
+                case false => None
+              }
           }
         case (IdentifierF(_, _), _ :: _ :: _) => None
       }
