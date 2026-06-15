@@ -1513,7 +1513,7 @@ object Translator:
       )
     case LetF(x, v, body, _) =>
       val newEnv = env.clone()
-      newEnv(x) = translateExpr(ctx, v, env)
+      newEnv(x) = translateEnsuresClause(ctx, v, env)
       translateEnsuresClause(ctx, body, newEnv)
     case _ => translateExpr(ctx, expr, env)
 
@@ -1653,9 +1653,15 @@ object Translator:
     ))
     val lhsMap  = Z3Expr.App(mapFuncFor(lhs, lhsMode), List(keyVar))
     val baseMap = Z3Expr.App(mapFuncFor(base, baseMode), List(keyVar))
-    val perEntry = translated.map: (k, v) =>
+    // Last-write-wins: a chained / multi-entry insert with a repeated key keeps the LAST value.
+    // An entry's value applies only when keyVar matches no later entry's key; without this guard
+    // duplicate keys would assert two values for one key and the axiom would be UNSAT.
+    val perEntry = translated.zipWithIndex.map: (kv, i) =>
+      val (k, v) = kv
+      val laterNeqs =
+        translated.drop(i + 1).map((lk, _) => Z3Expr.Not(Z3Expr.Cmp(CmpOp.Eq, keyVar, lk)))
       Z3Expr.Implies(
-        Z3Expr.Cmp(CmpOp.Eq, keyVar, k),
+        Z3Expr.And(Z3Expr.Cmp(CmpOp.Eq, keyVar, k) :: laterNeqs),
         Z3Expr.Cmp(CmpOp.Eq, lhsMap, v)
       )
     val fallthrough = Z3Expr.Implies(
