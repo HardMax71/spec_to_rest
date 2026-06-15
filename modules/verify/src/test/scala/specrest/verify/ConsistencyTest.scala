@@ -431,6 +431,30 @@ class ConsistencyTest extends CatsEffectSuite:
         |    subtotal = sum(items, i => i.line_total)
         |}""".stripMargin,
       "sum(items, i => i.line_total) must verify: as an uninterpreted function keyed by collection and field, the invariant `subtotal = sum(items, _)` is preserved when items is unchanged (same collection => same sum)"
+    ),
+    (
+      "#contents on an entity-field Set verifies via Z3 (the ecommerce #items shape)",
+      "entity_set_card_demo",
+      """service EntitySetCardDemo {
+        |  entity Bag {
+        |    contents: Set[Int]
+        |    count: Int
+        |    invariant: #contents > 0 implies count > 0
+        |  }
+        |  state {
+        |    n: Int
+        |  }
+        |  operation Bump {
+        |    input: x: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      n' = pre(n) + x
+        |  }
+        |  invariant nonneg:
+        |    true
+        |}""".stripMargin,
+      "#contents on an entity-field Set (an Order's `#items` shape) must verify, not skip on 'cardinality requires a state relation' - it gets the uninterpreted setCard model"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
