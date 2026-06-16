@@ -5910,16 +5910,50 @@ object SpecRestGenerated {
                   translate_forall_bindings(enums, bs, bodya)
               }
             case QSome() =>
-              map_option[smt_term, smt_term](
-                (a: smt_term) => TNot(a),
-                translate_forall_bindings(enums, bs, TNot(bodya))
-              )
-            case QNo() => translate_forall_bindings(enums, bs, TNot(bodya))
+              translate_forall_bindings(enums, bs, TNot(bodya)) match {
+                case None =>
+                  bs match {
+                    case Nil => None
+                    case List(QuantifierBindingFull(v, d, _, _)) =>
+                      map_option[smt_term, smt_term](
+                        (da: smt_term) =>
+                          TNot(TForallSet(v, da, TNot(bodya))),
+                        translate(enums, d)
+                      )
+                    case QuantifierBindingFull(_, _, _, _) :: _ :: _ => None
+                  }
+                case Some(t) => Some[smt_term](TNot(t))
+              }
+            case QNo() =>
+              translate_forall_bindings(enums, bs, TNot(bodya)) match {
+                case None =>
+                  bs match {
+                    case Nil => None
+                    case List(QuantifierBindingFull(v, d, _, _)) =>
+                      map_option[smt_term, smt_term](
+                        (da: smt_term) =>
+                          TForallSet(v, da, TNot(bodya)),
+                        translate(enums, d)
+                      )
+                    case QuantifierBindingFull(_, _, _, _) :: _ :: _ => None
+                  }
+                case Some(a) => Some[smt_term](a)
+              }
             case QExists() =>
-              map_option[smt_term, smt_term](
-                (a: smt_term) => TNot(a),
-                translate_forall_bindings(enums, bs, TNot(bodya))
-              )
+              translate_forall_bindings(enums, bs, TNot(bodya)) match {
+                case None =>
+                  bs match {
+                    case Nil => None
+                    case List(QuantifierBindingFull(v, d, _, _)) =>
+                      map_option[smt_term, smt_term](
+                        (da: smt_term) =>
+                          TNot(TForallSet(v, da, TNot(bodya))),
+                        translate(enums, d)
+                      )
+                    case QuantifierBindingFull(_, _, _, _) :: _ :: _ => None
+                  }
+                case Some(t) => Some[smt_term](TNot(t))
+              }
           }
       }
     case (enums, UnaryOpF(op, e, vu)) =>

@@ -260,13 +260,19 @@ proof (induction e rule: measure_induct_rule[where f = size])
       qed
     next
       case QNo
-      thus ?thesis using QuantifierF hb dfb_some_of_wf[OF wb] by auto
+      obtain r where "translate_forall_bindings enums bs (TNot bt) = Some r"
+        using dfb_some_of_wf[OF wb] by blast
+      thus ?thesis using QuantifierF QNo hb by auto
     next
       case QSome
-      thus ?thesis using QuantifierF hb dfb_some_of_wf[OF wb] by auto
+      obtain r where "translate_forall_bindings enums bs (TNot bt) = Some r"
+        using dfb_some_of_wf[OF wb] by blast
+      thus ?thesis using QuantifierF QSome hb by auto
     next
       case QExists
-      thus ?thesis using QuantifierF hb dfb_some_of_wf[OF wb] by auto
+      obtain r where "translate_forall_bindings enums bs (TNot bt) = Some r"
+        using dfb_some_of_wf[OF wb] by blast
+      thus ?thesis using QuantifierF QExists hb by auto
     qed
   next
     case (ConstructorF name fas sp2)

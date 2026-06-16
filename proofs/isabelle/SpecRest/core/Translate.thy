@@ -164,11 +164,23 @@ where
                        IdentifierF _ _ \<Rightarrow> translate_forall_bindings enums bs body'
                      | _ \<Rightarrow> map_option (\<lambda>d'. TForallSet v d' body') (translate enums d))
                 | _ \<Rightarrow> translate_forall_bindings enums bs body')
-           | QNo \<Rightarrow> translate_forall_bindings enums bs (TNot body')
-           | QSome \<Rightarrow>
-               map_option TNot (translate_forall_bindings enums bs (TNot body'))
-           | QExists \<Rightarrow>
-               map_option TNot (translate_forall_bindings enums bs (TNot body'))))"
+           | QNo \<Rightarrow>
+               (case translate_forall_bindings enums bs (TNot body') of
+                  Some t \<Rightarrow> Some t
+                | None \<Rightarrow>
+                    (case bs of
+                       [QuantifierBindingFull v d _ _] \<Rightarrow>
+                         map_option (\<lambda>d'. TForallSet v d' (TNot body')) (translate enums d)
+                     | _ \<Rightarrow> None))
+           | _ \<Rightarrow>
+               \<comment> \<open>QSome and QExists: both existential, \<open>\<exists>x. P \<equiv> \<not>(\<forall>x. \<not>P)\<close>\<close>
+               (case translate_forall_bindings enums bs (TNot body') of
+                  Some t \<Rightarrow> Some (TNot t)
+                | None \<Rightarrow>
+                    (case bs of
+                       [QuantifierBindingFull v d _ _] \<Rightarrow>
+                         map_option (\<lambda>d'. TNot (TForallSet v d' (TNot body'))) (translate enums d)
+                     | _ \<Rightarrow> None))))"
 | "translate enums (UnaryOpF op e _) =
      (case op of
         UNot \<Rightarrow> map_option TNot (translate enums e)
