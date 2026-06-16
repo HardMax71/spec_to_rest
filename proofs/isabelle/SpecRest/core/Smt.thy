@@ -49,6 +49,7 @@ datatype (plugins only: code size) smt_term =
   | TTheRel "String.literal" "String.literal" "smt_term"
   | TEntityBase "String.literal"
   | TForallSet "String.literal" "smt_term" "smt_term"
+  | TTheSet "String.literal" "smt_term" "smt_term"
   | TIndexRel "smt_term" "smt_term"
   | TFieldAccess "smt_term" "String.literal"
   | TSetEmpty
@@ -105,6 +106,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TTheRel v _ b)       = v # smt_var_list b"
 | "smt_var_list (TEntityBase _)       = []"
 | "smt_var_list (TForallSet v d b)    = v # smt_var_list d @ smt_var_list b"
+| "smt_var_list (TTheSet v d b)       = v # smt_var_list d @ smt_var_list b"
 | "smt_var_list (TIndexRel b k)       = smt_var_list b @ smt_var_list k"
 | "smt_var_list (TFieldAccess b _)    = smt_var_list b"
 | "smt_var_list TSetEmpty             = []"
@@ -483,6 +485,13 @@ where
 | "smtEval m env (TForallSet var setT body) =
      (case smtEval m env setT of
         Some (SSet elems) \<Rightarrow> smtEval_forall_rel m env var elems body
+      | _ \<Rightarrow> None)"
+| "smtEval m env (TTheSet var setT body) =
+     (case smtEval m env setT of
+        Some (SSet elems) \<Rightarrow>
+          (case smtEval_the_rel m env var elems body of
+             Some (x # rest) \<Rightarrow> (if list_all (\<lambda>y. y = x) rest then Some x else None)
+           | _               \<Rightarrow> None)
       | _ \<Rightarrow> None)"
 | "smtEval m env (TIndexRel base key) =
      (case (peelSmtRelationRef base, smtEval m env key) of

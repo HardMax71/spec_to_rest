@@ -198,6 +198,7 @@ fun smt_uses_var :: "String.literal \<Rightarrow> smt_term \<Rightarrow> bool" w
 | "smt_uses_var x (TTheRel y _ b)        = (y \<noteq> x \<and> smt_uses_var x b)"
 | "smt_uses_var x (TEntityBase _)        = False"
 | "smt_uses_var x (TForallSet y setT b)  = (smt_uses_var x setT \<or> (y \<noteq> x \<and> smt_uses_var x b))"
+| "smt_uses_var x (TTheSet y setT b)     = (smt_uses_var x setT \<or> (y \<noteq> x \<and> smt_uses_var x b))"
 | "smt_uses_var x (TIndexRel b k)        = (smt_uses_var x b \<or> smt_uses_var x k)"
 | "smt_uses_var x (TFieldAccess b _)     = smt_uses_var x b"
 | "smt_uses_var x TSetEmpty              = False"
@@ -369,6 +370,35 @@ next
       have hb: "smtEval m (((y, v) # pre) @ (x, xv) # post) b
               = smtEval m (((y, v) # pre) @ post) b"
         using TForallSet.prems by (intro TForallSet.IH(2)) auto
+      show ?case
+      proof (cases "smtEval m ((y, v) # pre @ post) b")
+        case None
+        thus ?thesis using hb by simp
+      next
+        case (Some bv)
+        show ?thesis using hb Some Cons.IH by (cases bv) simp_all
+      qed
+    qed
+  qed
+  thus ?case using hs by (simp split: option.splits smt_val.splits)
+next
+  case (TTheSet y setT b)
+  have hs: "smtEval m (pre @ (x, xv) # post) setT = smtEval m (pre @ post) setT"
+    using TTheSet.prems by (auto intro: TTheSet.IH(1))
+  have "\<And>d. smtEval_the_rel m (pre @ (x, xv) # post) y d b
+          = smtEval_the_rel m (pre @ post) y d b"
+  proof -
+    fix d
+    show "smtEval_the_rel m (pre @ (x, xv) # post) y d b
+            = smtEval_the_rel m (pre @ post) y d b"
+    proof (induction d)
+      case Nil
+      show ?case by simp
+    next
+      case (Cons v rest)
+      have hb: "smtEval m (((y, v) # pre) @ (x, xv) # post) b
+              = smtEval m (((y, v) # pre) @ post) b"
+        using TTheSet.prems by (intro TTheSet.IH(2)) auto
       show ?case
       proof (cases "smtEval m ((y, v) # pre @ post) b")
         case None

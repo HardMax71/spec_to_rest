@@ -580,6 +580,34 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`some it in boxes[bid].contents | it.id = target` - an existential whose domain is a field-access set (not an identifier) - must verify, not skip: QSome over a non-identifier domain lowers to TNot(TForallSet ...), mirroring #440's QAll path"
+    ),
+    (
+      "definite description over a field-access set verifies via Z3 (the ecommerce `the i in pre(orders)[oid].items` shape)",
+      "the_set_demo",
+      """service TheSetDemo {
+        |  entity Item {
+        |    id: Int
+        |  }
+        |  entity Box {
+        |    contents: Set[Item]
+        |  }
+        |  state {
+        |    boxes: Int -> lone Box
+        |    last_id: Int
+        |  }
+        |  operation Pick {
+        |    input: bid: Int, target: Int
+        |    requires:
+        |      bid in boxes
+        |      some it in boxes[bid].contents | it.id = target
+        |    ensures:
+        |      last_id' = (the it in pre(boxes)[bid].contents | it.id = target).id
+        |      boxes' = pre(boxes)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`the it in pre(boxes)[bid].contents | it.id = target` - a definite description whose domain is a field-access set (not an identifier relation) - must verify, not skip: TheF over a non-identifier domain lowers to the new TTheSet node (the set-domain analogue of TTheRel)"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

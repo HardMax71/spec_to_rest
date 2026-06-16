@@ -562,6 +562,7 @@ object SpecRestGenerated {
   final case class TTheRel(a: String, b: String, c: smt_term)      extends smt_term
   final case class TEntityBase(a: String)                          extends smt_term
   final case class TForallSet(a: String, b: smt_term, c: smt_term) extends smt_term
+  final case class TTheSet(a: String, b: smt_term, c: smt_term)    extends smt_term
   final case class TIndexRel(a: smt_term, b: smt_term)             extends smt_term
   final case class TFieldAccess(a: smt_term, b: String)            extends smt_term
   final case class TSetEmpty()                                     extends smt_term
@@ -1795,6 +1796,7 @@ object SpecRestGenerated {
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
     case TSetEmpty()            => None
@@ -1850,6 +1852,7 @@ object SpecRestGenerated {
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
     case TSetEmpty()            => None
@@ -2571,6 +2574,31 @@ object SpecRestGenerated {
           case Some(SEnumElem(_, _))      => None
           case Some(SEntityElem(_, _))    => None
           case Some(SSet(elems))          => smtEval_forall_rel(m, env, vara, elems, body)
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
+      case (m, env, TTheSet(vara, setT, body)) =>
+        smtEval(m, env, setT) match {
+          case None                    => None
+          case Some(SBool(_))          => None
+          case Some(SInt(_))           => None
+          case Some(SReal(_))          => None
+          case Some(SEnumElem(_, _))   => None
+          case Some(SEntityElem(_, _)) => None
+          case Some(SSet(elems)) =>
+            smtEval_the_rel(m, env, vara, elems, body) match {
+              case None      => None
+              case Some(Nil) => None
+              case Some(x :: rest) =>
+                list_all[smt_val]((y: smt_val) => equal_smt_vala(y, x), rest) match {
+                  case true  => Some[smt_val](x)
+                  case false => None
+                }
+            }
           case Some(SEntityWith(_, _, _)) => None
           case Some(SNone())              => None
           case Some(SSome(_))             => None
@@ -3307,6 +3335,7 @@ object SpecRestGenerated {
     case TTheRel(v, ve, b)     => v :: smt_var_list(b)
     case TEntityBase(vf)       => Nil
     case TForallSet(v, d, b)   => v :: smt_var_list(d) ++ smt_var_list(b)
+    case TTheSet(v, d, b)      => v :: smt_var_list(d) ++ smt_var_list(b)
     case TIndexRel(b, k)       => smt_var_list(b) ++ smt_var_list(k)
     case TFieldAccess(b, vg)   => smt_var_list(b)
     case TSetEmpty()           => Nil
@@ -5230,6 +5259,7 @@ object SpecRestGenerated {
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
     case TSetEmpty()            => None
@@ -5285,6 +5315,7 @@ object SpecRestGenerated {
     case TTheRel(v, va, vb)     => None
     case TEntityBase(v)         => None
     case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
     case TIndexRel(v, va)       => None
     case TFieldAccess(v, va)    => None
     case TSetEmpty()            => None
@@ -5699,32 +5730,162 @@ object SpecRestGenerated {
     case (vm, SetComprehensionF(vn, vo, vp, vq)) => None
     case (enums, TheF(vara, dm, body, vr)) =>
       dm match {
-        case BinaryOpF(_, _, _, _)         => None
-        case UnaryOpF(_, _, _)             => None
-        case QuantifierF(_, _, _, _)       => None
-        case SomeWrapF(_, _)               => None
-        case TheF(_, _, _, _)              => None
-        case FieldAccessF(_, _, _)         => None
-        case EnumAccessF(_, _, _)          => None
-        case IndexF(_, _, _)               => None
-        case CallF(_, _, _)                => None
-        case PrimeF(_, _)                  => None
-        case PreF(_, _)                    => None
-        case WithF(_, _, _)                => None
-        case IfF(_, _, _, _)               => None
-        case LetF(_, _, _, _)              => None
-        case LambdaF(_, _, _)              => None
-        case ConstructorF(_, _, _)         => None
-        case SetLiteralF(_, _)             => None
-        case MapLiteralF(_, _)             => None
-        case SetComprehensionF(_, _, _, _) => None
-        case SeqLiteralF(_, _)             => None
-        case MatchesF(_, _, _)             => None
-        case IntLitF(_, _)                 => None
-        case FloatLitF(_, _)               => None
-        case StringLitF(_, _)              => None
-        case BoolLitF(_, _)                => None
-        case NoneLitF(_)                   => None
+        case BinaryOpF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case UnaryOpF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case QuantifierF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case SomeWrapF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case TheF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case FieldAccessF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case EnumAccessF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case IndexF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case CallF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case PrimeF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case PreF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case WithF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case IfF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case LetF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case LambdaF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case ConstructorF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case SetLiteralF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case MapLiteralF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case SetComprehensionF(_, _, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case SeqLiteralF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case MatchesF(_, _, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case IntLitF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case FloatLitF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case StringLitF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case BoolLitF(_, _) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
+        case NoneLitF(_) =>
+          map2_opt(
+            (a: smt_term) => (b: smt_term) => TTheSet(vara, a, b),
+            translate(enums, dm),
+            translate(enums, body)
+          )
         case IdentifierF(rel, _) =>
           string_in_list(rel, enums) match {
             case true => None

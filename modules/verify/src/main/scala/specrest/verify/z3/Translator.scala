@@ -2439,6 +2439,38 @@ object Translator:
           Z3Expr.Implies(Z3Expr.SetMember(binderVar, setZ), inner)
         )
 
+      case TTheSet(varName, setT, body) =>
+        val setZ = encodeFromSmtTerm(ctx, setT, env)
+        val elemSort = inferSortOfZ3Expr(ctx, setZ) match
+          case Some(Z3Sort.SetOf(e)) => e
+          case _ =>
+            fail(ctx, "definite description `the` requires a set-sorted domain")
+        // a Skolem constant denotes "the unique element" only at quantifier-free position;
+        // under a binder it would need a Skolem function of the bound vars (mirrors TTheRel)
+        if env.values.exists { case _: Z3Expr.Var => true; case _ => false } then
+          fail(ctx, "definite description `the` is not supported under a quantifier")
+        val skolemName = ctx.freshSkolem(s"the_set_$varName")
+        ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, elemSort))
+        val c    = Z3Expr.App(skolemName, Nil)
+        val envC = env.clone()
+        envC(varName) = c
+        val bodyC = encodeFromSmtTerm(ctx, body, envC)
+        ctx.assertions += Z3Expr.And(List(Z3Expr.SetMember(c, setZ), bodyC))
+        val wName = ctx.freshSkolem(s"the_set_witness_$varName")
+        val w     = Z3Expr.Var(wName, elemSort)
+        val envW  = env.clone()
+        envW(varName) = w
+        val bodyW = encodeFromSmtTerm(ctx, body, envW)
+        ctx.assertions += Z3Expr.Quantifier(
+          QKind.ForAll,
+          List(Z3Binding(wName, elemSort)),
+          Z3Expr.Implies(
+            Z3Expr.And(List(Z3Expr.SetMember(w, setZ), bodyW)),
+            Z3Expr.Cmp(CmpOp.Eq, w, c)
+          )
+        )
+        c
+
       case TTheRel(varName, rel, body) =>
         ctx.state.get(rel) match
           case Some(_: StateRelationInfo)

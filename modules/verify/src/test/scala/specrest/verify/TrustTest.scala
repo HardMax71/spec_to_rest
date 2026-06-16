@@ -78,9 +78,9 @@ class TrustTest extends CatsEffectSuite:
       TrustLevel.Sound
     ),
     (
-      "BestEffort: TheF over a non-identifier domain",
-      TheF("s", BinaryOpF(BAdd(), i(1), i(2), None), lit(true), None),
-      TrustLevel.BestEffort
+      "Sound: TheF over a non-identifier (set-valued) domain lowers to TTheSet",
+      TheF("s", FieldAccessF(id("box"), "contents", None), lit(true), None),
+      TrustLevel.Sound
     ),
     (
       "Sound: IfF lowers to the Ite verified-subset ctor",

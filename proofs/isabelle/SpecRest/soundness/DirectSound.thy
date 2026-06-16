@@ -666,7 +666,7 @@ next
     have uniq': "list_all (\<lambda>y. y = value_to_smt x) (map value_to_smt rest)"
       using uniq by (induction rest) auto
     show ?thesis using teq srd etr uniq' v_eq by simp
-  qed (use "24.prems"(2) in simp_all)
+  qed (use "24.prems"(1) in simp_all)
 next
   case (25 fs ps fuel s st env k bs body sp v t)
   note wf = "25.prems"(3)
