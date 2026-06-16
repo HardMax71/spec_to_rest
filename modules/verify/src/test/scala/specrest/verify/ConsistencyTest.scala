@@ -525,6 +525,35 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`seen' = pre(seen) + {x}` - `+` on two Set operands - must verify as set union, not skip on 'addition requires numeric'"
+    ),
+    (
+      "existential over a primed relation verifies via Z3 (the ecommerce `some p in payments'` shape)",
+      "primed_exists_demo",
+      """service PrimedExistsDemo {
+        |  enum PayStatus {
+        |    PENDING,
+        |    REFUNDED
+        |  }
+        |  entity Payment {
+        |    id: Int
+        |    status: PayStatus
+        |  }
+        |  state {
+        |    payments: Int -> lone Payment
+        |  }
+        |  operation Refund {
+        |    input: pid: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      some p in payments' |
+        |        p not in pre(payments)
+        |        and payments'[p].status = REFUNDED
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`some p in payments' | p not in pre(payments) and payments'[p].status = REFUNDED` - an existential whose domain is a primed state relation - must verify, not skip: it lowers to TNot(TPrime(TForallRel ...)) and the encoder composes the post-state domain via stateMode"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

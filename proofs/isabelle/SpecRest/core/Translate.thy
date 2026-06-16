@@ -21,6 +21,8 @@ where
           (if string_in_list dnm enums
              then Some (TForallEnum v dnm body)
              else Some (TForallRel v dnm body))
+      | PrimeF (IdentifierF dnm _) _ \<Rightarrow> Some (TPrime (TForallRel v dnm body))
+      | PreF (IdentifierF dnm _) _ \<Rightarrow> Some (TPre (TForallRel v dnm body))
       | _ \<Rightarrow> None)"
 
 fun translate_forall_bindings ::
