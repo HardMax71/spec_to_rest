@@ -149,7 +149,7 @@ where
         IdentifierF rel _ \<Rightarrow>
           (if string_in_list rel enums then None
            else map_option (\<lambda>b. TTheRel var rel b) (translate enums body))
-      | _ \<Rightarrow> None)"
+      | _ \<Rightarrow> map2_opt (TTheSet var) (translate enums dm) (translate enums body))"
 | "translate enums (MatchesF e pat _) =
      map_option (\<lambda>e'. TMatches e' pat) (translate enums e)"
 | "translate enums (QuantifierF k bs body _) =
