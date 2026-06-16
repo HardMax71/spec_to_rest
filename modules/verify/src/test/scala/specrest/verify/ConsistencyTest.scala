@@ -654,6 +654,30 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`now() - recs[k].ts` where ts: Option[DateTime] - an Option[Numeric] operand in arithmetic - must verify: the encoder unwraps it via OptGet (DateTime is already the Int sort; the blocker was the Option wrapper), the dual of #431's optional-vs-base equality coercion"
+    ),
+    (
+      "days(n) builtin verifies via Z3 (the ecommerce ProcessReturn `now() - delivered_at <= days(30)` shape)",
+      "days_demo",
+      """service DaysDemo {
+        |  entity Rec {
+        |    ts: Option[DateTime]
+        |  }
+        |  state {
+        |    recs: Int -> lone Rec
+        |  }
+        |  operation Check {
+        |    input: k: Int
+        |    requires:
+        |      k in recs
+        |      recs[k].ts != none
+        |      now() - recs[k].ts <= days(30)
+        |    ensures:
+        |      recs' = pre(recs)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`now() - recs[k].ts <= days(30)` - the 1-arg `days(n)` Int->Int builtin (uninterpreted, mirroring now()/hash) plus the optional-arithmetic coercion - must verify, not skip; this is exactly the ecommerce ProcessReturn.requires shape"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
