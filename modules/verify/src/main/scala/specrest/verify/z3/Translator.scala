@@ -2239,6 +2239,25 @@ object Translator:
         "addition requires two numeric (Int or Real), two String, two Seq, or two Set operands"
       )
 
+  private def encSub(
+      ctx: TranslateCtx,
+      l: smt_term,
+      r: smt_term,
+      env: mutable.Map[String, Z3Expr]
+  ): Z3Expr =
+    val lz                        = encodeFromSmtTerm(ctx, l, env)
+    val rz                        = encodeFromSmtTerm(ctx, r, env)
+    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+    // `set - set` is set difference (e.g. `items - {removed}`); both operands must share an element sort.
+    def sameSet(a: Z3Expr, b: Z3Expr): Boolean =
+      (inferSortOfZ3Expr(ctx, a), inferSortOfZ3Expr(ctx, b)) match
+        case (Some(Z3Sort.SetOf(ae)), Some(Z3Sort.SetOf(be))) => Z3Sort.eq(ae, be)
+        case _                                                => false
+    if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Sub, List(lz, rz))
+    else if sameSet(lz, rz) then Z3Expr.SetBinOp(SetOpKind.Diff, lz, rz)
+    else
+      fail(ctx, "subtraction requires two numeric (Int or Real) or two Set operands")
+
   private def encodeSetEmptyCmp(
       ctx: TranslateCtx,
       op: CmpOp,
@@ -2339,7 +2358,7 @@ object Translator:
       case TAdd(l, r) =>
         encAdd(ctx, l, r, env)
       case TSub(l, r) =>
-        Z3Expr.Arith(ArithOp.Sub, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
+        encSub(ctx, l, r, env)
       case TMul(l, r) =>
         Z3Expr.Arith(ArithOp.Mul, List(encNumeric(ctx, l, env), encNumeric(ctx, r, env)))
       case TDiv(l, r) =>
