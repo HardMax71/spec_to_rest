@@ -1476,8 +1476,12 @@ object Translator:
       (inferSortOfZ3Expr(ctx, t), inferSortOfZ3Expr(ctx, e)) match
         case (Some(ts), Some(es)) => if Z3Sort.eq(ts, es) then Some(ts) else None
         case (ts, es)             => ts.orElse(es)
-    case Z3Expr.OptNone(elemSort, _)   => Some(Z3Sort.OptionOf(elemSort))
-    case Z3Expr.OptSome(value, _)      => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
+    case Z3Expr.OptNone(elemSort, _) => Some(Z3Sort.OptionOf(elemSort))
+    case Z3Expr.OptSome(value, _)    => inferSortOfZ3Expr(ctx, value).map(Z3Sort.OptionOf.apply)
+    case Z3Expr.OptGet(value, _) =>
+      inferSortOfZ3Expr(ctx, value) match
+        case Some(Z3Sort.OptionOf(e)) => Some(e)
+        case _                        => None
     case Z3Expr.StrLit(_, _)           => Some(Z3Sort.Str)
     case Z3Expr.StrConcat(_, _, _)     => Some(Z3Sort.Str)
     case Z3Expr.SeqConcat(l, _, _)     => inferSortOfZ3Expr(ctx, l)
@@ -2155,6 +2159,16 @@ object Translator:
       case _ =>
         subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
 
+  // An `Option[T]` operand in numeric position (e.g. `now() - order.delivered_at`,
+  // delivered_at: Option[DateTime], guarded by `!= none`) is unwrapped to its `T`
+  // value. Sound because such arithmetic is vacuous-on-eval (`eval_arith` rejects a
+  // non-numeric operand), so the encoder is the trusted oracle - the dual of #431's
+  // optional-vs-base equality coercion, which lifts the base to `some(...)`.
+  private def coerceOptionalNumeric(ctx: TranslateCtx, z: Z3Expr): Z3Expr =
+    inferSortOfZ3Expr(ctx, z) match
+      case Some(Z3Sort.OptionOf(e)) if Z3Sort.isNumeric(e) => Z3Expr.OptGet(z)
+      case _                                               => z
+
   // Arithmetic/ordering are valid only on the verifier's numeric theory sorts
   // (Int for integers and temporal-as-epoch, Real for Float/Decimal/Money). An
   // operand of any other sort is outside the encodable subset, so the check is
@@ -2164,7 +2178,7 @@ object Translator:
       term: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val z = encodeFromSmtTerm(ctx, term, env)
+    val z = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, term, env))
     if !inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric) then
       fail(ctx, "ordering/arithmetic requires a numeric type (Int or Real)")
     z
@@ -2213,8 +2227,8 @@ object Translator:
       r: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val lz = encodeFromSmtTerm(ctx, l, env)
-    val rz = encodeFromSmtTerm(ctx, r, env)
+    val lz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, l, env))
+    val rz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, r, env))
     def isStr(z: Z3Expr): Boolean =
       inferSortOfZ3Expr(ctx, z) match
         case Some(Z3Sort.Str) => true
@@ -2245,8 +2259,8 @@ object Translator:
       r: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val lz                        = encodeFromSmtTerm(ctx, l, env)
-    val rz                        = encodeFromSmtTerm(ctx, r, env)
+    val lz                        = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, l, env))
+    val rz                        = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, r, env))
     def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
     // `set - set` is set difference (e.g. `items - {removed}`); both operands must share an element sort.
     def sameSet(a: Z3Expr, b: Z3Expr): Boolean =

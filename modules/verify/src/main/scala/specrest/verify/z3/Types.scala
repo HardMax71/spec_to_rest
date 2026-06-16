@@ -106,6 +106,7 @@ enum Z3Expr derives CanEqual:
   case Ite(cond: Z3Expr, thenE: Z3Expr, elseE: Z3Expr, span: Option[span_t] = None)
   case OptNone(elemSort: Z3Sort, span: Option[span_t] = None)
   case OptSome(value: Z3Expr, span: Option[span_t] = None)
+  case OptGet(value: Z3Expr, span: Option[span_t] = None)
   case StrLit(value: String, span: Option[span_t] = None)
   case InRe(str: Z3Expr, re: Z3Regex, span: Option[span_t] = None)
   case SeqLit(elemSort: Z3Sort, members: List[Z3Expr], span: Option[span_t] = None)
@@ -140,6 +141,7 @@ enum Z3Expr derives CanEqual:
     case e: Ite         => e.span
     case e: OptNone     => e.span
     case e: OptSome     => e.span
+    case e: OptGet      => e.span
     case e: StrLit      => e.span
     case e: InRe        => e.span
     case e: SeqLit      => e.span
@@ -172,6 +174,7 @@ enum Z3Expr derives CanEqual:
         case e: Ite         => e.copy(span = s)
         case e: OptNone     => e.copy(span = s)
         case e: OptSome     => e.copy(span = s)
+        case e: OptGet      => e.copy(span = s)
         case e: StrLit      => e.copy(span = s)
         case e: InRe        => e.copy(span = s)
         case e: SeqLit      => e.copy(span = s)
