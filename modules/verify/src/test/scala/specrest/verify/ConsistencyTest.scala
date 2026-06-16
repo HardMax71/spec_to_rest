@@ -478,6 +478,31 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "#(boxes[bid].contents) - cardinality of a set-valued field-access (not a bare relation identifier) - must verify: `#expr` lowers to TCard and gets the uninterpreted setCard model"
+    ),
+    (
+      "universal quantification over a field-access set verifies via Z3 (the ecommerce lineItemTotalConsistency shape)",
+      "set_forall_field_demo",
+      """service SetForallFieldDemo {
+        |  entity Item {
+        |    qty: Int
+        |  }
+        |  entity Box {
+        |    contents: Set[Item]
+        |  }
+        |  state {
+        |    boxes: Int -> lone Box
+        |  }
+        |  operation Touch {
+        |    input: bid: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      boxes' = pre(boxes)
+        |  }
+        |  invariant allQtyNonNeg:
+        |    all bid in boxes | all it in boxes[bid].contents | it.qty >= 0
+        |}""".stripMargin,
+      "`all it in boxes[bid].contents | it.qty >= 0` - a universal whose domain is a field-access set (not a bare identifier) - must verify: it lowers to TForallSet and the binder resolves to the Item entity sort"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

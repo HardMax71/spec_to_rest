@@ -155,7 +155,13 @@ where
         None \<Rightarrow> None
       | Some body' \<Rightarrow>
           (case k of
-             QAll \<Rightarrow> translate_forall_bindings enums bs body'
+             QAll \<Rightarrow>
+               (case bs of
+                  [QuantifierBindingFull v d _ _] \<Rightarrow>
+                    (case d of
+                       IdentifierF _ _ \<Rightarrow> translate_forall_bindings enums bs body'
+                     | _ \<Rightarrow> map_option (\<lambda>d'. TForallSet v d' body') (translate enums d))
+                | _ \<Rightarrow> translate_forall_bindings enums bs body')
            | QNo \<Rightarrow> translate_forall_bindings enums bs (TNot body')
            | QSome \<Rightarrow>
                map_option TNot (translate_forall_bindings enums bs (TNot body'))
