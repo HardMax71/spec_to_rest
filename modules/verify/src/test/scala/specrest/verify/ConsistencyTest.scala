@@ -554,6 +554,32 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`some p in payments' | p not in pre(payments) and payments'[p].status = REFUNDED` - an existential whose domain is a primed state relation - must verify, not skip: it lowers to TNot(TPrime(TForallRel ...)) and the encoder composes the post-state domain via stateMode"
+    ),
+    (
+      "existential over a field-access set verifies via Z3 (the ecommerce `some i in orders[oid].items` shape)",
+      "set_exists_demo",
+      """service SetExistsDemo {
+        |  entity Item {
+        |    id: Int
+        |  }
+        |  entity Box {
+        |    contents: Set[Item]
+        |  }
+        |  state {
+        |    boxes: Int -> lone Box
+        |  }
+        |  operation Find {
+        |    input: bid: Int, target: Int
+        |    requires:
+        |      bid in boxes
+        |      some it in boxes[bid].contents | it.id = target
+        |    ensures:
+        |      boxes' = pre(boxes)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`some it in boxes[bid].contents | it.id = target` - an existential whose domain is a field-access set (not an identifier) - must verify, not skip: QSome over a non-identifier domain lowers to TNot(TForallSet ...), mirroring #440's QAll path"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
