@@ -503,6 +503,28 @@ class ConsistencyTest extends CatsEffectSuite:
         |    all bid in boxes | all it in boxes[bid].contents | it.qty >= 0
         |}""".stripMargin,
       "`all it in boxes[bid].contents | it.qty >= 0` - a universal whose domain is a field-access set (not a bare identifier) - must verify: it lowers to TForallSet and the binder resolves to the Item entity sort"
+    ),
+    (
+      "set union via `+` verifies via Z3 (the ecommerce `items + {item}` shape)",
+      "set_union_demo",
+      """service SetUnionDemo {
+        |  entity It {
+        |    v: Int
+        |  }
+        |  state {
+        |    seen: Set[It]
+        |  }
+        |  operation Add {
+        |    input: x: It
+        |    requires:
+        |      true
+        |    ensures:
+        |      seen' = pre(seen) + {x}
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`seen' = pre(seen) + {x}` - `+` on two Set operands - must verify as set union, not skip on 'addition requires numeric'"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
