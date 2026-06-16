@@ -581,6 +581,7 @@ object SpecRestGenerated {
   final case class TMatches(a: smt_term, b: String)                extends smt_term
   final case class TUStrPred(a: String, b: smt_term)               extends smt_term
   final case class TUStrFunc(a: String, b: smt_term)               extends smt_term
+  final case class TUIntFunc(a: String, b: smt_term)               extends smt_term
   final case class TUConst(a: String)                              extends smt_term
   final case class TSeqEmpty()                                     extends smt_term
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
@@ -1815,6 +1816,7 @@ object SpecRestGenerated {
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -1869,6 +1871,7 @@ object SpecRestGenerated {
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -2818,6 +2821,22 @@ object SpecRestGenerated {
           case Some(SSeq(_))              => None
           case Some(SMap(_))              => None
         }
+      case (m, env, TUIntFunc(name, t)) =>
+        smtEval(m, env, t) match {
+          case None                       => None
+          case Some(SBool(_))             => None
+          case Some(SInt(n))              => Some[smt_val](SInt(BigInt(name.hashCode) + n))
+          case Some(SReal(_))             => None
+          case Some(SEnumElem(_, _))      => None
+          case Some(SEntityElem(_, _))    => None
+          case Some(SSet(_))              => None
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(_))              => None
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
       case (m, env, TUConst(nm)) => Some[smt_val](SInt(BigInt(nm.hashCode)))
       case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
       case (m, env, TSeqCons(e, rest)) =>
@@ -3354,13 +3373,14 @@ object SpecRestGenerated {
     case TMatches(t, vj)       => smt_var_list(t)
     case TUStrPred(vk, t)      => smt_var_list(t)
     case TUStrFunc(vl, t)      => smt_var_list(t)
-    case TUConst(vm)           => Nil
+    case TUIntFunc(vm, t)      => smt_var_list(t)
+    case TUConst(vn)           => Nil
     case TSeqEmpty()           => Nil
     case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
     case TMapEmpty()           => Nil
     case TMapCons(k, v, r) =>
       smt_var_list(k) ++ (smt_var_list(v) ++ smt_var_list(r))
-    case TSum(c, vn) => smt_var_list(c)
+    case TSum(c, vo) => smt_var_list(c)
   }
 
   def isIntLit(x0: expr): Boolean = x0 match {
@@ -5278,6 +5298,7 @@ object SpecRestGenerated {
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5332,6 +5353,7 @@ object SpecRestGenerated {
     case TMatches(v, va)        => None
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5409,6 +5431,8 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => None
     case IdentifierF(v, va)               => None
   }
+
+  def is_builtin_int_func(nm: String): Boolean = nm == "days"
 
   def comp_parts(x0: expr): Option[(String, (String, expr))] = x0 match {
     case SetComprehensionF(vara, d, p, uu) =>
@@ -5574,7 +5598,13 @@ object SpecRestGenerated {
                     (a: smt_term) => TUStrFunc(nm, a),
                     translate(enums, arg)
                   )
-                case false => None
+                case false => is_builtin_int_func(nm) match {
+                    case true => map_option[smt_term, smt_term](
+                        (a: smt_term) => TUIntFunc(nm, a),
+                        translate(enums, arg)
+                      )
+                    case false => None
+                  }
               }
           }
         case (IdentifierF(_, _), _ :: BinaryOpF(_, _, _, _) :: _)                => None

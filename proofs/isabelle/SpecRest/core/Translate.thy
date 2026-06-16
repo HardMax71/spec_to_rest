@@ -133,6 +133,8 @@ where
              then map_option (\<lambda>a'. TUStrPred nm a') (translate enums arg)
            else if is_builtin_func nm
              then map_option (\<lambda>a'. TUStrFunc nm a') (translate enums arg)
+           else if is_builtin_int_func nm
+             then map_option (\<lambda>a'. TUIntFunc nm a') (translate enums arg)
              else None)
       | (IdentifierF nm _, []) \<Rightarrow>
           (if is_builtin_const nm then Some (TUConst nm) else None)
