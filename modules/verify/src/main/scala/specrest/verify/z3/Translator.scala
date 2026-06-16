@@ -2224,11 +2224,20 @@ object Translator:
       inferSortOfZ3Expr(ctx, z) match
         case Some(Z3Sort.SeqOf(_)) => true
         case _                     => false
+    // `set + set` is set union (e.g. `items + {item}`); both operands must share an element sort.
+    def sameSet(a: Z3Expr, b: Z3Expr): Boolean =
+      (inferSortOfZ3Expr(ctx, a), inferSortOfZ3Expr(ctx, b)) match
+        case (Some(Z3Sort.SetOf(ae)), Some(Z3Sort.SetOf(be))) => Z3Sort.eq(ae, be)
+        case _                                                => false
     if isStr(lz) && isStr(rz) then Z3Expr.StrConcat(lz, rz)
     else if isSeq(lz) && isSeq(rz) then Z3Expr.SeqConcat(lz, rz)
     else if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Add, List(lz, rz))
+    else if sameSet(lz, rz) then Z3Expr.SetBinOp(SetOpKind.Union, lz, rz)
     else
-      fail(ctx, "addition requires two numeric (Int or Real), two String, or two Seq operands")
+      fail(
+        ctx,
+        "addition requires two numeric (Int or Real), two String, two Seq, or two Set operands"
+      )
 
   private def encodeSetEmptyCmp(
       ctx: TranslateCtx,
