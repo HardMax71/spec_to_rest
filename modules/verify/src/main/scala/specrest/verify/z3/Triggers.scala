@@ -20,6 +20,7 @@ object Z3Trigger:
     case Z3Expr.SetBinOp(_, l, r, _)   => List(l, r)
     case Z3Expr.Ite(c, t, el, _)       => List(c, t, el)
     case Z3Expr.OptSome(v, _)          => List(v)
+    case Z3Expr.OptGet(v, _)           => List(v)
     case Z3Expr.InRe(s, _, _)          => List(s)
     case Z3Expr.SeqLit(_, ms, _)       => ms
     case Z3Expr.MapLit(_, _, es, _)    => es.flatMap((k, v) => List(k, v))

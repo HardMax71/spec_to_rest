@@ -1007,6 +1007,8 @@ object Translator:
       )
     case Z3Expr.OptSome(value, sp) =>
       Z3Expr.OptSome(substituteVar(value, varName, replacement), sp)
+    case Z3Expr.OptGet(value, sp) =>
+      Z3Expr.OptGet(substituteVar(value, varName, replacement), sp)
     case Z3Expr.SeqLit(elemSort, members, sp) =>
       Z3Expr.SeqLit(elemSort, members.map(m => substituteVar(m, varName, replacement)), sp)
     case Z3Expr.MapLit(keySort, valueSort, entries, sp) =>
