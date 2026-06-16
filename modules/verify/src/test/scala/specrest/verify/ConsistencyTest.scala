@@ -630,6 +630,30 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`seen' = pre(seen) - {x}` - `-` on two Set operands - must verify as set difference, not skip on 'subtraction requires numeric' (the #441 set-union sibling)"
+    ),
+    (
+      "optional-numeric arithmetic verifies via Z3 (the ecommerce `now() - delivered_at` shape, delivered_at: Option[DateTime])",
+      "opt_arith_demo",
+      """service OptArithDemo {
+        |  entity Rec {
+        |    ts: Option[DateTime]
+        |  }
+        |  state {
+        |    recs: Int -> lone Rec
+        |  }
+        |  operation Check {
+        |    input: k: Int
+        |    requires:
+        |      k in recs
+        |      recs[k].ts != none
+        |      now() - recs[k].ts <= 100
+        |    ensures:
+        |      recs' = pre(recs)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`now() - recs[k].ts` where ts: Option[DateTime] - an Option[Numeric] operand in arithmetic - must verify: the encoder unwraps it via OptGet (DateTime is already the Int sort; the blocker was the Option wrapper), the dual of #431's optional-vs-base equality coercion"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

@@ -130,6 +130,8 @@ object SmtLib:
       s"(as none (Option ${renderSort(elemSort)}))"
     case Z3Expr.OptSome(value, _) =>
       s"(some ${renderExpr(value)})"
+    case Z3Expr.OptGet(value, _) =>
+      s"(valOf ${renderExpr(value)})"
     case Z3Expr.StrLit(s, _) =>
       "\"" + s.replace("\"", "\"\"") + "\""
     case Z3Expr.InRe(str, re, _) =>

@@ -334,6 +334,18 @@ private object Backend:
     case Z3Expr.OptSome(value, _) =>
       val v = renderExpr(rctx, value)
       optionSortFor(rctx.ctx, rctx.sortMap, v.getSort).getConstructors()(1).apply(v)
+    case Z3Expr.OptGet(value, _) =>
+      // `valOf` accessor of the `some` constructor (constructor index 1, accessor 0);
+      // applying it to `none` yields an unspecified value of the element sort, which is
+      // sound here (the construct is vacuous-on-eval, so the encoder is the trusted oracle
+      // and the source guards != none). `coerceOptionalNumeric` only builds OptGet over an
+      // Option-sorted operand, but match defensively rather than cast blindly at the FFI.
+      val o = renderExpr(rctx, value).asInstanceOf[Z3AstExpr[Sort]]
+      o.getSort match
+        case dt: DatatypeSort[?] if dt.getAccessors().length > 1 && dt.getAccessors()(1).nonEmpty =>
+          dt.asInstanceOf[DatatypeSort[Sort]].getAccessors()(1)(0).apply(o)
+        case other =>
+          backendFail(rctx, s"OptGet requires an Option datatype sort, got $other")
     case Z3Expr.StrLit(s, _) =>
       rctx.ctx.mkString(s)
     case Z3Expr.InRe(str, re, _) =>
