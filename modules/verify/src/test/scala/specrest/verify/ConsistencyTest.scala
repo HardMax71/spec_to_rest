@@ -608,6 +608,28 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`the it in pre(boxes)[bid].contents | it.id = target` - a definite description whose domain is a field-access set (not an identifier relation) - must verify, not skip: TheF over a non-identifier domain lowers to the new TTheSet node (the set-domain analogue of TTheRel)"
+    ),
+    (
+      "set difference via `-` verifies via Z3 (the ecommerce `items - {removed}` shape)",
+      "set_diff_demo",
+      """service SetDiffDemo {
+        |  entity It {
+        |    v: Int
+        |  }
+        |  state {
+        |    seen: Set[It]
+        |  }
+        |  operation Drop {
+        |    input: x: It
+        |    requires:
+        |      true
+        |    ensures:
+        |      seen' = pre(seen) - {x}
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`seen' = pre(seen) - {x}` - `-` on two Set operands - must verify as set difference, not skip on 'subtraction requires numeric' (the #441 set-union sibling)"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):
