@@ -588,7 +588,7 @@ object SpecRestGenerated {
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
   final case class TMapEmpty()                                     extends smt_term
   final case class TMapCons(a: smt_term, b: smt_term, c: smt_term) extends smt_term
-  final case class TSum(a: smt_term, b: String)                    extends smt_term
+  final case class TSum(a: smt_term, b: smt_term)                  extends smt_term
 
   sealed abstract class field_decl
   final case class FieldDeclFull(a: String, b: type_expr, c: Option[expr], d: Option[span_t])
@@ -5635,141 +5635,34 @@ object SpecRestGenerated {
                   }
               }
           }
-        case (IdentifierF(_, _), _ :: BinaryOpF(_, _, _, _) :: _)                => None
-        case (IdentifierF(_, _), _ :: UnaryOpF(_, _, _) :: _)                    => None
-        case (IdentifierF(_, _), _ :: QuantifierF(_, _, _, _) :: _)              => None
-        case (IdentifierF(_, _), _ :: SomeWrapF(_, _) :: _)                      => None
-        case (IdentifierF(_, _), _ :: TheF(_, _, _, _) :: _)                     => None
-        case (IdentifierF(_, _), _ :: FieldAccessF(_, _, _) :: _)                => None
-        case (IdentifierF(_, _), _ :: EnumAccessF(_, _, _) :: _)                 => None
-        case (IdentifierF(_, _), _ :: IndexF(_, _, _) :: _)                      => None
-        case (IdentifierF(_, _), _ :: CallF(_, _, _) :: _)                       => None
-        case (IdentifierF(_, _), _ :: PrimeF(_, _) :: _)                         => None
-        case (IdentifierF(_, _), _ :: PreF(_, _) :: _)                           => None
-        case (IdentifierF(_, _), _ :: WithF(_, _, _) :: _)                       => None
-        case (IdentifierF(_, _), _ :: IfF(_, _, _, _) :: _)                      => None
-        case (IdentifierF(_, _), _ :: LetF(_, _, _, _) :: _)                     => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, BinaryOpF(_, _, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, UnaryOpF(_, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, QuantifierF(_, _, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, SomeWrapF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, TheF(_, _, _, _), _) :: _) =>
-          None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(BinaryOpF(_, _, _, _), _, _), _) ::
-              _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(UnaryOpF(_, _, _), _, _), _) :: _) =>
-          None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(QuantifierF(_, _, _, _), _, _), _) ::
-              _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SomeWrapF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(TheF(_, _, _, _), _, _), _) :: _) =>
-          None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(FieldAccessF(_, _, _), _, _), _) ::
-              _
-            ) => None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(EnumAccessF(_, _, _), _, _), _) :: _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IndexF(_, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(CallF(_, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(PrimeF(_, _), _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(PreF(_, _), _, _), _) :: _)   => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(WithF(_, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IfF(_, _, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(LetF(_, _, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(LambdaF(_, _, _), _, _), _) :: _) =>
-          None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(ConstructorF(_, _, _), _, _), _) ::
-              _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SetLiteralF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(MapLiteralF(_, _), _, _), _) :: _) =>
-          None
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(SetComprehensionF(_, _, _, _), _, _), _) ::
-              _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(SeqLiteralF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(MatchesF(_, _, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(IntLitF(_, _), _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(FloatLitF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(StringLitF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(BoolLitF(_, _), _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FieldAccessF(NoneLitF(_), _, _), _) :: _) => None
-        case (
-              IdentifierF(nm, _),
-              List(arg, LambdaF(p, FieldAccessF(IdentifierF(q, _), field, _), _))
-            ) => nm == "sum" && p == q match {
-            case true => map_option[smt_term, smt_term](
-                (c: smt_term) =>
-                  TSum(c, field),
-                translate(enums, arg)
-              )
+        case (IdentifierF(_, _), _ :: BinaryOpF(_, _, _, _) :: _)   => None
+        case (IdentifierF(_, _), _ :: UnaryOpF(_, _, _) :: _)       => None
+        case (IdentifierF(_, _), _ :: QuantifierF(_, _, _, _) :: _) => None
+        case (IdentifierF(_, _), _ :: SomeWrapF(_, _) :: _)         => None
+        case (IdentifierF(_, _), _ :: TheF(_, _, _, _) :: _)        => None
+        case (IdentifierF(_, _), _ :: FieldAccessF(_, _, _) :: _)   => None
+        case (IdentifierF(_, _), _ :: EnumAccessF(_, _, _) :: _)    => None
+        case (IdentifierF(_, _), _ :: IndexF(_, _, _) :: _)         => None
+        case (IdentifierF(_, _), _ :: CallF(_, _, _) :: _)          => None
+        case (IdentifierF(_, _), _ :: PrimeF(_, _) :: _)            => None
+        case (IdentifierF(_, _), _ :: PreF(_, _) :: _)              => None
+        case (IdentifierF(_, _), _ :: WithF(_, _, _) :: _)          => None
+        case (IdentifierF(_, _), _ :: IfF(_, _, _, _) :: _)         => None
+        case (IdentifierF(_, _), _ :: LetF(_, _, _, _) :: _)        => None
+        case (IdentifierF(nm, _), List(arg, LambdaF(p, body, _))) =>
+          nm == "sum" match {
+            case true => (translate(enums, arg), translate(enums, body)) match {
+                case (None, _)       => None
+                case (Some(_), None) => None
+                case (Some(c), Some(b)) =>
+                  list_all[String]((v: String) => v == p, smt_var_list(b)) match {
+                    case true  => Some[smt_term](TSum(c, b))
+                    case false => None
+                  }
+              }
             case false => None
           }
-        case (
-              IdentifierF(_, _),
-              _ :: LambdaF(_, FieldAccessF(IdentifierF(_, _), _, _), _) ::
-              _ :: _
-            ) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, EnumAccessF(_, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, IndexF(_, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, CallF(_, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, PrimeF(_, _), _) :: _)   => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, PreF(_, _), _) :: _)     => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, WithF(_, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, IfF(_, _, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, LetF(_, _, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, LambdaF(_, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, ConstructorF(_, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, SetLiteralF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, MapLiteralF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, SetComprehensionF(_, _, _, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, SeqLiteralF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, MatchesF(_, _, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, IntLitF(_, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, FloatLitF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, StringLitF(_, _), _) :: _) =>
-          None
-        case (IdentifierF(_, _), _ :: LambdaF(_, BoolLitF(_, _), _) :: _) => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, NoneLitF(_), _) :: _)    => None
-        case (IdentifierF(_, _), _ :: LambdaF(_, IdentifierF(_, _), _) :: _) =>
-          None
+        case (IdentifierF(_, _), _ :: LambdaF(_, _, _) :: _ :: _)         => None
         case (IdentifierF(_, _), _ :: ConstructorF(_, _, _) :: _)         => None
         case (IdentifierF(_, _), _ :: SetLiteralF(_, _) :: _)             => None
         case (IdentifierF(_, _), _ :: MapLiteralF(_, _) :: _)             => None

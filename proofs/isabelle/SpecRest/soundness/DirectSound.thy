@@ -32,7 +32,7 @@ lemma sum_eval_None:
   shows "eval fs ps fuel s st env (CallF (IdentifierF nm sp1) (arg # a # list) sp) = None"
 proof -
   have nmsum: "nm = STR ''sum''"
-    using tr by (auto split: if_splits option.splits list.splits expr.splits)
+    using tr by (auto split: if_splits option.splits prod.splits list.splits expr.splits)
   have lk: "lookup_callee fs ps nm = None"
     using res nmsum by (simp add: builtins_reserved_def)
   show ?thesis by (cases fuel) (simp_all add: lk)

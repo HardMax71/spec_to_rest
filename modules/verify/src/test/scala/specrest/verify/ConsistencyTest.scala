@@ -433,6 +433,27 @@ class ConsistencyTest extends CatsEffectSuite:
       "sum(items, i => i.line_total) must verify: as an uninterpreted function keyed by collection and field, the invariant `subtotal = sum(items, _)` is preserved when items is unchanged (same collection => same sum)"
     ),
     (
+      "sum(coll, i => i * 2) computed-body aggregate verifies (generalizes the field-access case to any binder-closed body)",
+      "sum_computed_demo",
+      """service SumComputedDemo {
+        |  state {
+        |    items: Set[Int]
+        |    doubled: Int
+        |  }
+        |  operation Relabel {
+        |    input: x: Int
+        |    requires:
+        |      true
+        |    ensures:
+        |      items' = pre(items)
+        |      doubled' = pre(doubled)
+        |  }
+        |  invariant doubledIsSum:
+        |    doubled = sum(items, i => i * 2)
+        |}""".stripMargin,
+      "sum(items, i => i * 2) - a computed (non-field-access) lambda body closed over the binder - must verify as an uninterpreted function keyed by the translated body and collection, generalizing #437's field-access-only sum recognizer"
+    ),
+    (
       "#contents on an entity-field Set verifies via Z3 (the ecommerce #items shape)",
       "entity_set_card_demo",
       """service EntitySetCardDemo {

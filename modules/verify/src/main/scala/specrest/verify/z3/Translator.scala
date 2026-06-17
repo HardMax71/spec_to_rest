@@ -2748,20 +2748,22 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Int))
         Z3Expr.App(funcName, Nil)
-      // sum(coll, i => i.field): an uninterpreted Int-valued function keyed by the field name and
-      // the collection sort. Same collection => same sum (a functional dependency), so equality
-      // invariants like `subtotal = sum(items, _)` are preserved when the collection is unchanged.
-      // The sum's arithmetic value semantics is not modelled (no finite-sum theory in SMT).
-      case TSum(coll, field) =>
+      // sum(coll, i => body): an uninterpreted Int-valued function keyed by the lambda body and the
+      // collection sort. Same collection + same body => same sum (a functional dependency), so
+      // equality invariants like `subtotal = sum(items, _)` are preserved when the collection is
+      // unchanged. The body (translated, closed over the binder) is a structural key only -- it is
+      // not summed; the arithmetic value semantics is not modelled (no finite-sum theory in SMT).
+      case TSum(coll, body) =>
         val collZ = encodeFromSmtTerm(ctx, coll, env)
         inferSortOfZ3Expr(ctx, collZ) match
           case Some(s) =>
-            val funcName = s"aggsum_${field}_${sortNameOf(s)}"
+            val bodyKey  = body.toString.replaceAll("[^A-Za-z0-9]+", "_")
+            val funcName = s"aggsum_${bodyKey}_${sortNameOf(s)}"
             if !ctx.funcs.contains(funcName) then
               ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
             Z3Expr.App(funcName, List(collZ))
           case None =>
-            fail(ctx, s"cannot infer collection sort for sum aggregate over field $field")
+            fail(ctx, s"cannot infer collection sort for sum aggregate")
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>
