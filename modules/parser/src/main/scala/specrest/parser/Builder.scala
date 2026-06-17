@@ -277,9 +277,21 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
     case c :: rest => c :: scopeLetsOverBlock(rest)
 
   private def extendLetBody(lf: LetF, extra: List[expr]): LetF = lf match
-    case LetF(x, v, inner: LetF, d) => LetF(x, v, extendLetBody(inner, extra), d)
+    case LetF(x, v, inner: LetF, d) =>
+      val extended = extendLetBody(inner, extra)
+      LetF(x, v, extended, coverSpan(d, spanOf(extended)))
     case LetF(x, v, body, d) =>
-      LetF(x, v, (body :: extra).reduceRight((a, b) => BinaryOpF(BAnd(), a, b, d)), d)
+      val folded = (body :: extra).reduceRight: (a, b) =>
+        BinaryOpF(BAnd(), a, b, coverSpan(spanOf(a), spanOf(b)))
+      LetF(x, v, folded, coverSpan(d, spanOf(folded)))
+
+  // The span from `first`'s start to `last`'s end. Synthetic `let`/`and` nodes must cover the
+  // clauses they now fold in (which start after the original body), else a parent's span ends
+  // before its children and source-mapped diagnostics point at an incomplete range.
+  private def coverSpan(first: Option[span_t], last: Option[span_t]): Option[span_t] =
+    (first, last) match
+      case (Some(SpanT(sl, sc, _, _)), Some(SpanT(_, _, el, ec))) => Some(SpanT(sl, sc, el, ec))
+      case (f, l)                                                 => f.orElse(l)
 
   private def buildParam(ctx: ParamContext): BuildResult[ParamDeclFull] =
     buildTypeExpr(ctx.typeExpr).map(t => ParamDeclFull(ctx.lowerIdent.getText, t, sp(ctx)))
