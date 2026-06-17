@@ -1,5 +1,5 @@
 theory Translate
-  imports IR Smt
+  imports IR IR_Analysis Smt
 begin
 
 fun identName_smt :: "smt_term \<Rightarrow> String.literal option" where
@@ -144,7 +144,7 @@ where
           (if nm = STR ''sum''
              then (case (translate enums coll, translate enums body) of
                      (Some c, Some b) \<Rightarrow>
-                       (if list_all (\<lambda>v. v = p) (smt_var_list b)
+                       (if list_all (\<lambda>v. v = p) (free_vars body)
                           then Some (TSum c b) else None)
                    | _ \<Rightarrow> None)
              else None)

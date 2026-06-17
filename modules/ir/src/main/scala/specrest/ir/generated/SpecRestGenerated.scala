@@ -5456,6 +5456,75 @@ object SpecRestGenerated {
 
   def is_builtin_int_func(nm: String): Boolean = nm == "days"
 
+  def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
+    case (uu, Nil) => Nil
+    case (n, x :: xs) =>
+      x == n match {
+        case true  => remove_name(n, xs)
+        case false => x :: remove_name(n, xs)
+      }
+  }
+
+  def remove_names(x0: List[String], xs: List[String]): List[String] = (x0, xs) match {
+    case (Nil, xs)     => xs
+    case (n :: ns, xs) => remove_name(n, remove_names(ns, xs))
+  }
+
+  def free_vars_bindings(x0: List[quantifier_binding]): List[String] = x0 match {
+    case Nil => Nil
+    case QuantifierBindingFull(wj, d, wk, wl) :: bs =>
+      free_vars(d) ++ free_vars_bindings(bs)
+  }
+
+  def free_vars_entries(x0: List[map_entry]): List[String] = x0 match {
+    case Nil => Nil
+    case MapEntryFull(k, v, wi) :: es =>
+      free_vars(k) ++ (free_vars(v) ++ free_vars_entries(es))
+  }
+
+  def free_vars_fields(x0: List[field_assign]): List[String] = x0 match {
+    case Nil                              => Nil
+    case FieldAssignFull(wg, v, wh) :: fs => free_vars(v) ++ free_vars_fields(fs)
+  }
+
+  def free_vars_list(x0: List[expr]): List[String] = x0 match {
+    case Nil     => Nil
+    case x :: xs => free_vars(x) ++ free_vars_list(xs)
+  }
+
+  def free_vars(x0: expr): List[String] = x0 match {
+    case IdentifierF(n, uu)      => List(n)
+    case BinaryOpF(uv, l, r, uw) => free_vars(l) ++ free_vars(r)
+    case UnaryOpF(ux, e, uy)     => free_vars(e)
+    case FieldAccessF(b, uz, va) => free_vars(b)
+    case EnumAccessF(b, vb, vc)  => free_vars(b)
+    case IndexF(b, i, vd)        => free_vars(b) ++ free_vars(i)
+    case CallF(c, args, ve)      => free_vars(c) ++ free_vars_list(args)
+    case PrimeF(e, vf)           => free_vars(e)
+    case PreF(e, vg)             => free_vars(e)
+    case WithF(b, upds, vh)      => free_vars(b) ++ free_vars_fields(upds)
+    case IfF(c, t, e, vi)        => free_vars(c) ++ (free_vars(t) ++ free_vars(e))
+    case LetF(v, vala, body, vj) =>
+      free_vars(vala) ++ remove_name(v, free_vars(body))
+    case LambdaF(p, b, vk)        => remove_name(p, free_vars(b))
+    case ConstructorF(vl, fs, vm) => free_vars_fields(fs)
+    case SetLiteralF(xs, vn)      => free_vars_list(xs)
+    case MapLiteralF(es, vo)      => free_vars_entries(es)
+    case SetComprehensionF(v, d, p, vp) =>
+      free_vars(d) ++ remove_name(v, free_vars(p))
+    case SeqLiteralF(xs, vq) => free_vars_list(xs)
+    case MatchesF(x, vr, vs) => free_vars(x)
+    case SomeWrapF(x, vt)    => free_vars(x)
+    case TheF(v, d, b, vu)   => free_vars(d) ++ remove_name(v, free_vars(b))
+    case QuantifierF(vv, bs, body, vw) =>
+      free_vars_bindings(bs) ++ remove_names(qb_names(bs), free_vars(body))
+    case IntLitF(vx, vy)    => Nil
+    case FloatLitF(vz, wa)  => Nil
+    case StringLitF(wb, wc) => Nil
+    case BoolLitF(wd, we)   => Nil
+    case NoneLitF(wf)       => Nil
+  }
+
   def comp_parts(x0: expr): Option[(String, (String, expr))] = x0 match {
     case SetComprehensionF(vara, d, p, uu) =>
       d match {
@@ -5655,7 +5724,7 @@ object SpecRestGenerated {
                 case (None, _)       => None
                 case (Some(_), None) => None
                 case (Some(c), Some(b)) =>
-                  list_all[String]((v: String) => v == p, smt_var_list(b)) match {
+                  list_all[String]((v: String) => v == p, free_vars(body)) match {
                     case true  => Some[smt_term](TSum(c, b))
                     case false => None
                   }
@@ -7041,75 +7110,6 @@ object SpecRestGenerated {
           case false => false
         }
     }
-
-  def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
-    case (uu, Nil) => Nil
-    case (n, x :: xs) =>
-      x == n match {
-        case true  => remove_name(n, xs)
-        case false => x :: remove_name(n, xs)
-      }
-  }
-
-  def remove_names(x0: List[String], xs: List[String]): List[String] = (x0, xs) match {
-    case (Nil, xs)     => xs
-    case (n :: ns, xs) => remove_name(n, remove_names(ns, xs))
-  }
-
-  def free_vars_bindings(x0: List[quantifier_binding]): List[String] = x0 match {
-    case Nil => Nil
-    case QuantifierBindingFull(wj, d, wk, wl) :: bs =>
-      free_vars(d) ++ free_vars_bindings(bs)
-  }
-
-  def free_vars_entries(x0: List[map_entry]): List[String] = x0 match {
-    case Nil => Nil
-    case MapEntryFull(k, v, wi) :: es =>
-      free_vars(k) ++ (free_vars(v) ++ free_vars_entries(es))
-  }
-
-  def free_vars_fields(x0: List[field_assign]): List[String] = x0 match {
-    case Nil                              => Nil
-    case FieldAssignFull(wg, v, wh) :: fs => free_vars(v) ++ free_vars_fields(fs)
-  }
-
-  def free_vars_list(x0: List[expr]): List[String] = x0 match {
-    case Nil     => Nil
-    case x :: xs => free_vars(x) ++ free_vars_list(xs)
-  }
-
-  def free_vars(x0: expr): List[String] = x0 match {
-    case IdentifierF(n, uu)      => List(n)
-    case BinaryOpF(uv, l, r, uw) => free_vars(l) ++ free_vars(r)
-    case UnaryOpF(ux, e, uy)     => free_vars(e)
-    case FieldAccessF(b, uz, va) => free_vars(b)
-    case EnumAccessF(b, vb, vc)  => free_vars(b)
-    case IndexF(b, i, vd)        => free_vars(b) ++ free_vars(i)
-    case CallF(c, args, ve)      => free_vars(c) ++ free_vars_list(args)
-    case PrimeF(e, vf)           => free_vars(e)
-    case PreF(e, vg)             => free_vars(e)
-    case WithF(b, upds, vh)      => free_vars(b) ++ free_vars_fields(upds)
-    case IfF(c, t, e, vi)        => free_vars(c) ++ (free_vars(t) ++ free_vars(e))
-    case LetF(v, vala, body, vj) =>
-      free_vars(vala) ++ remove_name(v, free_vars(body))
-    case LambdaF(p, b, vk)        => remove_name(p, free_vars(b))
-    case ConstructorF(vl, fs, vm) => free_vars_fields(fs)
-    case SetLiteralF(xs, vn)      => free_vars_list(xs)
-    case MapLiteralF(es, vo)      => free_vars_entries(es)
-    case SetComprehensionF(v, d, p, vp) =>
-      free_vars(d) ++ remove_name(v, free_vars(p))
-    case SeqLiteralF(xs, vq) => free_vars_list(xs)
-    case MatchesF(x, vr, vs) => free_vars(x)
-    case SomeWrapF(x, vt)    => free_vars(x)
-    case TheF(v, d, b, vu)   => free_vars(d) ++ remove_name(v, free_vars(b))
-    case QuantifierF(vv, bs, body, vw) =>
-      free_vars_bindings(bs) ++ remove_names(qb_names(bs), free_vars(body))
-    case IntLitF(vx, vy)    => Nil
-    case FloatLitF(vz, wa)  => Nil
-    case StringLitF(wb, wc) => Nil
-    case BoolLitF(wd, we)   => Nil
-    case NoneLitF(wf)       => Nil
-  }
 
   def isBoolLit(x0: expr): Boolean = x0 match {
     case BoolLitF(uu, uv)                 => true
