@@ -2763,7 +2763,7 @@ object Translator:
               ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
             Z3Expr.App(funcName, List(collZ))
           case None =>
-            fail(ctx, s"cannot infer collection sort for sum aggregate")
+            fail(ctx, "cannot infer collection sort for sum aggregate")
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>
