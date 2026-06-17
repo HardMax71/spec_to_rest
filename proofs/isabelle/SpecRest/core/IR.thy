@@ -127,9 +127,12 @@ definition is_builtin_int_func :: "String.literal \<Rightarrow> bool" where
   "is_builtin_int_func nm \<longleftrightarrow> nm = STR ''days''"
 
 text \<open>\<open>str_length s\<close> is the length of string \<open>s\<close>, the meaning of the reserved
-  builtin \<open>len(s)\<close>. Abstract here (like \<open>builtin_str_func\<close>); the trusted translator
-  emits Z3's native \<open>str.len\<close> and the codegen serialisation is Scala \<open>.length\<close>, both
-  the real length, so any realisation \<open>smtEval\<close> shares is sound by construction.\<close>
+  builtin \<open>len(s)\<close>. Abstract here (like \<open>builtin_str_func\<close>); the codegen serialisation
+  is Scala \<open>.length\<close> (the real length, for the reference interpreter). \<open>len\<close> is
+  vacuous-on-eval, so the trusted Z3 translator is free to encode it as an uninterpreted
+  Int function -- which it does, rather than native \<open>str.len\<close>, whose exact-length
+  constraints make Z3's string solver materialise fixed-length strings -- without
+  affecting soundness.\<close>
 consts str_length :: "String.literal \<Rightarrow> int"
 
 record schema_field_decl =
