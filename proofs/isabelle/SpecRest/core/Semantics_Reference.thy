@@ -23,7 +23,8 @@ definition builtins_reserved ::
                               \<and> lookup_callee fs ps (STR ''dom'') = None
                               \<and> lookup_callee fs ps (STR ''range'') = None
                               \<and> lookup_callee fs ps (STR ''ran'') = None
-                              \<and> lookup_callee fs ps (STR ''sum'') = None"
+                              \<and> lookup_callee fs ps (STR ''sum'') = None
+                              \<and> lookup_callee fs ps (STR ''len'') = None"
 
 fun quant_dom ::
   "schema \<Rightarrow> state \<Rightarrow> quant_kind \<Rightarrow> quantifier_binding list
@@ -1414,17 +1415,26 @@ next
         next
           case False
           note nfunc = False
-          have bif: "is_builtin_int_func nm"
-            using "15.prems" fuel idc None aeq npred nfunc
-            by (auto split: option.splits ir_value.splits if_splits)
-          obtain n where ea: "eval fs ps fuel s st env arg = Some (VInt n)"
-              and w_eq: "w = VInt (builtin_int_func nm n)"
-            using "15.prems" fuel idc None aeq npred nfunc bif
-            by (auto split: option.splits ir_value.splits if_splits)
-          have ea': "eval fs ps fuel s st env (inline_calls fs ps arg) = Some (VInt n)"
-            using "15.IH" fuel idc None aeq ea npred nfunc bif by (auto split: if_splits)
-          show ?thesis using inl ea' w_eq fuel idc None aeq npred nfunc bif
-            by (simp split: option.splits ir_value.splits)
+          show ?thesis
+          proof (cases "is_builtin_int_func nm")
+            case True
+            note bif = True
+            obtain n where ea: "eval fs ps fuel s st env arg = Some (VInt n)"
+                and w_eq: "w = VInt (builtin_int_func nm n)"
+              using "15.prems" fuel idc None aeq npred nfunc bif
+              by (auto split: option.splits ir_value.splits if_splits)
+            have ea': "eval fs ps fuel s st env (inline_calls fs ps arg) = Some (VInt n)"
+              using "15.IH" fuel idc None aeq ea npred nfunc bif by (auto split: if_splits)
+            show ?thesis using inl ea' w_eq fuel idc None aeq npred nfunc bif
+              by (simp split: option.splits ir_value.splits)
+          next
+            case False
+            \<comment> \<open>nm = len: eval has no len case, so eval (CallF ...) = None contradicts the premise.\<close>
+            note nint = False
+            show ?thesis
+              using "15.prems" fuel idc None aeq npred nfunc nint
+              by (auto split: option.splits ir_value.splits if_splits)
+          qed
         qed
       qed
     qed

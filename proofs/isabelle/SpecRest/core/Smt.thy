@@ -69,6 +69,7 @@ datatype (plugins only: code size) smt_term =
   | TUStrPred "String.literal" "smt_term"
   | TUStrFunc "String.literal" "smt_term"
   | TUIntFunc "String.literal" "smt_term"
+  | TStrLen "smt_term"
   | TUConst "String.literal"
   | TSeqEmpty
   | TSeqCons "smt_term" "smt_term"
@@ -127,6 +128,7 @@ fun smt_var_list :: "smt_term \<Rightarrow> String.literal list" where
 | "smt_var_list (TUStrPred _ t)       = smt_var_list t"
 | "smt_var_list (TUStrFunc _ t)       = smt_var_list t"
 | "smt_var_list (TUIntFunc _ t)       = smt_var_list t"
+| "smt_var_list (TStrLen t)           = smt_var_list t"
 | "smt_var_list (TUConst _)           = []"
 | "smt_var_list TSeqEmpty             = []"
 | "smt_var_list (TSeqCons e r)        = smt_var_list e @ smt_var_list r"
@@ -553,6 +555,10 @@ where
 | "smtEval m env (TUIntFunc name t) =
      (case smtEval m env t of
         Some (SInt n) \<Rightarrow> Some (SInt (builtin_int_func name n))
+      | _ \<Rightarrow> None)"
+| "smtEval m env (TStrLen t) =
+     (case smtEval m env t of
+        Some (SStr s) \<Rightarrow> Some (SInt (str_length s))
       | _ \<Rightarrow> None)"
 | "smtEval m env (TUConst nm) = Some (SInt (builtin_const_val nm))"
 | "smtEval m env TSeqEmpty = Some (SSeq [])"

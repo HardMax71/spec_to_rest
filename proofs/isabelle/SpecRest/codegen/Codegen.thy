@@ -125,6 +125,7 @@ code_printing
 | constant builtin_const_val \<rightharpoonup> (Scala) "(BigInt((_).hashCode))"
 | constant builtin_str_func \<rightharpoonup> (Scala) "((_) + (_))"
 | constant builtin_int_func \<rightharpoonup> (Scala) "(BigInt((_).hashCode) + (_))"
+| constant str_length \<rightharpoonup> (Scala) "(BigInt((_).length))"
 | constant agg_sum \<rightharpoonup> (Scala) "(BigInt((_).hashCode + (_).hashCode))"
 
 export_code

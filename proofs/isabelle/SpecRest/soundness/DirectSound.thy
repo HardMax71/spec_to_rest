@@ -579,20 +579,36 @@ next
         next
           case False
           note nfunc = False
-          have bif: "is_builtin_int_func nm"
-            using "15.prems"(2) ceq aeq npred nfunc by (auto split: if_splits option.splits)
-          obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUIntFunc nm argt"
-            using "15.prems"(2) ceq aeq npred nfunc bif by (auto split: if_splits option.splits)
-          have lc_none: "lookup_callee fs ps nm = None"
-            using "15.prems"(4) bif by (simp add: builtins_reserved_def)
-          from "15.prems"(1) fuel ceq aeq lc_none npred nfunc bif obtain n where
-              ea: "eval fs ps fuel s st env arg = Some (VInt n)"
-              and veq: "v = VInt (builtin_int_func nm n)"
-            by (auto split: option.splits ir_value.splits if_splits)
-          have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SInt n)"
-            using "15.IH" fuel ceq aeq lc_none npred nfunc bif ea ta "15.prems"(3) "15.prems"(4)
-            by (auto split: if_splits)
-          show ?thesis using teq veq ev by simp
+          show ?thesis
+          proof (cases "is_builtin_int_func nm")
+            case True
+            note bif = True
+            obtain argt where ta: "translate enums arg = Some argt" and teq: "t = TUIntFunc nm argt"
+              using "15.prems"(2) ceq aeq npred nfunc bif by (auto split: if_splits option.splits)
+            have lc_none: "lookup_callee fs ps nm = None"
+              using "15.prems"(4) bif by (simp add: builtins_reserved_def)
+            from "15.prems"(1) fuel ceq aeq lc_none npred nfunc bif obtain n where
+                ea: "eval fs ps fuel s st env arg = Some (VInt n)"
+                and veq: "v = VInt (builtin_int_func nm n)"
+              by (auto split: option.splits ir_value.splits if_splits)
+            have ev: "smtEval (correlate_model s st) (correlate_env env) argt = Some (SInt n)"
+              using "15.IH" fuel ceq aeq lc_none npred nfunc bif ea ta "15.prems"(3) "15.prems"(4)
+              by (auto split: if_splits)
+            show ?thesis using teq veq ev by simp
+          next
+            case False
+            \<comment> \<open>translate succeeded with none of pred/func/int_func, so \<open>nm = len\<close>; eval
+               has no \<open>len\<close> case (vacuous-on-eval), so the premise eval = Some v is false.\<close>
+            note nint = False
+            have nlen: "nm = STR ''len''"
+              using "15.prems"(2) ceq aeq npred nfunc nint by (auto split: if_splits option.splits)
+            have lc_none: "lookup_callee fs ps nm = None"
+              using "15.prems"(4) nlen by (simp add: builtins_reserved_def)
+            have "eval fs ps fuel s st env (CallF (IdentifierF nm sp1) [arg] sp) = None"
+              using fuel lc_none npred nfunc nint
+              by (auto split: option.splits ir_value.splits if_splits)
+            then show ?thesis using "15.prems"(1) ceq aeq by simp
+          qed
         qed
       qed
     next

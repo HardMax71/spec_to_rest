@@ -582,6 +582,7 @@ object SpecRestGenerated {
   final case class TUStrPred(a: String, b: smt_term)               extends smt_term
   final case class TUStrFunc(a: String, b: smt_term)               extends smt_term
   final case class TUIntFunc(a: String, b: smt_term)               extends smt_term
+  final case class TStrLen(a: smt_term)                            extends smt_term
   final case class TUConst(a: String)                              extends smt_term
   final case class TSeqEmpty()                                     extends smt_term
   final case class TSeqCons(a: smt_term, b: smt_term)              extends smt_term
@@ -1817,6 +1818,7 @@ object SpecRestGenerated {
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
     case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -1872,6 +1874,7 @@ object SpecRestGenerated {
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
     case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -2837,6 +2840,22 @@ object SpecRestGenerated {
           case Some(SSeq(_))              => None
           case Some(SMap(_))              => None
         }
+      case (m, env, TStrLen(t)) =>
+        smtEval(m, env, t) match {
+          case None                       => None
+          case Some(SBool(_))             => None
+          case Some(SInt(_))              => None
+          case Some(SReal(_))             => None
+          case Some(SEnumElem(_, _))      => None
+          case Some(SEntityElem(_, _))    => None
+          case Some(SSet(_))              => None
+          case Some(SEntityWith(_, _, _)) => None
+          case Some(SNone())              => None
+          case Some(SSome(_))             => None
+          case Some(SStr(s))              => Some[smt_val](SInt(BigInt(s.length)))
+          case Some(SSeq(_))              => None
+          case Some(SMap(_))              => None
+        }
       case (m, env, TUConst(nm)) => Some[smt_val](SInt(BigInt(nm.hashCode)))
       case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
       case (m, env, TSeqCons(e, rest)) =>
@@ -3374,6 +3393,7 @@ object SpecRestGenerated {
     case TUStrPred(vk, t)      => smt_var_list(t)
     case TUStrFunc(vl, t)      => smt_var_list(t)
     case TUIntFunc(vm, t)      => smt_var_list(t)
+    case TStrLen(t)            => smt_var_list(t)
     case TUConst(vn)           => Nil
     case TSeqEmpty()           => Nil
     case TSeqCons(e, r)        => smt_var_list(e) ++ smt_var_list(r)
@@ -5299,6 +5319,7 @@ object SpecRestGenerated {
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
     case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5354,6 +5375,7 @@ object SpecRestGenerated {
     case TUStrPred(v, va)       => None
     case TUStrFunc(v, va)       => None
     case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
     case TUConst(v)             => None
     case TSeqEmpty()            => None
     case TSeqCons(v, va)        => None
@@ -5603,7 +5625,13 @@ object SpecRestGenerated {
                         (a: smt_term) => TUIntFunc(nm, a),
                         translate(enums, arg)
                       )
-                    case false => None
+                    case false => nm == "len" match {
+                        case true => map_option[smt_term, smt_term](
+                            (a: smt_term) => TStrLen(a),
+                            translate(enums, arg)
+                          )
+                        case false => None
+                      }
                   }
               }
           }
