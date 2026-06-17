@@ -44,7 +44,7 @@ flowchart TD
   F --> G[per-check expr_full]
   G --> H[lower :: expr_full ⇒ expr]
   H --> I[translate :: expr ⇒ smt_term]
-  I --> J[SmtTermToZ3 bridge]
+  I --> J[SmtTermBridge]
   J --> K[Z3 JNI]
   K --> L[Verdict]
 ```
@@ -58,9 +58,11 @@ Every box's correctness obligation:
 | `lower` projection | extracted from `IR.thy` via `Code_Target_Scala`, lives at `modules/ir/.../SpecRestGenerated.scala` | **Verified**, proven total in Isabelle. Returns `None` for shapes outside the subset. |
 | `translate` (verified) | extracted from `Translate.thy`. Same generated file. | **Verified**, `translate :: expr ⇒ smt_term` is the function the soundness theorem talks about. |
 | `Code_Target_Scala` extraction | Isabelle stock tool | **Trusted**, production-grade, used by Stainless/Leon, but not formally verified end-to-end. |
-| `SmtTermToZ3` bridge | new in #192, lives in `modules/verify/.../z3/Translator.scala` (private nested object) | **Trusted**, hand-written, ~250 LOC. Converts `smt_term` to `Z3Expr` for the JNI driver. |
-| Hand-written `translateExpr` | same file, ~1900 LOC | **Trusted but bypassed for sound checks**, invoked only for declaration-level expressions (entity field constraints, type-alias `where`-clauses); on the check-body path, lower→bridge runs instead. |
-| Sort inference, Z3 declaration management, set-of-T monomorphization, Skolem allocation, span threading | hand-written, in `Translator.scala` | **Trusted**, outside the soundness statement; runs before/around the bridge. |
+| Z3 entrypoint | `modules/verify/.../z3/Translator.scala` | **Trusted**, hand-written, small public API that declares context and dispatches operation/invariant checks. |
+| Checked/declaration boundary | `modules/verify/.../z3/ExpressionEncoder.scala` (`translateCheckedExpr`, `translateDeclarationExpr`) | **Trusted**, hand-written. Check bodies use the extracted translator only; declaration-level refinements may use the Scala fallback. |
+| `SmtTermBridge` | `modules/verify/.../z3/SmtTermBridge.scala` (`encodeFromSmtTerm`) | **Trusted**, hand-written. Converts extracted `smt_term` values to `Z3Expr` for the JNI driver. |
+| Declaration fallback | `modules/verify/.../z3/ExpressionEncoder.scala` (`translateDeclarationExprRaw`) | **Trusted but bypassed for sound checks**, invoked only for declaration-level expressions such as entity field constraints and type-alias `where` clauses. |
+| Sort inference, Z3 declaration management, set-of-T monomorphization, Skolem allocation, span threading | hand-written, split across `TranslationContext.scala`, `Declarations.scala`, `ExpressionEncoder.scala`, `RelationFrames.scala`, and `SmtTermBridge.scala` | **Trusted**, outside the soundness statement; runs before/around the bridge. |
 | Z3 SMT solver (`com.microsoft.z3`) | external | **Trusted**, incomplete on quantifiers + nonlinear arithmetic + theory combinations. UNSAT verdicts are sound; SAT/Unknown can be solver artifacts. |
 | Counterexample decoder | `modules/verify/.../z3/CounterExample.scala` | **Trusted**, hand-written; outside soundness. |
 | Alloy backend | `modules/verify/src/main/scala/specrest/verify/alloy/*` | **Trusted**, separate bounded-model-checking story, rather than subject to `lower`. |
@@ -95,18 +97,18 @@ What it does **not** claim:
 
 Before #192:
 
-- Hand-written `translateExpr` end-to-end for every check (~1900 LOC).
+- Hand-written `translateExpr` end-to-end for every check (~1900 LOC in the old single-file
+  implementation).
 - Soundness theorem existed but only the A8 round-trip oracle exercised the verified path on 24
   canonical probes, that test set was too small to call the production path "verified."
 
 After #192:
 
-- Hand-written `translateExpr` reduced to declaration-level expressions only (~hundreds of LOC
-  reachable on a typical spec).
-- Check-body translation routes through verified `lower → translate` plus the new
-  `SmtTermToZ3` bridge (~250 LOC, new TCB).
-- Net hand-written check-body code in TCB: roughly half of `translateExpr`'s 1900 LOC replaced by
-  the much smaller bridge + verified extraction. Best-effort checks no longer produce unsound
+- The declaration fallback is isolated behind `translateDeclarationExpr`; check bodies call
+  `translateCheckedExpr`, which has no Scala fallback.
+- Check-body translation routes through verified `lower -> translate` plus `SmtTermBridge`.
+- Net hand-written check-body code in TCB is now the bridge, relation/frame synthesis, and the
+  surrounding Z3 declaration/rendering layers. Best-effort checks no longer produce unsound
   verdicts at all, they skip.
 
 The bridge is the only piece of *new* TCB. It is small, syntax-directed, and structurally
@@ -157,7 +159,9 @@ narrow to the verified subset, or accept that those particular checks are not fo
 | Soundness theorem | `proofs/isabelle/SpecRest/Soundness.thy` |
 | Code extraction | `proofs/isabelle/SpecRest/Codegen.thy` |
 | Generated Scala | `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` |
-| Bridge + dispatcher | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` (`encodeFromSmtTerm`, `translateExpr`) |
+| Z3 entrypoint | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` |
+| Checked/declaration expression boundary | `modules/verify/src/main/scala/specrest/verify/z3/ExpressionEncoder.scala` (`translateCheckedExpr`, `translateDeclarationExpr`) |
+| Bridge | `modules/verify/src/main/scala/specrest/verify/z3/SmtTermBridge.scala` (`encodeFromSmtTerm`) |
 | Trust classifier | `modules/verify/src/main/scala/specrest/verify/Trust.scala` |
 | Skip dispatcher | `modules/verify/src/main/scala/specrest/verify/Consistency.scala` (`runOperationCheck` etc.) |
 | CI gate for Isabelle | `.github/workflows/isabelle-build.yml` |
