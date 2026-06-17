@@ -631,17 +631,23 @@ than a useful verdict. Use the inline membership form instead: `y in { x in S | 
 
 ## Extending the translator
 
-Adding a new IR expression kind is a three-file change:
+Adding a new verified expression shape is a proof-first change:
 
-1. `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala`, add a case to `translateExpr`; declare any helper uninterpreted
-   functions lazily via `ctx.declareFunc`. Spans flow automatically thanks to the wrapping
-   `translateExpr` call.
-2. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala`, add a case to `renderExpr` that produces valid SMT-LIB text.
-3. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala`, add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
+1. Extend `proofs/isabelle/SpecRest/Translate.thy` and regenerate
+   `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`.
+2. `modules/verify/src/main/scala/specrest/verify/z3/SmtTermBridge.scala`, add the
+   `smt_term -> Z3Expr` bridge case and declare any helper uninterpreted functions lazily via
+   `ctx.declareFunc`.
+3. If the shape is allowed only for declaration-level refinements, add the fallback case in
+   `modules/verify/src/main/scala/specrest/verify/z3/ExpressionEncoder.scala`; check bodies must
+   continue through `translateCheckedExpr` without fallback.
+4. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala`, add a case to `renderExpr` that produces valid SMT-LIB text.
+5. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala`, add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
    `Arith` / `Expr` as appropriate.
 
-Unit-test the new case in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`
-(Z3Script shape + SMT-LIB render, no solver), and add a scenario to
+Unit-test bridge-only behaviour in `modules/verify/src/test/scala/specrest/verify/z3/SmtTermBridgeTest.scala`,
+golden script output in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`,
+and add a scenario to
 `modules/verify/src/test/scala/specrest/verify/z3/BackendTest.scala` if the case requires solver
 round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/specrest/verify/ConsistencyTest.scala`
 or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT

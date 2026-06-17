@@ -183,13 +183,13 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
         s"error message should not suggest typed receiver; got: ${err.message}"
       )
 
-  test("powerset operator raises a sharp TranslatorError"):
+  test("powerset operator in a check body stops at the verified-subset boundary"):
     translatorErrorOf(
       specWithInvariant("a: Set[Int]\n    b: Set[Set[Int]]", "b subset ^a")
     ).map: err =>
       assert(
-        err.message.contains("powerset"),
-        s"expected powerset error; got: ${err.message}"
+        err.message.contains("Isabelle-extracted Z3 translator subset"),
+        s"expected verified-subset boundary error; got: ${err.message}"
       )
 
   test("`if c then a else b` lowers to an SMT (ite ...)"):

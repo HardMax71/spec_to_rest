@@ -100,7 +100,7 @@ flowchart TD
   Parser["Parser CST<br/>modules/parser/.../Parse.scala"]
   Builder["IR Builder<br/>modules/parser/.../Builder.scala"]
   IR["Typed IR<br/>modules/ir/.../Types.scala (25 Expr cases)"]
-  ZTrans["Z3 Translator<br/>modules/verify/.../z3/Translator.scala (1917 LOC)"]
+  ZTrans["Z3 translator boundary<br/>modules/verify/.../z3/{Translator,ExpressionEncoder,SmtTermBridge}.scala"]
   ATrans["Alloy Translator<br/>modules/verify/.../alloy/Translator.scala (429 LOC)"]
   Z3["Z3 4.13<br/>via z3-turnkey JNI"]
   Verdict["sat / unsat / unknown"]
@@ -901,7 +901,7 @@ proof impact in the same PR.
 | Class | Surface | Why it is governed |
 |---|---|---|
 | Proof-owned core | `proofs/isabelle/SpecRest/IR.thy` (extracted to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`) | Defines `expr`/`expr_full`/`type_expr_full`/`service_ir_full`, the AST shapes the proof mirrors. Since #202 the Scala IR is auto-extracted; do not hand-edit the generated file. |
-| Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Translator.scala` | Main translation function; prover-side mirror tracks case-for-case. |
+| Proof-owned core | `proofs/isabelle/SpecRest/Translate.thy` plus extracted `SpecRestGenerated.translate` | Main verified translation function; prover-side mirror tracks case-for-case. |
 | Proof-owned core | `modules/verify/src/main/scala/specrest/verify/z3/Types.scala` | `Z3Script`, `Z3Expr`, artifact structures in the first theorem target. |
 | Proof-owned core | `proofs/isabelle/SpecRest/{IR,Semantics,Smt,Translate,Soundness,Codegen}.thy` | The canonical proof track. Universal `soundness` theorem closes with zero sorries. |
 | Drift-control artifact | `modules/verify/src/test/scala/specrest/verify/cert/generated/A8RoundTripOracleTest.scala` | Round-trip oracle: every canonical probe runs through extracted `lower → translate`. Since #202 close-out, the projection is the extracted `lower` itself, no hand-rolled mirror remains. |
@@ -1392,13 +1392,14 @@ translator on the production verify path.
 - **Best-effort checks always skip with `category = soundness_limitation`** before backend
   dispatch (no flag, this is the default since #192). The `--strict-soundness` flag and
   its CLI surface were retired.
-- **Sound checks route via extracted translator.** `Translator.translateExpr` calls
-  `lower(enums, e)`; on `Some` it routes through `SpecRestGenerated.translate` (the
-  Isabelle-extracted function) and then a small `SmtTermToZ3` bridge (~250 LOC,
-  hand-written) to reach Z3. On `None` the hand-written `translateExprRaw` runs, but only
-  for *declaration-level* expressions (entity field constraints, type-alias `where`-clauses);
-  out-of-subset check-body shapes are filtered to skip by the Trust classifier before
-  ever reaching the translator.
+- **Sound checks route via extracted translator.** `ExpressionEncoder.translateCheckedExpr`
+  routes each check body through `SpecRestGenerated.translate` (the Isabelle-extracted
+  function) and then `SmtTermBridge.encodeFromSmtTerm` to reach Z3. If the extracted
+  translator returns `None`, the checked path fails the translation instead of falling back.
+  The only fallback entrypoint is `translateDeclarationExpr`, used for declaration-level
+  expressions such as entity field constraints and type-alias `where` clauses. Out-of-subset
+  check-body shapes are filtered to skip by the Trust classifier before they reach the
+  translator.
 - **Exit code 4 (`ExitCodes.Trust`)**: emitted when soundness skips are the only reason
   the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
 - **TCB audit** lives at `docs/research/11_tcb_audit.md`, the single ledger of what
