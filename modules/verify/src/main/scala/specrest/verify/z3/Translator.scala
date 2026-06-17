@@ -65,6 +65,7 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
   val state: mutable.LinkedHashMap[String, StateEntry]        = mutable.LinkedHashMap.empty
   val matchesIds: mutable.LinkedHashMap[String, Int]          = mutable.LinkedHashMap.empty
   val stringLitIds: mutable.LinkedHashMap[String, Int]        = mutable.LinkedHashMap.empty
+  val aggSumIds: mutable.LinkedHashMap[String, Int]           = mutable.LinkedHashMap.empty
   val cardinalityNames: mutable.LinkedHashMap[String, String] = mutable.LinkedHashMap.empty
   val skolemIds: mutable.LinkedHashMap[String, Int]           = mutable.LinkedHashMap.empty
   val inputs: mutable.ArrayBuffer[ArtifactBinding]            = mutable.ArrayBuffer.empty
@@ -104,6 +105,17 @@ final private class TranslateCtx(val bnd: TranslateBoundary):
         s"str_$id"
 
   def stringLitCount: Int = stringLitIds.size
+
+  // A sum aggregate's uninterpreted function is keyed by its lambda body. The full term `toString`
+  // is the registry key (injective: distinct terms render distinctly), so distinct bodies always
+  // get distinct ids -- never the collisions a lossy name-sanitiser would risk.
+  def aggSumKeyFor(bodyRendered: String): String =
+    aggSumIds.get(bodyRendered) match
+      case Some(id) => s"b$id"
+      case None =>
+        val id = aggSumIds.size
+        aggSumIds(bodyRendered) = id
+        s"b$id"
 
   def cardinalityNameFor(targetName: String, mode: StateMode = StateMode.Pre): String =
     val key = if mode == StateMode.Post then s"${targetName}__post" else targetName
@@ -2748,20 +2760,21 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Int))
         Z3Expr.App(funcName, Nil)
-      // sum(coll, i => i.field): an uninterpreted Int-valued function keyed by the field name and
-      // the collection sort. Same collection => same sum (a functional dependency), so equality
-      // invariants like `subtotal = sum(items, _)` are preserved when the collection is unchanged.
-      // The sum's arithmetic value semantics is not modelled (no finite-sum theory in SMT).
-      case TSum(coll, field) =>
+      // sum(coll, i => body): an uninterpreted Int-valued function keyed by the lambda body and the
+      // collection sort. Same collection + same body => same sum (a functional dependency), so
+      // equality invariants like `subtotal = sum(items, _)` are preserved when the collection is
+      // unchanged. The body (translated, closed over the binder) is a structural key only -- it is
+      // not summed; the arithmetic value semantics is not modelled (no finite-sum theory in SMT).
+      case TSum(coll, body) =>
         val collZ = encodeFromSmtTerm(ctx, coll, env)
         inferSortOfZ3Expr(ctx, collZ) match
           case Some(s) =>
-            val funcName = s"aggsum_${field}_${sortNameOf(s)}"
+            val funcName = s"aggsum_${ctx.aggSumKeyFor(body.toString)}_${sortNameOf(s)}"
             if !ctx.funcs.contains(funcName) then
               ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
             Z3Expr.App(funcName, List(collZ))
           case None =>
-            fail(ctx, s"cannot infer collection sort for sum aggregate over field $field")
+            fail(ctx, "cannot infer collection sort for sum aggregate")
       case TSeqEmpty() =>
         fail(ctx, "empty sequence literal requires context to infer its element sort")
       case cons @ TSeqCons(_, _) =>

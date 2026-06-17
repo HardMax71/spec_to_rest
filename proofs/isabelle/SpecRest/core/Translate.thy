@@ -1,5 +1,5 @@
 theory Translate
-  imports IR Smt
+  imports IR IR_Analysis Smt
 begin
 
 fun identName_smt :: "smt_term \<Rightarrow> String.literal option" where
@@ -140,9 +140,13 @@ where
              else None)
       | (IdentifierF nm _, []) \<Rightarrow>
           (if is_builtin_const nm then Some (TUConst nm) else None)
-      | (IdentifierF nm _, [coll, LambdaF p (FieldAccessF (IdentifierF q _) field _) _]) \<Rightarrow>
-          (if nm = STR ''sum'' \<and> p = q
-             then map_option (\<lambda>c. TSum c field) (translate enums coll)
+      | (IdentifierF nm _, [coll, LambdaF p body _]) \<Rightarrow>
+          (if nm = STR ''sum''
+             then (case (translate enums coll, translate enums body) of
+                     (Some c, Some b) \<Rightarrow>
+                       (if list_all (\<lambda>v. v = p) (free_vars body)
+                          then Some (TSum c b) else None)
+                   | _ \<Rightarrow> None)
              else None)
       | _ \<Rightarrow> None)"
 | "translate enums (ConstructorF name fas _) =

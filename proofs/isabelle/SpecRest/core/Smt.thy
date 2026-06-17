@@ -75,7 +75,7 @@ datatype (plugins only: code size) smt_term =
   | TSeqCons "smt_term" "smt_term"
   | TMapEmpty
   | TMapCons "smt_term" "smt_term" "smt_term"
-  | TSum "smt_term" "String.literal"
+  | TSum "smt_term" "smt_term"
 
 text \<open>\<open>smt_var_list\<close>: every variable name occurring anywhere in a term,
   binders included. Over-approximates the free variables, so a name not in
@@ -342,13 +342,15 @@ definition set_diff_smt_vals ::
   "smt_val list \<Rightarrow> smt_val list \<Rightarrow> smt_val list" where
   "set_diff_smt_vals l r \<equiv> dedupe_smt_vals (filter (\<lambda>v. \<not> contains_smt_val r v) l)"
 
-text \<open>\<open>agg_sum coll field\<close> is the uninterpreted value of \<open>sum(coll, i => i.field)\<close>: abstract, like
+text \<open>\<open>agg_sum coll body\<close> is the uninterpreted value of \<open>sum(coll, i => body)\<close>: abstract, like
   \<open>str_predicate\<close>, so the trusted translator emits it as a Z3 uninterpreted function of the
-  collection (same collection + field \<Rightarrow> same sum). It captures the functional dependency of the
-  aggregate on its collection, not the arithmetic of summation (finite sums are not expressible in
-  first-order SMT); the obligation is vacuous on the reference \<open>eval\<close> (a 2-arg \<open>CallF\<close> evaluates to
-  \<open>None\<close>), so any realisation is sound.\<close>
-consts agg_sum :: "smt_val \<Rightarrow> String.literal \<Rightarrow> int"
+  collection (same collection + body \<Rightarrow> same sum). The body is the translated lambda term, used
+  only as a key distinguishing one aggregate from another (\<open>i.field\<close> vs \<open>i * 2\<close>); the translator
+  restricts it to a body closed over the binder, so it has no free variables beyond the summed-over
+  element. It captures the functional dependency of the aggregate on its collection, not the
+  arithmetic of summation (finite sums are not expressible in first-order SMT); the obligation is
+  vacuous on the reference \<open>eval\<close> (a 2-arg \<open>CallF\<close> evaluates to \<open>None\<close>), so any realisation is sound.\<close>
+consts agg_sum :: "smt_val \<Rightarrow> smt_term \<Rightarrow> int"
 
 function (sequential) smtEval :: "smt_model \<Rightarrow> smt_env \<Rightarrow> smt_term \<Rightarrow> smt_val option"
 and smtEval_forall_enum ::
