@@ -8,9 +8,7 @@ import scala.collection.mutable
 import scala.util.boundary
 
 private object SmtTermBridgeHarness
-    extends Declarations
-    with ExpressionEncoder
-    with RelationFrames
+    extends Z3EncodingSupport
     with SmtTermBridge:
 
   def script(term: smt_term)(
@@ -21,7 +19,12 @@ private object SmtTermBridgeHarness
       val ctx = new TranslateCtx(summon[TranslateBoundary])
       val env = configure(ctx)
       ctx.assertions += encodeFromSmtTerm(ctx, term, env)
-      Right(finalizeScript(ctx))
+      Right(Z3Script(
+        sorts = ctx.sorts.values.toList.sortBy(Z3Sort.key),
+        funcs = ctx.funcs.values.toList.sortBy(_.name.toLowerCase),
+        assertions = ctx.assertions.toList,
+        artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, ctx.hasPostState)
+      ))
 
 class SmtTermBridgeTest extends CatsEffectSuite:
 

@@ -10,7 +10,7 @@ import scala.collection.mutable
   "org.wartremover.warts.OptionPartial"
 ))
 private[z3] trait RelationFrames:
-  this: Declarations & ExpressionEncoder =>
+  this: Declarations & ExpressionEncoder & Z3EncodingSupport =>
   private[z3] def translateEnsuresClause(
       ctx: TranslateCtx,
       expr: expr,
