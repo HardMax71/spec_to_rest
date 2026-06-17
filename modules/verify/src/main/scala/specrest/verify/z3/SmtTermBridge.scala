@@ -10,7 +10,7 @@ import scala.collection.mutable
   "org.wartremover.warts.OptionPartial"
 ))
 private[z3] trait SmtTermBridge:
-  this: Declarations & ExpressionEncoder =>
+  this: Z3EncodingSupport =>
   private[z3] def coerceOptionalNumeric(ctx: TranslateCtx, z: Z3Expr): Z3Expr =
     inferSortOfZ3Expr(ctx, z) match
       case Some(Z3Sort.OptionOf(e)) if Z3Sort.isNumeric(e) => Z3Expr.OptGet(z)

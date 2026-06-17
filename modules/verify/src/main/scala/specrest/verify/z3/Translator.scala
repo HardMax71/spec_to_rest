@@ -13,7 +13,8 @@ import scala.util.boundary
     "org.wartremover.warts.OptionPartial"
   )
 )
-object Translator extends Declarations with ExpressionEncoder with RelationFrames
+object Translator extends Z3EncodingSupport with Declarations with ExpressionEncoder
+    with RelationFrames
     with SmtTermBridge:
 
   def translate(ir: service_ir): IO[Either[VerifyError.Translator, Z3Script]] =

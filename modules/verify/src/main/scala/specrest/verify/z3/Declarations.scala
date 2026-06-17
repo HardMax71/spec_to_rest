@@ -10,7 +10,7 @@ import scala.collection.mutable
   "org.wartremover.warts.OptionPartial"
 ))
 private[z3] trait Declarations:
-  this: ExpressionEncoder =>
+  this: ExpressionEncoder & Z3EncodingSupport =>
   private[z3] def declareBase(ctx: TranslateCtx, ir: service_ir): Unit =
     svcPredicates(ir).foreach(p => ctx.predicateNames += prdName(p))
     for e <- svcEnums(ir) do declareEnum(ctx, e)
@@ -374,15 +374,6 @@ private[z3] trait Declarations:
         ctx.declareFunc(Z3FunctionDecl(funcName, Nil, fieldSort))
         ctx.state(stfName(sf)) = StateConstInfo(fieldSort, funcName, s"${funcName}_post")
 
-  private[z3] def domFuncFor(info: StateRelationInfo, mode: StateMode): String =
-    if mode == StateMode.Post then info.domFuncPost else info.domFunc
-
-  private[z3] def mapFuncFor(info: StateRelationInfo, mode: StateMode): String =
-    if mode == StateMode.Post then info.mapFuncPost else info.mapFunc
-
-  private[z3] def constFuncFor(info: StateConstInfo, mode: StateMode): String =
-    if mode == StateMode.Post then info.funcNamePost else info.funcName
-
   private[z3] def emitStateTotality(
       ctx: TranslateCtx,
       sf: state_field_decl,
@@ -423,17 +414,6 @@ private[z3] trait Declarations:
       Z3Sort.MapOf(sortForType(ctx, k), sortForType(ctx, v))
     case RelationTypeF(f, _, t, _) =>
       Z3Sort.Uninterp(s"Rel_${sortNameOf(sortForType(ctx, f))}_${sortNameOf(sortForType(ctx, t))}")
-
-  private[z3] def sortNameOf(s: Z3Sort): String = s match
-    case Z3Sort.Int         => "Int"
-    case Z3Sort.Real        => "Real"
-    case Z3Sort.Bool        => "Bool"
-    case Z3Sort.Uninterp(n) => n
-    case Z3Sort.SetOf(e)    => s"Set_${sortNameOf(e)}"
-    case Z3Sort.OptionOf(e) => s"Option_${sortNameOf(e)}"
-    case Z3Sort.SeqOf(e)    => s"Seq_${sortNameOf(e)}"
-    case Z3Sort.MapOf(k, v) => s"Map_${sortNameOf(k)}_${sortNameOf(v)}"
-    case Z3Sort.Str         => "String"
 
   private[z3] def sortForNamedType(ctx: TranslateCtx, name: String): Z3Sort =
     primitiveSortOf(name).getOrElse:
