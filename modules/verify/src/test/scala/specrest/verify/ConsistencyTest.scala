@@ -678,6 +678,29 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`now() - recs[k].ts <= days(30)` - the 1-arg `days(n)` Int->Int builtin (uninterpreted, mirroring now()/hash) plus the optional-arithmetic coercion - must verify, not skip; this is exactly the ecommerce ProcessReturn.requires shape"
+    ),
+    (
+      "len(s) builtin verifies via Z3 as an uninterpreted Int function (the auth Register/ResetPassword `len(pw) >= 8` shape)",
+      "len_demo",
+      """service LenDemo {
+        |  entity User {
+        |    name: String
+        |  }
+        |  state {
+        |    users: Int -> lone User
+        |  }
+        |  operation Register {
+        |    input: k: Int, pw: String
+        |    requires:
+        |      len(pw) >= 8
+        |      len(users[k].name) > 0
+        |    ensures:
+        |      users' = pre(users)
+        |  }
+        |  invariant t:
+        |    true
+        |}""".stripMargin,
+      "`len(pw) >= 8` and `len(users[k].name) > 0` - the 1-arg `len(s)` String->Int builtin lowers to an uninterpreted Int function (mirroring now()/hash/days; functional dependency preserved, native str.len avoided so exact-length constraints don't blow up the string solver), so the length constraints must verify, not skip; this is the auth_service Register/ResetPassword and todo_list shape"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

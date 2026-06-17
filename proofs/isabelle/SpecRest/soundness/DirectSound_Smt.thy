@@ -218,6 +218,7 @@ fun smt_uses_var :: "String.literal \<Rightarrow> smt_term \<Rightarrow> bool" w
 | "smt_uses_var x (TUStrPred _ t)        = smt_uses_var x t"
 | "smt_uses_var x (TUStrFunc _ t)        = smt_uses_var x t"
 | "smt_uses_var x (TUIntFunc _ t)        = smt_uses_var x t"
+| "smt_uses_var x (TStrLen t)            = smt_uses_var x t"
 | "smt_uses_var x (TUConst _)            = False"
 | "smt_uses_var x TSeqEmpty              = False"
 | "smt_uses_var x (TSeqCons e r)         = (smt_uses_var x e \<or> smt_uses_var x r)"

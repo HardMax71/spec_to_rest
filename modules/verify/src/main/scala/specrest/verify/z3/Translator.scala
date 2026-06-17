@@ -2729,6 +2729,18 @@ object Translator:
         if !ctx.funcs.contains(funcName) then
           ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
         Z3Expr.App(funcName, List(argZ))
+      // len(s): an uninterpreted Int-valued function, like the builtins above. Native Z3 str.len
+      // forces the string solver to materialise concrete strings of the constrained length (e.g.
+      // `len(token) = 128` with `distinct` tokens), which blows up by ~75x on string-heavy specs;
+      // the functional dependency (same string -> same length) is all the refinement constraints
+      // (`= 64`, `>= 8`) need, and `len` is vacuous-on-eval so the proof does not constrain this.
+      case TStrLen(t) =>
+        val argZ     = encodeFromSmtTerm(ctx, t, env)
+        val s        = inferSortOfZ3Expr(ctx, argZ).getOrElse(Z3Sort.Str)
+        val funcName = s"len_${sortNameOf(s)}"
+        if !ctx.funcs.contains(funcName) then
+          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
+        Z3Expr.App(funcName, List(argZ))
       // 0-arg reserved builtin (e.g. now()): an uninterpreted Int constant. The `${name}_0`
       // name matches translateCall's argSortsMangled, so the in-subset and raw paths share it.
       case TUConst(name) =>
