@@ -3128,239 +3128,64 @@
             },
             "body" : {
               "kind" : "BinaryOp",
-              "op" : "=",
+              "op" : "and",
               "left" : {
-                "kind" : "Identifier",
-                "name" : "order",
-                "span" : {
-                  "startLine" : 163,
-                  "startCol" : 8,
-                  "endLine" : 163,
-                  "endCol" : 13
-                }
-              },
-              "right" : {
-                "kind" : "With",
-                "base" : {
-                  "kind" : "Index",
+                "kind" : "BinaryOp",
+                "op" : "=",
+                "left" : {
+                  "kind" : "Identifier",
+                  "name" : "order",
+                  "span" : {
+                    "startLine" : 163,
+                    "startCol" : 8,
+                    "endLine" : 163,
+                    "endCol" : 13
+                  }
+                },
+                "right" : {
+                  "kind" : "With",
                   "base" : {
-                    "kind" : "Pre",
-                    "expr" : {
-                      "kind" : "Identifier",
-                      "name" : "orders",
+                    "kind" : "Index",
+                    "base" : {
+                      "kind" : "Pre",
+                      "expr" : {
+                        "kind" : "Identifier",
+                        "name" : "orders",
+                        "span" : {
+                          "startLine" : 163,
+                          "startCol" : 20,
+                          "endLine" : 163,
+                          "endCol" : 26
+                        }
+                      },
                       "span" : {
                         "startLine" : 163,
-                        "startCol" : 20,
+                        "startCol" : 16,
                         "endLine" : 163,
-                        "endCol" : 26
+                        "endCol" : 27
+                      }
+                    },
+                    "index" : {
+                      "kind" : "Identifier",
+                      "name" : "order_id",
+                      "span" : {
+                        "startLine" : 163,
+                        "startCol" : 28,
+                        "endLine" : 163,
+                        "endCol" : 36
                       }
                     },
                     "span" : {
                       "startLine" : 163,
                       "startCol" : 16,
                       "endLine" : 163,
-                      "endCol" : 27
+                      "endCol" : 37
                     }
                   },
-                  "index" : {
-                    "kind" : "Identifier",
-                    "name" : "order_id",
-                    "span" : {
-                      "startLine" : 163,
-                      "startCol" : 28,
-                      "endLine" : 163,
-                      "endCol" : 36
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 163,
-                    "startCol" : 16,
-                    "endLine" : 163,
-                    "endCol" : 37
-                  }
-                },
-                "updates" : [
-                  {
-                    "name" : "items",
-                    "value" : {
-                      "kind" : "BinaryOp",
-                      "op" : "+",
-                      "left" : {
-                        "kind" : "FieldAccess",
-                        "base" : {
-                          "kind" : "Index",
-                          "base" : {
-                            "kind" : "Pre",
-                            "expr" : {
-                              "kind" : "Identifier",
-                              "name" : "orders",
-                              "span" : {
-                                "startLine" : 164,
-                                "startCol" : 22,
-                                "endLine" : 164,
-                                "endCol" : 28
-                              }
-                            },
-                            "span" : {
-                              "startLine" : 164,
-                              "startCol" : 18,
-                              "endLine" : 164,
-                              "endCol" : 29
-                            }
-                          },
-                          "index" : {
-                            "kind" : "Identifier",
-                            "name" : "order_id",
-                            "span" : {
-                              "startLine" : 164,
-                              "startCol" : 30,
-                              "endLine" : 164,
-                              "endCol" : 38
-                            }
-                          },
-                          "span" : {
-                            "startLine" : 164,
-                            "startCol" : 18,
-                            "endLine" : 164,
-                            "endCol" : 39
-                          }
-                        },
-                        "field" : "items",
-                        "span" : {
-                          "startLine" : 164,
-                          "startCol" : 18,
-                          "endLine" : 164,
-                          "endCol" : 45
-                        }
-                      },
-                      "right" : {
-                        "kind" : "SetLiteral",
-                        "elements" : [
-                          {
-                            "kind" : "Identifier",
-                            "name" : "item",
-                            "span" : {
-                              "startLine" : 164,
-                              "startCol" : 49,
-                              "endLine" : 164,
-                              "endCol" : 53
-                            }
-                          }
-                        ],
-                        "span" : {
-                          "startLine" : 164,
-                          "startCol" : 48,
-                          "endLine" : 164,
-                          "endCol" : 54
-                        }
-                      },
-                      "span" : {
-                        "startLine" : 164,
-                        "startCol" : 18,
-                        "endLine" : 164,
-                        "endCol" : 54
-                      }
-                    },
-                    "span" : {
-                      "startLine" : 164,
-                      "startCol" : 10,
-                      "endLine" : 164,
-                      "endCol" : 54
-                    }
-                  },
-                  {
-                    "name" : "subtotal",
-                    "value" : {
-                      "kind" : "BinaryOp",
-                      "op" : "+",
-                      "left" : {
-                        "kind" : "FieldAccess",
-                        "base" : {
-                          "kind" : "Index",
-                          "base" : {
-                            "kind" : "Pre",
-                            "expr" : {
-                              "kind" : "Identifier",
-                              "name" : "orders",
-                              "span" : {
-                                "startLine" : 165,
-                                "startCol" : 25,
-                                "endLine" : 165,
-                                "endCol" : 31
-                              }
-                            },
-                            "span" : {
-                              "startLine" : 165,
-                              "startCol" : 21,
-                              "endLine" : 165,
-                              "endCol" : 32
-                            }
-                          },
-                          "index" : {
-                            "kind" : "Identifier",
-                            "name" : "order_id",
-                            "span" : {
-                              "startLine" : 165,
-                              "startCol" : 33,
-                              "endLine" : 165,
-                              "endCol" : 41
-                            }
-                          },
-                          "span" : {
-                            "startLine" : 165,
-                            "startCol" : 21,
-                            "endLine" : 165,
-                            "endCol" : 42
-                          }
-                        },
-                        "field" : "subtotal",
-                        "span" : {
-                          "startLine" : 165,
-                          "startCol" : 21,
-                          "endLine" : 165,
-                          "endCol" : 51
-                        }
-                      },
-                      "right" : {
-                        "kind" : "FieldAccess",
-                        "base" : {
-                          "kind" : "Identifier",
-                          "name" : "item",
-                          "span" : {
-                            "startLine" : 165,
-                            "startCol" : 54,
-                            "endLine" : 165,
-                            "endCol" : 58
-                          }
-                        },
-                        "field" : "line_total",
-                        "span" : {
-                          "startLine" : 165,
-                          "startCol" : 54,
-                          "endLine" : 165,
-                          "endCol" : 69
-                        }
-                      },
-                      "span" : {
-                        "startLine" : 165,
-                        "startCol" : 21,
-                        "endLine" : 165,
-                        "endCol" : 69
-                      }
-                    },
-                    "span" : {
-                      "startLine" : 165,
-                      "startCol" : 10,
-                      "endLine" : 165,
-                      "endCol" : 69
-                    }
-                  },
-                  {
-                    "name" : "total",
-                    "value" : {
-                      "kind" : "BinaryOp",
-                      "op" : "+",
-                      "left" : {
+                  "updates" : [
+                    {
+                      "name" : "items",
+                      "value" : {
                         "kind" : "BinaryOp",
                         "op" : "+",
                         "left" : {
@@ -3373,16 +3198,16 @@
                                 "kind" : "Identifier",
                                 "name" : "orders",
                                 "span" : {
-                                  "startLine" : 166,
+                                  "startLine" : 164,
                                   "startCol" : 22,
-                                  "endLine" : 166,
+                                  "endLine" : 164,
                                   "endCol" : 28
                                 }
                               },
                               "span" : {
-                                "startLine" : 166,
+                                "startLine" : 164,
                                 "startCol" : 18,
-                                "endLine" : 166,
+                                "endLine" : 164,
                                 "endCol" : 29
                               }
                             },
@@ -3390,25 +3215,113 @@
                               "kind" : "Identifier",
                               "name" : "order_id",
                               "span" : {
-                                "startLine" : 166,
+                                "startLine" : 164,
                                 "startCol" : 30,
-                                "endLine" : 166,
+                                "endLine" : 164,
                                 "endCol" : 38
                               }
                             },
                             "span" : {
-                              "startLine" : 166,
+                              "startLine" : 164,
                               "startCol" : 18,
-                              "endLine" : 166,
+                              "endLine" : 164,
                               "endCol" : 39
+                            }
+                          },
+                          "field" : "items",
+                          "span" : {
+                            "startLine" : 164,
+                            "startCol" : 18,
+                            "endLine" : 164,
+                            "endCol" : 45
+                          }
+                        },
+                        "right" : {
+                          "kind" : "SetLiteral",
+                          "elements" : [
+                            {
+                              "kind" : "Identifier",
+                              "name" : "item",
+                              "span" : {
+                                "startLine" : 164,
+                                "startCol" : 49,
+                                "endLine" : 164,
+                                "endCol" : 53
+                              }
+                            }
+                          ],
+                          "span" : {
+                            "startLine" : 164,
+                            "startCol" : 48,
+                            "endLine" : 164,
+                            "endCol" : 54
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 164,
+                          "startCol" : 18,
+                          "endLine" : 164,
+                          "endCol" : 54
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 164,
+                        "startCol" : 10,
+                        "endLine" : 164,
+                        "endCol" : 54
+                      }
+                    },
+                    {
+                      "name" : "subtotal",
+                      "value" : {
+                        "kind" : "BinaryOp",
+                        "op" : "+",
+                        "left" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Index",
+                            "base" : {
+                              "kind" : "Pre",
+                              "expr" : {
+                                "kind" : "Identifier",
+                                "name" : "orders",
+                                "span" : {
+                                  "startLine" : 165,
+                                  "startCol" : 25,
+                                  "endLine" : 165,
+                                  "endCol" : 31
+                                }
+                              },
+                              "span" : {
+                                "startLine" : 165,
+                                "startCol" : 21,
+                                "endLine" : 165,
+                                "endCol" : 32
+                              }
+                            },
+                            "index" : {
+                              "kind" : "Identifier",
+                              "name" : "order_id",
+                              "span" : {
+                                "startLine" : 165,
+                                "startCol" : 33,
+                                "endLine" : 165,
+                                "endCol" : 41
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 165,
+                              "startCol" : 21,
+                              "endLine" : 165,
+                              "endCol" : 42
                             }
                           },
                           "field" : "subtotal",
                           "span" : {
-                            "startLine" : 166,
-                            "startCol" : 18,
-                            "endLine" : 166,
-                            "endCol" : 48
+                            "startLine" : 165,
+                            "startCol" : 21,
+                            "endLine" : 165,
+                            "endCol" : 51
                           }
                         },
                         "right" : {
@@ -3417,28 +3330,352 @@
                             "kind" : "Identifier",
                             "name" : "item",
                             "span" : {
-                              "startLine" : 166,
-                              "startCol" : 51,
-                              "endLine" : 166,
-                              "endCol" : 55
+                              "startLine" : 165,
+                              "startCol" : 54,
+                              "endLine" : 165,
+                              "endCol" : 58
                             }
                           },
                           "field" : "line_total",
                           "span" : {
+                            "startLine" : 165,
+                            "startCol" : 54,
+                            "endLine" : 165,
+                            "endCol" : 69
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 165,
+                          "startCol" : 21,
+                          "endLine" : 165,
+                          "endCol" : 69
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 165,
+                        "startCol" : 10,
+                        "endLine" : 165,
+                        "endCol" : 69
+                      }
+                    },
+                    {
+                      "name" : "total",
+                      "value" : {
+                        "kind" : "BinaryOp",
+                        "op" : "+",
+                        "left" : {
+                          "kind" : "BinaryOp",
+                          "op" : "+",
+                          "left" : {
+                            "kind" : "FieldAccess",
+                            "base" : {
+                              "kind" : "Index",
+                              "base" : {
+                                "kind" : "Pre",
+                                "expr" : {
+                                  "kind" : "Identifier",
+                                  "name" : "orders",
+                                  "span" : {
+                                    "startLine" : 166,
+                                    "startCol" : 22,
+                                    "endLine" : 166,
+                                    "endCol" : 28
+                                  }
+                                },
+                                "span" : {
+                                  "startLine" : 166,
+                                  "startCol" : 18,
+                                  "endLine" : 166,
+                                  "endCol" : 29
+                                }
+                              },
+                              "index" : {
+                                "kind" : "Identifier",
+                                "name" : "order_id",
+                                "span" : {
+                                  "startLine" : 166,
+                                  "startCol" : 30,
+                                  "endLine" : 166,
+                                  "endCol" : 38
+                                }
+                              },
+                              "span" : {
+                                "startLine" : 166,
+                                "startCol" : 18,
+                                "endLine" : 166,
+                                "endCol" : 39
+                              }
+                            },
+                            "field" : "subtotal",
+                            "span" : {
+                              "startLine" : 166,
+                              "startCol" : 18,
+                              "endLine" : 166,
+                              "endCol" : 48
+                            }
+                          },
+                          "right" : {
+                            "kind" : "FieldAccess",
+                            "base" : {
+                              "kind" : "Identifier",
+                              "name" : "item",
+                              "span" : {
+                                "startLine" : 166,
+                                "startCol" : 51,
+                                "endLine" : 166,
+                                "endCol" : 55
+                              }
+                            },
+                            "field" : "line_total",
+                            "span" : {
+                              "startLine" : 166,
+                              "startCol" : 51,
+                              "endLine" : 166,
+                              "endCol" : 66
+                            }
+                          },
+                          "span" : {
                             "startLine" : 166,
-                            "startCol" : 51,
+                            "startCol" : 18,
                             "endLine" : 166,
                             "endCol" : 66
+                          }
+                        },
+                        "right" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Index",
+                            "base" : {
+                              "kind" : "Pre",
+                              "expr" : {
+                                "kind" : "Identifier",
+                                "name" : "orders",
+                                "span" : {
+                                  "startLine" : 167,
+                                  "startCol" : 24,
+                                  "endLine" : 167,
+                                  "endCol" : 30
+                                }
+                              },
+                              "span" : {
+                                "startLine" : 167,
+                                "startCol" : 20,
+                                "endLine" : 167,
+                                "endCol" : 31
+                              }
+                            },
+                            "index" : {
+                              "kind" : "Identifier",
+                              "name" : "order_id",
+                              "span" : {
+                                "startLine" : 167,
+                                "startCol" : 32,
+                                "endLine" : 167,
+                                "endCol" : 40
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 167,
+                              "startCol" : 20,
+                              "endLine" : 167,
+                              "endCol" : 41
+                            }
+                          },
+                          "field" : "tax",
+                          "span" : {
+                            "startLine" : 167,
+                            "startCol" : 20,
+                            "endLine" : 167,
+                            "endCol" : 45
                           }
                         },
                         "span" : {
                           "startLine" : 166,
                           "startCol" : 18,
-                          "endLine" : 166,
-                          "endCol" : 66
+                          "endLine" : 167,
+                          "endCol" : 45
                         }
                       },
-                      "right" : {
+                      "span" : {
+                        "startLine" : 166,
+                        "startCol" : 10,
+                        "endLine" : 167,
+                        "endCol" : 45
+                      }
+                    }
+                  ],
+                  "span" : {
+                    "startLine" : 163,
+                    "startCol" : 16,
+                    "endLine" : 168,
+                    "endCol" : 9
+                  }
+                },
+                "span" : {
+                  "startLine" : 163,
+                  "startCol" : 8,
+                  "endLine" : 168,
+                  "endCol" : 9
+                }
+              },
+              "right" : {
+                "kind" : "BinaryOp",
+                "op" : "and",
+                "left" : {
+                  "kind" : "BinaryOp",
+                  "op" : "=",
+                  "left" : {
+                    "kind" : "Prime",
+                    "expr" : {
+                      "kind" : "Identifier",
+                      "name" : "orders",
+                      "span" : {
+                        "startLine" : 169,
+                        "startCol" : 8,
+                        "endLine" : 169,
+                        "endCol" : 14
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 169,
+                      "startCol" : 8,
+                      "endLine" : 169,
+                      "endCol" : 15
+                    }
+                  },
+                  "right" : {
+                    "kind" : "BinaryOp",
+                    "op" : "+",
+                    "left" : {
+                      "kind" : "Pre",
+                      "expr" : {
+                        "kind" : "Identifier",
+                        "name" : "orders",
+                        "span" : {
+                          "startLine" : 169,
+                          "startCol" : 22,
+                          "endLine" : 169,
+                          "endCol" : 28
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 169,
+                        "startCol" : 18,
+                        "endLine" : 169,
+                        "endCol" : 29
+                      }
+                    },
+                    "right" : {
+                      "kind" : "MapLiteral",
+                      "entries" : [
+                        {
+                          "key" : {
+                            "kind" : "Identifier",
+                            "name" : "order_id",
+                            "span" : {
+                              "startLine" : 169,
+                              "startCol" : 33,
+                              "endLine" : 169,
+                              "endCol" : 41
+                            }
+                          },
+                          "value" : {
+                            "kind" : "Identifier",
+                            "name" : "order",
+                            "span" : {
+                              "startLine" : 169,
+                              "startCol" : 45,
+                              "endLine" : 169,
+                              "endCol" : 50
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 169,
+                            "startCol" : 33,
+                            "endLine" : 169,
+                            "endCol" : 41
+                          }
+                        }
+                      ],
+                      "span" : {
+                        "startLine" : 169,
+                        "startCol" : 32,
+                        "endLine" : 169,
+                        "endCol" : 51
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 169,
+                      "startCol" : 18,
+                      "endLine" : 169,
+                      "endCol" : 51
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 169,
+                    "startCol" : 8,
+                    "endLine" : 169,
+                    "endCol" : 51
+                  }
+                },
+                "right" : {
+                  "kind" : "BinaryOp",
+                  "op" : "and",
+                  "left" : {
+                    "kind" : "BinaryOp",
+                    "op" : "=",
+                    "left" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
+                        "base" : {
+                          "kind" : "Prime",
+                          "expr" : {
+                            "kind" : "Identifier",
+                            "name" : "inventory",
+                            "span" : {
+                              "startLine" : 170,
+                              "startCol" : 8,
+                              "endLine" : 170,
+                              "endCol" : 17
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 170,
+                            "startCol" : 8,
+                            "endLine" : 170,
+                            "endCol" : 18
+                          }
+                        },
+                        "index" : {
+                          "kind" : "Identifier",
+                          "name" : "sku",
+                          "span" : {
+                            "startLine" : 170,
+                            "startCol" : 19,
+                            "endLine" : 170,
+                            "endCol" : 22
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 170,
+                          "startCol" : 8,
+                          "endLine" : 170,
+                          "endCol" : 23
+                        }
+                      },
+                      "field" : "reserved",
+                      "span" : {
+                        "startLine" : 170,
+                        "startCol" : 8,
+                        "endLine" : 170,
+                        "endCol" : 32
+                      }
+                    },
+                    "right" : {
+                      "kind" : "BinaryOp",
+                      "op" : "+",
+                      "left" : {
                         "kind" : "FieldAccess",
                         "base" : {
                           "kind" : "Index",
@@ -3446,434 +3683,227 @@
                             "kind" : "Pre",
                             "expr" : {
                               "kind" : "Identifier",
-                              "name" : "orders",
+                              "name" : "inventory",
                               "span" : {
-                                "startLine" : 167,
-                                "startCol" : 24,
-                                "endLine" : 167,
-                                "endCol" : 30
+                                "startLine" : 171,
+                                "startCol" : 14,
+                                "endLine" : 171,
+                                "endCol" : 23
                               }
                             },
                             "span" : {
-                              "startLine" : 167,
-                              "startCol" : 20,
-                              "endLine" : 167,
-                              "endCol" : 31
+                              "startLine" : 171,
+                              "startCol" : 10,
+                              "endLine" : 171,
+                              "endCol" : 24
                             }
                           },
                           "index" : {
                             "kind" : "Identifier",
-                            "name" : "order_id",
+                            "name" : "sku",
                             "span" : {
-                              "startLine" : 167,
-                              "startCol" : 32,
-                              "endLine" : 167,
-                              "endCol" : 40
+                              "startLine" : 171,
+                              "startCol" : 25,
+                              "endLine" : 171,
+                              "endCol" : 28
                             }
                           },
                           "span" : {
-                            "startLine" : 167,
-                            "startCol" : 20,
-                            "endLine" : 167,
-                            "endCol" : 41
+                            "startLine" : 171,
+                            "startCol" : 10,
+                            "endLine" : 171,
+                            "endCol" : 29
                           }
                         },
-                        "field" : "tax",
+                        "field" : "reserved",
                         "span" : {
-                          "startLine" : 167,
-                          "startCol" : 20,
-                          "endLine" : 167,
-                          "endCol" : 45
+                          "startLine" : 171,
+                          "startCol" : 10,
+                          "endLine" : 171,
+                          "endCol" : 38
+                        }
+                      },
+                      "right" : {
+                        "kind" : "Identifier",
+                        "name" : "quantity",
+                        "span" : {
+                          "startLine" : 171,
+                          "startCol" : 41,
+                          "endLine" : 171,
+                          "endCol" : 49
                         }
                       },
                       "span" : {
-                        "startLine" : 166,
-                        "startCol" : 18,
-                        "endLine" : 167,
-                        "endCol" : 45
+                        "startLine" : 171,
+                        "startCol" : 10,
+                        "endLine" : 171,
+                        "endCol" : 49
                       }
                     },
                     "span" : {
-                      "startLine" : 166,
-                      "startCol" : 10,
-                      "endLine" : 167,
-                      "endCol" : 45
+                      "startLine" : 170,
+                      "startCol" : 8,
+                      "endLine" : 171,
+                      "endCol" : 49
                     }
+                  },
+                  "right" : {
+                    "kind" : "BinaryOp",
+                    "op" : "=",
+                    "left" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
+                        "base" : {
+                          "kind" : "Prime",
+                          "expr" : {
+                            "kind" : "Identifier",
+                            "name" : "inventory",
+                            "span" : {
+                              "startLine" : 172,
+                              "startCol" : 8,
+                              "endLine" : 172,
+                              "endCol" : 17
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 172,
+                            "startCol" : 8,
+                            "endLine" : 172,
+                            "endCol" : 18
+                          }
+                        },
+                        "index" : {
+                          "kind" : "Identifier",
+                          "name" : "sku",
+                          "span" : {
+                            "startLine" : 172,
+                            "startCol" : 19,
+                            "endLine" : 172,
+                            "endCol" : 22
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 172,
+                          "startCol" : 8,
+                          "endLine" : 172,
+                          "endCol" : 23
+                        }
+                      },
+                      "field" : "available",
+                      "span" : {
+                        "startLine" : 172,
+                        "startCol" : 8,
+                        "endLine" : 172,
+                        "endCol" : 33
+                      }
+                    },
+                    "right" : {
+                      "kind" : "BinaryOp",
+                      "op" : "-",
+                      "left" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Index",
+                          "base" : {
+                            "kind" : "Pre",
+                            "expr" : {
+                              "kind" : "Identifier",
+                              "name" : "inventory",
+                              "span" : {
+                                "startLine" : 173,
+                                "startCol" : 14,
+                                "endLine" : 173,
+                                "endCol" : 23
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 173,
+                              "startCol" : 10,
+                              "endLine" : 173,
+                              "endCol" : 24
+                            }
+                          },
+                          "index" : {
+                            "kind" : "Identifier",
+                            "name" : "sku",
+                            "span" : {
+                              "startLine" : 173,
+                              "startCol" : 25,
+                              "endLine" : 173,
+                              "endCol" : 28
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 173,
+                            "startCol" : 10,
+                            "endLine" : 173,
+                            "endCol" : 29
+                          }
+                        },
+                        "field" : "available",
+                        "span" : {
+                          "startLine" : 173,
+                          "startCol" : 10,
+                          "endLine" : 173,
+                          "endCol" : 39
+                        }
+                      },
+                      "right" : {
+                        "kind" : "Identifier",
+                        "name" : "quantity",
+                        "span" : {
+                          "startLine" : 173,
+                          "startCol" : 42,
+                          "endLine" : 173,
+                          "endCol" : 50
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 173,
+                        "startCol" : 10,
+                        "endLine" : 173,
+                        "endCol" : 50
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 172,
+                      "startCol" : 8,
+                      "endLine" : 173,
+                      "endCol" : 50
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 170,
+                    "startCol" : 8,
+                    "endLine" : 173,
+                    "endCol" : 50
                   }
-                ],
+                },
                 "span" : {
-                  "startLine" : 163,
-                  "startCol" : 16,
-                  "endLine" : 168,
-                  "endCol" : 9
+                  "startLine" : 169,
+                  "startCol" : 8,
+                  "endLine" : 173,
+                  "endCol" : 50
                 }
               },
               "span" : {
                 "startLine" : 163,
                 "startCol" : 8,
-                "endLine" : 168,
-                "endCol" : 9
-              }
-            },
-            "span" : {
-              "startLine" : 156,
-              "startCol" : 6,
-              "endLine" : 168,
-              "endCol" : 9
-            }
-          },
-          "span" : {
-            "startLine" : 155,
-            "startCol" : 6,
-            "endLine" : 168,
-            "endCol" : 9
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "Prime",
-            "expr" : {
-              "kind" : "Identifier",
-              "name" : "orders",
-              "span" : {
-                "startLine" : 169,
-                "startCol" : 8,
-                "endLine" : 169,
-                "endCol" : 14
-              }
-            },
-            "span" : {
-              "startLine" : 169,
-              "startCol" : 8,
-              "endLine" : 169,
-              "endCol" : 15
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "+",
-            "left" : {
-              "kind" : "Pre",
-              "expr" : {
-                "kind" : "Identifier",
-                "name" : "orders",
-                "span" : {
-                  "startLine" : 169,
-                  "startCol" : 22,
-                  "endLine" : 169,
-                  "endCol" : 28
-                }
-              },
-              "span" : {
-                "startLine" : 169,
-                "startCol" : 18,
-                "endLine" : 169,
-                "endCol" : 29
-              }
-            },
-            "right" : {
-              "kind" : "MapLiteral",
-              "entries" : [
-                {
-                  "key" : {
-                    "kind" : "Identifier",
-                    "name" : "order_id",
-                    "span" : {
-                      "startLine" : 169,
-                      "startCol" : 33,
-                      "endLine" : 169,
-                      "endCol" : 41
-                    }
-                  },
-                  "value" : {
-                    "kind" : "Identifier",
-                    "name" : "order",
-                    "span" : {
-                      "startLine" : 169,
-                      "startCol" : 45,
-                      "endLine" : 169,
-                      "endCol" : 50
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 169,
-                    "startCol" : 33,
-                    "endLine" : 169,
-                    "endCol" : 41
-                  }
-                }
-              ],
-              "span" : {
-                "startLine" : 169,
-                "startCol" : 32,
-                "endLine" : 169,
-                "endCol" : 51
-              }
-            },
-            "span" : {
-              "startLine" : 169,
-              "startCol" : 18,
-              "endLine" : 169,
-              "endCol" : 51
-            }
-          },
-          "span" : {
-            "startLine" : 169,
-            "startCol" : 8,
-            "endLine" : 169,
-            "endCol" : 51
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "FieldAccess",
-            "base" : {
-              "kind" : "Index",
-              "base" : {
-                "kind" : "Prime",
-                "expr" : {
-                  "kind" : "Identifier",
-                  "name" : "inventory",
-                  "span" : {
-                    "startLine" : 170,
-                    "startCol" : 8,
-                    "endLine" : 170,
-                    "endCol" : 17
-                  }
-                },
-                "span" : {
-                  "startLine" : 170,
-                  "startCol" : 8,
-                  "endLine" : 170,
-                  "endCol" : 18
-                }
-              },
-              "index" : {
-                "kind" : "Identifier",
-                "name" : "sku",
-                "span" : {
-                  "startLine" : 170,
-                  "startCol" : 19,
-                  "endLine" : 170,
-                  "endCol" : 22
-                }
-              },
-              "span" : {
-                "startLine" : 170,
-                "startCol" : 8,
-                "endLine" : 170,
-                "endCol" : 23
-              }
-            },
-            "field" : "reserved",
-            "span" : {
-              "startLine" : 170,
-              "startCol" : 8,
-              "endLine" : 170,
-              "endCol" : 32
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "+",
-            "left" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "inventory",
-                    "span" : {
-                      "startLine" : 171,
-                      "startCol" : 14,
-                      "endLine" : 171,
-                      "endCol" : 23
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 171,
-                    "startCol" : 10,
-                    "endLine" : 171,
-                    "endCol" : 24
-                  }
-                },
-                "index" : {
-                  "kind" : "Identifier",
-                  "name" : "sku",
-                  "span" : {
-                    "startLine" : 171,
-                    "startCol" : 25,
-                    "endLine" : 171,
-                    "endCol" : 28
-                  }
-                },
-                "span" : {
-                  "startLine" : 171,
-                  "startCol" : 10,
-                  "endLine" : 171,
-                  "endCol" : 29
-                }
-              },
-              "field" : "reserved",
-              "span" : {
-                "startLine" : 171,
-                "startCol" : 10,
-                "endLine" : 171,
-                "endCol" : 38
-              }
-            },
-            "right" : {
-              "kind" : "Identifier",
-              "name" : "quantity",
-              "span" : {
-                "startLine" : 171,
-                "startCol" : 41,
-                "endLine" : 171,
-                "endCol" : 49
-              }
-            },
-            "span" : {
-              "startLine" : 171,
-              "startCol" : 10,
-              "endLine" : 171,
-              "endCol" : 49
-            }
-          },
-          "span" : {
-            "startLine" : 170,
-            "startCol" : 8,
-            "endLine" : 171,
-            "endCol" : 49
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "FieldAccess",
-            "base" : {
-              "kind" : "Index",
-              "base" : {
-                "kind" : "Prime",
-                "expr" : {
-                  "kind" : "Identifier",
-                  "name" : "inventory",
-                  "span" : {
-                    "startLine" : 172,
-                    "startCol" : 8,
-                    "endLine" : 172,
-                    "endCol" : 17
-                  }
-                },
-                "span" : {
-                  "startLine" : 172,
-                  "startCol" : 8,
-                  "endLine" : 172,
-                  "endCol" : 18
-                }
-              },
-              "index" : {
-                "kind" : "Identifier",
-                "name" : "sku",
-                "span" : {
-                  "startLine" : 172,
-                  "startCol" : 19,
-                  "endLine" : 172,
-                  "endCol" : 22
-                }
-              },
-              "span" : {
-                "startLine" : 172,
-                "startCol" : 8,
-                "endLine" : 172,
-                "endCol" : 23
-              }
-            },
-            "field" : "available",
-            "span" : {
-              "startLine" : 172,
-              "startCol" : 8,
-              "endLine" : 172,
-              "endCol" : 33
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "-",
-            "left" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "inventory",
-                    "span" : {
-                      "startLine" : 173,
-                      "startCol" : 14,
-                      "endLine" : 173,
-                      "endCol" : 23
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 173,
-                    "startCol" : 10,
-                    "endLine" : 173,
-                    "endCol" : 24
-                  }
-                },
-                "index" : {
-                  "kind" : "Identifier",
-                  "name" : "sku",
-                  "span" : {
-                    "startLine" : 173,
-                    "startCol" : 25,
-                    "endLine" : 173,
-                    "endCol" : 28
-                  }
-                },
-                "span" : {
-                  "startLine" : 173,
-                  "startCol" : 10,
-                  "endLine" : 173,
-                  "endCol" : 29
-                }
-              },
-              "field" : "available",
-              "span" : {
-                "startLine" : 173,
-                "startCol" : 10,
-                "endLine" : 173,
-                "endCol" : 39
-              }
-            },
-            "right" : {
-              "kind" : "Identifier",
-              "name" : "quantity",
-              "span" : {
-                "startLine" : 173,
-                "startCol" : 42,
                 "endLine" : 173,
                 "endCol" : 50
               }
             },
             "span" : {
-              "startLine" : 173,
-              "startCol" : 10,
+              "startLine" : 156,
+              "startCol" : 6,
               "endLine" : 173,
               "endCol" : 50
             }
           },
           "span" : {
-            "startLine" : 172,
-            "startCol" : 8,
+            "startLine" : 155,
+            "startCol" : 6,
             "endLine" : 173,
             "endCol" : 50
           }
@@ -4249,310 +4279,67 @@
           },
           "body" : {
             "kind" : "BinaryOp",
-            "op" : "=",
+            "op" : "and",
             "left" : {
-              "kind" : "Identifier",
-              "name" : "order",
-              "span" : {
-                "startLine" : 188,
-                "startCol" : 8,
-                "endLine" : 188,
-                "endCol" : 13
-              }
-            },
-            "right" : {
-              "kind" : "With",
-              "base" : {
-                "kind" : "Index",
+              "kind" : "BinaryOp",
+              "op" : "=",
+              "left" : {
+                "kind" : "Identifier",
+                "name" : "order",
+                "span" : {
+                  "startLine" : 188,
+                  "startCol" : 8,
+                  "endLine" : 188,
+                  "endCol" : 13
+                }
+              },
+              "right" : {
+                "kind" : "With",
                 "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "orders",
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Pre",
+                    "expr" : {
+                      "kind" : "Identifier",
+                      "name" : "orders",
+                      "span" : {
+                        "startLine" : 188,
+                        "startCol" : 20,
+                        "endLine" : 188,
+                        "endCol" : 26
+                      }
+                    },
                     "span" : {
                       "startLine" : 188,
-                      "startCol" : 20,
+                      "startCol" : 16,
                       "endLine" : 188,
-                      "endCol" : 26
+                      "endCol" : 27
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "order_id",
+                    "span" : {
+                      "startLine" : 188,
+                      "startCol" : 28,
+                      "endLine" : 188,
+                      "endCol" : 36
                     }
                   },
                   "span" : {
                     "startLine" : 188,
                     "startCol" : 16,
                     "endLine" : 188,
-                    "endCol" : 27
+                    "endCol" : 37
                   }
                 },
-                "index" : {
-                  "kind" : "Identifier",
-                  "name" : "order_id",
-                  "span" : {
-                    "startLine" : 188,
-                    "startCol" : 28,
-                    "endLine" : 188,
-                    "endCol" : 36
-                  }
-                },
-                "span" : {
-                  "startLine" : 188,
-                  "startCol" : 16,
-                  "endLine" : 188,
-                  "endCol" : 37
-                }
-              },
-              "updates" : [
-                {
-                  "name" : "items",
-                  "value" : {
-                    "kind" : "BinaryOp",
-                    "op" : "-",
-                    "left" : {
-                      "kind" : "FieldAccess",
-                      "base" : {
-                        "kind" : "Index",
-                        "base" : {
-                          "kind" : "Pre",
-                          "expr" : {
-                            "kind" : "Identifier",
-                            "name" : "orders",
-                            "span" : {
-                              "startLine" : 189,
-                              "startCol" : 22,
-                              "endLine" : 189,
-                              "endCol" : 28
-                            }
-                          },
-                          "span" : {
-                            "startLine" : 189,
-                            "startCol" : 18,
-                            "endLine" : 189,
-                            "endCol" : 29
-                          }
-                        },
-                        "index" : {
-                          "kind" : "Identifier",
-                          "name" : "order_id",
-                          "span" : {
-                            "startLine" : 189,
-                            "startCol" : 30,
-                            "endLine" : 189,
-                            "endCol" : 38
-                          }
-                        },
-                        "span" : {
-                          "startLine" : 189,
-                          "startCol" : 18,
-                          "endLine" : 189,
-                          "endCol" : 39
-                        }
-                      },
-                      "field" : "items",
-                      "span" : {
-                        "startLine" : 189,
-                        "startCol" : 18,
-                        "endLine" : 189,
-                        "endCol" : 45
-                      }
-                    },
-                    "right" : {
-                      "kind" : "SetLiteral",
-                      "elements" : [
-                        {
-                          "kind" : "Identifier",
-                          "name" : "removed",
-                          "span" : {
-                            "startLine" : 189,
-                            "startCol" : 49,
-                            "endLine" : 189,
-                            "endCol" : 56
-                          }
-                        }
-                      ],
-                      "span" : {
-                        "startLine" : 189,
-                        "startCol" : 48,
-                        "endLine" : 189,
-                        "endCol" : 57
-                      }
-                    },
-                    "span" : {
-                      "startLine" : 189,
-                      "startCol" : 18,
-                      "endLine" : 189,
-                      "endCol" : 57
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 189,
-                    "startCol" : 10,
-                    "endLine" : 189,
-                    "endCol" : 57
-                  }
-                },
-                {
-                  "name" : "subtotal",
-                  "value" : {
-                    "kind" : "BinaryOp",
-                    "op" : "-",
-                    "left" : {
-                      "kind" : "FieldAccess",
-                      "base" : {
-                        "kind" : "Index",
-                        "base" : {
-                          "kind" : "Pre",
-                          "expr" : {
-                            "kind" : "Identifier",
-                            "name" : "orders",
-                            "span" : {
-                              "startLine" : 190,
-                              "startCol" : 25,
-                              "endLine" : 190,
-                              "endCol" : 31
-                            }
-                          },
-                          "span" : {
-                            "startLine" : 190,
-                            "startCol" : 21,
-                            "endLine" : 190,
-                            "endCol" : 32
-                          }
-                        },
-                        "index" : {
-                          "kind" : "Identifier",
-                          "name" : "order_id",
-                          "span" : {
-                            "startLine" : 190,
-                            "startCol" : 33,
-                            "endLine" : 190,
-                            "endCol" : 41
-                          }
-                        },
-                        "span" : {
-                          "startLine" : 190,
-                          "startCol" : 21,
-                          "endLine" : 190,
-                          "endCol" : 42
-                        }
-                      },
-                      "field" : "subtotal",
-                      "span" : {
-                        "startLine" : 190,
-                        "startCol" : 21,
-                        "endLine" : 190,
-                        "endCol" : 51
-                      }
-                    },
-                    "right" : {
-                      "kind" : "FieldAccess",
-                      "base" : {
-                        "kind" : "Identifier",
-                        "name" : "removed",
-                        "span" : {
-                          "startLine" : 190,
-                          "startCol" : 54,
-                          "endLine" : 190,
-                          "endCol" : 61
-                        }
-                      },
-                      "field" : "line_total",
-                      "span" : {
-                        "startLine" : 190,
-                        "startCol" : 54,
-                        "endLine" : 190,
-                        "endCol" : 72
-                      }
-                    },
-                    "span" : {
-                      "startLine" : 190,
-                      "startCol" : 21,
-                      "endLine" : 190,
-                      "endCol" : 72
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 190,
-                    "startCol" : 10,
-                    "endLine" : 190,
-                    "endCol" : 72
-                  }
-                },
-                {
-                  "name" : "total",
-                  "value" : {
-                    "kind" : "BinaryOp",
-                    "op" : "-",
-                    "left" : {
-                      "kind" : "FieldAccess",
-                      "base" : {
-                        "kind" : "Index",
-                        "base" : {
-                          "kind" : "Pre",
-                          "expr" : {
-                            "kind" : "Identifier",
-                            "name" : "orders",
-                            "span" : {
-                              "startLine" : 191,
-                              "startCol" : 22,
-                              "endLine" : 191,
-                              "endCol" : 28
-                            }
-                          },
-                          "span" : {
-                            "startLine" : 191,
-                            "startCol" : 18,
-                            "endLine" : 191,
-                            "endCol" : 29
-                          }
-                        },
-                        "index" : {
-                          "kind" : "Identifier",
-                          "name" : "order_id",
-                          "span" : {
-                            "startLine" : 191,
-                            "startCol" : 30,
-                            "endLine" : 191,
-                            "endCol" : 38
-                          }
-                        },
-                        "span" : {
-                          "startLine" : 191,
-                          "startCol" : 18,
-                          "endLine" : 191,
-                          "endCol" : 39
-                        }
-                      },
-                      "field" : "subtotal",
-                      "span" : {
-                        "startLine" : 191,
-                        "startCol" : 18,
-                        "endLine" : 191,
-                        "endCol" : 48
-                      }
-                    },
-                    "right" : {
+                "updates" : [
+                  {
+                    "name" : "items",
+                    "value" : {
                       "kind" : "BinaryOp",
-                      "op" : "+",
+                      "op" : "-",
                       "left" : {
-                        "kind" : "FieldAccess",
-                        "base" : {
-                          "kind" : "Identifier",
-                          "name" : "removed",
-                          "span" : {
-                            "startLine" : 191,
-                            "startCol" : 51,
-                            "endLine" : 191,
-                            "endCol" : 58
-                          }
-                        },
-                        "field" : "line_total",
-                        "span" : {
-                          "startLine" : 191,
-                          "startCol" : 51,
-                          "endLine" : 191,
-                          "endCol" : 69
-                        }
-                      },
-                      "right" : {
                         "kind" : "FieldAccess",
                         "base" : {
                           "kind" : "Index",
@@ -4562,492 +4349,765 @@
                               "kind" : "Identifier",
                               "name" : "orders",
                               "span" : {
-                                "startLine" : 192,
-                                "startCol" : 24,
-                                "endLine" : 192,
-                                "endCol" : 30
+                                "startLine" : 189,
+                                "startCol" : 22,
+                                "endLine" : 189,
+                                "endCol" : 28
                               }
                             },
                             "span" : {
-                              "startLine" : 192,
-                              "startCol" : 20,
-                              "endLine" : 192,
-                              "endCol" : 31
+                              "startLine" : 189,
+                              "startCol" : 18,
+                              "endLine" : 189,
+                              "endCol" : 29
                             }
                           },
                           "index" : {
                             "kind" : "Identifier",
                             "name" : "order_id",
                             "span" : {
-                              "startLine" : 192,
-                              "startCol" : 32,
-                              "endLine" : 192,
-                              "endCol" : 40
+                              "startLine" : 189,
+                              "startCol" : 30,
+                              "endLine" : 189,
+                              "endCol" : 38
                             }
                           },
+                          "span" : {
+                            "startLine" : 189,
+                            "startCol" : 18,
+                            "endLine" : 189,
+                            "endCol" : 39
+                          }
+                        },
+                        "field" : "items",
+                        "span" : {
+                          "startLine" : 189,
+                          "startCol" : 18,
+                          "endLine" : 189,
+                          "endCol" : 45
+                        }
+                      },
+                      "right" : {
+                        "kind" : "SetLiteral",
+                        "elements" : [
+                          {
+                            "kind" : "Identifier",
+                            "name" : "removed",
+                            "span" : {
+                              "startLine" : 189,
+                              "startCol" : 49,
+                              "endLine" : 189,
+                              "endCol" : 56
+                            }
+                          }
+                        ],
+                        "span" : {
+                          "startLine" : 189,
+                          "startCol" : 48,
+                          "endLine" : 189,
+                          "endCol" : 57
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 189,
+                        "startCol" : 18,
+                        "endLine" : 189,
+                        "endCol" : 57
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 189,
+                      "startCol" : 10,
+                      "endLine" : 189,
+                      "endCol" : 57
+                    }
+                  },
+                  {
+                    "name" : "subtotal",
+                    "value" : {
+                      "kind" : "BinaryOp",
+                      "op" : "-",
+                      "left" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Index",
+                          "base" : {
+                            "kind" : "Pre",
+                            "expr" : {
+                              "kind" : "Identifier",
+                              "name" : "orders",
+                              "span" : {
+                                "startLine" : 190,
+                                "startCol" : 25,
+                                "endLine" : 190,
+                                "endCol" : 31
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 190,
+                              "startCol" : 21,
+                              "endLine" : 190,
+                              "endCol" : 32
+                            }
+                          },
+                          "index" : {
+                            "kind" : "Identifier",
+                            "name" : "order_id",
+                            "span" : {
+                              "startLine" : 190,
+                              "startCol" : 33,
+                              "endLine" : 190,
+                              "endCol" : 41
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 190,
+                            "startCol" : 21,
+                            "endLine" : 190,
+                            "endCol" : 42
+                          }
+                        },
+                        "field" : "subtotal",
+                        "span" : {
+                          "startLine" : 190,
+                          "startCol" : 21,
+                          "endLine" : 190,
+                          "endCol" : 51
+                        }
+                      },
+                      "right" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Identifier",
+                          "name" : "removed",
+                          "span" : {
+                            "startLine" : 190,
+                            "startCol" : 54,
+                            "endLine" : 190,
+                            "endCol" : 61
+                          }
+                        },
+                        "field" : "line_total",
+                        "span" : {
+                          "startLine" : 190,
+                          "startCol" : 54,
+                          "endLine" : 190,
+                          "endCol" : 72
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 190,
+                        "startCol" : 21,
+                        "endLine" : 190,
+                        "endCol" : 72
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 190,
+                      "startCol" : 10,
+                      "endLine" : 190,
+                      "endCol" : 72
+                    }
+                  },
+                  {
+                    "name" : "total",
+                    "value" : {
+                      "kind" : "BinaryOp",
+                      "op" : "-",
+                      "left" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Index",
+                          "base" : {
+                            "kind" : "Pre",
+                            "expr" : {
+                              "kind" : "Identifier",
+                              "name" : "orders",
+                              "span" : {
+                                "startLine" : 191,
+                                "startCol" : 22,
+                                "endLine" : 191,
+                                "endCol" : 28
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 191,
+                              "startCol" : 18,
+                              "endLine" : 191,
+                              "endCol" : 29
+                            }
+                          },
+                          "index" : {
+                            "kind" : "Identifier",
+                            "name" : "order_id",
+                            "span" : {
+                              "startLine" : 191,
+                              "startCol" : 30,
+                              "endLine" : 191,
+                              "endCol" : 38
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 191,
+                            "startCol" : 18,
+                            "endLine" : 191,
+                            "endCol" : 39
+                          }
+                        },
+                        "field" : "subtotal",
+                        "span" : {
+                          "startLine" : 191,
+                          "startCol" : 18,
+                          "endLine" : 191,
+                          "endCol" : 48
+                        }
+                      },
+                      "right" : {
+                        "kind" : "BinaryOp",
+                        "op" : "+",
+                        "left" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Identifier",
+                            "name" : "removed",
+                            "span" : {
+                              "startLine" : 191,
+                              "startCol" : 51,
+                              "endLine" : 191,
+                              "endCol" : 58
+                            }
+                          },
+                          "field" : "line_total",
+                          "span" : {
+                            "startLine" : 191,
+                            "startCol" : 51,
+                            "endLine" : 191,
+                            "endCol" : 69
+                          }
+                        },
+                        "right" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Index",
+                            "base" : {
+                              "kind" : "Pre",
+                              "expr" : {
+                                "kind" : "Identifier",
+                                "name" : "orders",
+                                "span" : {
+                                  "startLine" : 192,
+                                  "startCol" : 24,
+                                  "endLine" : 192,
+                                  "endCol" : 30
+                                }
+                              },
+                              "span" : {
+                                "startLine" : 192,
+                                "startCol" : 20,
+                                "endLine" : 192,
+                                "endCol" : 31
+                              }
+                            },
+                            "index" : {
+                              "kind" : "Identifier",
+                              "name" : "order_id",
+                              "span" : {
+                                "startLine" : 192,
+                                "startCol" : 32,
+                                "endLine" : 192,
+                                "endCol" : 40
+                              }
+                            },
+                            "span" : {
+                              "startLine" : 192,
+                              "startCol" : 20,
+                              "endLine" : 192,
+                              "endCol" : 41
+                            }
+                          },
+                          "field" : "tax",
                           "span" : {
                             "startLine" : 192,
                             "startCol" : 20,
                             "endLine" : 192,
-                            "endCol" : 41
+                            "endCol" : 45
                           }
                         },
-                        "field" : "tax",
                         "span" : {
-                          "startLine" : 192,
-                          "startCol" : 20,
+                          "startLine" : 191,
+                          "startCol" : 51,
                           "endLine" : 192,
                           "endCol" : 45
                         }
                       },
                       "span" : {
                         "startLine" : 191,
-                        "startCol" : 51,
+                        "startCol" : 18,
                         "endLine" : 192,
                         "endCol" : 45
                       }
                     },
                     "span" : {
                       "startLine" : 191,
-                      "startCol" : 18,
+                      "startCol" : 10,
                       "endLine" : 192,
                       "endCol" : 45
                     }
-                  },
-                  "span" : {
-                    "startLine" : 191,
-                    "startCol" : 10,
-                    "endLine" : 192,
-                    "endCol" : 45
                   }
+                ],
+                "span" : {
+                  "startLine" : 188,
+                  "startCol" : 16,
+                  "endLine" : 193,
+                  "endCol" : 9
                 }
-              ],
+              },
               "span" : {
                 "startLine" : 188,
-                "startCol" : 16,
+                "startCol" : 8,
                 "endLine" : 193,
                 "endCol" : 9
               }
             },
-            "span" : {
-              "startLine" : 188,
-              "startCol" : 8,
-              "endLine" : 193,
-              "endCol" : 9
-            }
-          },
-          "span" : {
-            "startLine" : 186,
-            "startCol" : 6,
-            "endLine" : 193,
-            "endCol" : 9
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "Prime",
-            "expr" : {
-              "kind" : "Identifier",
-              "name" : "orders",
-              "span" : {
-                "startLine" : 194,
-                "startCol" : 8,
-                "endLine" : 194,
-                "endCol" : 14
-              }
-            },
-            "span" : {
-              "startLine" : 194,
-              "startCol" : 8,
-              "endLine" : 194,
-              "endCol" : 15
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "+",
-            "left" : {
-              "kind" : "Pre",
-              "expr" : {
-                "kind" : "Identifier",
-                "name" : "orders",
-                "span" : {
-                  "startLine" : 194,
-                  "startCol" : 22,
-                  "endLine" : 194,
-                  "endCol" : 28
-                }
-              },
-              "span" : {
-                "startLine" : 194,
-                "startCol" : 18,
-                "endLine" : 194,
-                "endCol" : 29
-              }
-            },
             "right" : {
-              "kind" : "MapLiteral",
-              "entries" : [
-                {
-                  "key" : {
+              "kind" : "BinaryOp",
+              "op" : "and",
+              "left" : {
+                "kind" : "BinaryOp",
+                "op" : "=",
+                "left" : {
+                  "kind" : "Prime",
+                  "expr" : {
                     "kind" : "Identifier",
-                    "name" : "order_id",
+                    "name" : "orders",
                     "span" : {
                       "startLine" : 194,
-                      "startCol" : 33,
+                      "startCol" : 8,
                       "endLine" : 194,
-                      "endCol" : 41
-                    }
-                  },
-                  "value" : {
-                    "kind" : "Identifier",
-                    "name" : "order",
-                    "span" : {
-                      "startLine" : 194,
-                      "startCol" : 45,
-                      "endLine" : 194,
-                      "endCol" : 50
+                      "endCol" : 14
                     }
                   },
                   "span" : {
                     "startLine" : 194,
-                    "startCol" : 33,
+                    "startCol" : 8,
                     "endLine" : 194,
-                    "endCol" : 41
+                    "endCol" : 15
                   }
+                },
+                "right" : {
+                  "kind" : "BinaryOp",
+                  "op" : "+",
+                  "left" : {
+                    "kind" : "Pre",
+                    "expr" : {
+                      "kind" : "Identifier",
+                      "name" : "orders",
+                      "span" : {
+                        "startLine" : 194,
+                        "startCol" : 22,
+                        "endLine" : 194,
+                        "endCol" : 28
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 194,
+                      "startCol" : 18,
+                      "endLine" : 194,
+                      "endCol" : 29
+                    }
+                  },
+                  "right" : {
+                    "kind" : "MapLiteral",
+                    "entries" : [
+                      {
+                        "key" : {
+                          "kind" : "Identifier",
+                          "name" : "order_id",
+                          "span" : {
+                            "startLine" : 194,
+                            "startCol" : 33,
+                            "endLine" : 194,
+                            "endCol" : 41
+                          }
+                        },
+                        "value" : {
+                          "kind" : "Identifier",
+                          "name" : "order",
+                          "span" : {
+                            "startLine" : 194,
+                            "startCol" : 45,
+                            "endLine" : 194,
+                            "endCol" : 50
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 194,
+                          "startCol" : 33,
+                          "endLine" : 194,
+                          "endCol" : 41
+                        }
+                      }
+                    ],
+                    "span" : {
+                      "startLine" : 194,
+                      "startCol" : 32,
+                      "endLine" : 194,
+                      "endCol" : 51
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 194,
+                    "startCol" : 18,
+                    "endLine" : 194,
+                    "endCol" : 51
+                  }
+                },
+                "span" : {
+                  "startLine" : 194,
+                  "startCol" : 8,
+                  "endLine" : 194,
+                  "endCol" : 51
                 }
-              ],
+              },
+              "right" : {
+                "kind" : "BinaryOp",
+                "op" : "and",
+                "left" : {
+                  "kind" : "BinaryOp",
+                  "op" : "=",
+                  "left" : {
+                    "kind" : "FieldAccess",
+                    "base" : {
+                      "kind" : "Index",
+                      "base" : {
+                        "kind" : "Prime",
+                        "expr" : {
+                          "kind" : "Identifier",
+                          "name" : "inventory",
+                          "span" : {
+                            "startLine" : 195,
+                            "startCol" : 8,
+                            "endLine" : 195,
+                            "endCol" : 17
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 195,
+                          "startCol" : 8,
+                          "endLine" : 195,
+                          "endCol" : 18
+                        }
+                      },
+                      "index" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Identifier",
+                          "name" : "removed",
+                          "span" : {
+                            "startLine" : 195,
+                            "startCol" : 19,
+                            "endLine" : 195,
+                            "endCol" : 26
+                          }
+                        },
+                        "field" : "product_sku",
+                        "span" : {
+                          "startLine" : 195,
+                          "startCol" : 19,
+                          "endLine" : 195,
+                          "endCol" : 38
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 195,
+                        "startCol" : 8,
+                        "endLine" : 195,
+                        "endCol" : 39
+                      }
+                    },
+                    "field" : "reserved",
+                    "span" : {
+                      "startLine" : 195,
+                      "startCol" : 8,
+                      "endLine" : 195,
+                      "endCol" : 48
+                    }
+                  },
+                  "right" : {
+                    "kind" : "BinaryOp",
+                    "op" : "-",
+                    "left" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
+                        "base" : {
+                          "kind" : "Pre",
+                          "expr" : {
+                            "kind" : "Identifier",
+                            "name" : "inventory",
+                            "span" : {
+                              "startLine" : 196,
+                              "startCol" : 14,
+                              "endLine" : 196,
+                              "endCol" : 23
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 196,
+                            "startCol" : 10,
+                            "endLine" : 196,
+                            "endCol" : 24
+                          }
+                        },
+                        "index" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Identifier",
+                            "name" : "removed",
+                            "span" : {
+                              "startLine" : 196,
+                              "startCol" : 25,
+                              "endLine" : 196,
+                              "endCol" : 32
+                            }
+                          },
+                          "field" : "product_sku",
+                          "span" : {
+                            "startLine" : 196,
+                            "startCol" : 25,
+                            "endLine" : 196,
+                            "endCol" : 44
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 196,
+                          "startCol" : 10,
+                          "endLine" : 196,
+                          "endCol" : 45
+                        }
+                      },
+                      "field" : "reserved",
+                      "span" : {
+                        "startLine" : 196,
+                        "startCol" : 10,
+                        "endLine" : 196,
+                        "endCol" : 54
+                      }
+                    },
+                    "right" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Identifier",
+                        "name" : "removed",
+                        "span" : {
+                          "startLine" : 196,
+                          "startCol" : 57,
+                          "endLine" : 196,
+                          "endCol" : 64
+                        }
+                      },
+                      "field" : "quantity",
+                      "span" : {
+                        "startLine" : 196,
+                        "startCol" : 57,
+                        "endLine" : 196,
+                        "endCol" : 73
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 196,
+                      "startCol" : 10,
+                      "endLine" : 196,
+                      "endCol" : 73
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 195,
+                    "startCol" : 8,
+                    "endLine" : 196,
+                    "endCol" : 73
+                  }
+                },
+                "right" : {
+                  "kind" : "BinaryOp",
+                  "op" : "=",
+                  "left" : {
+                    "kind" : "FieldAccess",
+                    "base" : {
+                      "kind" : "Index",
+                      "base" : {
+                        "kind" : "Prime",
+                        "expr" : {
+                          "kind" : "Identifier",
+                          "name" : "inventory",
+                          "span" : {
+                            "startLine" : 197,
+                            "startCol" : 8,
+                            "endLine" : 197,
+                            "endCol" : 17
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 197,
+                          "startCol" : 8,
+                          "endLine" : 197,
+                          "endCol" : 18
+                        }
+                      },
+                      "index" : {
+                        "kind" : "FieldAccess",
+                        "base" : {
+                          "kind" : "Identifier",
+                          "name" : "removed",
+                          "span" : {
+                            "startLine" : 197,
+                            "startCol" : 19,
+                            "endLine" : 197,
+                            "endCol" : 26
+                          }
+                        },
+                        "field" : "product_sku",
+                        "span" : {
+                          "startLine" : 197,
+                          "startCol" : 19,
+                          "endLine" : 197,
+                          "endCol" : 38
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 197,
+                        "startCol" : 8,
+                        "endLine" : 197,
+                        "endCol" : 39
+                      }
+                    },
+                    "field" : "available",
+                    "span" : {
+                      "startLine" : 197,
+                      "startCol" : 8,
+                      "endLine" : 197,
+                      "endCol" : 49
+                    }
+                  },
+                  "right" : {
+                    "kind" : "BinaryOp",
+                    "op" : "+",
+                    "left" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
+                        "base" : {
+                          "kind" : "Pre",
+                          "expr" : {
+                            "kind" : "Identifier",
+                            "name" : "inventory",
+                            "span" : {
+                              "startLine" : 198,
+                              "startCol" : 14,
+                              "endLine" : 198,
+                              "endCol" : 23
+                            }
+                          },
+                          "span" : {
+                            "startLine" : 198,
+                            "startCol" : 10,
+                            "endLine" : 198,
+                            "endCol" : 24
+                          }
+                        },
+                        "index" : {
+                          "kind" : "FieldAccess",
+                          "base" : {
+                            "kind" : "Identifier",
+                            "name" : "removed",
+                            "span" : {
+                              "startLine" : 198,
+                              "startCol" : 25,
+                              "endLine" : 198,
+                              "endCol" : 32
+                            }
+                          },
+                          "field" : "product_sku",
+                          "span" : {
+                            "startLine" : 198,
+                            "startCol" : 25,
+                            "endLine" : 198,
+                            "endCol" : 44
+                          }
+                        },
+                        "span" : {
+                          "startLine" : 198,
+                          "startCol" : 10,
+                          "endLine" : 198,
+                          "endCol" : 45
+                        }
+                      },
+                      "field" : "available",
+                      "span" : {
+                        "startLine" : 198,
+                        "startCol" : 10,
+                        "endLine" : 198,
+                        "endCol" : 55
+                      }
+                    },
+                    "right" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Identifier",
+                        "name" : "removed",
+                        "span" : {
+                          "startLine" : 198,
+                          "startCol" : 58,
+                          "endLine" : 198,
+                          "endCol" : 65
+                        }
+                      },
+                      "field" : "quantity",
+                      "span" : {
+                        "startLine" : 198,
+                        "startCol" : 58,
+                        "endLine" : 198,
+                        "endCol" : 74
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 198,
+                      "startCol" : 10,
+                      "endLine" : 198,
+                      "endCol" : 74
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 197,
+                    "startCol" : 8,
+                    "endLine" : 198,
+                    "endCol" : 74
+                  }
+                },
+                "span" : {
+                  "startLine" : 195,
+                  "startCol" : 8,
+                  "endLine" : 198,
+                  "endCol" : 74
+                }
+              },
               "span" : {
                 "startLine" : 194,
-                "startCol" : 32,
-                "endLine" : 194,
-                "endCol" : 51
-              }
-            },
-            "span" : {
-              "startLine" : 194,
-              "startCol" : 18,
-              "endLine" : 194,
-              "endCol" : 51
-            }
-          },
-          "span" : {
-            "startLine" : 194,
-            "startCol" : 8,
-            "endLine" : 194,
-            "endCol" : 51
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "FieldAccess",
-            "base" : {
-              "kind" : "Index",
-              "base" : {
-                "kind" : "Prime",
-                "expr" : {
-                  "kind" : "Identifier",
-                  "name" : "inventory",
-                  "span" : {
-                    "startLine" : 195,
-                    "startCol" : 8,
-                    "endLine" : 195,
-                    "endCol" : 17
-                  }
-                },
-                "span" : {
-                  "startLine" : 195,
-                  "startCol" : 8,
-                  "endLine" : 195,
-                  "endCol" : 18
-                }
-              },
-              "index" : {
-                "kind" : "FieldAccess",
-                "base" : {
-                  "kind" : "Identifier",
-                  "name" : "removed",
-                  "span" : {
-                    "startLine" : 195,
-                    "startCol" : 19,
-                    "endLine" : 195,
-                    "endCol" : 26
-                  }
-                },
-                "field" : "product_sku",
-                "span" : {
-                  "startLine" : 195,
-                  "startCol" : 19,
-                  "endLine" : 195,
-                  "endCol" : 38
-                }
-              },
-              "span" : {
-                "startLine" : 195,
                 "startCol" : 8,
-                "endLine" : 195,
-                "endCol" : 39
-              }
-            },
-            "field" : "reserved",
-            "span" : {
-              "startLine" : 195,
-              "startCol" : 8,
-              "endLine" : 195,
-              "endCol" : 48
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "-",
-            "left" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "inventory",
-                    "span" : {
-                      "startLine" : 196,
-                      "startCol" : 14,
-                      "endLine" : 196,
-                      "endCol" : 23
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 196,
-                    "startCol" : 10,
-                    "endLine" : 196,
-                    "endCol" : 24
-                  }
-                },
-                "index" : {
-                  "kind" : "FieldAccess",
-                  "base" : {
-                    "kind" : "Identifier",
-                    "name" : "removed",
-                    "span" : {
-                      "startLine" : 196,
-                      "startCol" : 25,
-                      "endLine" : 196,
-                      "endCol" : 32
-                    }
-                  },
-                  "field" : "product_sku",
-                  "span" : {
-                    "startLine" : 196,
-                    "startCol" : 25,
-                    "endLine" : 196,
-                    "endCol" : 44
-                  }
-                },
-                "span" : {
-                  "startLine" : 196,
-                  "startCol" : 10,
-                  "endLine" : 196,
-                  "endCol" : 45
-                }
-              },
-              "field" : "reserved",
-              "span" : {
-                "startLine" : 196,
-                "startCol" : 10,
-                "endLine" : 196,
-                "endCol" : 54
-              }
-            },
-            "right" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Identifier",
-                "name" : "removed",
-                "span" : {
-                  "startLine" : 196,
-                  "startCol" : 57,
-                  "endLine" : 196,
-                  "endCol" : 64
-                }
-              },
-              "field" : "quantity",
-              "span" : {
-                "startLine" : 196,
-                "startCol" : 57,
-                "endLine" : 196,
-                "endCol" : 73
-              }
-            },
-            "span" : {
-              "startLine" : 196,
-              "startCol" : 10,
-              "endLine" : 196,
-              "endCol" : 73
-            }
-          },
-          "span" : {
-            "startLine" : 195,
-            "startCol" : 8,
-            "endLine" : 196,
-            "endCol" : 73
-          }
-        },
-        {
-          "kind" : "BinaryOp",
-          "op" : "=",
-          "left" : {
-            "kind" : "FieldAccess",
-            "base" : {
-              "kind" : "Index",
-              "base" : {
-                "kind" : "Prime",
-                "expr" : {
-                  "kind" : "Identifier",
-                  "name" : "inventory",
-                  "span" : {
-                    "startLine" : 197,
-                    "startCol" : 8,
-                    "endLine" : 197,
-                    "endCol" : 17
-                  }
-                },
-                "span" : {
-                  "startLine" : 197,
-                  "startCol" : 8,
-                  "endLine" : 197,
-                  "endCol" : 18
-                }
-              },
-              "index" : {
-                "kind" : "FieldAccess",
-                "base" : {
-                  "kind" : "Identifier",
-                  "name" : "removed",
-                  "span" : {
-                    "startLine" : 197,
-                    "startCol" : 19,
-                    "endLine" : 197,
-                    "endCol" : 26
-                  }
-                },
-                "field" : "product_sku",
-                "span" : {
-                  "startLine" : 197,
-                  "startCol" : 19,
-                  "endLine" : 197,
-                  "endCol" : 38
-                }
-              },
-              "span" : {
-                "startLine" : 197,
-                "startCol" : 8,
-                "endLine" : 197,
-                "endCol" : 39
-              }
-            },
-            "field" : "available",
-            "span" : {
-              "startLine" : 197,
-              "startCol" : 8,
-              "endLine" : 197,
-              "endCol" : 49
-            }
-          },
-          "right" : {
-            "kind" : "BinaryOp",
-            "op" : "+",
-            "left" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Index",
-                "base" : {
-                  "kind" : "Pre",
-                  "expr" : {
-                    "kind" : "Identifier",
-                    "name" : "inventory",
-                    "span" : {
-                      "startLine" : 198,
-                      "startCol" : 14,
-                      "endLine" : 198,
-                      "endCol" : 23
-                    }
-                  },
-                  "span" : {
-                    "startLine" : 198,
-                    "startCol" : 10,
-                    "endLine" : 198,
-                    "endCol" : 24
-                  }
-                },
-                "index" : {
-                  "kind" : "FieldAccess",
-                  "base" : {
-                    "kind" : "Identifier",
-                    "name" : "removed",
-                    "span" : {
-                      "startLine" : 198,
-                      "startCol" : 25,
-                      "endLine" : 198,
-                      "endCol" : 32
-                    }
-                  },
-                  "field" : "product_sku",
-                  "span" : {
-                    "startLine" : 198,
-                    "startCol" : 25,
-                    "endLine" : 198,
-                    "endCol" : 44
-                  }
-                },
-                "span" : {
-                  "startLine" : 198,
-                  "startCol" : 10,
-                  "endLine" : 198,
-                  "endCol" : 45
-                }
-              },
-              "field" : "available",
-              "span" : {
-                "startLine" : 198,
-                "startCol" : 10,
-                "endLine" : 198,
-                "endCol" : 55
-              }
-            },
-            "right" : {
-              "kind" : "FieldAccess",
-              "base" : {
-                "kind" : "Identifier",
-                "name" : "removed",
-                "span" : {
-                  "startLine" : 198,
-                  "startCol" : 58,
-                  "endLine" : 198,
-                  "endCol" : 65
-                }
-              },
-              "field" : "quantity",
-              "span" : {
-                "startLine" : 198,
-                "startCol" : 58,
                 "endLine" : 198,
                 "endCol" : 74
               }
             },
             "span" : {
-              "startLine" : 198,
-              "startCol" : 10,
+              "startLine" : 188,
+              "startCol" : 8,
               "endLine" : 198,
               "endCol" : 74
             }
           },
           "span" : {
-            "startLine" : 197,
-            "startCol" : 8,
+            "startLine" : 186,
+            "startCol" : 6,
             "endLine" : 198,
             "endCol" : 74
           }

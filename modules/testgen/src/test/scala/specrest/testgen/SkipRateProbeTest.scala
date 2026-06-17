@@ -83,9 +83,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "ecommerce",
-      76,
-      4,
-      "2 `removed` parser scope leak + 2 non-Int scalar ensures; Int scalars backed since #407"
+      70,
+      2,
+      "2 non-Int scalar ensures (next_order_id unbacked); the prior 2 `removed` skips are gone now that a `let` scopes its whole ensures block"
     ),
     ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
