@@ -254,17 +254,32 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
           else if clause.requiresClause ne null then
             clause.requiresClause.expr.asScala.toList
               .traverseB(expr)
-              .map(es => (ins, outs, reqs ++ es, ens, auth))
+              .map(es => (ins, outs, reqs ++ scopeLetsOverBlock(es), ens, auth))
           else if clause.ensuresClause ne null then
             clause.ensuresClause.expr.asScala.toList
               .traverseB(expr)
-              .map(es => (ins, outs, reqs, ens ++ es, auth))
+              .map(es => (ins, outs, reqs, ens ++ scopeLetsOverBlock(es), auth))
           else if clause.requiresAuthClause ne null then
             val names = clause.requiresAuthClause.lowerIdent.asScala.toList.map(_.getText)
             Right((ins, outs, reqs, ens, Some(auth.getOrElse(Nil) ++ names)))
           else Right((ins, outs, reqs, ens, auth))
     collected.map: (ins, outs, reqs, ens, auth) =>
       OperationDeclFull(name, ins, outs, reqs, ens, auth, sp(ctx))
+
+  // A `let x = v in ...` written above newline-separated clauses reads, by its indentation, as
+  // binding `x` over the whole block. The grammar (`letExpr : LET id EQ expr IN expr`) scopes the
+  // let body to a single clause, so any later clause sees `x` as a free identifier. Fold the
+  // following clauses into the let's innermost body so the binding spans the block as written.
+  private def scopeLetsOverBlock(clauses: List[expr]): List[expr] = clauses match
+    case Nil => Nil
+    case (lf: LetF) :: rest if rest.nonEmpty =>
+      List(extendLetBody(lf, scopeLetsOverBlock(rest)))
+    case c :: rest => c :: scopeLetsOverBlock(rest)
+
+  private def extendLetBody(lf: LetF, extra: List[expr]): LetF = lf match
+    case LetF(x, v, inner: LetF, d) => LetF(x, v, extendLetBody(inner, extra), d)
+    case LetF(x, v, body, d) =>
+      LetF(x, v, (body :: extra).reduceRight((a, b) => BinaryOpF(BAnd(), a, b, d)), d)
 
   private def buildParam(ctx: ParamContext): BuildResult[ParamDeclFull] =
     buildTypeExpr(ctx.typeExpr).map(t => ParamDeclFull(ctx.lowerIdent.getText, t, sp(ctx)))
