@@ -184,11 +184,19 @@ service AuthService {
       len(new_password) >= 8
 
     ensures:
+      // `userKeyMatchesId`/`emailIndexConsistent` require the same User *value* in
+      // both stores, so we build one updated record and insert it into both —
+      // a per-field update of `users` alone would leave `user_by_email` stale.
       let s = (the s in sessions |
         sessions[s].access_token = reset_token) in
         let user_id = pre(sessions)[s].user_id in
-          users'[user_id].password_hash = hash(new_password)
-          and sessions'[s].is_revoked = true
+          let updated = pre(users)[user_id] with {
+            password_hash = hash(new_password)
+          } in
+            users' = pre(users) + {user_id -> updated}
+            and user_by_email' =
+              pre(user_by_email) + {pre(users)[user_id].email -> updated}
+            and sessions'[s].is_revoked = true
   }
 
   operation Logout {
