@@ -4811,40 +4811,72 @@
       "kind" : "Invariant",
       "name" : "nextIdFresh",
       "expr" : {
-        "kind" : "BinaryOp",
-        "op" : "not_in",
-        "left" : {
-          "kind" : "Identifier",
-          "name" : "next_id",
-          "span" : {
-            "startLine" : 209,
-            "startCol" : 4,
-            "endLine" : 209,
-            "endCol" : 11
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "id",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "todos",
+              "span" : {
+                "startLine" : 209,
+                "startCol" : 14,
+                "endLine" : 209,
+                "endCol" : 19
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 209,
+              "startCol" : 8,
+              "endLine" : 209,
+              "endCol" : 19
+            }
           }
-        },
-        "right" : {
-          "kind" : "Identifier",
-          "name" : "todos",
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "<",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "id",
+            "span" : {
+              "startLine" : 209,
+              "startCol" : 22,
+              "endLine" : 209,
+              "endCol" : 24
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "next_id",
+            "span" : {
+              "startLine" : 209,
+              "startCol" : 27,
+              "endLine" : 209,
+              "endCol" : 34
+            }
+          },
           "span" : {
             "startLine" : 209,
-            "startCol" : 19,
+            "startCol" : 22,
             "endLine" : 209,
-            "endCol" : 24
+            "endCol" : 34
           }
         },
         "span" : {
           "startLine" : 209,
           "startCol" : 4,
           "endLine" : 209,
-          "endCol" : 24
+          "endCol" : 34
         }
       },
       "span" : {
         "startLine" : 208,
         "startCol" : 2,
         "endLine" : 209,
-        "endCol" : 24
+        "endCol" : 34
       }
     },
     {
