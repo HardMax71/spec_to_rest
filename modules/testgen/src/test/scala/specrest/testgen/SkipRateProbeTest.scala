@@ -90,9 +90,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
       "auth_service",
-      43,
+      44,
       4,
-      "4 unbacked scalar-state; total 43 after adding userKeyMatchesId, sessionKeyMatchesId, nextUserIdFresh, nextSessionIdFresh, post-state membership clauses to make the Dafny kernel hand-verifiable (all 7 ops verified with bodies, see #149)"
+      "4 unbacked scalar-state; total 44 since Logout's `let s = (the ..) in (sessions'[s].. and users'=users)` was hoisted to two top-level ensures clauses (`sessions'[(the ..)].is_revoked` + `users'=users`) so the partial-relation frame synthesizes and Logout's 5 spurious uniqueness/freshness violations clear"
     )
   ).foreach: (name, expectedTotal, expectedSkipped, why) =>
     test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):
