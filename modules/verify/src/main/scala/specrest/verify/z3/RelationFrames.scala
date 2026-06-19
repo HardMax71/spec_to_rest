@@ -243,7 +243,7 @@ private[z3] trait RelationFrames:
         ctx.state.get(sfName) match
           case None => ()
           case Some(info) =>
-            val analysis = analyzeStateMention(operEnsures(op), sfName)
+            val analysis = analyzeStateMention(flattenForFrame(operEnsures(op)), sfName)
             if !analysis.fullyReplaced then
               info match
                 case c: StateConstInfo =>
@@ -280,6 +280,17 @@ private[z3] trait RelationFrames:
       fieldUpdatedKeys: List[(expr, Set[String])],
       hasUnclassifiedMention: Boolean
   )
+
+  // analyzeStateMention only matches the top of each ensures clause, so an update inside
+  // `let x = v in (... and X'[k] = w)` goes unframed. Inlining the let with the proof's
+  // capture-avoiding `subst` (meaning-preserving) and splitting `and` surfaces it for the matchers.
+  private[z3] def flattenForFrame(clauses: List[expr]): List[expr] =
+    clauses.flatMap(flattenFrameClause)
+
+  private[z3] def flattenFrameClause(clause: expr): List[expr] = clause match
+    case LetF(x, v, body, _)        => flattenFrameClause(subst(x, v, body))
+    case BinaryOpF(BAnd(), a, b, _) => flattenFrameClause(a) ++ flattenFrameClause(b)
+    case other                      => List(other)
 
   private[z3] def analyzeStateMention(
       ensures: List[expr],
