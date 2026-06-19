@@ -29,6 +29,12 @@ private[z3] trait RelationFrames:
       val newEnv = env.clone()
       newEnv(x) = translateEnsuresClause(ctx, v, env)
       translateEnsuresClause(ctx, body, newEnv)
+    // A conditional effect `cond implies (... X' = rhs ...)` must keep recursing into the body so
+    // the relation-assignment still routes through the frame path; otherwise the nested `pre(X) +
+    // {..}` reaches the generic translator as a bare `+` and is rejected as numeric addition. For a
+    // body with no relation-assignment this yields the same `Implies(cond, body)` as before.
+    case BinaryOpF(BImplies(), cond, body, _) =>
+      Z3Expr.Implies(translateCheckedExpr(ctx, cond, env), translateEnsuresClause(ctx, body, env))
     case _ => translateCheckedExpr(ctx, expr, env)
 
   private[z3] def tryLowerRelationEquality(

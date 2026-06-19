@@ -83,9 +83,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "ecommerce",
-      70,
-      2,
-      "2 non-Int scalar ensures (next_order_id unbacked); the prior 2 `removed` skips are gone now that a `let` scopes its whole ensures block"
+      74,
+      8,
+      "8 unbacked-scalar ensures (next_order_id + next_payment_id): the payment-frame completion (RecordPayment fresh id, ProcessReturn/CancelOrder deterministic refund inserts that bump next_payment_id) adds next_payment_id ensures, which the test-admin /state endpoint can't project black-box - same class as the next_order_id skips"
     ),
     ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
