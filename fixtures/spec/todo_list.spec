@@ -206,7 +206,7 @@ service TodoList {
     next_id > 0
 
   invariant nextIdFresh:
-    next_id not in todos
+    all id in todos | id < next_id
 
   invariant completedImpliesDone:
     all id in todos |

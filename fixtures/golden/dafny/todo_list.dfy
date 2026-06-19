@@ -36,7 +36,7 @@ predicate ServiceStateInv(st: ServiceState)
 {
   (forall id :: (id in st.todos) ==> (id > 0))
   && (st.next_id > 0)
-  && (st.next_id !in st.todos)
+  && (forall id :: (id in st.todos) ==> (id < st.next_id))
   && (forall id :: (id in st.todos) ==> ((st.todos[id].status == DONE <==> st.todos[id].completed_at != None)))
 }
 
