@@ -722,6 +722,42 @@ class ConsistencyTest extends CatsEffectSuite:
         |    true
         |}""".stripMargin,
       "`len(pw) >= 8` and `len(users[k].name) > 0` - the 1-arg `len(s)` String->Int builtin lowers to an uninterpreted Int function (mirroring now()/hash/days; functional dependency preserved, native str.len avoided so exact-length constraints don't blow up the string solver), so the length constraints must verify, not skip; this is the auth_service Register/ResetPassword and todo_list shape"
+    ),
+    (
+      "conditional relation-insert verifies via Z3 (the ecommerce CancelOrder `status = PAID implies payments' = pre(payments) + {..}` shape)",
+      "cond_insert_demo",
+      """service CondInsertDemo {
+        |  enum PayStatus {
+        |    PENDING,
+        |    REFUNDED
+        |  }
+        |  entity Payment {
+        |    id: Int
+        |    status: PayStatus
+        |  }
+        |  state {
+        |    payments: Int -> lone Payment
+        |    next_id: Int
+        |  }
+        |  operation MaybeRefund {
+        |    input: doRefund: Bool
+        |    requires:
+        |      true
+        |    ensures:
+        |      doRefund implies (
+        |        payments' = pre(payments) + {pre(next_id) -> Payment {
+        |          id = pre(next_id),
+        |          status = REFUNDED
+        |        }}
+        |        and next_id' = pre(next_id) + 1)
+        |      doRefund = false implies (
+        |        payments' = pre(payments)
+        |        and next_id' = pre(next_id))
+        |  }
+        |  invariant idFresh:
+        |    all pid in payments | pid < next_id
+        |}""".stripMargin,
+      "a relation-insert nested in `cond implies (payments' = pre(payments) + {..} and ..)` must route through the frame path (guarded by the condition), not reach the generic translator as a bare numeric `+`; both branches frame payments'/next_id' so idFresh is preserved - this is the ecommerce CancelOrder conditional-refund shape"
     )
   ).foreach: (name, fixture, spec, reason) =>
     test(name):

@@ -223,6 +223,7 @@ service OrderService {
       amount = orders[order_id].total
 
     ensures:
+      payment.id = pre(next_payment_id)
       payment.order_id = order_id
       payment.amount = amount
       payment.status = CAPTURED
@@ -282,11 +283,18 @@ service OrderService {
           pre(inventory)[item.product_sku].available + item.quantity
         and inventory'[item.product_sku].reserved =
           pre(inventory)[item.product_sku].reserved - item.quantity
-      orders[order_id].status = PAID implies
-        some p in payments' |
-          p not in pre(payments)
-          and payments'[p].order_id = order_id
-          and payments'[p].status = REFUNDED
+      pre(orders)[order_id].status = PAID implies (
+        payments' = pre(payments) + {pre(next_payment_id) -> Payment {
+          id = pre(next_payment_id),
+          order_id = order_id,
+          amount = pre(orders)[order_id].total,
+          status = REFUNDED,
+          created_at = now()
+        }}
+        and next_payment_id' = pre(next_payment_id) + 1)
+      pre(orders)[order_id].status != PAID implies (
+        payments' = pre(payments)
+        and next_payment_id' = pre(next_payment_id))
   }
 
   operation ProcessReturn {
@@ -305,11 +313,14 @@ service OrderService {
       all item in pre(orders)[order_id].items |
         inventory'[item.product_sku].available =
           pre(inventory)[item.product_sku].available + item.quantity
-      some p in payments' |
-        p not in pre(payments)
-        and payments'[p].order_id = order_id
-        and payments'[p].status = REFUNDED
-        and payments'[p].amount = pre(orders)[order_id].total
+      payments' = pre(payments) + {pre(next_payment_id) -> Payment {
+        id = pre(next_payment_id),
+        order_id = order_id,
+        amount = pre(orders)[order_id].total,
+        status = REFUNDED,
+        created_at = now()
+      }}
+      next_payment_id' = pre(next_payment_id) + 1
   }
 
   operation GetOrder {
@@ -376,6 +387,9 @@ service OrderService {
           implies
           some rid in payments |
             payments[rid].order_id = oid and payments[rid].status = REFUNDED)
+
+  invariant paymentIdFresh:
+    all pid in payments | pid < next_payment_id
 
   // --- Conventions ---
 
