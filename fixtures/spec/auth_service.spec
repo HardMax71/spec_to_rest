@@ -201,10 +201,9 @@ service AuthService {
         and sessions[s].is_revoked = false
 
     ensures:
-      let s = (the s in sessions |
-        sessions[s].access_token = access_token) in
-        sessions'[s].is_revoked = true
-        and users' = users
+      sessions'[(the s in sessions |
+        sessions[s].access_token = access_token)].is_revoked = true
+      users' = users
   }
 
   // --- Helper Functions ---
