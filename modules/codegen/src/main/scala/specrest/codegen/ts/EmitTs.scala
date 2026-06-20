@@ -8,6 +8,7 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
+import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
@@ -94,6 +95,7 @@ final private case class TsEntityCtx(
     needsBuffer: Boolean,
     needsPrismaImport: Boolean,
     needsResultCast: Boolean,
+    hasListRoute: Boolean,
     customSchemas: List[TsCustomSchema]
 )
 
@@ -226,6 +228,7 @@ object EmitTs:
       "src/app.ts"                 -> templates.app,
       "src/config.ts"              -> templates.config,
       "src/prisma.ts"              -> templates.prisma,
+      "src/pagination.ts"          -> templates.pagination,
       "src/middleware/error.ts"    -> templates.errorMiddleware,
       "src/middleware/validate.ts" -> templates.validateMiddleware,
       "src/middleware/auth.ts"     -> templates.authMiddleware,
@@ -584,7 +587,8 @@ object EmitTs:
       "hasScalarOps"      -> ctx.hasScalarOps,
       "needsJwt"          -> ctx.needsJwt,
       "authSchemaLines"   -> proj.authSchemaLines,
-      "authConfigLines"   -> proj.authConfigLines
+      "authConfigLines"   -> proj.authConfigLines,
+      "pagination"        -> Pagination.view
     )
     currentEntity match
       case Some(e) =>
@@ -688,6 +692,7 @@ object EmitTs:
       needsBuffer = needsBuffer,
       needsPrismaImport = needsDecimal,
       needsResultCast = needsResultCast,
+      hasListRoute = operations.exists(_.routeKind == "list"),
       customSchemas = customSchemas
     )
 

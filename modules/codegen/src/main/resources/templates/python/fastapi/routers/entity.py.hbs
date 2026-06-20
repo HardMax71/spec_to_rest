@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
 {{/if}}
+{{#if routerImports.needsPagination}}
+from app.pagination import Pagination
+{{/if}}
 {{#if routerImports.schemas.length}}
 from app.schemas.{{snake_case entity.entityName}} import (
 {{#each routerImports.schemas}}
@@ -36,10 +39,15 @@ async def {{this.handlerName}}(
 {{#if this.hasRequestBody}}
     body: {{this.requestBodyType}},
 {{/if}}
+{{#if (eq this.routeKind "list")}}
+    pagination: Pagination = Depends(),
+{{/if}}
     session: AsyncSession = Depends(get_session),
 ) -> {{this.responseAnnotation}}:
     svc = {{../entity.entityName}}Service(session)
-{{#if (eq this.routeKind "read")}}
+{{#if (eq this.routeKind "list")}}
+    return await svc.{{this.handlerName}}(limit=pagination.limit, offset=pagination.offset)
+{{else if (eq this.routeKind "read")}}
     result = await svc.{{this.handlerName}}({{this.serviceCallArgs}})
     if result is None:
         raise HTTPException(status_code=404, detail="not found")

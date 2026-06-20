@@ -3,9 +3,41 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/generated/url-shortener/internal/models"
 )
+
+const (
+	pageLimitDefault  = 50
+	pageLimitMin      = 1
+	pageLimitMax      = 100
+	pageOffsetDefault = 0
+)
+
+// queryInt reads an integer query parameter, falling back to def and clamping to [min, max].
+func queryInt(r *http.Request, name string, def, min, max int) int {
+	n := def
+	if v := r.URL.Query().Get(name); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			n = parsed
+		}
+	}
+	if n < min {
+		return min
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
+// listPagination reads the standard limit/offset list query params, clamped to the configured bounds.
+func listPagination(r *http.Request) (limit, offset int) {
+	limit = queryInt(r, "limit", pageLimitDefault, pageLimitMin, pageLimitMax)
+	offset = queryInt(r, "offset", pageOffsetDefault, 0, 1<<31-1)
+	return limit, offset
+}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

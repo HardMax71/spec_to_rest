@@ -32,7 +32,8 @@ func (h *UrlMappingHandler) Shorten(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UrlMappingHandler) ListAll(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.ListAll(r.Context())
+	limit, offset := listPagination(r)
+	result, err := h.svc.ListAll(r.Context(), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

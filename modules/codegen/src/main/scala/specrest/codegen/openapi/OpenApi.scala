@@ -1,6 +1,7 @@
 package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
+import specrest.codegen.Pagination
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
@@ -441,8 +442,11 @@ object Paths:
       entity: ProfiledEntity,
       ctx: BuildContext
   ): OperationObject =
-    val routeKind   = OperationContext.from(op, entity).initialRouteKind
-    val parameters  = buildParameters(op, ctx)
+    val routeKind     = OperationContext.from(op, entity).initialRouteKind
+    val baseParams    = buildParameters(op, ctx)
+    val declaredNames = baseParams.map(_.name).toSet
+    val parameters =
+      baseParams ++ paginationParameters(routeKind).filterNot(p => declaredNames.contains(p.name))
     val requestBody = buildRequestBody(op, entity, routeKind, ctx)
     val responses   = buildResponses(op, entity, routeKind)
     OperationObject(
@@ -467,6 +471,35 @@ object Paths:
   private def buildParameters(op: ProfiledOperation, ctx: BuildContext): List[ParameterObject] =
     op.endpoint.pathParams.map(p => paramObject(p, "path", ctx)) ++
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
+
+  // Values outside the bounds are clamped (not rejected) by the handler, so the schema
+  // advertises a plain integer rather than min/max validation constraints it would not enforce.
+  private def paginationParameters(routeKind: route_kind): List[ParameterObject] =
+    routeKind match
+      case _: RkList =>
+        List(
+          ParameterObject(
+            name = "limit",
+            in = "query",
+            required = false,
+            description = Some(
+              s"Number of items to return; default ${Pagination.defaultLimit}, " +
+                s"clamped to [${Pagination.minLimit}, ${Pagination.maxLimit}]."
+            ),
+            schema = SchemaObject(`type` = Some(List("integer")), format = Some("int32"))
+          ),
+          ParameterObject(
+            name = "offset",
+            in = "query",
+            required = false,
+            description = Some(
+              s"Number of items to skip; default ${Pagination.defaultOffset}, " +
+                "negative values are treated as 0."
+            ),
+            schema = SchemaObject(`type` = Some(List("integer")), format = Some("int32"))
+          )
+        )
+      case _ => Nil
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
     val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx)

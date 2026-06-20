@@ -20,9 +20,11 @@ export const shorten = async (body: ShortenRequest): Promise<void> => {
   throw new Error('shorten not implemented');
 };
 
-export const listAll = async (): Promise<UrlMappingRead[]> => {
+export const listAll = async (limit: number, offset: number): Promise<UrlMappingRead[]> => {
   return prisma.urlMapping.findMany({
     orderBy: { id: 'asc' },
+    take: limit,
+    skip: offset,
   }) as unknown as Promise<UrlMappingRead[]>;
 };
 

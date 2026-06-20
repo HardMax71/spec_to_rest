@@ -40,7 +40,8 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		return
 	}
 	writeJSON(w, {{successStatus}}, result)
-{{/if}}{{#if (eq routeKind "list")}}	result, err := h.svc.{{serviceMethod}}(r.Context())
+{{/if}}{{#if (eq routeKind "list")}}	limit, offset := listPagination(r)
+	result, err := h.svc.{{serviceMethod}}(r.Context(), limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

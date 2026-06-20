@@ -41,9 +41,9 @@ func New{{entity.entity.modelClassName}}Service(db *bun.DB, cfg *config.Config) 
 	}
 	return m, nil
 }
-{{/if}}{{#if (eq routeKind "list")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context) ([]models.{{../entity.entity.modelClassName}}, error) {
+{{/if}}{{#if (eq routeKind "list")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, limit, offset int) ([]models.{{../entity.entity.modelClassName}}, error) {
 	items := make([]models.{{../entity.entity.modelClassName}}, 0)
-	if err := s.db.NewSelect().Model(&items).Order("id").Scan(ctx); err != nil {
+	if err := s.db.NewSelect().Model(&items).Order("id").Limit(limit).Offset(offset).Scan(ctx); err != nil {
 		return nil, err
 	}
 	return items, nil

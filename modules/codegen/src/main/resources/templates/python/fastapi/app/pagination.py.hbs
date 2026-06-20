@@ -1,0 +1,14 @@
+PAGE_LIMIT_DEFAULT = {{pagination.defaultLimit}}
+PAGE_LIMIT_MIN = {{pagination.minLimit}}
+PAGE_LIMIT_MAX = {{pagination.maxLimit}}
+PAGE_OFFSET_DEFAULT = {{pagination.defaultOffset}}
+
+
+class Pagination:
+    def __init__(
+        self,
+        limit: int = PAGE_LIMIT_DEFAULT,
+        offset: int = PAGE_OFFSET_DEFAULT,
+    ) -> None:
+        self.limit = max(PAGE_LIMIT_MIN, min(limit, PAGE_LIMIT_MAX))
+        self.offset = max(0, offset)

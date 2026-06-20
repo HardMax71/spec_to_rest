@@ -20,8 +20,10 @@ class UrlMappingService:
             "Create operation 'Shorten' — implement in M4+"
         )
 
-    async def list_all(self) -> list[UrlMappingRead]:
-        result = await self._session.execute(select(UrlMapping))
+    async def list_all(self, limit: int, offset: int) -> list[UrlMappingRead]:
+        result = await self._session.execute(
+            select(UrlMapping).order_by(UrlMapping.id).limit(limit).offset(offset)
+        )
         rows = result.scalars().all()
         return [UrlMappingRead.model_validate(row) for row in rows]
 

@@ -186,6 +186,7 @@ class EmitTest extends CatsEffectSuite:
         "app/security.py",
         "app/database.py",
         "app/redaction.py",
+        "app/pagination.py",
         "app/routers/admin.py",
         "app/db/__init__.py",
         "app/db/base.py",

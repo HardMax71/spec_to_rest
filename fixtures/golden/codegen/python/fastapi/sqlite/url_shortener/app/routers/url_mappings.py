@@ -3,6 +3,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_session
+from app.pagination import Pagination
 from app.schemas.url_mapping import (
     ShortenRequest,
     UrlMappingRead,
@@ -22,10 +23,11 @@ async def shorten(
 
 @router.get("/urls", status_code=200)
 async def list_all(
+    pagination: Pagination = Depends(),
     session: AsyncSession = Depends(get_session),
 ) -> list[UrlMappingRead]:
     svc = UrlMappingService(session)
-    return await svc.list_all()
+    return await svc.list_all(limit=pagination.limit, offset=pagination.offset)
 
 @router.get("/{code}", status_code=302)
 async def resolve(

@@ -217,7 +217,9 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val urlHandler  = handlers(url)
       assert(todoHandler.contains("strconv.ParseInt("), todoHandler)
       assert(todoHandler.contains("\"strconv\""), todoHandler)
-      assert(!urlHandler.contains("strconv"), urlHandler)
+      // url_shortener's key is a string, so its path param is never int-parsed.
+      // (common.go's pagination `queryInt` uses strconv.Atoi, so check ParseInt specifically.)
+      assert(!urlHandler.contains("strconv.ParseInt"), urlHandler)
       assert(urlHandler.contains("""chi.URLParam(r, "code")"""), urlHandler)
 
   // express req.params is string; an integer PK route param must be coerced via Number()
