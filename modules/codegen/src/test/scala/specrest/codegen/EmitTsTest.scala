@@ -29,6 +29,7 @@ class EmitTsTest extends CatsEffectSuite:
         "src/app.ts",
         "src/config.ts",
         "src/prisma.ts",
+        "src/pagination.ts",
         "src/middleware/error.ts",
         "src/middleware/validate.ts",
         "src/routes/index.ts",

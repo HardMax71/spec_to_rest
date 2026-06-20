@@ -9,6 +9,7 @@ import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
 import specrest.codegen.OperationContext
+import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
@@ -517,7 +518,8 @@ object EmitGo:
       "scalarStateFields" -> ctx.scalarStateFields,
       "hasScalarOps"      -> ctx.hasScalarOps,
       "needsJwt"          -> ctx.needsJwt,
-      "authConfigLines"   -> proj.authConfigLines
+      "authConfigLines"   -> proj.authConfigLines,
+      "pagination"        -> Pagination.view
     )
     currentEntity match
       case Some(e) =>

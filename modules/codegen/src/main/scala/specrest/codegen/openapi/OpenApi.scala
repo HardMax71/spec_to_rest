@@ -1,6 +1,7 @@
 package specrest.codegen.openapi
 
 import specrest.codegen.OperationContext
+import specrest.codegen.Pagination
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
@@ -468,7 +469,6 @@ object Paths:
     op.endpoint.pathParams.map(p => paramObject(p, "path", ctx)) ++
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
-  // List endpoints take `limit`/`offset` query params (defaults applied by the handler).
   private def paginationParameters(routeKind: route_kind): List[ParameterObject] =
     routeKind match
       case _: RkList =>
@@ -477,23 +477,24 @@ object Paths:
             name = "limit",
             in = "query",
             required = false,
-            description = Some("Maximum number of items to return (default 50)."),
+            description =
+              Some(s"Maximum number of items to return (default ${Pagination.defaultLimit})."),
             schema = SchemaObject(
               `type` = Some(List("integer")),
               format = Some("int32"),
-              minimum = Some(1),
-              maximum = Some(100)
+              minimum = Some(Pagination.minLimit.toDouble),
+              maximum = Some(Pagination.maxLimit.toDouble)
             )
           ),
           ParameterObject(
             name = "offset",
             in = "query",
             required = false,
-            description = Some("Number of items to skip (default 0)."),
+            description = Some(s"Number of items to skip (default ${Pagination.defaultOffset})."),
             schema = SchemaObject(
               `type` = Some(List("integer")),
               format = Some("int32"),
-              minimum = Some(0)
+              minimum = Some(Pagination.defaultOffset.toDouble)
             )
           )
         )

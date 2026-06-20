@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from 'express';
 
 import { NotFound } from '../middleware/error.js';
 import { validateBody } from '../middleware/validate.js';
+import { paginationFromQuery } from '../pagination.js';
 import * as service from '../services/urlMapping.js';
 import {
   UrlMappingCreateSchema,
@@ -28,8 +29,7 @@ export const registerUrlMappingRoutes = (app: Express): void => {
   app.get(
     '/urls',
     wrap(async (req, res) => {
-      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? '50'), 10) || 50));
-      const offset = Math.max(0, Number.parseInt(String(req.query.offset ?? '0'), 10) || 0);
+      const { limit, offset } = paginationFromQuery(req.query);
       const result = await service.listAll(limit, offset);
       res.status(200).json(result);
     }),

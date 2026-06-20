@@ -7,6 +7,7 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
+import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
 import specrest.codegen.RenderProfile
 import specrest.codegen.ScalarOpView
@@ -125,6 +126,7 @@ final private case class RouterTemplateImports(
     needsHttpException: Boolean,
     needsResponse: Boolean,
     needsRedirectResponse: Boolean,
+    needsPagination: Boolean,
     schemas: List[String],
     stdlibImports: List[StdlibImport],
     authDeps: List[String]
@@ -235,6 +237,10 @@ object EmitPython:
     files += EmittedFile("app/security.py", SecurityPython.emit(profiled))
     files += EmittedFile("app/database.py", engine.renderAny(templates.database, ctx))
     files += EmittedFile("app/redaction.py", engine.renderAny(templates.redaction, ctx))
+    files += EmittedFile(
+      "app/pagination.py",
+      engine.renderAny(templates.pagination, Map("pagination" -> Pagination.view))
+    )
     files += EmittedFile("app/db/__init__.py", "")
     files += EmittedFile("app/db/base.py", engine.renderAny(templates.dbBase, ctx))
     files += EmittedFile("app/models/__init__.py", PyInit.models(profiled))
@@ -819,6 +825,7 @@ object EmitPython:
     var needsHttpException    = false
     var needsResponse         = false
     var needsRedirectResponse = false
+    var needsPagination       = false
     val schemaSet             = mutable.Set.empty[String]
     val stdlibByModule        = mutable.Map.empty[String, mutable.Set[String]]
 
@@ -827,6 +834,7 @@ object EmitPython:
         case "read"     => needsHttpException = true
         case "delete"   => needsHttpException = true; needsResponse = true
         case "redirect" => needsRedirectResponse = true
+        case "list"     => needsPagination = true
         case _          => ()
       if op.hasRequestBody && op.requestBodyType.nonEmpty then schemaSet += op.requestBodyType
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
@@ -837,6 +845,7 @@ object EmitPython:
       needsHttpException = needsHttpException,
       needsResponse = needsResponse,
       needsRedirectResponse = needsRedirectResponse,
+      needsPagination = needsPagination,
       schemas = schemaSet.toList.sorted,
       stdlibImports = finalizeStdlibImports(stdlibByModule),
       authDeps = operations.flatMap(_.authDependency).distinct.sorted
