@@ -35,9 +35,11 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
 
 {{/if}}
 {{#if (eq routeKind "list")}}
-export const {{handlerName}} = async (): {{serviceReturnType}} => {
+export const {{handlerName}} = async (limit = 50, offset = 0): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
     orderBy: { id: 'asc' },
+    take: limit,
+    skip: offset,
   }){{#if ../entity.needsResultCast}} as unknown as {{serviceReturnType}}{{/if}};
 };
 

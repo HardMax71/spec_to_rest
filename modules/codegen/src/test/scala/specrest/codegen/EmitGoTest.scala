@@ -86,11 +86,19 @@ class EmitGoTest extends CatsEffectSuite:
       assert(handler.contains("func (h *UrlMappingHandler) Shorten("), handler)
       assert(handler.contains("func (h *UrlMappingHandler) Resolve("), handler)
       assert(handler.contains("http.Redirect"), handler)
+      // list endpoint is paginated: handler reads limit/offset and passes them through
+      assert(handler.contains("h.svc.ListAll(r.Context(), limit, offset)"), handler)
+      assert(files("internal/handlers/common.go").contains("func queryInt("), files)
 
       val svc = files("internal/services/url_mapping.go")
       assert(svc.contains("type UrlMappingService struct"), svc)
       assert(svc.contains("db  *bun.DB"), svc)
-      assert(svc.contains("s.db.NewSelect().Model(&items).Order(\"id\").Scan(ctx)"), svc)
+      assert(
+        svc.contains(
+          "s.db.NewSelect().Model(&items).Order(\"id\").Limit(limit).Offset(offset).Scan(ctx)"
+        ),
+        svc
+      )
       assert(
         svc.contains("s.db.NewDelete().Model((*models.UrlMapping)(nil))"),
         svc

@@ -27,8 +27,10 @@ export const registerUrlMappingRoutes = (app: Express): void => {
 
   app.get(
     '/urls',
-    wrap(async (_req, res) => {
-      const result = await service.listAll();
+    wrap(async (req, res) => {
+      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? '50'), 10) || 50));
+      const offset = Math.max(0, Number.parseInt(String(req.query.offset ?? '0'), 10) || 0);
+      const result = await service.listAll(limit, offset);
       res.status(200).json(result);
     }),
   );

@@ -442,7 +442,7 @@ object Paths:
       ctx: BuildContext
   ): OperationObject =
     val routeKind   = OperationContext.from(op, entity).initialRouteKind
-    val parameters  = buildParameters(op, ctx)
+    val parameters  = buildParameters(op, ctx) ++ paginationParameters(routeKind)
     val requestBody = buildRequestBody(op, entity, routeKind, ctx)
     val responses   = buildResponses(op, entity, routeKind)
     OperationObject(
@@ -467,6 +467,37 @@ object Paths:
   private def buildParameters(op: ProfiledOperation, ctx: BuildContext): List[ParameterObject] =
     op.endpoint.pathParams.map(p => paramObject(p, "path", ctx)) ++
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
+
+  // List endpoints take `limit`/`offset` query params (defaults applied by the handler).
+  private def paginationParameters(routeKind: route_kind): List[ParameterObject] =
+    routeKind match
+      case _: RkList =>
+        List(
+          ParameterObject(
+            name = "limit",
+            in = "query",
+            required = false,
+            description = Some("Maximum number of items to return (default 50)."),
+            schema = SchemaObject(
+              `type` = Some(List("integer")),
+              format = Some("int32"),
+              minimum = Some(1),
+              maximum = Some(100)
+            )
+          ),
+          ParameterObject(
+            name = "offset",
+            in = "query",
+            required = false,
+            description = Some("Number of items to skip (default 0)."),
+            schema = SchemaObject(
+              `type` = Some(List("integer")),
+              format = Some("int32"),
+              minimum = Some(0)
+            )
+          )
+        )
+      case _ => Nil
 
   private def paramObject(p: ParamSpec, location: String, ctx: BuildContext): ParameterObject =
     val fs = Schema.fieldToSchema(p match { case ParamSpec(_, t, _) => t }, None, ctx)

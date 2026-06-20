@@ -65,8 +65,10 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
 {{#if authMiddleware}}
     {{authMiddleware}},
 {{/if}}
-    wrap(async (_req, res) => {
-      const result = await service.{{handlerName}}();
+    wrap(async (req, res) => {
+      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? '50'), 10) || 50));
+      const offset = Math.max(0, Number.parseInt(String(req.query.offset ?? '0'), 10) || 0);
+      const result = await service.{{handlerName}}(limit, offset);
       res.status({{successStatus}}).json(result);
     }),
   );

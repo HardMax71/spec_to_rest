@@ -22,10 +22,12 @@ async def shorten(
 
 @router.get("/urls", status_code=200)
 async def list_all(
+    limit: int = 50,
+    offset: int = 0,
     session: AsyncSession = Depends(get_session),
 ) -> list[UrlMappingRead]:
     svc = UrlMappingService(session)
-    return await svc.list_all()
+    return await svc.list_all(limit=limit, offset=offset)
 
 @router.get("/{code}", status_code=302)
 async def resolve(

@@ -27,9 +27,9 @@ func (s *UrlMappingService) Shorten(ctx context.Context, body models.ShortenRequ
 	return errors.New("Shorten not implemented")
 }
 
-func (s *UrlMappingService) ListAll(ctx context.Context) ([]models.UrlMapping, error) {
+func (s *UrlMappingService) ListAll(ctx context.Context, limit, offset int) ([]models.UrlMapping, error) {
 	items := make([]models.UrlMapping, 0)
-	if err := s.db.NewSelect().Model(&items).Order("id").Scan(ctx); err != nil {
+	if err := s.db.NewSelect().Model(&items).Order("id").Limit(limit).Offset(offset).Scan(ctx); err != nil {
 		return nil, err
 	}
 	return items, nil
