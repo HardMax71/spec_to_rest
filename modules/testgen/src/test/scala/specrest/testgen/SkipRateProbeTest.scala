@@ -90,9 +90,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
       "auth_service",
-      44,
+      45,
       5,
-      "5 unbacked scalar-state skips: the prior 4 plus RefreshToken.ensures, which now bumps `next_session_id' = pre(next_session_id) + 1` (the unbacked scalar the test-admin /state endpoint projects as null) as part of giving the new session a fresh id alongside fresh access/refresh tokens via `all s in pre(sessions) | new.token != pre(sessions)[s].token`"
+      "45 (was 44): password-reset tokens moved into their own `reset_tokens: Token -> lone ResetToken` relation, so RequestPasswordReset/ResetPassword now lower as backed-relation updates (no longer skipped) while the two new reset-token consistency invariants add to the count. The 5 skips are all unbacked non-entity state the test-admin /state endpoint projects as null: next_user_id (Register x2), login_attempts (Login, LoginFailed), next_session_id (RefreshToken)"
     )
   ).foreach: (name, expectedTotal, expectedSkipped, why) =>
     test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):
