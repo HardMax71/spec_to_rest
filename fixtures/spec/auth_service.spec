@@ -205,6 +205,10 @@ service AuthService {
           users' = pre(users) + {user_id -> updated}
           and user_by_email' =
             pre(user_by_email) + {pre(users)[user_id].email -> updated}
+          // Consume the token: a reset is single-use, so the same token cannot
+          // be replayed to reset the password again. (The old session-based
+          // model enforced this by revoking the session.)
+          and reset_tokens' = pre(reset_tokens) - {reset_token}
   }
 
   operation Logout {
