@@ -55,6 +55,12 @@ service AuthService {
     user_id: UserId
   }
 
+  entity FailedLogin {
+    email: Email
+    count: Int where value > 0
+    window_start: DateTime
+  }
+
   // --- State ---
 
   state {
@@ -63,6 +69,7 @@ service AuthService {
     login_attempts: Seq[LoginAttempt]
     user_by_email: Email -> lone User
     reset_tokens: Token -> lone ResetToken
+    failed_logins: Email -> lone FailedLogin
     next_user_id: UserId
     next_session_id: Int
   }
@@ -107,20 +114,38 @@ service AuthService {
       email in user_by_email
       user_by_email[email].is_active = true
       user_by_email[email].password_hash = hash(password)
-      recentFailedAttempts(email) < 5
+      // Rate limit: at most 5 failures inside a 15-minute window. A window that
+      // started over 15 minutes ago has lapsed, so it no longer blocks (this is
+      // what prevents a permanent lockout).
+      email not in failed_logins
+        or failed_logins[email].count < 5
+        or now() - failed_logins[email].window_start > minutes(15)
 
     ensures:
       let user = user_by_email[email] in
-        session.user_id = user.id
-        and session.is_revoked = false
-        and session.access_expires_at > now()
-        and session.refresh_expires_at > session.access_expires_at
-        and sessions' = pre(sessions) + {session.id -> session}
-        and users'[user.id].last_login = some(now())
-        and login_attempts' = pre(login_attempts)
-             + [LoginAttempt { email = email,
-                               timestamp = now(),
-                               success = true }]
+        // Stamp last_login on one updated record and write it to both stores so
+        // the cross-store value-equality invariants hold (see ResetPassword).
+        let updated = user with { last_login = some(now()) } in
+          session.id = pre(next_session_id)
+          and session.user_id = user.id
+          and session.is_revoked = false
+          and session.access_expires_at > now()
+          and session.refresh_expires_at > session.access_expires_at
+          // Fresh session id and tokens (see RefreshToken).
+          and (all s in pre(sessions) |
+                session.access_token != pre(sessions)[s].access_token)
+          and (all s in pre(sessions) |
+                session.refresh_token != pre(sessions)[s].refresh_token)
+          and next_session_id' = pre(next_session_id) + 1
+          and sessions' = pre(sessions) + {session.id -> session}
+          and users' = pre(users) + {user.id -> updated}
+          and user_by_email' = pre(user_by_email) + {email -> updated}
+          // A successful login clears the failure counter.
+          and failed_logins' = pre(failed_logins) - {email}
+          and login_attempts' = pre(login_attempts)
+               + [LoginAttempt { email = email,
+                                 timestamp = now(),
+                                 success = true }]
   }
 
   operation LoginFailed {
@@ -131,12 +156,24 @@ service AuthService {
       user_by_email[email].password_hash != hash(password)
 
     ensures:
-      sessions' = sessions
-      users' = users
-      login_attempts' = pre(login_attempts)
-        + [LoginAttempt { email = email,
-                          timestamp = now(),
-                          success = false }]
+      // Bump the failure counter. A single insert handles all three cases via
+      // `if`: no prior record or a lapsed window starts a fresh window at count
+      // 1, an active window increments in place. Computing the values inline
+      // (rather than branching the state update) keeps the relation framed.
+      let active = email in pre(failed_logins)
+        and now() - pre(failed_logins)[email].window_start <= minutes(15) in
+        failed_logins' = pre(failed_logins) + {email -> FailedLogin {
+          email = email,
+          count = (if active then pre(failed_logins)[email].count else 0) + 1,
+          window_start = if active then pre(failed_logins)[email].window_start
+                         else now()
+        }}
+        and sessions' = sessions
+        and users' = users
+        and login_attempts' = pre(login_attempts)
+          + [LoginAttempt { email = email,
+                            timestamp = now(),
+                            success = false }]
   }
 
   operation RefreshToken {
@@ -226,13 +263,6 @@ service AuthService {
       users' = users
   }
 
-  // --- Helper Functions ---
-
-  function recentFailedAttempts(email: Email): Int =
-    #{ a in login_attempts |
-       a.email = email
-       and a.success = false
-       and a.timestamp > now() - minutes(15) }
 
   // --- Global Invariants ---
 
@@ -264,6 +294,9 @@ service AuthService {
 
   invariant resetTokenBelongsToUser:
     all t in reset_tokens | reset_tokens[t].user_id in users
+
+  invariant failedLoginKeyMatches:
+    all e in failed_logins | failed_logins[e].email = e
 
   invariant nextUserIdFresh:
     all u in users | u < next_user_id
