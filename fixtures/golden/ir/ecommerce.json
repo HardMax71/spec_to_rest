@@ -11441,7 +11441,7 @@
     },
     {
       "kind" : "Invariant",
-      "name" : "cancelledPaidOrdersHaveRefunds",
+      "name" : "unpaidOrdersHaveNoCapturedPayments",
       "expr" : {
         "kind" : "Quantifier",
         "quantifier" : "all",
@@ -11472,7 +11472,7 @@
           "op" : "implies",
           "left" : {
             "kind" : "BinaryOp",
-            "op" : "=",
+            "op" : "in",
             "left" : {
               "kind" : "FieldAccess",
               "base" : {
@@ -11513,20 +11513,41 @@
               }
             },
             "right" : {
-              "kind" : "Identifier",
-              "name" : "CANCELLED",
+              "kind" : "SetLiteral",
+              "elements" : [
+                {
+                  "kind" : "Identifier",
+                  "name" : "DRAFT",
+                  "span" : {
+                    "startLine" : 384,
+                    "startCol" : 29,
+                    "endLine" : 384,
+                    "endCol" : 34
+                  }
+                },
+                {
+                  "kind" : "Identifier",
+                  "name" : "PLACED",
+                  "span" : {
+                    "startLine" : 384,
+                    "startCol" : 36,
+                    "endLine" : 384,
+                    "endCol" : 42
+                  }
+                }
+              ],
               "span" : {
                 "startLine" : 384,
-                "startCol" : 27,
+                "startCol" : 28,
                 "endLine" : 384,
-                "endCol" : 36
+                "endCol" : 43
               }
             },
             "span" : {
               "startLine" : 384,
               "startCol" : 6,
               "endLine" : 384,
-              "endCol" : 36
+              "endCol" : 43
             }
           },
           "right" : {
@@ -11556,7 +11577,7 @@
             ],
             "body" : {
               "kind" : "BinaryOp",
-              "op" : "and",
+              "op" : "implies",
               "left" : {
                 "kind" : "BinaryOp",
                 "op" : "=",
@@ -11618,7 +11639,219 @@
               },
               "right" : {
                 "kind" : "BinaryOp",
-                "op" : "implies",
+                "op" : "!=",
+                "left" : {
+                  "kind" : "FieldAccess",
+                  "base" : {
+                    "kind" : "Index",
+                    "base" : {
+                      "kind" : "Identifier",
+                      "name" : "payments",
+                      "span" : {
+                        "startLine" : 386,
+                        "startCol" : 47,
+                        "endLine" : 386,
+                        "endCol" : 55
+                      }
+                    },
+                    "index" : {
+                      "kind" : "Identifier",
+                      "name" : "pid",
+                      "span" : {
+                        "startLine" : 386,
+                        "startCol" : 56,
+                        "endLine" : 386,
+                        "endCol" : 59
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 386,
+                      "startCol" : 47,
+                      "endLine" : 386,
+                      "endCol" : 60
+                    }
+                  },
+                  "field" : "status",
+                  "span" : {
+                    "startLine" : 386,
+                    "startCol" : 47,
+                    "endLine" : 386,
+                    "endCol" : 67
+                  }
+                },
+                "right" : {
+                  "kind" : "Identifier",
+                  "name" : "CAPTURED",
+                  "span" : {
+                    "startLine" : 386,
+                    "startCol" : 71,
+                    "endLine" : 386,
+                    "endCol" : 79
+                  }
+                },
+                "span" : {
+                  "startLine" : 386,
+                  "startCol" : 47,
+                  "endLine" : 386,
+                  "endCol" : 79
+                }
+              },
+              "span" : {
+                "startLine" : 386,
+                "startCol" : 10,
+                "endLine" : 386,
+                "endCol" : 79
+              }
+            },
+            "span" : {
+              "startLine" : 385,
+              "startCol" : 9,
+              "endLine" : 386,
+              "endCol" : 79
+            }
+          },
+          "span" : {
+            "startLine" : 384,
+            "startCol" : 6,
+            "endLine" : 386,
+            "endCol" : 80
+          }
+        },
+        "span" : {
+          "startLine" : 383,
+          "startCol" : 4,
+          "endLine" : 386,
+          "endCol" : 80
+        }
+      },
+      "span" : {
+        "startLine" : 382,
+        "startCol" : 2,
+        "endLine" : 386,
+        "endCol" : 80
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "cancelledPaidOrdersHaveRefunds",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "oid",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "orders",
+              "span" : {
+                "startLine" : 389,
+                "startCol" : 15,
+                "endLine" : 389,
+                "endCol" : 21
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 389,
+              "startCol" : 8,
+              "endLine" : 389,
+              "endCol" : 21
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "implies",
+          "left" : {
+            "kind" : "BinaryOp",
+            "op" : "=",
+            "left" : {
+              "kind" : "FieldAccess",
+              "base" : {
+                "kind" : "Index",
+                "base" : {
+                  "kind" : "Identifier",
+                  "name" : "orders",
+                  "span" : {
+                    "startLine" : 390,
+                    "startCol" : 6,
+                    "endLine" : 390,
+                    "endCol" : 12
+                  }
+                },
+                "index" : {
+                  "kind" : "Identifier",
+                  "name" : "oid",
+                  "span" : {
+                    "startLine" : 390,
+                    "startCol" : 13,
+                    "endLine" : 390,
+                    "endCol" : 16
+                  }
+                },
+                "span" : {
+                  "startLine" : 390,
+                  "startCol" : 6,
+                  "endLine" : 390,
+                  "endCol" : 17
+                }
+              },
+              "field" : "status",
+              "span" : {
+                "startLine" : 390,
+                "startCol" : 6,
+                "endLine" : 390,
+                "endCol" : 24
+              }
+            },
+            "right" : {
+              "kind" : "Identifier",
+              "name" : "CANCELLED",
+              "span" : {
+                "startLine" : 390,
+                "startCol" : 27,
+                "endLine" : 390,
+                "endCol" : 36
+              }
+            },
+            "span" : {
+              "startLine" : 390,
+              "startCol" : 6,
+              "endLine" : 390,
+              "endCol" : 36
+            }
+          },
+          "right" : {
+            "kind" : "Quantifier",
+            "quantifier" : "all",
+            "bindings" : [
+              {
+                "variable" : "pid",
+                "domain" : {
+                  "kind" : "Identifier",
+                  "name" : "payments",
+                  "span" : {
+                    "startLine" : 391,
+                    "startCol" : 20,
+                    "endLine" : 391,
+                    "endCol" : 28
+                  }
+                },
+                "bindingKind" : "in",
+                "span" : {
+                  "startLine" : 391,
+                  "startCol" : 13,
+                  "endLine" : 391,
+                  "endCol" : 28
+                }
+              }
+            ],
+            "body" : {
+              "kind" : "BinaryOp",
+              "op" : "implies",
+              "left" : {
+                "kind" : "BinaryOp",
+                "op" : "and",
                 "left" : {
                   "kind" : "BinaryOp",
                   "op" : "=",
@@ -11630,254 +11863,313 @@
                         "kind" : "Identifier",
                         "name" : "payments",
                         "span" : {
-                          "startLine" : 386,
-                          "startCol" : 43,
-                          "endLine" : 386,
-                          "endCol" : 51
+                          "startLine" : 392,
+                          "startCol" : 11,
+                          "endLine" : 392,
+                          "endCol" : 19
                         }
                       },
                       "index" : {
                         "kind" : "Identifier",
                         "name" : "pid",
                         "span" : {
-                          "startLine" : 386,
-                          "startCol" : 52,
-                          "endLine" : 386,
-                          "endCol" : 55
+                          "startLine" : 392,
+                          "startCol" : 20,
+                          "endLine" : 392,
+                          "endCol" : 23
                         }
                       },
                       "span" : {
-                        "startLine" : 386,
-                        "startCol" : 43,
-                        "endLine" : 386,
-                        "endCol" : 56
+                        "startLine" : 392,
+                        "startCol" : 11,
+                        "endLine" : 392,
+                        "endCol" : 24
+                      }
+                    },
+                    "field" : "order_id",
+                    "span" : {
+                      "startLine" : 392,
+                      "startCol" : 11,
+                      "endLine" : 392,
+                      "endCol" : 33
+                    }
+                  },
+                  "right" : {
+                    "kind" : "Identifier",
+                    "name" : "oid",
+                    "span" : {
+                      "startLine" : 392,
+                      "startCol" : 36,
+                      "endLine" : 392,
+                      "endCol" : 39
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 392,
+                    "startCol" : 11,
+                    "endLine" : 392,
+                    "endCol" : 39
+                  }
+                },
+                "right" : {
+                  "kind" : "BinaryOp",
+                  "op" : "=",
+                  "left" : {
+                    "kind" : "FieldAccess",
+                    "base" : {
+                      "kind" : "Index",
+                      "base" : {
+                        "kind" : "Identifier",
+                        "name" : "payments",
+                        "span" : {
+                          "startLine" : 392,
+                          "startCol" : 44,
+                          "endLine" : 392,
+                          "endCol" : 52
+                        }
+                      },
+                      "index" : {
+                        "kind" : "Identifier",
+                        "name" : "pid",
+                        "span" : {
+                          "startLine" : 392,
+                          "startCol" : 53,
+                          "endLine" : 392,
+                          "endCol" : 56
+                        }
+                      },
+                      "span" : {
+                        "startLine" : 392,
+                        "startCol" : 44,
+                        "endLine" : 392,
+                        "endCol" : 57
                       }
                     },
                     "field" : "status",
                     "span" : {
-                      "startLine" : 386,
-                      "startCol" : 43,
-                      "endLine" : 386,
-                      "endCol" : 63
+                      "startLine" : 392,
+                      "startCol" : 44,
+                      "endLine" : 392,
+                      "endCol" : 64
                     }
                   },
                   "right" : {
                     "kind" : "Identifier",
                     "name" : "CAPTURED",
                     "span" : {
-                      "startLine" : 386,
-                      "startCol" : 66,
-                      "endLine" : 386,
-                      "endCol" : 74
+                      "startLine" : 392,
+                      "startCol" : 67,
+                      "endLine" : 392,
+                      "endCol" : 75
                     }
                   },
                   "span" : {
-                    "startLine" : 386,
-                    "startCol" : 43,
-                    "endLine" : 386,
-                    "endCol" : 74
+                    "startLine" : 392,
+                    "startCol" : 44,
+                    "endLine" : 392,
+                    "endCol" : 75
                   }
                 },
-                "right" : {
-                  "kind" : "Quantifier",
-                  "quantifier" : "some",
-                  "bindings" : [
-                    {
-                      "variable" : "rid",
-                      "domain" : {
-                        "kind" : "Identifier",
-                        "name" : "payments",
-                        "span" : {
-                          "startLine" : 388,
-                          "startCol" : 22,
-                          "endLine" : 388,
-                          "endCol" : 30
-                        }
-                      },
-                      "bindingKind" : "in",
+                "span" : {
+                  "startLine" : 392,
+                  "startCol" : 11,
+                  "endLine" : 392,
+                  "endCol" : 75
+                }
+              },
+              "right" : {
+                "kind" : "Quantifier",
+                "quantifier" : "some",
+                "bindings" : [
+                  {
+                    "variable" : "rid",
+                    "domain" : {
+                      "kind" : "Identifier",
+                      "name" : "payments",
                       "span" : {
-                        "startLine" : 388,
-                        "startCol" : 15,
-                        "endLine" : 388,
-                        "endCol" : 30
+                        "startLine" : 394,
+                        "startCol" : 23,
+                        "endLine" : 394,
+                        "endCol" : 31
                       }
+                    },
+                    "bindingKind" : "in",
+                    "span" : {
+                      "startLine" : 394,
+                      "startCol" : 16,
+                      "endLine" : 394,
+                      "endCol" : 31
                     }
-                  ],
-                  "body" : {
+                  }
+                ],
+                "body" : {
+                  "kind" : "BinaryOp",
+                  "op" : "and",
+                  "left" : {
                     "kind" : "BinaryOp",
-                    "op" : "and",
+                    "op" : "=",
                     "left" : {
-                      "kind" : "BinaryOp",
-                      "op" : "=",
-                      "left" : {
-                        "kind" : "FieldAccess",
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
                         "base" : {
-                          "kind" : "Index",
-                          "base" : {
-                            "kind" : "Identifier",
-                            "name" : "payments",
-                            "span" : {
-                              "startLine" : 389,
-                              "startCol" : 12,
-                              "endLine" : 389,
-                              "endCol" : 20
-                            }
-                          },
-                          "index" : {
-                            "kind" : "Identifier",
-                            "name" : "rid",
-                            "span" : {
-                              "startLine" : 389,
-                              "startCol" : 21,
-                              "endLine" : 389,
-                              "endCol" : 24
-                            }
-                          },
+                          "kind" : "Identifier",
+                          "name" : "payments",
                           "span" : {
-                            "startLine" : 389,
+                            "startLine" : 395,
                             "startCol" : 12,
-                            "endLine" : 389,
-                            "endCol" : 25
+                            "endLine" : 395,
+                            "endCol" : 20
                           }
                         },
-                        "field" : "order_id",
+                        "index" : {
+                          "kind" : "Identifier",
+                          "name" : "rid",
+                          "span" : {
+                            "startLine" : 395,
+                            "startCol" : 21,
+                            "endLine" : 395,
+                            "endCol" : 24
+                          }
+                        },
                         "span" : {
-                          "startLine" : 389,
+                          "startLine" : 395,
                           "startCol" : 12,
-                          "endLine" : 389,
-                          "endCol" : 34
+                          "endLine" : 395,
+                          "endCol" : 25
                         }
                       },
-                      "right" : {
-                        "kind" : "Identifier",
-                        "name" : "oid",
-                        "span" : {
-                          "startLine" : 389,
-                          "startCol" : 37,
-                          "endLine" : 389,
-                          "endCol" : 40
-                        }
-                      },
+                      "field" : "order_id",
                       "span" : {
-                        "startLine" : 389,
+                        "startLine" : 395,
                         "startCol" : 12,
-                        "endLine" : 389,
-                        "endCol" : 40
+                        "endLine" : 395,
+                        "endCol" : 34
                       }
                     },
                     "right" : {
-                      "kind" : "BinaryOp",
-                      "op" : "=",
-                      "left" : {
-                        "kind" : "FieldAccess",
+                      "kind" : "Identifier",
+                      "name" : "oid",
+                      "span" : {
+                        "startLine" : 395,
+                        "startCol" : 37,
+                        "endLine" : 395,
+                        "endCol" : 40
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 395,
+                      "startCol" : 12,
+                      "endLine" : 395,
+                      "endCol" : 40
+                    }
+                  },
+                  "right" : {
+                    "kind" : "BinaryOp",
+                    "op" : "=",
+                    "left" : {
+                      "kind" : "FieldAccess",
+                      "base" : {
+                        "kind" : "Index",
                         "base" : {
-                          "kind" : "Index",
-                          "base" : {
-                            "kind" : "Identifier",
-                            "name" : "payments",
-                            "span" : {
-                              "startLine" : 389,
-                              "startCol" : 45,
-                              "endLine" : 389,
-                              "endCol" : 53
-                            }
-                          },
-                          "index" : {
-                            "kind" : "Identifier",
-                            "name" : "rid",
-                            "span" : {
-                              "startLine" : 389,
-                              "startCol" : 54,
-                              "endLine" : 389,
-                              "endCol" : 57
-                            }
-                          },
+                          "kind" : "Identifier",
+                          "name" : "payments",
                           "span" : {
-                            "startLine" : 389,
+                            "startLine" : 395,
                             "startCol" : 45,
-                            "endLine" : 389,
-                            "endCol" : 58
+                            "endLine" : 395,
+                            "endCol" : 53
                           }
                         },
-                        "field" : "status",
+                        "index" : {
+                          "kind" : "Identifier",
+                          "name" : "rid",
+                          "span" : {
+                            "startLine" : 395,
+                            "startCol" : 54,
+                            "endLine" : 395,
+                            "endCol" : 57
+                          }
+                        },
                         "span" : {
-                          "startLine" : 389,
+                          "startLine" : 395,
                           "startCol" : 45,
-                          "endLine" : 389,
-                          "endCol" : 65
+                          "endLine" : 395,
+                          "endCol" : 58
                         }
                       },
-                      "right" : {
-                        "kind" : "Identifier",
-                        "name" : "REFUNDED",
-                        "span" : {
-                          "startLine" : 389,
-                          "startCol" : 68,
-                          "endLine" : 389,
-                          "endCol" : 76
-                        }
-                      },
+                      "field" : "status",
                       "span" : {
-                        "startLine" : 389,
+                        "startLine" : 395,
                         "startCol" : 45,
-                        "endLine" : 389,
+                        "endLine" : 395,
+                        "endCol" : 65
+                      }
+                    },
+                    "right" : {
+                      "kind" : "Identifier",
+                      "name" : "REFUNDED",
+                      "span" : {
+                        "startLine" : 395,
+                        "startCol" : 68,
+                        "endLine" : 395,
                         "endCol" : 76
                       }
                     },
                     "span" : {
-                      "startLine" : 389,
-                      "startCol" : 12,
-                      "endLine" : 389,
+                      "startLine" : 395,
+                      "startCol" : 45,
+                      "endLine" : 395,
                       "endCol" : 76
                     }
                   },
                   "span" : {
-                    "startLine" : 388,
-                    "startCol" : 10,
-                    "endLine" : 389,
+                    "startLine" : 395,
+                    "startCol" : 12,
+                    "endLine" : 395,
                     "endCol" : 76
                   }
                 },
                 "span" : {
-                  "startLine" : 386,
-                  "startCol" : 43,
-                  "endLine" : 389,
+                  "startLine" : 394,
+                  "startCol" : 11,
+                  "endLine" : 395,
                   "endCol" : 76
                 }
               },
               "span" : {
-                "startLine" : 386,
+                "startLine" : 392,
                 "startCol" : 10,
-                "endLine" : 389,
-                "endCol" : 76
+                "endLine" : 395,
+                "endCol" : 77
               }
             },
             "span" : {
-              "startLine" : 385,
+              "startLine" : 391,
               "startCol" : 9,
-              "endLine" : 389,
-              "endCol" : 76
+              "endLine" : 395,
+              "endCol" : 77
             }
           },
           "span" : {
-            "startLine" : 384,
+            "startLine" : 390,
             "startCol" : 6,
-            "endLine" : 389,
-            "endCol" : 77
+            "endLine" : 395,
+            "endCol" : 78
           }
         },
         "span" : {
-          "startLine" : 383,
+          "startLine" : 389,
           "startCol" : 4,
-          "endLine" : 389,
-          "endCol" : 77
+          "endLine" : 395,
+          "endCol" : 78
         }
       },
       "span" : {
-        "startLine" : 382,
+        "startLine" : 388,
         "startCol" : 2,
-        "endLine" : 389,
-        "endCol" : 77
+        "endLine" : 395,
+        "endCol" : 78
       }
     },
     {
@@ -11893,17 +12185,17 @@
               "kind" : "Identifier",
               "name" : "payments",
               "span" : {
-                "startLine" : 392,
+                "startLine" : 398,
                 "startCol" : 15,
-                "endLine" : 392,
+                "endLine" : 398,
                 "endCol" : 23
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 392,
+              "startLine" : 398,
               "startCol" : 8,
-              "endLine" : 392,
+              "endLine" : 398,
               "endCol" : 23
             }
           }
@@ -11915,9 +12207,9 @@
             "kind" : "Identifier",
             "name" : "pid",
             "span" : {
-              "startLine" : 392,
+              "startLine" : 398,
               "startCol" : 26,
-              "endLine" : 392,
+              "endLine" : 398,
               "endCol" : 29
             }
           },
@@ -11925,31 +12217,204 @@
             "kind" : "Identifier",
             "name" : "next_payment_id",
             "span" : {
-              "startLine" : 392,
+              "startLine" : 398,
               "startCol" : 32,
-              "endLine" : 392,
+              "endLine" : 398,
               "endCol" : 47
             }
           },
           "span" : {
-            "startLine" : 392,
+            "startLine" : 398,
             "startCol" : 26,
-            "endLine" : 392,
+            "endLine" : 398,
             "endCol" : 47
           }
         },
         "span" : {
-          "startLine" : 392,
+          "startLine" : 398,
           "startCol" : 4,
-          "endLine" : 392,
+          "endLine" : 398,
           "endCol" : 47
         }
       },
       "span" : {
-        "startLine" : 391,
+        "startLine" : 397,
         "startCol" : 2,
-        "endLine" : 392,
+        "endLine" : 398,
         "endCol" : 47
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "nextOrderIdFresh",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "oid",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "orders",
+              "span" : {
+                "startLine" : 401,
+                "startCol" : 15,
+                "endLine" : 401,
+                "endCol" : 21
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 401,
+              "startCol" : 8,
+              "endLine" : 401,
+              "endCol" : 21
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "<",
+          "left" : {
+            "kind" : "Identifier",
+            "name" : "oid",
+            "span" : {
+              "startLine" : 401,
+              "startCol" : 24,
+              "endLine" : 401,
+              "endCol" : 27
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "next_order_id",
+            "span" : {
+              "startLine" : 401,
+              "startCol" : 30,
+              "endLine" : 401,
+              "endCol" : 43
+            }
+          },
+          "span" : {
+            "startLine" : 401,
+            "startCol" : 24,
+            "endLine" : 401,
+            "endCol" : 43
+          }
+        },
+        "span" : {
+          "startLine" : 401,
+          "startCol" : 4,
+          "endLine" : 401,
+          "endCol" : 43
+        }
+      },
+      "span" : {
+        "startLine" : 400,
+        "startCol" : 2,
+        "endLine" : 401,
+        "endCol" : 43
+      }
+    },
+    {
+      "kind" : "Invariant",
+      "name" : "paymentsReferenceExistingOrders",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "pid",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "payments",
+              "span" : {
+                "startLine" : 404,
+                "startCol" : 15,
+                "endLine" : 404,
+                "endCol" : 23
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 404,
+              "startCol" : 8,
+              "endLine" : 404,
+              "endCol" : 23
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "BinaryOp",
+          "op" : "in",
+          "left" : {
+            "kind" : "FieldAccess",
+            "base" : {
+              "kind" : "Index",
+              "base" : {
+                "kind" : "Identifier",
+                "name" : "payments",
+                "span" : {
+                  "startLine" : 404,
+                  "startCol" : 26,
+                  "endLine" : 404,
+                  "endCol" : 34
+                }
+              },
+              "index" : {
+                "kind" : "Identifier",
+                "name" : "pid",
+                "span" : {
+                  "startLine" : 404,
+                  "startCol" : 35,
+                  "endLine" : 404,
+                  "endCol" : 38
+                }
+              },
+              "span" : {
+                "startLine" : 404,
+                "startCol" : 26,
+                "endLine" : 404,
+                "endCol" : 39
+              }
+            },
+            "field" : "order_id",
+            "span" : {
+              "startLine" : 404,
+              "startCol" : 26,
+              "endLine" : 404,
+              "endCol" : 48
+            }
+          },
+          "right" : {
+            "kind" : "Identifier",
+            "name" : "orders",
+            "span" : {
+              "startLine" : 404,
+              "startCol" : 52,
+              "endLine" : 404,
+              "endCol" : 58
+            }
+          },
+          "span" : {
+            "startLine" : 404,
+            "startCol" : 26,
+            "endLine" : 404,
+            "endCol" : 58
+          }
+        },
+        "span" : {
+          "startLine" : 404,
+          "startCol" : 4,
+          "endLine" : 404,
+          "endCol" : 58
+        }
+      },
+      "span" : {
+        "startLine" : 403,
+        "startCol" : 2,
+        "endLine" : 404,
+        "endCol" : 58
       }
     }
   ],
@@ -12078,9 +12543,9 @@
           "value" : "/orders"
         },
         "span" : {
-          "startLine" : 397,
+          "startLine" : 409,
           "startCol" : 4,
-          "endLine" : 397,
+          "endLine" : 409,
           "endCol" : 42
         }
       },
@@ -12094,9 +12559,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 398,
+          "startLine" : 410,
           "startCol" : 4,
-          "endLine" : 398,
+          "endLine" : 410,
           "endCol" : 46
         }
       },
@@ -12110,9 +12575,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 400,
+          "startLine" : 412,
           "startCol" : 4,
-          "endLine" : 400,
+          "endLine" : 412,
           "endCol" : 36
         }
       },
@@ -12126,9 +12591,9 @@
           "value" : "/orders/{order_id}/items"
         },
         "span" : {
-          "startLine" : 401,
+          "startLine" : 413,
           "startCol" : 4,
-          "endLine" : 401,
+          "endLine" : 413,
           "endCol" : 54
         }
       },
@@ -12142,9 +12607,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 402,
+          "startLine" : 414,
           "startCol" : 4,
-          "endLine" : 402,
+          "endLine" : 414,
           "endCol" : 41
         }
       },
@@ -12158,9 +12623,9 @@
           "value" : "DELETE"
         },
         "span" : {
-          "startLine" : 404,
+          "startLine" : 416,
           "startCol" : 4,
-          "endLine" : 404,
+          "endLine" : 416,
           "endCol" : 41
         }
       },
@@ -12174,9 +12639,9 @@
           "value" : "/orders/{order_id}/items/{item_id}"
         },
         "span" : {
-          "startLine" : 405,
+          "startLine" : 417,
           "startCol" : 4,
-          "endLine" : 405,
+          "endLine" : 417,
           "endCol" : 67
         }
       },
@@ -12190,9 +12655,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 407,
+          "startLine" : 419,
           "startCol" : 4,
-          "endLine" : 407,
+          "endLine" : 419,
           "endCol" : 35
         }
       },
@@ -12206,9 +12671,9 @@
           "value" : "/orders/{order_id}/place"
         },
         "span" : {
-          "startLine" : 408,
+          "startLine" : 420,
           "startCol" : 4,
-          "endLine" : 408,
+          "endLine" : 420,
           "endCol" : 53
         }
       },
@@ -12222,9 +12687,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 410,
+          "startLine" : 422,
           "startCol" : 4,
-          "endLine" : 410,
+          "endLine" : 422,
           "endCol" : 38
         }
       },
@@ -12238,9 +12703,9 @@
           "value" : "/orders/{order_id}/payments"
         },
         "span" : {
-          "startLine" : 411,
+          "startLine" : 423,
           "startCol" : 4,
-          "endLine" : 411,
+          "endLine" : 423,
           "endCol" : 59
         }
       },
@@ -12254,9 +12719,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 412,
+          "startLine" : 424,
           "startCol" : 4,
-          "endLine" : 412,
+          "endLine" : 424,
           "endCol" : 43
         }
       },
@@ -12270,9 +12735,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 414,
+          "startLine" : 426,
           "startCol" : 4,
-          "endLine" : 414,
+          "endLine" : 426,
           "endCol" : 34
         }
       },
@@ -12286,9 +12751,9 @@
           "value" : "/orders/{order_id}/ship"
         },
         "span" : {
-          "startLine" : 415,
+          "startLine" : 427,
           "startCol" : 4,
-          "endLine" : 415,
+          "endLine" : 427,
           "endCol" : 51
         }
       },
@@ -12302,9 +12767,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 417,
+          "startLine" : 429,
           "startCol" : 4,
-          "endLine" : 417,
+          "endLine" : 429,
           "endCol" : 40
         }
       },
@@ -12318,9 +12783,9 @@
           "value" : "/orders/{order_id}/deliver"
         },
         "span" : {
-          "startLine" : 418,
+          "startLine" : 430,
           "startCol" : 4,
-          "endLine" : 418,
+          "endLine" : 430,
           "endCol" : 60
         }
       },
@@ -12334,9 +12799,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 420,
+          "startLine" : 432,
           "startCol" : 4,
-          "endLine" : 420,
+          "endLine" : 432,
           "endCol" : 36
         }
       },
@@ -12350,9 +12815,9 @@
           "value" : "/orders/{order_id}/cancel"
         },
         "span" : {
-          "startLine" : 421,
+          "startLine" : 433,
           "startCol" : 4,
-          "endLine" : 421,
+          "endLine" : 433,
           "endCol" : 55
         }
       },
@@ -12366,9 +12831,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 423,
+          "startLine" : 435,
           "startCol" : 4,
-          "endLine" : 423,
+          "endLine" : 435,
           "endCol" : 38
         }
       },
@@ -12382,9 +12847,9 @@
           "value" : "/orders/{order_id}/return"
         },
         "span" : {
-          "startLine" : 424,
+          "startLine" : 436,
           "startCol" : 4,
-          "endLine" : 424,
+          "endLine" : 436,
           "endCol" : 57
         }
       },
@@ -12398,9 +12863,9 @@
           "value" : "/orders/{order_id}"
         },
         "span" : {
-          "startLine" : 426,
+          "startLine" : 438,
           "startCol" : 4,
-          "endLine" : 426,
+          "endLine" : 438,
           "endCol" : 45
         }
       },
@@ -12414,9 +12879,9 @@
           "value" : "/orders"
         },
         "span" : {
-          "startLine" : 427,
+          "startLine" : 439,
           "startCol" : 4,
-          "endLine" : 427,
+          "endLine" : 439,
           "endCol" : 36
         }
       },
@@ -12430,24 +12895,24 @@
           "value" : "active = true"
         },
         "span" : {
-          "startLine" : 429,
+          "startLine" : 441,
           "startCol" : 4,
-          "endLine" : 429,
+          "endLine" : 441,
           "endCol" : 52
         }
       }
     ],
     "span" : {
-      "startLine" : 396,
+      "startLine" : 408,
       "startCol" : 2,
-      "endLine" : 430,
+      "endLine" : 442,
       "endCol" : 3
     }
   },
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 431,
+    "endLine" : 443,
     "endCol" : 1
   }
 }

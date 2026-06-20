@@ -379,17 +379,29 @@ service OrderService {
           payments[pid].order_id = oid
           and payments[pid].status = CAPTURED
 
+  invariant unpaidOrdersHaveNoCapturedPayments:
+    all oid in orders |
+      orders[oid].status in {DRAFT, PLACED} implies
+        (all pid in payments |
+          payments[pid].order_id = oid implies payments[pid].status != CAPTURED)
+
   invariant cancelledPaidOrdersHaveRefunds:
     all oid in orders |
       orders[oid].status = CANCELLED implies
         (all pid in payments |
-          payments[pid].order_id = oid and payments[pid].status = CAPTURED
+          (payments[pid].order_id = oid and payments[pid].status = CAPTURED)
           implies
-          some rid in payments |
-            payments[rid].order_id = oid and payments[rid].status = REFUNDED)
+          (some rid in payments |
+            payments[rid].order_id = oid and payments[rid].status = REFUNDED))
 
   invariant paymentIdFresh:
     all pid in payments | pid < next_payment_id
+
+  invariant nextOrderIdFresh:
+    all oid in orders | oid < next_order_id
+
+  invariant paymentsReferenceExistingOrders:
+    all pid in payments | payments[pid].order_id in orders
 
   // --- Conventions ---
 
