@@ -5924,171 +5924,19 @@ object SpecRestGenerated {
         case Some(bodya) =>
           k match {
             case QAll() =>
-              bs match {
-                case Nil => translate_forall_bindings(enums, bs, bodya)
-                case List(QuantifierBindingFull(v, d, _, _)) =>
-                  d match {
-                    case BinaryOpF(_, _, _, _) =>
+              translate_forall_bindings(enums, bs, bodya) match {
+                case None =>
+                  bs match {
+                    case Nil => None
+                    case List(QuantifierBindingFull(v, d, _, _)) =>
                       map_option[smt_term, smt_term](
                         (da: smt_term) =>
                           TForallSet(v, da, bodya),
                         translate(enums, d)
                       )
-                    case UnaryOpF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case QuantifierF(_, _, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case SomeWrapF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case TheF(_, _, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case FieldAccessF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case EnumAccessF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case IndexF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case CallF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case PrimeF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case PreF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case WithF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case IfF(_, _, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case LetF(_, _, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case LambdaF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case ConstructorF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case SetLiteralF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case MapLiteralF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case SetComprehensionF(_, _, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case SeqLiteralF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case MatchesF(_, _, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case IntLitF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case FloatLitF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case StringLitF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case BoolLitF(_, _) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case NoneLitF(_) =>
-                      map_option[smt_term, smt_term](
-                        (da: smt_term) =>
-                          TForallSet(v, da, bodya),
-                        translate(enums, d)
-                      )
-                    case IdentifierF(_, _) =>
-                      translate_forall_bindings(enums, bs, bodya)
+                    case QuantifierBindingFull(_, _, _, _) :: _ :: _ => None
                   }
-                case QuantifierBindingFull(_, _, _, _) :: _ :: _ =>
-                  translate_forall_bindings(enums, bs, bodya)
+                case Some(a) => Some[smt_term](a)
               }
             case QSome() =>
               translate_forall_bindings(enums, bs, TNot(bodya)) match {

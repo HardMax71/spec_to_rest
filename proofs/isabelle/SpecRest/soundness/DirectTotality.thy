@@ -237,27 +237,9 @@ proof (induction e rule: measure_induct_rule[where f = size])
     show ?thesis
     proof (cases k)
       case QAll
-      show ?thesis
-      proof (cases bs)
-        case Nil
-        thus ?thesis using wb by simp
-      next
-        case (Cons b rest)
-        note bs_eq = Cons
-        show ?thesis
-        proof (cases rest)
-          case Nil
-          have "is_ident_dom b" using wb bs_eq Nil by simp
-          then obtain v dnm sp3 bk ex
-            where "b = QuantifierBindingFull v (IdentifierF dnm sp3) bk ex"
-            by (cases b rule: is_ident_dom.cases) auto
-          thus ?thesis using QuantifierF QAll hb dfb_some_of_wf[OF wb] bs_eq Nil by auto
-        next
-          case (Cons b2 rest2)
-          thus ?thesis using QuantifierF QAll hb dfb_some_of_wf[OF wb] bs_eq Cons
-            by (auto split: quantifier_binding.splits)
-        qed
-      qed
+      obtain r where "translate_forall_bindings enums bs bt = Some r"
+        using dfb_some_of_wf[OF wb] by blast
+      thus ?thesis using QuantifierF QAll hb by auto
     next
       case QNo
       obtain r where "translate_forall_bindings enums bs (TNot bt) = Some r"

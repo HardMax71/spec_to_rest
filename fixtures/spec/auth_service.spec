@@ -147,10 +147,15 @@ service AuthService {
     ensures:
       let old_session = (the s in sessions |
         sessions[s].refresh_token = refresh_token) in
-        sessions'[old_session].is_revoked = true
+        new_session.id = pre(next_session_id)
         and new_session.user_id = pre(sessions)[old_session].user_id
         and new_session.is_revoked = false
         and new_session.access_expires_at > now()
+        and (all s in pre(sessions) |
+              new_session.access_token != pre(sessions)[s].access_token)
+        and (all s in pre(sessions) |
+              new_session.refresh_token != pre(sessions)[s].refresh_token)
+        and next_session_id' = pre(next_session_id) + 1
         and sessions' = pre(sessions)
              + {old_session -> pre(sessions)[old_session]
                   with { is_revoked = true }}
