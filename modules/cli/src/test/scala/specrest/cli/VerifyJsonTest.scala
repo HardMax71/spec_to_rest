@@ -136,25 +136,49 @@ class VerifyJsonTest extends CatsEffectSuite:
         assert(nonEmpty.nonEmpty, s"expected at least one non-empty suggestion; got: $out")
 
   test("best-effort checks always skip with soundness_limitation (default behavior)"):
-    // auth_service uses pre(rel)[k] / TheF — neither lowers under v2; those checks skip.
+    // A Seq-comprehension cardinality is outside lower's coverage, so its checks
+    // are skipped as best-effort soundness limitations. Use a self-contained spec
+    // rather than a real fixture — fixtures get lifted into the subset over time
+    // (e.g. auth_service is now fully verified), which would silently gut this test.
+    val spec =
+      """service SoundnessSkipDemo {
+        |  entity Item { tag: String where len(value) >= 1 }
+        |  state { items: Seq[Item] }
+        |  operation Tally {
+        |    input: needle: String
+        |    requires:
+        |      #{ i in items | i.tag = needle } < 5
+        |    ensures:
+        |      items' = items
+        |  }
+        |  invariant ok:
+        |    true
+        |}""".stripMargin
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
-    captureStdout(ps => Verify.run("fixtures/spec/auth_service.spec", opts, log, ps))
-      .map: (_, out) =>
-        val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
-        val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
-        val soundnessSkipped = checks.filter: c =>
-          val status   = c.hcursor.downField("status").as[String].toOption
-          val category = c.hcursor.downField("diagnostic").downField("category").as[String].toOption
-          status.contains("skipped") && category.contains("soundness_limitation")
-        assert(
-          soundnessSkipped.nonEmpty,
-          s"expected at least one soundness_limitation skip; checks=$checks"
-        )
-        soundnessSkipped.foreach: c =>
-          assertEquals(
-            c.hcursor.downField("trust").as[String].toOption,
-            Some("best-effort")
+    IO.blocking {
+      val tmp = Files.createTempFile("soundness_skip", ".spec")
+      Files.writeString(tmp, spec)
+      tmp
+    }.flatMap: tmp =>
+      captureStdout(ps => Verify.run(tmp.toString, opts, log, ps))
+        .guarantee(IO.blocking(Files.deleteIfExists(tmp)).void)
+        .map: (_, out) =>
+          val parsed = parser.parse(out).toOption.getOrElse(fail(s"invalid JSON: $out"))
+          val checks = parsed.hcursor.downField("checks").values.getOrElse(Vector.empty).toList
+          val soundnessSkipped = checks.filter: c =>
+            val status = c.hcursor.downField("status").as[String].toOption
+            val category =
+              c.hcursor.downField("diagnostic").downField("category").as[String].toOption
+            status.contains("skipped") && category.contains("soundness_limitation")
+          assert(
+            soundnessSkipped.nonEmpty,
+            s"expected at least one soundness_limitation skip; checks=$checks"
           )
+          soundnessSkipped.foreach: c =>
+            assertEquals(
+              c.hcursor.downField("trust").as[String].toOption,
+              Some("best-effort")
+            )
 
   test("safe_counter still passes (every check lowers; routes via extracted)"):
     val opts = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, json = true)
