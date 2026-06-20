@@ -442,8 +442,11 @@ object Paths:
       entity: ProfiledEntity,
       ctx: BuildContext
   ): OperationObject =
-    val routeKind   = OperationContext.from(op, entity).initialRouteKind
-    val parameters  = buildParameters(op, ctx) ++ paginationParameters(routeKind)
+    val routeKind     = OperationContext.from(op, entity).initialRouteKind
+    val baseParams    = buildParameters(op, ctx)
+    val declaredNames = baseParams.map(_.name).toSet
+    val parameters =
+      baseParams ++ paginationParameters(routeKind).filterNot(p => declaredNames.contains(p.name))
     val requestBody = buildRequestBody(op, entity, routeKind, ctx)
     val responses   = buildResponses(op, entity, routeKind)
     OperationObject(
@@ -469,6 +472,8 @@ object Paths:
     op.endpoint.pathParams.map(p => paramObject(p, "path", ctx)) ++
       op.endpoint.queryParams.map(p => paramObject(p, "query", ctx))
 
+  // Values outside the bounds are clamped (not rejected) by the handler, so the schema
+  // advertises a plain integer rather than min/max validation constraints it would not enforce.
   private def paginationParameters(routeKind: route_kind): List[ParameterObject] =
     routeKind match
       case _: RkList =>
@@ -477,25 +482,21 @@ object Paths:
             name = "limit",
             in = "query",
             required = false,
-            description =
-              Some(s"Maximum number of items to return (default ${Pagination.defaultLimit})."),
-            schema = SchemaObject(
-              `type` = Some(List("integer")),
-              format = Some("int32"),
-              minimum = Some(Pagination.minLimit.toDouble),
-              maximum = Some(Pagination.maxLimit.toDouble)
-            )
+            description = Some(
+              s"Number of items to return; default ${Pagination.defaultLimit}, " +
+                s"clamped to [${Pagination.minLimit}, ${Pagination.maxLimit}]."
+            ),
+            schema = SchemaObject(`type` = Some(List("integer")), format = Some("int32"))
           ),
           ParameterObject(
             name = "offset",
             in = "query",
             required = false,
-            description = Some(s"Number of items to skip (default ${Pagination.defaultOffset})."),
-            schema = SchemaObject(
-              `type` = Some(List("integer")),
-              format = Some("int32"),
-              minimum = Some(Pagination.defaultOffset.toDouble)
-            )
+            description = Some(
+              s"Number of items to skip; default ${Pagination.defaultOffset}, " +
+                "negative values are treated as 0."
+            ),
+            schema = SchemaObject(`type` = Some(List("integer")), format = Some("int32"))
           )
         )
       case _ => Nil
