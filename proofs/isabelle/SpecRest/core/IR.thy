@@ -117,14 +117,17 @@ definition is_builtin_func :: "String.literal \<Rightarrow> bool" where
   "is_builtin_func nm \<longleftrightarrow> nm = STR ''hash''"
 
 text \<open>\<open>builtin_int_func name n\<close> is the uninterpreted value of a reserved 1-argument
-  built-in \<open>int \<Rightarrow> int\<close> function \<open>name\<close> (e.g.\ \<open>days\<close>, a duration in epoch seconds)
+  built-in \<open>int \<Rightarrow> int\<close> function \<open>name\<close> (the duration constructors \<open>seconds\<close>,
+  \<open>minutes\<close>, \<open>hours\<close>, \<open>days\<close>, \<open>weeks\<close>, each a duration in epoch seconds)
   applied to \<open>n\<close>. The integer analogue of \<open>builtin_str_func\<close>: abstract, so soundness
   stays parametric in the realisation. \<open>is_builtin_int_func nm\<close> gates lifting
   \<open>CallF (IdentifierF nm) [arg]\<close> to \<open>UIntFunc\<close>.\<close>
 consts builtin_int_func :: "String.literal \<Rightarrow> int \<Rightarrow> int"
 
 definition is_builtin_int_func :: "String.literal \<Rightarrow> bool" where
-  "is_builtin_int_func nm \<longleftrightarrow> nm = STR ''days''"
+  "is_builtin_int_func nm \<longleftrightarrow> nm = STR ''seconds'' \<or> nm = STR ''minutes''
+                              \<or> nm = STR ''hours'' \<or> nm = STR ''days''
+                              \<or> nm = STR ''weeks''"
 
 text \<open>\<open>str_length s\<close> is the length of string \<open>s\<close>, the meaning of the reserved
   builtin \<open>len(s)\<close>. Abstract here (like \<open>builtin_str_func\<close>); the codegen serialisation

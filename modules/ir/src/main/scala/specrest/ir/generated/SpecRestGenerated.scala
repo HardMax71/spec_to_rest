@@ -5454,7 +5454,9 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => None
   }
 
-  def is_builtin_int_func(nm: String): Boolean = nm == "days"
+  def is_builtin_int_func(nm: String): Boolean =
+    nm == "seconds" ||
+      (nm == "minutes" || (nm == "hours" || (nm == "days" || nm == "weeks")))
 
   def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
     case (uu, Nil) => Nil
