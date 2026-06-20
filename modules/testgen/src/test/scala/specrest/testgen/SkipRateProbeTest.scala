@@ -83,9 +83,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "ecommerce",
-      74,
+      77,
       8,
-      "8 unbacked-scalar ensures (next_order_id + next_payment_id): the payment-frame completion (RecordPayment fresh id, ProcessReturn/CancelOrder deterministic refund inserts that bump next_payment_id) adds next_payment_id ensures, which the test-admin /state endpoint can't project black-box - same class as the next_order_id skips"
+      "77 (was 74): three consistency invariants added to make ecommerce fully verify (nextOrderIdFresh, paymentsReferenceExistingOrders, unpaidOrdersHaveNoCapturedPayments). The 8 skips are unchanged - unbacked-scalar ensures on next_order_id + next_payment_id that the test-admin /state endpoint can't project black-box"
     ),
     ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
     (
