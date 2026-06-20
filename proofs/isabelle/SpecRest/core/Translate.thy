@@ -166,12 +166,16 @@ where
       | Some body' \<Rightarrow>
           (case k of
              QAll \<Rightarrow>
-               (case bs of
-                  [QuantifierBindingFull v d _ _] \<Rightarrow>
-                    (case d of
-                       IdentifierF _ _ \<Rightarrow> translate_forall_bindings enums bs body'
-                     | _ \<Rightarrow> map_option (\<lambda>d'. TForallSet v d' body') (translate enums d))
-                | _ \<Rightarrow> translate_forall_bindings enums bs body')
+               \<comment> \<open>Try the relation/enum-domain path first (it also covers \<open>pre\<close>/\<open>prime\<close> of an
+                   identifier and multi-binding lists); only a genuine set-valued single
+                   domain falls through to \<open>TForallSet\<close>. Mirrors the QNo/QSome dispatch.\<close>
+               (case translate_forall_bindings enums bs body' of
+                  Some t \<Rightarrow> Some t
+                | None \<Rightarrow>
+                    (case bs of
+                       [QuantifierBindingFull v d _ _] \<Rightarrow>
+                         map_option (\<lambda>d'. TForallSet v d' body') (translate enums d)
+                     | _ \<Rightarrow> None))
            | QNo \<Rightarrow>
                (case translate_forall_bindings enums bs (TNot body') of
                   Some t \<Rightarrow> Some t

@@ -91,8 +91,8 @@ class SkipRateProbeTest extends CatsEffectSuite:
     (
       "auth_service",
       44,
-      4,
-      "4 unbacked scalar-state; total 44 since Logout's `let s = (the ..) in (sessions'[s].. and users'=users)` was hoisted to two top-level ensures clauses (`sessions'[(the ..)].is_revoked` + `users'=users`) so the partial-relation frame synthesizes and Logout's 5 spurious uniqueness/freshness violations clear"
+      5,
+      "5 unbacked scalar-state skips: the prior 4 plus RefreshToken.ensures, which now bumps `next_session_id' = pre(next_session_id) + 1` (the unbacked scalar the test-admin /state endpoint projects as null) as part of giving the new session a fresh id alongside fresh access/refresh tokens via `all s in pre(sessions) | new.token != pre(sessions)[s].token`"
     )
   ).foreach: (name, expectedTotal, expectedSkipped, why) =>
     test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):
