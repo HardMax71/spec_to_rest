@@ -271,14 +271,15 @@ expr
     | expr SUBSET expr                                          # subsetExpr
     | expr MATCHES REGEX_LIT                                    # matchesExpr
 
-    // ── Implication ──
-    | expr IMPLIES expr                                         # impliesExpr
-    | expr IFF expr                                             # iffExpr
-
-    // ── Logical (lowest precedence among binary ops) ──
+    // ── Logical negation / conjunction / disjunction ──
+    // (bind tighter than implication, per the usual `not > and > or > implies`)
     | NOT expr                                                  # notExpr
     | expr AND expr                                             # andExpr
     | expr OR expr                                              # orExpr
+
+    // ── Implication (lowest precedence among binary ops) ──
+    | expr IMPLIES expr                                         # impliesExpr
+    | expr IFF expr                                             # iffExpr
 
     // ── Primary (atoms — not left-recursive, no precedence) ──
     | LPAREN expr RPAREN                                        # parenExpr
