@@ -50,6 +50,11 @@ service AuthService {
     success: Bool
   }
 
+  entity ResetToken {
+    token: Token
+    user_id: UserId
+  }
+
   // --- State ---
 
   state {
@@ -57,6 +62,7 @@ service AuthService {
     sessions: Int -> lone Session
     login_attempts: Seq[LoginAttempt]
     user_by_email: Email -> lone User
+    reset_tokens: Token -> lone ResetToken
     next_user_id: UserId
     next_session_id: Int
   }
@@ -171,37 +177,38 @@ service AuthService {
       user_by_email[email].is_active = true
 
     ensures:
-      some s in sessions' |
-        s not in pre(sessions)
-        and sessions'[s].user_id = user_by_email[email].id
-        and sessions'[s].access_expires_at > now()
-      users' = users
+      // Reset tokens live in their own relation, not in `sessions`: a reset token
+      // is not a login session (it has no refresh token and grants no access), so
+      // storing it as a `Session` forced an unframeable existential create. Keying
+      // `reset_tokens` by the token itself makes uniqueness hold by construction.
+      reset_tokens' = pre(reset_tokens) + {reset_token -> ResetToken {
+        token = reset_token,
+        user_id = user_by_email[email].id
+      }}
   }
 
   operation ResetPassword {
     input:  reset_token: Token, new_password: String
 
     requires:
-      some s in sessions |
-        sessions[s].access_token = reset_token
-        and sessions[s].is_revoked = false
-        and sessions[s].access_expires_at > now()
+      reset_token in reset_tokens
       len(new_password) >= 8
 
     ensures:
       // `userKeyMatchesId`/`emailIndexConsistent` require the same User *value* in
       // both stores, so we build one updated record and insert it into both —
       // a per-field update of `users` alone would leave `user_by_email` stale.
-      let s = (the s in sessions |
-        sessions[s].access_token = reset_token) in
-        let user_id = pre(sessions)[s].user_id in
-          let updated = pre(users)[user_id] with {
-            password_hash = hash(new_password)
-          } in
-            users' = pre(users) + {user_id -> updated}
-            and user_by_email' =
-              pre(user_by_email) + {pre(users)[user_id].email -> updated}
-            and sessions'[s].is_revoked = true
+      let user_id = pre(reset_tokens)[reset_token].user_id in
+        let updated = pre(users)[user_id] with {
+          password_hash = hash(new_password)
+        } in
+          users' = pre(users) + {user_id -> updated}
+          and user_by_email' =
+            pre(user_by_email) + {pre(users)[user_id].email -> updated}
+          // Consume the token: a reset is single-use, so the same token cannot
+          // be replayed to reset the password again. (The old session-based
+          // model enforced this by revoking the session.)
+          and reset_tokens' = pre(reset_tokens) - {reset_token}
   }
 
   operation Logout {
@@ -251,6 +258,12 @@ service AuthService {
 
   invariant sessionKeyMatchesId:
     all s in sessions | sessions[s].id = s
+
+  invariant resetTokenKeyMatches:
+    all t in reset_tokens | reset_tokens[t].token = t
+
+  invariant resetTokenBelongsToUser:
+    all t in reset_tokens | reset_tokens[t].user_id in users
 
   invariant nextUserIdFresh:
     all u in users | u < next_user_id
