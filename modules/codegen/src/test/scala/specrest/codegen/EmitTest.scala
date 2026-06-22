@@ -270,6 +270,59 @@ class EmitTest extends CatsEffectSuite:
       val paths = Emit.emitProject(profiled).map(_.path).toSet
       assert(paths.forall(p => !p.startsWith("internal/dafnykernel/")), "go kernel files leaked")
 
+  test("TS kernel-routed service marshals scalar in/out via the dafnyKernel adapter"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "ts-express-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.JsDefaultPackagePath,
+        files = Map("kernel.js" -> "let _module = {};\nlet _dafny = {};\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files   = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val byPath  = files.map(f => f.path -> f.content).toMap
+      val service = byPath.getOrElse("src/services/urlMapping.ts", fail("no ts service emitted"))
+      // Shorten: body op, two-value (code, short_url) return -> object literal.
+      assert(
+        service.contains("companion.Shorten(state, stringToDafny(body.url))"),
+        s"Shorten should marshal body.url through the companion — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "return { code: stringFromDafny(outCode), short_url: stringFromDafny(outShortUrl) };"
+        ),
+        s"Shorten should marshal both outputs into a result object — got:\n$service"
+      )
+      // Resolve: single scalar in/out.
+      assert(
+        service.contains("companion.Resolve(state, stringToDafny(code))"),
+        s"Resolve should marshal the path param — got:\n$service"
+      )
+      assert(
+        service.contains("from '../dafnyKernel/adapter.js'"),
+        s"service should import the kernel adapter — got:\n$service"
+      )
+      // Kernel emitted as .cjs with appended exports; adapter + copy script present.
+      assert(byPath.contains("src/dafnyKernel/adapter.ts"), "adapter not emitted")
+      assert(!byPath.contains("src/dafnyKernel/kernel.js"), "kernel.js should be renamed to .cjs")
+      val kernelCjs = byPath.getOrElse("src/dafnyKernel/kernel.cjs", fail("kernel.cjs not emitted"))
+      assert(
+        kernelCjs.contains("module.exports = { _module, _dafny };"),
+        s"kernel.cjs should re-export the module + runtime — got:\n$kernelCjs"
+      )
+      assert(byPath.contains("scripts/copyKernel.mjs"), "build-time kernel copy script not emitted")
+
+  test("TS emitProject without kernel emits no dafnyKernel files or adapter"):
+    SpecFixtures.loadProfiled("url_shortener", "ts-express-postgres").map: profiled =>
+      val paths = Emit.emitProject(profiled).map(_.path).toSet
+      assert(paths.forall(p => !p.startsWith("src/dafnyKernel/")), "ts kernel files leaked")
+      assert(!paths.contains("scripts/copyKernel.mjs"), "copy script leaked without a kernel")
+
   test("url_shortener emits a known file set"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val files = Emit.emitProject(profiled).map(_.path).toSet

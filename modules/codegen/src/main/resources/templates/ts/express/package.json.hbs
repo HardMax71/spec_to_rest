@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc{{#if hasDafny}} && node scripts/copyKernel.mjs{{/if}}",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
@@ -19,6 +19,8 @@
     "{{this.name}}": "{{this.version}}"{{#unless @last}},{{/unless}}
 {{/each}}{{#if needsJwt}},
     "jsonwebtoken": "^9.0.3"
+{{/if}}{{#if hasDafny}},
+    "bignumber.js": "^9.1.2"
 {{/if}}
   },
   "devDependencies": {

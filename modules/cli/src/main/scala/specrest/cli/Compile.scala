@@ -260,7 +260,7 @@ object Compile:
                           boundOps
                             .map: c =>
                               val n = classificationOperationName(c)
-                              n -> s"dafnyKernel.$n"
+                              n -> n
                             .toMap
                         case TargetLanguage.Python =>
                           boundOps
