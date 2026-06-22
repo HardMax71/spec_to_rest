@@ -73,6 +73,9 @@ final private case class GoOperation(
     serviceReturnType: String,
     redirectField: Option[String],
     dafnyMethod: Option[String],
+    routeThroughKernel: Boolean,
+    kernelServiceMethod: String,
+    kernelHandlerArgs: String,
     lookupColumn: String,
     createAssigns: List[String],
     authMiddleware: Option[String]
@@ -101,6 +104,8 @@ final private case class GoEntityCtx(
     usesNotFound: Boolean,
     usesErrors: Boolean,
     usesSqlNoRows: Boolean,
+    usesKernel: Boolean,
+    usesModels: Boolean,
     customSchemas: List[GoCustomSchema],
     modelStructLines: List[String],
     createStructLines: List[String],
@@ -293,8 +298,12 @@ object EmitGo:
 
     opts.dafnyKernel.foreach: kernel =>
       val pkg = kernel.packagePath.stripSuffix("/")
-      kernel.files.toList.sortBy(_._1).foreach: (rel, content) =>
-        files += EmittedFile(s"$pkg/$rel", content)
+      DafnyKernel.rewriteGoImports(kernel.files, module, pkg).toList.sortBy(_._1).foreach:
+        (rel, content) => files += EmittedFile(s"$pkg/$rel", content)
+      files += EmittedFile(
+        s"$pkg/adapter.go",
+        engine.renderAny(templates.dafnyAdapter, Map("module" -> module))
+      )
 
     files.result()
 
@@ -572,10 +581,21 @@ object EmitGo:
     // routes (the redirect route still maps a not-found error to 404). The service's
     // `database/sql` import is needed only by the `read` branch's `sql.ErrNoRows` — a redirect
     // op is now a fail-loud stub that does no row lookup, so it must not pull in `database/sql`.
+    // A kernel-routed op emits the kernel branch instead of its route-kind body, so its original
+    // route kind must not pull in the route-kind imports (errors / database/sql) it no longer uses.
+    def effectiveKind(o: GoOperation): String =
+      if o.routeThroughKernel then "kernel" else o.routeKind
     val usesNotFound = operations.exists: o =>
-      o.routeKind == "read" || o.routeKind == "redirect"
-    val usesErrors      = usesNotFound || operations.exists(_.routeKind == "other")
-    val usesSqlNoRows   = operations.exists(_.routeKind == "read")
+      effectiveKind(o) == "read" || effectiveKind(o) == "redirect"
+    val usesErrors    = usesNotFound || operations.exists(effectiveKind(_) == "other")
+    val usesSqlNoRows = operations.exists(effectiveKind(_) == "read")
+    val usesKernel    = operations.exists(_.routeThroughKernel)
+    // The `models` import is referenced by every CRUD route-kind body (entity model query/return)
+    // and by any op carrying a request body. A kernel-routed scalar op without a body, or an
+    // `other` stub without a body, never names a models type — so gating on hasOperations alone
+    // leaves the import unused (a hard Go compile error) for such entities.
+    val usesModels = operations.exists: o =>
+      o.hasRequestBody || (!o.routeThroughKernel && o.routeKind != "other")
     val usesRequestBody = operations.exists(_.hasRequestBody)
     val usesPathParams  = operations.exists(_.pathParams.nonEmpty)
 
@@ -608,6 +628,8 @@ object EmitGo:
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
       usesSqlNoRows = usesSqlNoRows,
+      usesKernel = usesKernel,
+      usesModels = usesModels,
       customSchemas = customSchemas,
       modelStructLines = padCells(
         List(
@@ -774,6 +796,19 @@ object EmitGo:
             .mkString(", ")
           ("", Option.empty[String], "error", op.operationName, call, args.mkString(", "))
 
+    val kernelMethod =
+      goKernelServiceMethod(
+        op,
+        entity,
+        serviceMethodName,
+        hasRequestBody,
+        requestBodyType,
+        typeLookup
+      )
+    val kernelHandlerArgs =
+      (endpoint.pathParams.map(p => toCamelCase(p.name)) ++
+        (if hasRequestBody then List("body") else Nil)).mkString(", ")
+
     GoOperation(
       operationName = op.operationName,
       handlerName = op.operationName,
@@ -794,6 +829,9 @@ object EmitGo:
       serviceReturnType = serviceReturnType,
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
+      routeThroughKernel = kernelMethod.isDefined,
+      kernelServiceMethod = kernelMethod.getOrElse(""),
+      kernelHandlerArgs = kernelHandlerArgs,
       lookupColumn = lookupCol,
       createAssigns = createAssigns,
       authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
@@ -962,6 +1000,75 @@ object EmitGo:
       case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "string")
       case OptionTypeF(inner, _) => s"*${goTypeForParam(inner, typeLookup)}"
       case _                     => "string"
+
+  // Idiomatic-Go <-> Dafny-runtime converters keyed by the Go domain type. The empty pair marks a
+  // type whose Go and Dafny representations coincide (bool), so no conversion call is emitted.
+  private val goKernelScalarConv: Map[String, (String, String)] = Map(
+    "string" -> ("dafnykernel.StringToDafny", "dafnykernel.StringFromDafny"),
+    "int64"  -> ("dafnykernel.IntToDafny", "dafnykernel.IntFromDafny"),
+    "bool"   -> ("", "")
+  )
+
+  // Render a service method that routes the operation through its verified Dafny kernel method,
+  // marshalling scalar inputs and outputs across the Go/Dafny boundary. Returns None (the caller
+  // falls back to the route-kind stub) unless the op is kernel-bound and every input/output is a
+  // supported scalar; query-param inputs and collection/datatype results are deferred follow-ups.
+  private def goKernelServiceMethod(
+      op: ProfiledOperation,
+      entity: ProfiledEntity,
+      serviceMethod: String,
+      hasRequestBody: Boolean,
+      requestBodyType: String,
+      typeLookup: Map[String, String]
+  ): Option[String] =
+    val endpoint = op.endpoint
+    op.dafnyMethod.filter(_ => endpoint.queryParams.isEmpty).flatMap: dafnyName =>
+      val inputSources =
+        endpoint.pathParams.map(p =>
+          toCamelCase(p.name) -> goTypeForParam(p.typeExpr, typeLookup)
+        ) ++
+          endpoint.bodyParams.map(p =>
+            s"body.${toPascalCase(p.name)}" -> goTypeForParam(p.typeExpr, typeLookup)
+          )
+      val convertedArgs = inputSources.map: (access, goType) =>
+        goKernelScalarConv.get(goType).map: (toDafny, _) =>
+          if toDafny.isEmpty then access else s"$toDafny($access)"
+      val outputs = op.responseFields
+      val outputsOk =
+        outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
+      Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
+        val callArgs = ("state" :: convertedArgs.flatten).mkString(", ")
+        val call     = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
+        val sigParts =
+          endpoint.pathParams.map(p =>
+            s"${toCamelCase(p.name)} ${goTypeForParam(p.typeExpr, typeLookup)}"
+          ) ++ Option.when(hasRequestBody)(s"body models.$requestBodyType")
+        val sig = if sigParts.isEmpty then "" else sigParts.mkString(", ", ", ", "")
+        def fromDafny(f: ProfiledField, v: String): String =
+          val conv = goKernelScalarConv(f.domainType)._2
+          if conv.isEmpty then v else s"$conv($v)"
+        val (returnType, resultLines) =
+          outputs match
+            case single :: Nil =>
+              val v = "out" + toPascalCase(single.fieldName)
+              (
+                s"(${single.domainType}, error)",
+                List(s"\t$v := $call", s"\treturn ${fromDafny(single, v)}, nil")
+              )
+            case many =>
+              val vars      = many.map(f => "out" + toPascalCase(f.fieldName))
+              val keyTokens = many.map(f => s"\"${f.columnName}\":")
+              val keyWidth  = keyTokens.map(_.length).max
+              val entries = many.zip(vars).zip(keyTokens).map: (fv, key) =>
+                s"\t\t${key.padTo(keyWidth, ' ')} ${fromDafny(fv._1, fv._2)},"
+              (
+                "(map[string]any, error)",
+                (s"\t${vars.mkString(", ")} := $call" :: "\treturn map[string]any{" :: entries) :::
+                  List("\t}, nil")
+              )
+        val header =
+          s"func (s *${entity.modelClassName}Service) $serviceMethod(ctx context.Context$sig) $returnType {"
+        (header :: "\tstate := dafnykernel.MakeState()" :: resultLines ::: List("}")).mkString("\n")
 
   private def toCamelCase(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)

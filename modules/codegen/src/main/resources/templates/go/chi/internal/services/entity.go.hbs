@@ -8,7 +8,8 @@ import (
 	"github.com/uptrace/bun"
 
 	"{{module}}/internal/config"
-{{#if entity.hasOperations}}	"{{module}}/internal/models"
+{{#if entity.usesKernel}}	dafnykernel "{{module}}/internal/dafnykernel"
+{{/if}}{{#if entity.usesModels}}	"{{module}}/internal/models"
 {{/if}})
 
 type {{entity.entity.modelClassName}}Service struct {
@@ -21,7 +22,8 @@ func New{{entity.entity.modelClassName}}Service(db *bun.DB, cfg *config.Config) 
 }
 {{#each entity.operations}}
 
-{{#if (eq routeKind "create")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.modelClassName}}, error) {
+{{#if routeThroughKernel}}{{{kernelServiceMethod}}}
+{{else}}{{#if (eq routeKind "create")}}func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx context.Context, body models.{{requestBodyType}}) (*models.{{../entity.entity.modelClassName}}, error) {
 	m := &models.{{../entity.entity.modelClassName}}{
 {{#each createAssigns}}		{{this}},
 {{/each}}	}
@@ -75,4 +77,4 @@ func (s *{{../entity.entity.modelClassName}}Service) {{serviceMethod}}(ctx conte
 	_ = s
 	return errors.New("{{serviceMethod}} not implemented")
 }
-{{/if}}{{/each~}}
+{{/if}}{{/if}}{{/each~}}

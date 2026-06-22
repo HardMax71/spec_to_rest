@@ -77,6 +77,40 @@ class EmitTest extends CatsEffectSuite:
     )
     assert(out("module_.py").contains("import sys"), "stdlib import preserved")
 
+  test("DafnyKernel.rewriteGoImports strips src/ and module-qualifies the runtime imports"):
+    val kernelFile =
+      """package kernel
+        |
+        |import (
+        |  os "os"
+        |  _dafny "dafny"
+        |  m__System "System_"
+        |)
+        |""".stripMargin
+    val runtimeFile =
+      """package dafny
+        |
+        |import "fmt"
+        |""".stripMargin
+    val out = DafnyKernel.rewriteGoImports(
+      Map("src/kernel.go" -> kernelFile, "src/dafny/dafny.go" -> runtimeFile),
+      "github.com/generated/svc",
+      "internal/dafnykernel"
+    )
+    assertEquals(out.keySet, Set("kernel.go", "dafny/dafny.go"))
+    val kernel = out("kernel.go")
+    assert(
+      kernel.contains("_dafny \"github.com/generated/svc/internal/dafnykernel/dafny\""),
+      s"runtime import should be module-qualified:\n$kernel"
+    )
+    assert(
+      kernel.contains("m__System \"github.com/generated/svc/internal/dafnykernel/System_\""),
+      s"System_ import should be module-qualified:\n$kernel"
+    )
+    assert(!kernel.contains("\"dafny\""), s"bare runtime import must be rewritten:\n$kernel")
+    assert(kernel.contains("os \"os\""), "stdlib import preserved")
+    assert(out("dafny/dafny.go").contains("import \"fmt\""), "runtime file content preserved")
+
   test("kernel-routed Create handler still receives `body` parameter (#27 review)"):
     SpecFixtures.loadIR("todo_list").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
@@ -169,12 +203,72 @@ class EmitTest extends CatsEffectSuite:
         s"resolve kernel call should pass code — got:\n$service"
       )
 
+  test("Go kernel-routed service marshals scalar in/out via the dafnykernel adapter"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "go-chi-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.GoDefaultPackagePath,
+        files = Map("src/kernel.go" -> "package kernel\n\nimport (\n  _dafny \"dafny\"\n)\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files  = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val byPath = files.map(f => f.path -> f.content).toMap
+      val service =
+        byPath.getOrElse("internal/services/url_mapping.go", fail("no go service emitted"))
+      // Shorten: body op with a two-value (code, short_url) return -> map[string]any.
+      assert(
+        service.contains(
+          "outCode, outShortURL := dafnykernel.Companion_Default___.Shorten(state, dafnykernel.StringToDafny(body.URL))"
+        ),
+        s"Shorten should marshal body.URL and capture both outputs — got:\n$service"
+      )
+      assert(
+        service.contains("\"code\":") && service.contains(
+          "dafnykernel.StringFromDafny(outShortURL)"
+        ),
+        s"Shorten should marshal outputs back into a result map — got:\n$service"
+      )
+      // Resolve: single scalar in/out.
+      assert(
+        service.contains(
+          "outURL := dafnykernel.Companion_Default___.Resolve(state, dafnykernel.StringToDafny(code))"
+        ),
+        s"Resolve should marshal the path param — got:\n$service"
+      )
+      assert(
+        service.contains("dafnykernel \"github.com/generated/url-shortener/internal/dafnykernel\""),
+        s"service should import the kernel package — got:\n$service"
+      )
+      // Adapter emitted, and the runtime import in the kernel files is module-qualified.
+      val adapter = byPath.getOrElse("internal/dafnykernel/adapter.go", fail("no adapter emitted"))
+      assert(
+        adapter.contains("func MakeState() *ServiceState"),
+        s"adapter missing MakeState:\n$adapter"
+      )
+      val kernelGo =
+        byPath.getOrElse("internal/dafnykernel/kernel.go", fail("kernel src/ not stripped"))
+      assert(
+        kernelGo.contains("github.com/generated/url-shortener/internal/dafnykernel/dafny"),
+        s"kernel runtime import should be rewritten — got:\n$kernelGo"
+      )
+
   test("emitProject without kernel does not emit dafny_kernel files"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>
       val paths = Emit.emitProject(profiled).map(_.path).toSet
       assert(paths.forall(p => !p.startsWith("app/dafny_kernel/")), "kernel files leaked")
       assert(!paths.contains("app/services/_dafny_adapter.py"), "adapter leaked")
       assert(!paths.contains("app/services/_synth.py"), "synth marker leaked")
+
+  test("Go emitProject without kernel emits no dafnykernel files or adapter"):
+    SpecFixtures.loadProfiled("url_shortener", "go-chi-postgres").map: profiled =>
+      val paths = Emit.emitProject(profiled).map(_.path).toSet
+      assert(paths.forall(p => !p.startsWith("internal/dafnykernel/")), "go kernel files leaked")
 
   test("url_shortener emits a known file set"):
     SpecFixtures.loadProfiled("url_shortener").map: profiled =>

@@ -31,19 +31,21 @@ final class DafnyTranslateCli private (binary: String, workDir: Path) extends Da
       target: TargetLanguage,
       timeoutSec: Int
   ): IO[Either[String, TranslatedDafny]] =
-    val unique  = java.util.UUID.randomUUID().toString
-    val srcFile = workDir.resolve(s"candidate-$unique.dfy")
-    val outBase = workDir.resolve(s"candidate-$unique")
-    val outDir  = workDir.resolve(s"candidate-$unique${target.outputSuffix}")
-    val outFile = workDir.resolve(s"candidate-$unique.translate.out")
-    val errFile = workDir.resolve(s"candidate-$unique.translate.err")
-    val cleanup =
-      IO.blocking(Files.deleteIfExists(srcFile)).attempt.void *>
-        IO.blocking(deleteRecursively(outDir)).attempt.void *>
-        IO.blocking(Files.deleteIfExists(outFile)).attempt.void *>
-        IO.blocking(Files.deleteIfExists(errFile)).attempt.void
+    val unique = java.util.UUID.randomUUID().toString
+    // The Go backend names the emitted package after the source file's basename, so a unique
+    // `candidate-<uuid>.dfy` would yield an unstable `package candidate_<uuid>`. Isolating each
+    // call in its own subdirectory lets us use a fixed `kernel.dfy` basename → stable `package
+    // kernel`. Python/JS derive their module name by convention, so this is a no-op for them.
+    val callDir = workDir.resolve(s"call-$unique")
+    val srcFile = callDir.resolve("kernel.dfy")
+    val outBase = callDir.resolve("kernel")
+    val outDir  = callDir.resolve(s"kernel${target.outputSuffix}")
+    val outFile = callDir.resolve("kernel.translate.out")
+    val errFile = callDir.resolve("kernel.translate.err")
+    val cleanup = IO.blocking(deleteRecursively(callDir)).attempt.void
     val program =
       for
+        _      <- IO.blocking(Files.createDirectories(callDir))
         _      <- IO.blocking(Files.writeString(srcFile, source, StandardOpenOption.CREATE_NEW))
         result <- runTranslate(srcFile, outBase, outDir, outFile, errFile, target, timeoutSec)
       yield result
@@ -88,24 +90,31 @@ final class DafnyTranslateCli private (binary: String, workDir: Path) extends Da
         val durationMs = (System.nanoTime() - started) / 1_000_000L
         val stdout     = readIfExists(outFile)
         val stderr     = readIfExists(errFile)
-        if exit != 0 then
-          val detail =
-            if stderr.trim.nonEmpty then stderr.trim
-            else if stdout.trim.nonEmpty then stdout.trim
-            else s"exit=$exit"
-          Left(s"dafny translate ${target.cliFlag} failed: $detail")
-        else if !Files.isDirectory(outDir) then
-          Left(s"dafny translate ${target.cliFlag} produced no output directory at $outDir")
-        else
+        val collected  = if Files.isDirectory(outDir) then collectFiles(outDir) else Map.empty
+        // The Go backend runs `goimports` as a post-emit format pass and exits non-zero when that
+        // tool is absent, even though the translated sources are already fully written and valid.
+        // Accept that one case (output present + the failure is the formatter), but let every other
+        // non-zero exit surface as an error so a genuinely broken translation is not masked.
+        val formatterOnlyFailure =
+          (stderr + stdout).toLowerCase.contains("goimports")
+        if collected.nonEmpty && (exit == 0 || formatterOnlyFailure) then
           Right(
             TranslatedDafny(
               target = target,
-              files = collectFiles(outDir),
+              files = collected,
               rawStdout = stdout,
               rawStderr = stderr,
               durationMs = durationMs
             )
           )
+        else if exit != 0 then
+          val detail =
+            if stderr.trim.nonEmpty then stderr.trim
+            else if stdout.trim.nonEmpty then stdout.trim
+            else s"exit=$exit"
+          Left(s"dafny translate ${target.cliFlag} failed: $detail")
+        else
+          Left(s"dafny translate ${target.cliFlag} produced no output directory at $outDir")
     }
 
   private def collectFiles(root: Path): Map[String, String] =

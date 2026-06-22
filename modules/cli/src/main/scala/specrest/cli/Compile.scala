@@ -254,7 +254,7 @@ object Compile:
                           boundOps
                             .map: c =>
                               val n = classificationOperationName(c)
-                              n -> s"dafnykernel.$n"
+                              n -> n
                             .toMap
                         case TargetLanguage.JavaScript =>
                           boundOps

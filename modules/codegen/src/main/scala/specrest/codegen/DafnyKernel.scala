@@ -20,6 +20,32 @@ object DafnyKernel:
 
   def empty: DafnyKernel = DafnyKernel(PythonDefaultPackagePath, Map.empty, Nil)
 
+  private val GoBareImport = """^(\s*)(\w+\s+)?"(dafny|System_)"\s*$""".r
+
+  def rewriteGoImports(
+      files: Map[String, String],
+      moduleName: String,
+      packagePath: String
+  ): Map[String, String] =
+    val importBase = s"$moduleName/${packagePath.stripSuffix("/")}"
+    files.map: (relPath, content) =>
+      stripSrcPrefix(relPath) -> rewriteGoFile(content, importBase)
+
+  private def stripSrcPrefix(relPath: String): String =
+    if relPath.startsWith("src/") then relPath.drop("src/".length) else relPath
+
+  private def rewriteGoFile(content: String, importBase: String): String =
+    content.linesWithSeparators.map(line => rewriteGoLine(line, importBase)).mkString
+
+  private def rewriteGoLine(line: String, importBase: String): String =
+    val stripped = if line.endsWith("\n") then line.dropRight(1) else line
+    val term     = if line.endsWith("\n") then "\n" else ""
+    stripped match
+      case GoBareImport(indent, alias, name) =>
+        val pre = Option(alias).getOrElse("")
+        s"$indent$pre\"$importBase/$name\"$term"
+      case _ => line
+
   def rewritePythonImports(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>
       val subdirDepth = relPath.count(_ == '/')
