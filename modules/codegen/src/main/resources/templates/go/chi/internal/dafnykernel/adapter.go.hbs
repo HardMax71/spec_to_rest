@@ -1,0 +1,23 @@
+package kernel
+
+import _dafny "{{module}}/internal/dafnykernel/dafny"
+
+func MakeState() *ServiceState {
+	return New_ServiceState_()
+}
+
+func StringToDafny(s string) _dafny.Sequence {
+	return _dafny.UnicodeSeqOfUtf8Bytes(s)
+}
+
+func StringFromDafny(s _dafny.Sequence) string {
+	return _dafny.SequenceVerbatimString(s, false)
+}
+
+func IntToDafny(n int64) _dafny.Int {
+	return _dafny.IntOfInt64(n)
+}
+
+func IntFromDafny(n _dafny.Int) int64 {
+	return n.Int64()
+}

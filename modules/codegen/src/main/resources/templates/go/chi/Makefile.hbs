@@ -13,7 +13,9 @@ fmt:
 	gofmt -s -w .
 
 vet:
-	go vet ./...
+{{#if hasDafny}}	go vet $$(go list ./... | grep -v '/internal/dafnykernel')
+{{else}}	go vet ./...
+{{/if}}
 
 tidy:
 	go mod tidy

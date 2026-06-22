@@ -37,9 +37,13 @@ class CompileSynthesisTest extends CatsEffectSuite:
           val _ = Files.deleteIfExists(it.next())
       finally stream.close()
 
-  private def baseOpts(outDir: String, cacheDir: Option[String]): CompileOptions =
+  private def baseOpts(
+      outDir: String,
+      cacheDir: Option[String],
+      target: String = "python-fastapi-postgres"
+  ): CompileOptions =
     CompileOptions(
-      target = "python-fastapi-postgres",
+      target = target,
       outDir = outDir,
       ignoreVerify = true,
       withSynthesis = true,
@@ -113,58 +117,58 @@ class CompileSynthesisTest extends CatsEffectSuite:
       case Left(_)  => IO.unit
       case Right(_) => runAllowSkeletonsHappyPath()
 
+  private def seedSkeletonCache(skeletonsRoot: Path): IO[Unit] =
+    for
+      _       <- IO.blocking(Files.createDirectories(skeletonsRoot))
+      source  <- IO.blocking(Files.readString(Paths.get("fixtures/spec/url_shortener.spec")))
+      parsedE <- Parse.parseSpec(source)
+      parsed   = parsedE.toOption.getOrElse(fail("parse failed"))
+      builtE  <- Builder.buildIR(parsed.tree)
+      built    = builtE.toOption.getOrElse(fail("build failed"))
+      dafny    = DafnyGenerator.generate(built).getOrElse(fail("dafny gen failed"))
+      cache   <- Cache.make(skeletonsRoot)
+      synthOps = specrest.convention.Classify
+                   .classifyOperations(built)
+                   .filter(c =>
+                     classificationStrategy(c) match {
+                       case _: LlmSynthesis => true
+                       case _               => false
+                     }
+                   )
+      _ <- synthOps.foldLeft(IO.unit): (acc, c) =>
+             acc *> IO {
+               dafny.methods
+                 .find(_.name == classificationOperationName(c))
+                 .map: header =>
+                   val body = SkeletonGenerator.fallbackBody(
+                     header,
+                     attempts = 1,
+                     finalStrategy = "ZeroShot",
+                     finalModel = "claude-sonnet-4-6",
+                     reason = "test"
+                   )
+                   val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
+                   val entry = CacheEntry(
+                     candidate = body,
+                     body = body,
+                     usage = TokenUsage(0, 0),
+                     model = "claude-sonnet-4-6",
+                     promptVersion = specrest.synth.SynthPromptVersion,
+                     outcome = CacheOutcome.Skeleton
+                   )
+                   (key, entry)
+             }.flatMap:
+               case Some((k, e)) => cache.store(k, e)
+               case None         => IO.unit
+    yield ()
+
   private def runAllowSkeletonsHappyPath(): IO[Unit] =
     withTempDir: dir =>
       val cacheDir      = dir.resolve("synth-cache")
       val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
       val opts =
         baseOpts(dir.toString, Some(cacheDir.toString)).copy(allowSkeletons = true)
-      val seedAll: IO[Unit] =
-        for
-          _       <- IO.blocking(Files.createDirectories(skeletonsRoot))
-          source  <- IO.blocking(Files.readString(Paths.get("fixtures/spec/url_shortener.spec")))
-          parsedE <- Parse.parseSpec(source)
-          parsed   = parsedE.toOption.getOrElse(fail("parse failed"))
-          builtE  <- Builder.buildIR(parsed.tree)
-          built    = builtE.toOption.getOrElse(fail("build failed"))
-          dafny    = DafnyGenerator.generate(built).getOrElse(fail("dafny gen failed"))
-          cache   <- Cache.make(skeletonsRoot)
-          synthOps = specrest.convention.Classify
-                       .classifyOperations(built)
-                       .filter(c =>
-                         classificationStrategy(c) match {
-                           case _: LlmSynthesis => true
-                           case _               => false
-                         }
-                       )
-          _ <- synthOps.foldLeft(IO.unit): (acc, c) =>
-                 acc *> IO {
-                   dafny.methods
-                     .find(_.name == classificationOperationName(c))
-                     .map: header =>
-                       val body = SkeletonGenerator.fallbackBody(
-                         header,
-                         attempts = 1,
-                         finalStrategy = "ZeroShot",
-                         finalModel = "claude-sonnet-4-6",
-                         reason = "test"
-                       )
-                       val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
-                       val entry = CacheEntry(
-                         candidate = body,
-                         body = body,
-                         usage = TokenUsage(0, 0),
-                         model = "claude-sonnet-4-6",
-                         promptVersion = specrest.synth.SynthPromptVersion,
-                         outcome = CacheOutcome.Skeleton
-                       )
-                       (key, entry)
-                 }.flatMap:
-                   case Some((k, e)) => cache.store(k, e)
-                   case None         => IO.unit
-        yield ()
-
-      seedAll *> Compile
+      seedSkeletonCache(skeletonsRoot) *> Compile
         .run("fixtures/spec/url_shortener.spec", opts, log)
         .map: code =>
           assertEquals(code, ExitStatus.Ok)
@@ -173,6 +177,43 @@ class CompileSynthesisTest extends CatsEffectSuite:
             Files.isDirectory(kernelDir),
             s"kernel emitted under $kernelDir even when only skeletons cached"
           )
+
+  test("--with-synthesis for go-chi translates + emits a kernel-routed Go project"):
+    DafnyCli.resolveBinary(None).flatMap:
+      case Left(_)  => IO.unit
+      case Right(_) => runGoSynthesisHappyPath()
+
+  private def runGoSynthesisHappyPath(): IO[Unit] =
+    withTempDir: dir =>
+      val cacheDir      = dir.resolve("synth-cache")
+      val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
+      val opts = baseOpts(dir.toString, Some(cacheDir.toString), target = "go-chi-postgres")
+        .copy(allowSkeletons = true, withTests = false)
+      seedSkeletonCache(skeletonsRoot) *> Compile
+        .run("fixtures/spec/url_shortener.spec", opts, log)
+        .flatMap: code =>
+          IO.blocking {
+            assertEquals(code, ExitStatus.Ok)
+            val root    = Paths.get(opts.outDir)
+            val kernel  = root.resolve("internal/dafnykernel/kernel.go")
+            val adapter = root.resolve("internal/dafnykernel/adapter.go")
+            val service = root.resolve("internal/services/url_mapping.go")
+            assert(Files.isRegularFile(kernel), s"kernel src/ not stripped to $kernel")
+            assert(Files.isRegularFile(adapter), s"adapter not emitted at $adapter")
+            assert(
+              !Files.exists(root.resolve("internal/dafnykernel/src")),
+              "src/ prefix leaked into the emitted kernel layout"
+            )
+            val svc = Files.readString(service)
+            assert(
+              svc.contains("dafnykernel.Companion_Default___.Shorten(state,"),
+              s"service should route Shorten through the kernel — got:\n$svc"
+            )
+            assert(
+              Files.readString(kernel).contains("internal/dafnykernel/dafny"),
+              "kernel runtime import should be module-qualified"
+            )
+          }
 
   test("--allow-skeletons but no skeletons either → still fails with helpful error"):
     withTempDir: dir =>
