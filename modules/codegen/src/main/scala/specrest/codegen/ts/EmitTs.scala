@@ -927,7 +927,14 @@ object EmitTs:
 
     val handlerName = toCamelCase(op.operationName)
     val kernelFn =
-      tsKernelServiceFn(op, handlerName, hasRequestBody, requestBodyType, typeLookup)
+      tsKernelServiceFn(
+        op,
+        handlerName,
+        routeKindName(routeKind),
+        hasRequestBody,
+        requestBodyType,
+        typeLookup
+      )
 
     TsOperation(
       operationName = op.operationName,
@@ -994,6 +1001,7 @@ object EmitTs:
   private def tsKernelServiceFn(
       op: ProfiledOperation,
       handlerName: String,
+      routeKind: String,
       hasRequestBody: Boolean,
       requestBodyType: String,
       typeLookup: Map[String, String]
@@ -1013,7 +1021,11 @@ object EmitTs:
       val outputs = op.responseFields
       val outputsOk =
         outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
-      Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
+      // A redirect op's route issues `res.redirect(status, result)`, so the kernel result must be a
+      // single string (the redirect target); otherwise leave it to the redirect route-kind branch.
+      val redirectOk =
+        routeKind != "redirect" || (outputs.sizeIs == 1 && outputs.head.domainType == "string")
+      Option.when(convertedArgs.forall(_.isDefined) && outputsOk && redirectOk):
         val callArgs = ("state" :: convertedArgs.flatten).mkString(", ")
         val call     = s"companion.$dafnyName($callArgs)"
         val sig =
@@ -1032,10 +1044,12 @@ object EmitTs:
                 List(s"  const $v = $call;", s"  return ${fromDafny(single, v)};")
               )
             case many =>
-              val vars      = many.map(f => "out" + toPascalCase(f.fieldName))
-              val typeBody  = many.map(f => s"${f.columnName}: ${f.domainType}").mkString("; ")
-              val unknowns  = List.fill(vars.size)("unknown").mkString(", ")
-              val retFields = many.zip(vars).map((f, v) => s"${f.columnName}: ${fromDafny(f, v)}")
+              val vars = many.map(f => "out" + toPascalCase(f.fieldName))
+              val typeBody =
+                many.map(f => s"${toCamelCase(f.fieldName)}: ${f.domainType}").mkString("; ")
+              val unknowns = List.fill(vars.size)("unknown").mkString(", ")
+              val retFields =
+                many.zip(vars).map((f, v) => s"${toCamelCase(f.fieldName)}: ${fromDafny(f, v)}")
               (
                 s"{ $typeBody }",
                 List(

@@ -45,7 +45,11 @@ export const register{{entity.entity.modelClassName}}Routes = (app: Express): vo
       const body = req.body as service.{{requestBodyType}};
 {{/if}}
       const result = await service.{{handlerName}}({{kernelRouteCallArgs}});
+{{#if (eq routeKind "redirect")}}
+      res.redirect({{successStatus}}, result);
+{{else}}
       res.status({{successStatus}}).json(result);
+{{/if}}
     }),
   );
 
