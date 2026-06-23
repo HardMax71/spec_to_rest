@@ -54,7 +54,7 @@ object GoStateful:
         "<stateful>",
         "stateful_go_pending",
         "bundle id-flow, transitions and temporals are not yet modelled by the " +
-          "Go stateful backend (#176); covered by the Python oracle suite"
+          "Go stateful backend (#420); covered by the Python oracle suite"
       )
 
     val file =

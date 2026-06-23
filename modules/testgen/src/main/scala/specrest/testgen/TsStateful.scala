@@ -53,7 +53,7 @@ object TsStateful:
         "<stateful>",
         "stateful_ts_pending",
         "bundle id-flow, transitions and temporals are not yet modelled by the " +
-          "TypeScript stateful backend (#174); covered by the Python oracle suite"
+          "TypeScript stateful backend (#420); covered by the Python oracle suite"
       )
 
     val file =

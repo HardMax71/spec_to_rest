@@ -30,7 +30,7 @@ object GoBehavioral:
                   operName(opDecl),
                   "behavioral_go_pending",
                   "negative/invariant/temporal/transition behavioral tests are not " +
-                    "yet emitted by the Go backend (#176); these remain covered by " +
+                    "yet emitted by the Go backend (#420); these remain covered by " +
                     "the Python oracle suite"
                 )
               )
