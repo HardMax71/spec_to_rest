@@ -1400,7 +1400,7 @@ translator on the production verify path.
   expressions such as entity field constraints and type-alias `where` clauses. Out-of-subset
   check-body shapes are filtered to skip by the Trust classifier before they reach the
   translator.
-- **Exit code 4 (`ExitCodes.Trust`)**: emitted when soundness skips are the only reason
+- **Exit code 4 (`ExitStatus.Trust`)**: emitted when soundness skips are the only reason
   the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
 - **TCB audit** lives at `docs/research/11_tcb_audit.md`, the single ledger of what
   `verify`'s verdicts actually depend on.

@@ -71,7 +71,7 @@ cutover. See [research/10](/research/10_translator_soundness) for the trust-chai
 | M_L.4 ([#130](https://github.com/HardMax71/spec_to_rest/issues/130)) | Subset expansion (a-l, including M_L.4.l `IndexRel` widen [#210](https://github.com/HardMax71/spec_to_rest/issues/210)) | shipped |
 | Isabelle pivot ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)) | Lean -> Isabelle/HOL + `Code_Target_Scala`; universal `soundness` theorem closes with zero `sorry` | shipped |
 | IR canonicalization ([#202](https://github.com/HardMax71/spec_to_rest/issues/202)) | Full input-language IR in Isabelle; `lower :: expr_full => expr option` projection; flat case-class extraction | shipped |
-| Trust dimension ([#205](https://github.com/HardMax71/spec_to_rest/issues/205)) | Per-check `trust: "sound" \| "best-effort"`; new exit code 4 (`ExitCodes.Trust`); JSON `schemaVersion` 1->2 | shipped |
+| Trust dimension ([#205](https://github.com/HardMax71/spec_to_rest/issues/205)) | Per-check `trust: "sound" \| "best-effort"`; new exit code 4 (`ExitStatus.Trust`); JSON `schemaVersion` 1->2 | shipped |
 | Production routing ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)) | `ExpressionEncoder.translateCheckedExpr` routes in-subset check bodies through `SpecRestGenerated.translate` and `SmtTermBridge`; the Scala fallback is isolated to declaration-level expressions | shipped |
 | Codegen drift gate ([#231](https://github.com/HardMax71/spec_to_rest/pull/231)) | `isabelle-build.yml` regenerates `SpecRestGenerated.scala` and diffs against the committed copy on every PR | shipped |
 
