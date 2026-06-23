@@ -48,9 +48,9 @@ object DafnyKernel:
 
   def rewriteJsKernel(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>
-      val cjsPath =
-        if relPath.endsWith(".js") then relPath.dropRight(".js".length) + ".cjs" else relPath
-      cjsPath -> appendJsExports(content)
+      if relPath.endsWith(".js") then
+        relPath.dropRight(".js".length) + ".cjs" -> appendJsExports(content)
+      else relPath                               -> content
 
   // Dafny's JS backend wraps each module in a module-private IIFE (`let _module = (function(){...})()`)
   // and emits no `module.exports`, so nothing is reachable via `require`. Re-export the module object

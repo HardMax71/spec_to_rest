@@ -111,6 +111,23 @@ class EmitTest extends CatsEffectSuite:
     assert(kernel.contains("os \"os\""), "stdlib import preserved")
     assert(out("dafny/dafny.go").contains("import \"fmt\""), "runtime file content preserved")
 
+  test(
+    "DafnyKernel.rewriteJsKernel renames .js to .cjs + appends exports, leaving others untouched"
+  ):
+    val out = DafnyKernel.rewriteJsKernel(
+      Map(
+        "kernel.js"   -> "let _module = {};\nlet _dafny = {};\n",
+        "runtime.txt" -> "raw\n"
+      )
+    )
+    assertEquals(out.keySet, Set("kernel.cjs", "runtime.txt"))
+    assert(
+      out("kernel.cjs").endsWith("module.exports = { _module, _dafny };\n"),
+      s"kernel.cjs should re-export the module + runtime:\n${out("kernel.cjs")}"
+    )
+    // Non-JS artifacts must pass through verbatim (no rename, no appended exports).
+    assertEquals(out("runtime.txt"), "raw\n")
+
   test("kernel-routed Create handler still receives `body` parameter (#27 review)"):
     SpecFixtures.loadIR("todo_list").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
