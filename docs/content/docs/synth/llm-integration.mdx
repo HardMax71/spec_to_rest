@@ -9,9 +9,14 @@ deterministic Dafny skeleton emitted by [`inspect --format dafny`](/design/conve
 skeleton, runs `dafny verify` against the structured-JSON log format, and
 iterates with a repair prompt until the body verifies, or the budget says stop.
 The verified body is then cached on disk; running `compile --with-synthesis`
-later splices every cached body for the spec, calls `dafny translate py`, and
-emits the resulting Python under `app/dafny_kernel/` of the generated project
-together with a thin handler-side adapter (M6.5, #27).
+later splices every cached body for the spec, calls `dafny translate <target>`,
+and emits the resulting kernel under the generated project together with a thin
+handler-side adapter (M6.5, #27). The worked example below uses the Python
+(fastapi) target; the Go (chi, [#465](https://github.com/HardMax71/spec_to_rest/pull/465))
+and TypeScript (express, [#466](https://github.com/HardMax71/spec_to_rest/pull/466))
+targets are also supported, each translating the same spliced Dafny via
+`dafny translate go` / `dafny translate js` and vendoring the kernel under its
+own conventional path.
 
 ## Modules and entry points
 

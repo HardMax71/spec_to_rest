@@ -213,10 +213,7 @@ ErrorResponse:
       description: Human-readable error description
 ```
 
-**Pagination** is not yet emitted. List endpoints currently return a flat JSON array of
-`<Entity>Read` objects. Cursor- and offset-based pagination are designed in
-[research/02, Convention Engine](/research/02_convention_engine) but tracked as a future
-milestone.
+**Pagination** is emitted for list endpoints (since [#464](https://github.com/HardMax71/spec_to_rest/pull/464)): they accept `limit` (default 50, clamped to 1..100) and `offset` (default 0) query parameters and return a flat, bounded JSON array of `<Entity>Read` objects (no envelope, backward-compatible). Clamping is centralized in an `app/pagination.py` helper. Cursor-based pagination remains a future milestone.
 
 ### Live OpenAPI reference
 

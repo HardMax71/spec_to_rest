@@ -3014,7 +3014,7 @@ Behavioural notes that diverge from the original Python sketch:
 - **No staged early-termination on type errors.** Z3/Alloy translation reports
   `TranslatorLimitation` per affected check (skipped, rather than fatal); the rest of the run
   continues. The CLI exit-code mapping in
-  [`ExitCodes.forCheckResults`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/cli/src/main/scala/specrest/cli/ExitCodes.scala)
+  [`ExitStatus.forCheckResults`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/cli/src/main/scala/specrest/cli/ExitCodes.scala)
   surfaces translator gaps as exit `2` after the run.
 - **Per-check failures are data, rather than exceptions.** `runConsistencyChecks` returns
   `IO[ConsistencyReport]`, failures stay inside `CheckResult.diagnostic`, so a
@@ -3022,7 +3022,7 @@ Behavioural notes that diverge from the original Python sketch:
   reserved for parse / build / translator-level errors that abort the run.
 - **No `verify_incremental`.** Incremental verification is not on the current
   roadmap; the gate runs all checks in parallel via `parTraverseN(maxParallel)`.
-- **Exit-code mapping** lives separately in `ExitCodes` (0 / 1 / 2 / 3), see
+- **Exit-code mapping** lives separately in the `ExitStatus` enum (0 / 1 / 2 / 3 / 4), see
   [Verification Engine, Exit codes](/pipelines/verification#exit-codes).
 
 
