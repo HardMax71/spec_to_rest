@@ -1250,9 +1250,9 @@ let_expr        = 'let' LOWER_IDENT '=' expr 'in' expr ;
 | 4.5         | `union`, `intersect`, `minus`                                        | Left          |
 | 5           | `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `not in`, `subset`, `matches` | Non-assoc     |
 | 6           | `not`                                                                | Right         |
-| 7           | `implies`, `iff`                                                     | Right         |
-| 8           | `and`                                                                | Left          |
-| 9           | `or`                                                                 | Left          |
+| 7           | `and`                                                                | Left          |
+| 8           | `or`                                                                 | Left          |
+| 9           | `implies`, `iff`                                                     | Right         |
 | 10 (lowest) | `all`, `some`, `no`, `exists`, `the` (quantifiers)                   | N/A           |
 
 ### 2.5 Syntactic sugar
