@@ -90,7 +90,11 @@ final class DafnyTranslateCli private (binary: String, workDir: Path) extends Da
         val durationMs = (System.nanoTime() - started) / 1_000_000L
         val stdout     = readIfExists(outFile)
         val stderr     = readIfExists(errFile)
-        val collected  = if Files.isDirectory(outDir) then collectFiles(outDir) else Map.empty
+        // Go/Python emit a directory tree; the JS backend emits a single `<base>.js` bundle (the
+        // runtime is inlined by `--include-runtime`), so fall back to collecting that one file.
+        val collected =
+          if Files.isDirectory(outDir) then collectFiles(outDir)
+          else collectSingleFile(outBase, target)
         // The Go backend runs `goimports` as a post-emit format pass and exits non-zero when that
         // tool is absent, even though the translated sources are already fully written and valid.
         // Accept that one case (output present + the failure is the formatter), but let every other
@@ -116,6 +120,11 @@ final class DafnyTranslateCli private (binary: String, workDir: Path) extends Da
         else
           Left(s"dafny translate ${target.cliFlag} produced no output directory at $outDir")
     }
+
+  private def collectSingleFile(outBase: Path, target: TargetLanguage): Map[String, String] =
+    val file = outBase.resolveSibling(s"${outBase.getFileName}.${target.cliFlag}")
+    if Files.isRegularFile(file) then Map(file.getFileName.toString -> Files.readString(file))
+    else Map.empty
 
   private def collectFiles(root: Path): Map[String, String] =
     val stream = Files.walk(root)

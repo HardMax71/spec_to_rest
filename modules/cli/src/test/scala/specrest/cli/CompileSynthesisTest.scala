@@ -215,6 +215,44 @@ class CompileSynthesisTest extends CatsEffectSuite:
             )
           }
 
+  test("--with-synthesis for ts-express translates + emits a kernel-routed TS project"):
+    DafnyCli.resolveBinary(None).flatMap:
+      case Left(_)  => IO.unit
+      case Right(_) => runTsSynthesisHappyPath()
+
+  private def runTsSynthesisHappyPath(): IO[Unit] =
+    withTempDir: dir =>
+      val cacheDir      = dir.resolve("synth-cache")
+      val skeletonsRoot = Cache.skeletonsRoot(cacheDir)
+      val opts = baseOpts(dir.toString, Some(cacheDir.toString), target = "ts-express-postgres")
+        .copy(allowSkeletons = true, withTests = false)
+      seedSkeletonCache(skeletonsRoot) *> Compile
+        .run("fixtures/spec/url_shortener.spec", opts, log)
+        .flatMap: code =>
+          IO.blocking {
+            assertEquals(code, ExitStatus.Ok)
+            val root    = Paths.get(opts.outDir)
+            val kernel  = root.resolve("src/dafnyKernel/kernel.cjs")
+            val adapter = root.resolve("src/dafnyKernel/adapter.ts")
+            val service = root.resolve("src/services/urlMapping.ts")
+            assert(Files.isRegularFile(kernel), s"kernel.js not renamed to .cjs at $kernel")
+            assert(Files.isRegularFile(adapter), s"adapter not emitted at $adapter")
+            assert(
+              !Files.exists(root.resolve("src/dafnyKernel/kernel.js")),
+              "kernel.js should have been renamed to kernel.cjs"
+            )
+            assert(
+              Files.readString(kernel).contains("module.exports = { _module, _dafny };"),
+              "kernel.cjs should re-export the module + runtime"
+            )
+            assert(
+              Files.readString(service).contains(
+                "companion.Shorten(state, stringToDafny(body.url))"
+              ),
+              s"service should route Shorten through the kernel — got:\n${Files.readString(service)}"
+            )
+          }
+
   test("--allow-skeletons but no skeletons either → still fails with helpful error"):
     withTempDir: dir =>
       val opts =

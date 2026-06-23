@@ -1,0 +1,27 @@
+import BigNumber from 'bignumber.js';
+// @ts-expect-error generated Dafny kernel ships without type declarations
+import kernel from './kernel.cjs';
+
+interface DafnySeq {
+  toVerbatimString(asLiteral: boolean): string;
+}
+interface DafnyInt {
+  toNumber(): number;
+}
+
+export const companion = kernel._module.__default as Record<
+  string,
+  (...args: unknown[]) => unknown
+>;
+
+export const makeState = (): unknown => new kernel._module.ServiceState();
+
+export const stringToDafny = (s: string): unknown =>
+  kernel._dafny.Seq.UnicodeFromString(s);
+
+export const stringFromDafny = (s: unknown): string =>
+  (s as DafnySeq).toVerbatimString(false);
+
+export const intToDafny = (n: number): unknown => new BigNumber(n);
+
+export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();

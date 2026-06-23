@@ -1,0 +1,8 @@
+import { cpSync, existsSync } from 'node:fs';
+
+if (existsSync('src/dafnyKernel')) {
+  cpSync('src/dafnyKernel', 'dist/dafnyKernel', {
+    recursive: true,
+    filter: (src) => !src.endsWith('.ts'),
+  });
+}

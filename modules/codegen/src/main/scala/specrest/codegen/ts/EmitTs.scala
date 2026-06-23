@@ -68,6 +68,9 @@ final private case class TsOperation(
     serviceReturnType: String,
     redirectField: Option[String],
     dafnyMethod: Option[String],
+    routeThroughKernel: Boolean,
+    kernelServiceFn: String,
+    kernelRouteCallArgs: String,
     authMiddleware: Option[String],
     prismaCall: String,
     prismaWhere: String,
@@ -96,6 +99,7 @@ final private case class TsEntityCtx(
     needsPrismaImport: Boolean,
     needsResultCast: Boolean,
     hasListRoute: Boolean,
+    usesKernel: Boolean,
     customSchemas: List[TsCustomSchema]
 )
 
@@ -308,8 +312,12 @@ object EmitTs:
 
     opts.dafnyKernel.foreach: kernel =>
       val pkg = kernel.packagePath.stripSuffix("/")
-      kernel.files.toList.sortBy(_._1).foreach: (rel, content) =>
+      DafnyKernel.rewriteJsKernel(kernel.files).toList.sortBy(_._1).foreach: (rel, content) =>
         files += EmittedFile(s"$pkg/$rel", content)
+      files += EmittedFile(s"$pkg/adapter.ts", templates.dafnyAdapter)
+      // tsc does not copy the non-TS `.cjs` kernel into `dist/`, so `npm start` (which runs the
+      // compiled output) would not find it; the gated `build` step runs this copy.
+      files += EmittedFile("scripts/copyKernel.mjs", templates.dafnyCopyScript)
 
     files.result()
 
@@ -693,6 +701,7 @@ object EmitTs:
       needsPrismaImport = needsDecimal,
       needsResultCast = needsResultCast,
       hasListRoute = operations.exists(_.routeKind == "list"),
+      usesKernel = operations.exists(_.routeThroughKernel),
       customSchemas = customSchemas
     )
 
@@ -916,9 +925,20 @@ object EmitTs:
             .mkString(", ")
           (op.operationName, call, args.mkString(", "), "Promise<void>", Option.empty[String], "")
 
+    val handlerName = toCamelCase(op.operationName)
+    val kernelFn =
+      tsKernelServiceFn(
+        op,
+        handlerName,
+        routeKindName(routeKind),
+        hasRequestBody,
+        requestBodyType,
+        typeLookup
+      )
+
     TsOperation(
       operationName = op.operationName,
-      handlerName = toCamelCase(op.operationName),
+      handlerName = handlerName,
       method = method,
       path = endpoint.path,
       expressPath = expressPath,
@@ -935,6 +955,9 @@ object EmitTs:
       serviceReturnType = serviceReturnType,
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
+      routeThroughKernel = kernelFn.isDefined,
+      kernelServiceFn = kernelFn.map(_._1).getOrElse(""),
+      kernelRouteCallArgs = kernelFn.map(_._2).getOrElse(""),
       authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
         SecurityTs.middlewareName(op.requiresAuth)
       ),
@@ -961,6 +984,86 @@ object EmitTs:
       case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "string")
       case OptionTypeF(inner, _) => s"${tsTypeForParam(inner, typeLookup)} | null"
       case _                     => "string"
+
+  // Idiomatic-TS <-> Dafny-runtime converters keyed by the TS domain type; the empty pair marks a
+  // type whose TS and Dafny representations coincide (boolean), so no conversion call is emitted.
+  private val tsKernelScalarConv: Map[String, (String, String)] = Map(
+    "string"  -> ("stringToDafny", "stringFromDafny"),
+    "number"  -> ("intToDafny", "intFromDafny"),
+    "boolean" -> ("", "")
+  )
+
+  // Render the exported service function that routes the operation through its verified Dafny kernel
+  // method, marshalling scalar inputs/outputs across the TS/Dafny boundary. Returns None (caller
+  // falls back to the route-kind stub) unless the op is kernel-bound and every input/output is a
+  // supported scalar; query-param inputs and collection/datatype results are deferred follow-ups.
+  // The second tuple element is the route-handler call-arg list (idiomatic, pre-marshalling).
+  private def tsKernelServiceFn(
+      op: ProfiledOperation,
+      handlerName: String,
+      routeKind: String,
+      hasRequestBody: Boolean,
+      requestBodyType: String,
+      typeLookup: Map[String, String]
+  ): Option[(String, String)] =
+    val endpoint = op.endpoint
+    op.dafnyMethod.filter(_ => endpoint.queryParams.isEmpty).flatMap: dafnyName =>
+      val inputs =
+        endpoint.pathParams.map(p =>
+          toCamelCase(p.name) -> tsTypeForParam(p.typeExpr, typeLookup)
+        ) ++
+          endpoint.bodyParams.map(p =>
+            s"body.${toCamelCase(p.name)}" -> tsTypeForParam(p.typeExpr, typeLookup)
+          )
+      val convertedArgs = inputs.map: (access, tsType) =>
+        tsKernelScalarConv.get(tsType).map: (toDafny, _) =>
+          if toDafny.isEmpty then access else s"$toDafny($access)"
+      val outputs = op.responseFields
+      val outputsOk =
+        outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
+      // A redirect op's route issues `res.redirect(status, result)`, so the kernel result must be a
+      // single string (the redirect target); otherwise leave it to the redirect route-kind branch.
+      val redirectOk =
+        routeKind != "redirect" || (outputs.sizeIs == 1 && outputs.head.domainType == "string")
+      Option.when(convertedArgs.forall(_.isDefined) && outputsOk && redirectOk):
+        val callArgs = ("state" :: convertedArgs.flatten).mkString(", ")
+        val call     = s"companion.$dafnyName($callArgs)"
+        val sig =
+          (endpoint.pathParams.map(p =>
+            s"${toCamelCase(p.name)}: ${tsTypeForParam(p.typeExpr, typeLookup)}"
+          ) ++ Option.when(hasRequestBody)(s"body: $requestBodyType")).mkString(", ")
+        def fromDafny(f: ProfiledField, v: String): String =
+          val conv = tsKernelScalarConv(f.domainType)._2
+          if conv.isEmpty then v else s"$conv($v)"
+        val (returnType, bodyLines) =
+          outputs match
+            case single :: Nil =>
+              val v = "out" + toPascalCase(single.fieldName)
+              (
+                single.domainType,
+                List(s"  const $v = $call;", s"  return ${fromDafny(single, v)};")
+              )
+            case many =>
+              val vars = many.map(f => "out" + toPascalCase(f.fieldName))
+              val typeBody =
+                many.map(f => s"${toCamelCase(f.fieldName)}: ${f.domainType}").mkString("; ")
+              val unknowns = List.fill(vars.size)("unknown").mkString(", ")
+              val retFields =
+                many.zip(vars).map((f, v) => s"${toCamelCase(f.fieldName)}: ${fromDafny(f, v)}")
+              (
+                s"{ $typeBody }",
+                List(
+                  s"  const [${vars.mkString(", ")}] = $call as [$unknowns];",
+                  s"  return { ${retFields.mkString(", ")} };"
+                )
+              )
+        val header = s"export const $handlerName = async ($sig): Promise<$returnType> => {"
+        val fn =
+          (header :: "  const state = makeState();" :: bodyLines ::: List("};")).mkString("\n")
+        val routeArgs =
+          (endpoint.pathParams.map(p => toCamelCase(p.name)) ++ Option.when(hasRequestBody)("body"))
+            .mkString(", ")
+        (fn, routeArgs)
 
   private def routeKindName(rk: route_kind): String = rk match
     case _: RkCreate   => "create"

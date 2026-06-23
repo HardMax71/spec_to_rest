@@ -1,4 +1,14 @@
 import { prisma } from '../prisma.js';
+{{#if entity.usesKernel}}
+import {
+  companion,
+  intFromDafny,
+  intToDafny,
+  makeState,
+  stringFromDafny,
+  stringToDafny,
+} from '../dafnyKernel/adapter.js';
+{{/if}}
 import type {
   {{entity.entity.modelClassName}},
   {{entity.entity.createSchemaName}},
@@ -18,6 +28,10 @@ export type {
 } from '../types/{{entity.entityCamel}}.js';
 
 {{#each entity.operations}}
+{{#if routeThroughKernel}}
+{{{kernelServiceFn}}}
+
+{{else}}
 {{#if (eq routeKind "create")}}
 export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturnType}} => {
   return prisma.{{../entity.entityCamel}}.{{prismaCall}}({
@@ -89,5 +103,6 @@ export const {{handlerName}} = async ({{serviceSignatureArgs}}): {{serviceReturn
   throw new Error('{{handlerName}} not implemented');
 };
 
+{{/if}}
 {{/if}}
 {{/each}}

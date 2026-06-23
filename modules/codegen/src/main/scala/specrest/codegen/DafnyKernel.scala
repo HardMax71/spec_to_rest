@@ -46,6 +46,20 @@ object DafnyKernel:
         s"$indent$pre\"$importBase/$name\"$term"
       case _ => line
 
+  def rewriteJsKernel(files: Map[String, String]): Map[String, String] =
+    files.map: (relPath, content) =>
+      if relPath.endsWith(".js") then
+        relPath.dropRight(".js".length) + ".cjs" -> appendJsExports(content)
+      else relPath                               -> content
+
+  // Dafny's JS backend wraps each module in a module-private IIFE (`let _module = (function(){...})()`)
+  // and emits no `module.exports`, so nothing is reachable via `require`. Re-export the module object
+  // (methods + ServiceState) and the runtime (Seq/Map helpers the adapter needs). The `.cjs` extension
+  // keeps it CommonJS inside the emitted ESM project (`"type": "module"`).
+  private def appendJsExports(content: String): String =
+    if content.contains("module.exports") then content
+    else s"$content\nmodule.exports = { _module, _dafny };\n"
+
   def rewritePythonImports(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>
       val subdirDepth = relPath.count(_ == '/')
