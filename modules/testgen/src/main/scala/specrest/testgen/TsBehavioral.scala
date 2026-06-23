@@ -30,7 +30,7 @@ object TsBehavioral:
                   operName(opDecl),
                   "behavioral_ts_pending",
                   "negative/invariant/temporal/transition behavioral tests are not " +
-                    "yet emitted by the TypeScript backend (#174); these remain " +
+                    "yet emitted by the TypeScript backend (#420); these remain " +
                     "covered by the Python oracle suite"
                 )
               )
