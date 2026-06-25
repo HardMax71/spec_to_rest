@@ -9,9 +9,10 @@ text \<open>\<open>eval\<close> is a reference semantics for the surface IR (\<o
   a tautology. A \<open>CallF\<close> evaluates its arguments, binds their values in the
   environment (call by value, hence capture-free), then evaluates the callee body;
   this needs \<^emph>\<open>fuel\<close> because a call unfolds into a body of unrelated size, so
-  termination is lexicographic on \<open>(fuel, size)\<close>. Binder and collection forms
+  termination is lexicographic on \<open>(fuel, size)\<close>. The binder and collection forms
   (\<open>QuantifierF\<close>, \<open>SetComprehensionF\<close>, \<open>TheF\<close>, \<open>ConstructorF\<close>, the list literals,
-  \<open>WithF\<close>, \<open>LambdaF\<close>) return \<open>None\<close> here pending later coverage: a gap in the
+  \<open>WithF\<close>) are modelled by the equations below; \<open>LambdaF\<close> alone has no equation and
+  falls through to the catch-all (\<open>None\<close>) pending later coverage: a gap in the
   modelled fragment, not an unsoundness.\<close>
 
 definition builtins_reserved ::

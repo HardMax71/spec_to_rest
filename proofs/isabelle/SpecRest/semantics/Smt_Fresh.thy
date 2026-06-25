@@ -19,9 +19,6 @@ fun fresh_in :: "nat \<Rightarrow> String.literal \<Rightarrow> String.literal l
 definition fresh_var :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal" where
   "fresh_var base avoid = fresh_in (Suc (length avoid)) base avoid"
 
-lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
-  by (induction xs) auto
-
 definition underscored :: "nat \<Rightarrow> String.literal \<Rightarrow> String.literal" where
   "underscored n base = ((\<lambda>s. s + STR ''_'') ^^ n) base"
 

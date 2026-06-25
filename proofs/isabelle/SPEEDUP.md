@@ -672,10 +672,10 @@ siblings `SpecRest_Soundness` and `SpecRest_Codegen`.
 Cross-session imports are session-qualified (`imports SpecRest_IR.IR_Helpers` from `semantics/`,
 `SpecRest_Semantics.Translate` from `codegen/`); same-session imports stay bare. Measured cold
 times: IR ≈ 60 s, Semantics ≈ 110 s, Codegen ≈ 50 s, Soundness ≈ 25 s. A `codegen/` edit (the common
-codegen-lift case) rebuilds only `SpecRest_Codegen` (~50 s), reusing the IR + Semantics + Soundness
-heaps; a `semantics/` edit (translate / eval lifts) reuses the ~60 s IR heap instead of
-re-elaborating it. `restore-keys` partial-hit reuse still applies on top. See `README.md` → Session
-structure.
+codegen-lift case) rebuilds only `SpecRest_Codegen` (~50 s), reusing the IR + Semantics heaps
+(`SpecRest_Soundness` is a sibling, not a dependency — it is left untouched, not rebuilt); a
+`semantics/` edit (translate / eval lifts) reuses the ~60 s IR heap instead of re-elaborating it.
+`restore-keys` partial-hit reuse still applies on top. See `README.md` → Session structure.
 
 ## Dropped / Deferred
 

@@ -61,7 +61,7 @@ graph TD
 | a `codegen/` theory (common case — codegen lifts) | `SpecRest_Codegen`              | IR + Semantics + Snd | ~50 s     |
 | a `soundness/` theory                             | `SpecRest_Soundness`            | IR + Semantics + Cg  | ~25 s     |
 | a `semantics/` theory (translate / eval lifts)    | Semantics + Soundness + Codegen | IR                   | ~2.5 min  |
-| an `core/` IR-layer theory                        | everything                      | —                    | ~3.5 min  |
+| a `core/` IR-layer theory                         | everything                      | —                    | ~3.5 min  |
 
 Measured on Isabelle2025-2: IR ≈ 60 s, Semantics ≈ 110 s, Codegen ≈ 50 s, Soundness ≈ 25 s. Editing
 the heavily-churned meaning layer now reuses the ~60 s IR heap instead of re-elaborating it.

@@ -762,9 +762,6 @@ next
   qed
 qed (auto simp: list_ex_iff)
 
-lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
-  by (induction xs) auto
-
 lemma inline_calls_list_length [simp]:
   "length (inline_calls_list fs ps es) = length es"
   by (induction es) auto
