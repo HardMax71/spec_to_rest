@@ -130,6 +130,21 @@ isabelle export -d proofs/isabelle/SpecRest -O ... -x 'SpecRest_Codegen.Codegen:
 diff -u modules/ir/.../SpecRestGenerated.scala $exported  →  DRIFT OK
 ```
 
+### Tier 2.1 follow-up — codegen datatypes (2026-06-25) — **`SpecRest_Codegen` −11 s (~20 %)**
+
+Tier 2.1 pruned the `IR` / `Semantics` / `Smt` datatypes but never reached the `SpecRest_Codegen`
+session — all **53** codegen datatypes still derived the full plugin set. Extended
+`(plugins only: code size)` to every one. Codegen uses no `quickcheck` / `nitpick` /
+`lift_definition` / `transfer_rule` and no local-datatype `map_/set_/rel_` BNF combinators
+(verified), so the skipped derivations are genuinely unused.
+
+| Metric                     | Before | After | Δ             |
+| -------------------------- | ------ | ----- | ------------- |
+| `SpecRest_Codegen` session | 51 s   | 40 s  | −11 s (~20 %) |
+
+`SpecRestGenerated.scala` byte-identical (the `code` plugin is kept, so code equations are
+unchanged).
+
 ### Tier 2.2 — `primrec` audit (2026-05-13) — **negligible (in noise)**
 
 Converted six list-recursive helpers from `fun` to `primrec`:
