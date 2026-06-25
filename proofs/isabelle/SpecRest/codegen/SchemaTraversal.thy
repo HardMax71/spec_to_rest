@@ -87,7 +87,7 @@ text \<open>OpenAPI primitive type table — lifted from
   primitive maps to an OpenAPI \<open>type\<close> list and an optional \<open>format\<close>
   string. The Scala caller wraps this into \<open>SchemaObject\<close>.\<close>
 
-datatype openapi_primitive_def = OpenApiPrimDef
+datatype (plugins only: code size) openapi_primitive_def = OpenApiPrimDef
   "String.literal list"      \<comment> \<open>type list, e.g. ["string"] or ["integer"]\<close>
   "String.literal option"    \<comment> \<open>format, e.g. Some "date-time"\<close>
 
@@ -121,7 +121,7 @@ text \<open>OpenAPI named-type classifier — mirrors \<open>classifyColumnType\
   (array \<open>items\<close>, object \<open>additionalProperties\<close>, etc.) in Scala where it
   builds the recursive \<open>SchemaObject\<close>.\<close>
 
-datatype openapi_named_kind =
+datatype (plugins only: code size) openapi_named_kind =
     OntPrimitive openapi_primitive_def
   | OntEnum "String.literal list"
   | OntEntityRef String.literal

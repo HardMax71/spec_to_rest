@@ -12,7 +12,7 @@ text \<open>Pure utility lifts from \<open>specrest.convention.Schema\<close>. T
   \<open>flattenAnd\<close>/\<open>flattenEnsuresExpr\<close>) so the extracted Scala can be called
   directly from hand-written code without a wrapper-rename indirection.\<close>
 
-datatype detected_aggregate = DetectedAggregate
+datatype (plugins only: code size) detected_aggregate = DetectedAggregate
   String.literal             \<comment> \<open>target_field\<close>
   String.literal             \<comment> \<open>collection_field\<close>
   trigger_aggregate          \<comment> \<open>aggregate\<close>
@@ -56,7 +56,7 @@ text \<open>Aggregate-call decoding: a verified-subset SUM/COUNT/MIN/MAX over a
   record (Isabelle tuples extract as right-nested in Scala, which makes them
   awkward to destructure; a datatype lifts cleanly to a flat case class).\<close>
 
-datatype aggregate_call = AggregateCall
+datatype (plugins only: code size) aggregate_call = AggregateCall
   String.literal             \<comment> \<open>collection_field\<close>
   trigger_aggregate          \<comment> \<open>aggregate\<close>
   "String.literal option"    \<comment> \<open>source_projection\<close>
@@ -129,7 +129,7 @@ text \<open>Column-kind classification for the deriveSchema field walker. Lifts 
   Alias-cycle protection: the same fuel-bounded visited-set pattern as
   \<open>aliasRefinements\<close> / \<open>findEnumValuesInType\<close> in \<open>SchemaTraversal\<close>.\<close>
 
-datatype column_kind =
+datatype (plugins only: code size) column_kind =
     CkPrim "String.literal"        \<comment> \<open>sql type from primitiveTypeToSql\<close>
   | CkEnum "String.literal list"   \<comment> \<open>enum value list (used to build IN-list CHECK)\<close>
   | CkEntityRef "String.literal"   \<comment> \<open>target entity name (Scala builds FK + _id suffix)\<close>
@@ -138,7 +138,7 @@ datatype column_kind =
   | CkRelation                     \<comment> \<open>RelationTypeF → BIGINT\<close>
   | CkUnknown                      \<comment> \<open>unresolved NamedTypeF → TEXT fallback\<close>
 
-datatype classified_column = ClassifiedColumn column_kind bool
+datatype (plugins only: code size) classified_column = ClassifiedColumn column_kind bool
   \<comment> \<open>kind + nullable flag (true iff the type expression had an outer OptionTypeF
       anywhere in the alias chain)\<close>
 
@@ -210,7 +210,7 @@ text \<open>Aggregate-trigger validation: the pure validity-check kernel of
   \<^enum> if the aggregate carries a source-projection name, the child entity has
     a field with that name\<close>
 
-datatype trigger_candidate = TriggerCandidate
+datatype (plugins only: code size) trigger_candidate = TriggerCandidate
   String.literal             \<comment> \<open>parent_table\<close>
   String.literal             \<comment> \<open>target_field (Scala turns into column name)\<close>
   String.literal             \<comment> \<open>child_table\<close>
@@ -329,7 +329,7 @@ text \<open>Invariant-atom classifier for entity \<open>CHECK\<close> constraint
   Scala dispatches on the typed class and emits the SQL string from
   the components (escape, format, interpolate).\<close>
 
-datatype invariant_check_class =
+datatype (plugins only: code size) invariant_check_class =
     IcSkip
   | IcInClause "String.literal" "expr list"
   | IcCompare "String.literal" bin_op expr
@@ -374,7 +374,7 @@ text \<open>Column-CHECK atom classifier for \<open>Schema.applyAtom\<close>. Mi
     on the RHS for length/value comparisons.
   \<^item> \<open>CcSkip\<close>: \<open>RaPredCall\<close>, or an unrecognised shape.\<close>
 
-datatype column_check_class =
+datatype (plugins only: code size) column_check_class =
     CcSkip
   | CcRegexMatch "String.literal"               \<comment> \<open>regex pattern\<close>
   | CcLenCompare bin_op int                \<comment> \<open>op, n\<close>

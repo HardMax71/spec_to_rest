@@ -16,7 +16,7 @@ text \<open>Type-to-sig mapping kernel for the Alloy translator. Lifts the pure
   caller turns \<open>None\<close> into a \<open>boundary/break\<close> \<open>failAlloy\<close>
   diagnostic with the unsupported shape's class name.\<close>
 
-datatype alloy_field_multiplicity =
+datatype (plugins only: code size) alloy_field_multiplicity =
     AfmOne
   | AfmLone
   | AfmSome
@@ -133,7 +133,7 @@ text \<open>\<open>renderBinaryOp\<close>'s structural decision: each spec binar
   \<^item> \<open>AbsPrefixCall tok\<close>: \<open>tok[$l, $r]\<close> — Alloy's prefix-call form
     used for the arithmetic builtins \<open>plus\<close>/\<open>minus\<close>/\<open>mul\<close>/\<open>div\<close>.\<close>
 
-datatype alloy_binop_shape =
+datatype (plugins only: code size) alloy_binop_shape =
     AbsLogical "String.literal"
   | AbsInfix "String.literal"
   | AbsPrefixCall "String.literal"
@@ -164,7 +164,7 @@ text \<open>\<open>renderExpr\<close>'s unary-operator dispatch. \<open>UPower\<
   prefix is unsupported (it requires higher-order Alloy reasoning); the
   binder-domain form is handled separately in \<open>buildBinding\<close>.\<close>
 
-datatype alloy_unop_shape =
+datatype (plugins only: code size) alloy_unop_shape =
     AusNot           \<comment> \<open>\<open>not (X)\<close>\<close>
   | AusCardinality   \<comment> \<open>\<open>#(X)\<close>\<close>
   | AusMinusZero     \<comment> \<open>\<open>minus[0, X]\<close>\<close>
@@ -182,7 +182,7 @@ text \<open>\<open>IdentifierF\<close> resolution classifier. Mirrors the four-w
   then falls through unprefixed. The Scala caller emits the prefix
   (\<open>currentStateSig.\<close> or \<open>Inputs.\<close>) for the field cases.\<close>
 
-datatype alloy_identifier_kind =
+datatype (plugins only: code size) alloy_identifier_kind =
     AikBoundVar
   | AikStateField
   | AikInputField
@@ -205,7 +205,7 @@ text \<open>Quantifier-keyword classifier. \<open>QExists\<close> shares the \<o
   keyword with \<open>QSome\<close> (the spec language distinguishes them; Alloy
   collapses both onto the same surface keyword).\<close>
 
-datatype alloy_quantifier_class =
+datatype (plugins only: code size) alloy_quantifier_class =
     AqAll
   | AqSome
   | AqExists
@@ -283,7 +283,7 @@ text \<open>\<open>buildBinding\<close>'s \<open>IdentifierF\<close>-case resolu
     containment fact.
   \<^item> \<open>AbirPlain\<close>: \<open>$name\<close> is unresolved. Emit \<open>$name\<close> as-is.\<close>
 
-datatype alloy_binding_identifier_resolution =
+datatype (plugins only: code size) alloy_binding_identifier_resolution =
     AbirEntity "String.literal"
   | AbirEnum "String.literal"
   | AbirStateOrInput

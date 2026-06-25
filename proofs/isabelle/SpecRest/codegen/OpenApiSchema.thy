@@ -23,7 +23,7 @@ text \<open>Lifted core of the OpenAPI \<open>SchemaObject\<close> datatype and 
   (\<open>additionalProperties\<close> may hold either a nested schema or a bool),
   so they are declared in a single \<open>datatype\<close> block.\<close>
 
-datatype schema_object = SchemaObject
+datatype (plugins only: code size) schema_object = SchemaObject
   "String.literal list option"            \<comment> \<open>type (one or more JSON-schema type tags, ordered)\<close>
   "String.literal option"                 \<comment> \<open>format\<close>
   "int option"                            \<comment> \<open>minLength\<close>
@@ -112,7 +112,7 @@ text \<open>Lift of \<open>OpenApi.Schema.makeNullable\<close> as a *decision cl
   \<^item> \<open>NdAppendNull\<close>: \<open>type\<close> is set and doesn't yet contain \<open>"null"\<close>
     — append \<open>"null"\<close> to the type list.\<close>
 
-datatype nullable_decision = NdNoop | NdWrapAnyOfNull | NdAppendNull
+datatype (plugins only: code size) nullable_decision = NdNoop | NdWrapAnyOfNull | NdAppendNull
 
 definition decideNullable ::
   "String.literal option \<Rightarrow> String.literal list option \<Rightarrow> nullable_decision"

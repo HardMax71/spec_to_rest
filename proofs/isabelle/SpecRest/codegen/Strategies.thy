@@ -9,12 +9,12 @@ text \<open>Constraint-walker primitives for the testgen strategy derivation.
   stay in Scala. The Scala layer composes these walkers with its IR-aware
   postprocessing.\<close>
 
-datatype int_constraint = IntConstraint
+datatype (plugins only: code size) int_constraint = IntConstraint
   "int option"               \<comment> \<open>min_value (inclusive)\<close>
   "int option"               \<comment> \<open>max_value (inclusive)\<close>
   "String.literal list"      \<comment> \<open>extra_filters\<close>
 
-datatype string_constraint = StringConstraint
+datatype (plugins only: code size) string_constraint = StringConstraint
   "int option"               \<comment> \<open>min_size (inclusive)\<close>
   "int option"               \<comment> \<open>max_size (inclusive)\<close>
   "String.literal list"      \<comment> \<open>regexes\<close>

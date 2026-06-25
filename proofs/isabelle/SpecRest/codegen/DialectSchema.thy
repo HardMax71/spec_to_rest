@@ -8,7 +8,7 @@ text \<open>Canonical SQL column type discriminator + per-dialect rendering.
   regex to extract \<open>VARCHAR(n)\<close> / \<open>NUMERIC(p, s)\<close> parameters); the ADT
   and the dialect-specific renderers move here.\<close>
 
-datatype canonical_type =
+datatype (plugins only: code size) canonical_type =
     CtText
   | CtVarchar int
   | CtInt4
@@ -41,7 +41,7 @@ text \<open>SQLAlchemy type rendering per Postgres / Sqlite / MySQL.
   and uses \<open>importModule\<close> to inject \<open>from postgresql import JSONB\<close>
   style imports.\<close>
 
-datatype sa_type = SaType "String.literal" "String.literal option"
+datatype (plugins only: code size) sa_type = SaType "String.literal" "String.literal option"
 
 fun saTypeExpr :: "sa_type \<Rightarrow> String.literal" where
   "saTypeExpr (SaType e _) = e"
@@ -187,7 +187,7 @@ text \<open>Dialect capability matrix: which target-dialect features (partial
   shortcuts (e.g. SQLite drops a CHECK on a serial PK because MySQL
   error 3818 would reject it elsewhere; Postgres keeps it).\<close>
 
-datatype dialect_caps = DialectCaps
+datatype (plugins only: code size) dialect_caps = DialectCaps
   bool  \<comment> \<open>supportsPartialIndex\<close>
   bool  \<comment> \<open>supportsCheckConstraint\<close>
   bool  \<comment> \<open>supportsCheckOnAutoIncrement\<close>

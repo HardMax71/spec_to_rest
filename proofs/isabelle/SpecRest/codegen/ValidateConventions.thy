@@ -165,7 +165,7 @@ text \<open>IR-context validation for individual convention rules. Two
 
   Mirrors the legacy \<open>Validate.validateIrContext\<close> branch logic.\<close>
 
-datatype convention_ir_diagnostic =
+datatype (plugins only: code size) convention_ir_diagnostic =
     PartialIndexFieldMissing "String.literal" "String.literal"
       \<comment> \<open>target entity name, qualifier field name\<close>
   | TestStrategyFieldMissing "String.literal" "String.literal" "String.literal"

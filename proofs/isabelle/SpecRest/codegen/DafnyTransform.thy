@@ -191,9 +191,9 @@ text \<open>Lift of \<open>convention.dafny.Generator.classifyExterns\<close>'s 
   info constructor is \<open>ExInfo\<close> (not \<open>ExternInfo\<close>) so it doesn't clash with the Scala
   \<open>ExternInfo\<close> case class the adapter targets.\<close>
 
-datatype extern_kind = EkPredicate | EkIntFunction
-datatype extern_info = ExInfo extern_kind int
-datatype extern_item = EiExtern String.literal int extern_kind | EiPattern String.literal
+datatype (plugins only: code size) extern_kind = EkPredicate | EkIntFunction
+datatype (plugins only: code size) extern_info = ExInfo extern_kind int
+datatype (plugins only: code size) extern_item = EiExtern String.literal int extern_kind | EiPattern String.literal
 
 definition knownBuiltinNames :: "String.literal list" where
   "knownBuiltinNames = [STR ''len'', STR ''dom'', STR ''ran'']"

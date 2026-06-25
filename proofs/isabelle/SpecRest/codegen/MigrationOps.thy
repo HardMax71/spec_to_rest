@@ -7,7 +7,7 @@ text \<open>Schema-migration operation ADT. Constructor names match the desired 
   via \<open>code_identifier\<close> in \<open>Codegen\<close>. The Scala layer drops its
   hand-written enum and uses these constructors directly.\<close>
 
-datatype migration_op =
+datatype (plugins only: code size) migration_op =
     CreateTable table_spec
   | DropTable table_spec
   | AddColumn String.literal column_spec

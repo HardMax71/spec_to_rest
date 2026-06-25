@@ -8,9 +8,9 @@ text \<open>HTTP method and operation-kind enums lifted from
   rule out collisions (\<open>DELETE\<close> vs \<open>Delete\<close>), and none of these
   names clash with existing extracted constructors.\<close>
 
-datatype http_method = GET | POST | PUT | PATCH | DELETE
+datatype (plugins only: code size) http_method = GET | POST | PUT | PATCH | DELETE
 
-datatype operation_kind =
+datatype (plugins only: code size) operation_kind =
     Create | Read | Replace | PartialUpdate | Delete
   | CreateChild | FilteredRead | SideEffect | BatchMutation | Transition
 
