@@ -20,9 +20,9 @@ proofs/isabelle/
 ├── STATUS.md              proof-state ledger
 └── SpecRest/
     ├── ROOT                 session graph (IR → Semantics → Soundness, Codegen)
-    ├── core/                SpecRest_IR: IR (datatypes) + analysis layer
-    │                        (IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars, IR_Analysis)
-    ├── semantics/           SpecRest_Semantics: Smt(_Fresh), Semantics(_Eval/_Typing),
+    ├── core/                SpecRest_IR: Names (string/var mechanics), IR (datatypes) +
+    │                        analysis layer (IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars, IR_Analysis)
+    ├── semantics/           SpecRest_Semantics: Smt, Semantics(_Eval/_Typing),
     │                        Semantics_Reference, Semantics_Inlining, Translate
     ├── soundness/           SpecRest_Soundness: Soundness_Framework, Preservation_*,
     │                        DirectSound(_*), DirectTotality, DirectPreservation
