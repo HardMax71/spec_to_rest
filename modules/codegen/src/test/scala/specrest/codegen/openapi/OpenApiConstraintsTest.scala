@@ -116,8 +116,14 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
     assertEquals(res.minimum, Some(dec(42, 0)))
     assertEquals(res.maximum, Some(dec(42, 0)))
 
-  test("Mirrored RaLenCmp: n < len(value) = len(value) > n -> minLength n+1"):
-    assertEquals(walk(binOp(BLt(), intL(3), lenOfValue)).minLength, Some(i(4)))
+  List[(String, bin_op, Int, openapi_bounds => Option[BigInt], Int)](
+    ("n < len  = len > n  -> minLength n+1", BLt(), 3, _.minLength, 4),
+    ("n <= len = len >= n -> minLength n", BLe(), 3, _.minLength, 3),
+    ("n > len  = len < n  -> maxLength n-1", BGt(), 10, _.maxLength, 9),
+    ("n >= len = len <= n -> maxLength n", BGe(), 10, _.maxLength, 10)
+  ).foreach: (name, op, n, field, expected) =>
+    test(s"Mirrored RaLenCmp: $name"):
+      assertEquals(field(walk(binOp(op, intL(n), lenOfValue))), Some(i(expected)))
 
   // -- RaLenCmp (Int path) ------------------------------------------------
 
