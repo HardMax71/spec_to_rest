@@ -1,17 +1,21 @@
 chapter SpecRest
 
-session SpecRest_Core in core = HOL +
+session SpecRest_IR in core = HOL +
   options [document = false, threads = 0]
   theories
     IR
     IR_Helpers
     IR_Analysis
+
+session SpecRest_Semantics in semantics = SpecRest_IR +
+  options [document = false, threads = 0]
+  theories
     Smt
     Semantics
     Semantics_Reference
     Translate
 
-session SpecRest_Soundness in soundness = SpecRest_Core +
+session SpecRest_Soundness in soundness = SpecRest_Semantics +
   options [document = false, threads = 0]
   theories
     Soundness_Framework
@@ -23,7 +27,7 @@ session SpecRest_Soundness in soundness = SpecRest_Core +
     DirectTotality
     DirectPreservation
 
-session SpecRest_Codegen in codegen = SpecRest_Core +
+session SpecRest_Codegen in codegen = SpecRest_Semantics +
   options [document = false, threads = 0]
   sessions
     "HOL-Library"

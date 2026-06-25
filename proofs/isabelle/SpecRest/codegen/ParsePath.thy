@@ -1,5 +1,5 @@
 theory ParsePath
-  imports SpecRest_Core.IR_Helpers Methods
+  imports SpecRest_IR.IR_Helpers Methods
 begin
 
 text \<open>Pure path-derivation helpers used by \<open>Path.autoDerivePath\<close>:

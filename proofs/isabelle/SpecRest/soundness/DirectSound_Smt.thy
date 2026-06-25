@@ -1,7 +1,7 @@
 theory DirectSound_Smt
   imports
     Soundness_Framework
-    SpecRest_Core.Translate
+    SpecRest_Semantics.Translate
 begin
 
 text \<open>Smt-side plumbing for the direct soundness proof: value-level

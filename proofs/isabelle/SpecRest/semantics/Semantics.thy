@@ -1,5 +1,5 @@
 theory Semantics
-  imports IR IR_Helpers IR_Analysis "HOL.Rat"
+  imports SpecRest_IR.IR SpecRest_IR.IR_Helpers SpecRest_IR.IR_Analysis "HOL.Rat"
 begin
 
 datatype (plugins only: code size) ir_value =

@@ -1,5 +1,5 @@
 theory Preservation_Wf
-  imports SpecRest_Core.Semantics
+  imports SpecRest_Semantics.Semantics
 begin
 
 text \<open>Phase 9j (dual of 9i). \<open>requiresAlloy_imp_lower_none\<close> proved the

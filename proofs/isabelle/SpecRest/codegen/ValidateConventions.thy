@@ -1,5 +1,5 @@
 theory ValidateConventions
-  imports SpecRest_Core.IR Methods OpenApiConstraints
+  imports SpecRest_IR.IR Methods OpenApiConstraints
 begin
 
 text \<open>Single-dispatcher parse-don't-validate machinery for convention

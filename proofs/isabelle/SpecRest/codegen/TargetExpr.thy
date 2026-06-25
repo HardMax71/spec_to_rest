@@ -1,5 +1,5 @@
 theory TargetExpr
-  imports SpecRest_Core.IR
+  imports SpecRest_IR.IR
 begin
 
 text \<open>Language-neutral decision kernels shared by the per-target expression backends

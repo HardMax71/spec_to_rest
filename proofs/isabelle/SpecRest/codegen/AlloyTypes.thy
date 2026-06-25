@@ -1,5 +1,5 @@
 theory AlloyTypes
-  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis ParseTemporal
+  imports SpecRest_IR.IR_Helpers SpecRest_IR.IR_Analysis ParseTemporal
 begin
 
 text \<open>Type-to-sig mapping kernel for the Alloy translator. Lifts the pure

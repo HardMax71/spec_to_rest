@@ -1,7 +1,7 @@
 theory DirectTotality
   imports
     Preservation_Wf
-    SpecRest_Core.Translate
+    SpecRest_Semantics.Translate
 begin
 
 text \<open>Totality: every \<open>wf_z3\<close> expression translates directly.

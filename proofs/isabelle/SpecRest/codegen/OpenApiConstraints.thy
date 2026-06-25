@@ -1,5 +1,5 @@
 theory OpenApiConstraints
-  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis
+  imports SpecRest_IR.IR_Helpers SpecRest_IR.IR_Analysis
 begin
 
 text \<open>Constraint-bounds walker for OpenAPI schema emission. Lifts

@@ -1,5 +1,5 @@
 theory LintAnalysis
-  imports SpecRest_Core.IR SpecRest_Core.IR_Analysis
+  imports SpecRest_IR.IR SpecRest_IR.IR_Analysis
 begin
 
 text \<open>Pure decision predicates and IR walkers for the lint analyses in
