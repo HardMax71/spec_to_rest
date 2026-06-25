@@ -23,9 +23,9 @@ proofs/isabelle/
     ├── core/                SpecRest_IR: Names (string/var mechanics), IR (datatypes) +
     │                        analysis layer (IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars, IR_Analysis)
     ├── semantics/           SpecRest_Semantics: Smt, Semantics(_Eval/_Typing),
-    │                        Semantics_Reference, Semantics_Inlining, Translate
+    │                        Semantics_Reference, Translate
     ├── soundness/           SpecRest_Soundness: Soundness_Framework, Preservation_*,
-    │                        DirectSound(_*), DirectTotality, DirectPreservation
+    │                        DirectSound(_*), DirectTotality, DirectPreservation, Semantics_Inlining
     └── codegen/             SpecRest_Codegen: schema/OpenAPI/Alloy/classify helpers +
                              Codegen.thy (export_code)
 ```

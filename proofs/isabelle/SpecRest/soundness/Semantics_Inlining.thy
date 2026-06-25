@@ -1,5 +1,5 @@
 theory Semantics_Inlining
-  imports Semantics_Reference
+  imports SpecRest_Semantics.Semantics_Reference
 begin
 
 lemma eval_coincidence:
