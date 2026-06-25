@@ -1,9 +1,7 @@
 package specrest.testgen
 
-import specrest.codegen.AdminModel
 import specrest.convention.EndpointSpec
 import specrest.ir.Naming
-import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -27,7 +25,7 @@ object Behavioral:
 
   def emitFor(profiled: ProfiledService): BehavioralOutput =
     val ir               = profiled.ir
-    val transition       = transitionEmission(profiled, ir)
+    val transition       = StateMachineTests.transitionEmission(profiled, ir)
     val coveredByTransit = transition.coveredOps
     val perOp = profiled.operations.flatMap: pop =>
       if StubOps.isStub(profiled, pop) then
@@ -93,21 +91,6 @@ object Behavioral:
         (refsCollOutput(r) && isComprehension(l))
       case _ => false
 
-  final private case class TransitionEmissionResult(
-      results: List[Either[TestSkip, GeneratedTest]],
-      coveredOps: Set[String]
-  )
-
-  private def transitionEmission(
-      profiled: ProfiledService,
-      ir: ServiceIRFull
-  ): TransitionEmissionResult =
-    svcTransitions(ir).foldLeft(
-      TransitionEmissionResult(Nil, Set.empty)
-    ): (acc, td) =>
-      val per = transitionTestsForTd(td, profiled, ir)
-      TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
-
   private def ensuresTests(
       pop: ProfiledOperation,
       opDecl: operation_decl,
@@ -155,7 +138,7 @@ object Behavioral:
                   Right(
                     buildPositiveTest(
                       name = s"test_${opSnake}_ensures_$idx",
-                      docstring = s"ensures: ${prettyOneLine(clause)}",
+                      docstring = s"ensures: ${TestFormat.prettyOneLine(clause)}",
                       inputArgs = strategySig,
                       pop = pop,
                       assertion = text,
@@ -193,9 +176,9 @@ object Behavioral:
                 )
               )
         case None =>
-          statusRestrictionPattern(req, inputs, stateFields, ir) match
+          StateMachineTests.statusRestrictionPattern(req, inputs, stateFields, ir) match
             case Some(restriction) =>
-              statusRestrictionNegativeOrSkip(opDecl, pop, ir, restriction, idx).toList
+              StateMachineTests.statusRestrictionNegativeOrSkip(opDecl, pop, ir, restriction, idx).toList
             case None =>
               if isTrueLit(req) then Nil
               else
@@ -224,7 +207,7 @@ object Behavioral:
         Left(
           TestSkip(
             operName(opDecl),
-            s"invariant[${invName(inv, idx)}]",
+            s"invariant[${TestFormat.invName(inv, idx)}]",
             stateDepSkipReason(operName(opDecl), coveredByTransit)
           )
         )
@@ -243,12 +226,18 @@ object Behavioral:
           svcInvariants(ir).zipWithIndex.toList.map: (inv, idx) =>
             ExprToPython.translate(invBody(inv), ctx) match
               case Translated.Skip(reason, _) =>
-                Left(TestSkip(operName(opDecl), s"invariant[${invName(inv, idx)}]", reason))
+                Left(TestSkip(
+                  operName(opDecl),
+                  s"invariant[${TestFormat.invName(inv, idx)}]",
+                  reason
+                ))
               case Translated.Emit(text) =>
                 Right(
                   buildInvariantTest(
-                    name = s"test_${opSnake}_invariant_${Naming.toSnakeCase(invName(inv, idx))}",
-                    docstring = s"invariant ${invName(inv, idx)}: ${prettyOneLine(invBody(inv))}",
+                    name =
+                      s"test_${opSnake}_invariant_${Naming.toSnakeCase(TestFormat.invName(inv, idx))}",
+                    docstring =
+                      s"invariant ${TestFormat.invName(inv, idx)}: ${TestFormat.prettyOneLine(invBody(inv))}",
                     inputArgs = strategySig,
                     pop = pop,
                     assertion = text
@@ -302,7 +291,7 @@ object Behavioral:
                           name =
                             s"test_${opSnake}_temporal_always_${Naming.toSnakeCase(tmpName(t))}",
                           docstring =
-                            s"temporal always(${tmpName(t)}): ${prettyOneLine(arg)}",
+                            s"temporal always(${tmpName(t)}): ${TestFormat.prettyOneLine(arg)}",
                           inputArgs = strategySig,
                           pop = pop,
                           assertion = text
@@ -340,379 +329,6 @@ object Behavioral:
                   )
                 )
 
-  private def transitionTestsForTd(
-      td: transition_decl,
-      profiled: ProfiledService,
-      ir: ServiceIRFull
-  ): TransitionEmissionResult =
-    val entityOpt =
-      entityByName(svcEntities(ir), trnEntity(td))
-    if entityOpt.isEmpty then
-      return TransitionEmissionResult(
-        List(Left(TestSkip(trnName(td), "transition", s"unknown entity '${trnEntity(td)}'"))),
-        Set.empty
-      )
-    val entity = entityOpt.get
-    val fieldOpt =
-      findFieldDeclFull(entFields(entity), trnField(td))
-    if fieldOpt.isEmpty then
-      return TransitionEmissionResult(
-        List(
-          Left(
-            TestSkip(
-              trnName(td),
-              "transition",
-              s"entity '${entName(entity)}' has no field '${trnField(td)}'"
-            )
-          )
-        ),
-        Set.empty
-      )
-    val enumValuesOpt = enumValuesForField(fieldOpt.get, ir)
-    if enumValuesOpt.isEmpty then
-      return TransitionEmissionResult(
-        List(
-          Left(
-            TestSkip(
-              trnName(td),
-              "transition",
-              s"transition field '${trnField(td)}' is not an enum (or alias of enum); illegal-from enumeration undefined"
-            )
-          )
-        ),
-        Set.empty
-      )
-    val pkOpt = AdminModel.primaryKeyField(entity)
-    if pkOpt.isEmpty then
-      return TransitionEmissionResult(
-        List(
-          Left(
-            TestSkip(
-              trnName(td),
-              "transition",
-              s"entity '${entName(entity)}' has no field; cannot seed"
-            )
-          )
-        ),
-        Set.empty
-      )
-    val statusValues = enumValuesOpt.get
-    val pk           = pkOpt.get
-    val byVia        = trnRules(td).groupBy(trlVia)
-    byVia.toList.sortBy(_._1).foldLeft(TransitionEmissionResult(Nil, Set.empty)): (acc, kv) =>
-      val (viaName, rules) = kv
-      val opDeclOpt        = svcOperations(ir).find(o => operName(o) == viaName)
-      val popOpt           = profiled.operations.find(_.operationName == viaName)
-      val per: TransitionEmissionResult = (opDeclOpt, popOpt) match
-        case (Some(_), Some(pop)) if StubOps.isStub(profiled, pop) =>
-          TransitionEmissionResult(
-            List(Left(TestSkip(viaName, s"transition[$viaName]", StubOps.skipReason(pop)))),
-            Set.empty
-          )
-        case (Some(_), Some(pop)) if pop.endpoint.pathParams.size != 1 =>
-          TransitionEmissionResult(
-            List(
-              Left(
-                TestSkip(
-                  viaName,
-                  s"transition[$viaName]",
-                  "transition tests require exactly one path input identifying the seeded entity; multi-path or zero-path shapes need multi-entity seed orchestration"
-                )
-              )
-            ),
-            Set.empty
-          )
-        case (Some(opDecl), Some(pop)) =>
-          nonPathInputBindings(opDecl, pop, ir) match
-            case Left((paramName, reason)) =>
-              TransitionEmissionResult(
-                List(
-                  Left(
-                    TestSkip(
-                      viaName,
-                      s"transition[$viaName]",
-                      s"transition tests need a generable strategy for input '$paramName': $reason"
-                    )
-                  )
-                ),
-                Set.empty
-              )
-            case Right(nonPath) =>
-              val legalFroms   = rules.map(trlFrom).toSet
-              val illegalFroms = statusValues.filterNot(legalFroms.contains)
-              val stateField = stateFieldForEntity(trnEntity(td), ir)
-                .getOrElse(Naming.toSnakeCase(trnEntity(td)) + "s")
-              val positives = rules.toList.map: rule =>
-                buildTransitionPositiveOrSkip(
-                  td = td,
-                  entity = entity,
-                  fieldName = trnField(td),
-                  pkName = pk,
-                  rule = rule,
-                  opDecl = opDecl,
-                  pop = pop,
-                  stateField = stateField,
-                  ir = ir,
-                  nonPath = nonPath
-                )
-              val negatives = illegalFroms.toList.sorted.map: from =>
-                buildTransitionNegative(
-                  entity = entity,
-                  fieldName = trnField(td),
-                  pkName = pk,
-                  from = from,
-                  opDecl = opDecl,
-                  pop = pop,
-                  nonPath = nonPath
-                )
-              val emitted    = positives ++ negatives
-              val anyRuntime = emitted.exists(_.isRight)
-              TransitionEmissionResult(
-                emitted,
-                if anyRuntime then Set(viaName) else Set.empty
-              )
-        case _ =>
-          TransitionEmissionResult(
-            List(
-              Left(
-                TestSkip(
-                  viaName,
-                  s"transition[$viaName]",
-                  s"no operation named '$viaName' for via clause"
-                )
-              )
-            ),
-            Set.empty
-          )
-      TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
-
-  private def enumValuesForField(
-      field: field_decl,
-      ir: ServiceIRFull
-  ): Option[List[String]] =
-    SpecRestGenerated.enumValuesForField(field, svcEnums(ir), svcTypeAliases(ir))
-
-  final private case class NonPathInput(
-      name: String,
-      argName: String,
-      kind: NonPathKind,
-      strategyExpr: String
-  )
-  private enum NonPathKind derives CanEqual:
-    case Body
-    case Query
-
-  private val ReservedTestLocals: Set[String] =
-    Set("row", "seed", "seeded_id", "response", "client", "pre_state", "post_state", "wrong_status")
-
-  private def safeArgName(raw: String, taken: Set[String]): String =
-    if !ReservedTestLocals.contains(raw) && !taken.contains(raw) then raw
-    else
-      val base = s"_arg_$raw"
-      if !taken.contains(base) && !ReservedTestLocals.contains(base) then base
-      else
-        Iterator
-          .from(1)
-          .map(i => s"${base}_$i")
-          .find(n => !taken.contains(n) && !ReservedTestLocals.contains(n))
-          .get
-
-  private def nonPathInputBindings(
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      ir: ServiceIRFull
-  ): Either[(String, String), List[NonPathInput]] =
-    val overrides = TestStrategyOverrides.from(ir)
-    val tagged =
-      pop.endpoint.bodyParams.map(p => (p, NonPathKind.Body)) ++
-        pop.endpoint.queryParams.map(p => (p, NonPathKind.Query))
-    val resolved = tagged.map: (p, k) =>
-      val ctx  = StrategyCtx.OperationInput(operName(opDecl), p.name)
-      val expr = Strategies.expressionFor(p.typeExpr, ir, ctx, overrides)
-      (p.name, k, expr)
-    resolved.collectFirst { case (n, _, StrategyExpr.Skip(r)) => (n, r) } match
-      case Some(skip) => Left(skip)
-      case None =>
-        val withArgs = resolved
-          .collect { case (n, k, StrategyExpr.Code(t)) => (n, k, t) }
-          .foldLeft((List.empty[NonPathInput], Set.empty[String])):
-            case ((acc, taken), (n, k, t)) =>
-              val arg = safeArgName(n, taken)
-              (acc :+ NonPathInput(n, arg, k, t), taken + arg)
-        Right(withArgs._1)
-
-  private def buildTransitionPositiveOrSkip(
-      td: transition_decl,
-      entity: entity_decl,
-      fieldName: String,
-      pkName: String,
-      rule: transition_rule,
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      stateField: String,
-      ir: ServiceIRFull,
-      nonPath: List[NonPathInput]
-  ): Either[TestSkip, GeneratedTest] =
-    val fixLines = trlGuard(rule) match
-      case None        => Some(Nil)
-      case Some(guard) => GuardSatisfier.recognize(guard, entity, fieldName, trlFrom(rule), ir)
-    fixLines match
-      case None =>
-        Left(
-          TestSkip(
-            operName(opDecl),
-            s"transition[${trlFrom(rule)}_to_${trlTo(rule)}]",
-            s"guard '${prettyOneLine(trlGuard(rule).get)}' uses constructs the seed-dict recognizer does not cover; see docs 'Guarded positive transitions' for the supported shapes"
-          )
-        )
-      case Some(lines) =>
-        Right(
-          buildTransitionPositive(
-            td = td,
-            entity = entity,
-            fieldName = fieldName,
-            pkName = pkName,
-            from = trlFrom(rule),
-            to = trlTo(rule),
-            opDecl = opDecl,
-            pop = pop,
-            stateField = stateField,
-            guardFixLines = lines,
-            nonPath = nonPath
-          )
-        )
-
-  private def buildTransitionPositive(
-      td: transition_decl,
-      entity: entity_decl,
-      fieldName: String,
-      pkName: String,
-      from: String,
-      to: String,
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      stateField: String,
-      guardFixLines: List[String],
-      nonPath: List[NonPathInput]
-  ): GeneratedTest =
-    val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val entitySnake = Naming.toSnakeCase(entName(entity))
-    val testName    = s"test_${opSnake}_transition_${from.toLowerCase}_to_${to.toLowerCase}"
-    val rowStrategy = Strategies.strategyFunctionName(entName(entity))
-    val pkKey       = ExprToPython.pyString(pkName)
-    val fieldKey    = ExprToPython.pyString(fieldName)
-    val stateKey    = ExprToPython.pyString(stateField)
-    val sb          = new StringBuilder
-    sb.append(givenLineFor(rowStrategy, nonPath))
-    sb.append(
-      "@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
-    )
-    sb.append(s"def $testName(${signatureFor(nonPath)}):\n")
-    sb.append(
-      s"    \"\"\"transition ${operName(opDecl)}: $from -> $to (post-state ${trnField(td)} = $to)\"\"\"\n"
-    )
-    sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    row = dict(row)\n")
-    sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
-    guardFixLines.foreach: line =>
-      sb.append(s"    $line\n")
-    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
-    sb.append("    assume(seed.status_code == 201)\n")
-    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
-    sb.append(transitionRequestCall(pop, nonPath))
-    sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
-    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
-    sb.append(
-      s"    bucket = post_state.get($stateKey, {})\n"
-    )
-    sb.append(
-      "    entity_view = bucket.get(str(seeded_id)) or bucket.get(seeded_id)\n"
-    )
-    sb.append(
-      s"    actual = entity_view.get($fieldKey) if isinstance(entity_view, dict) else entity_view\n"
-    )
-    sb.append(
-      s"    assert actual == ${ExprToPython.pyString(to)}, " +
-        s"f\"expected ${trnField(td)}=$to, got {actual!r}\"\n"
-    )
-    GeneratedTest(name = testName, body = sb.toString, skipReason = None)
-
-  private def buildTransitionNegative(
-      entity: entity_decl,
-      fieldName: String,
-      pkName: String,
-      from: String,
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      nonPath: List[NonPathInput]
-  ): Either[TestSkip, GeneratedTest] =
-    val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val entitySnake = Naming.toSnakeCase(entName(entity))
-    val testName    = s"test_${opSnake}_transition_illegal_from_${from.toLowerCase}"
-    val rowStrategy = Strategies.strategyFunctionName(entName(entity))
-    val pkKey       = ExprToPython.pyString(pkName)
-    val fieldKey    = ExprToPython.pyString(fieldName)
-    val sb          = new StringBuilder
-    sb.append(givenLineFor(rowStrategy, nonPath))
-    sb.append(
-      "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
-    )
-    sb.append(s"def $testName(${signatureFor(nonPath)}):\n")
-    sb.append(
-      s"    \"\"\"transition ${operName(opDecl)}: from=$from is illegal (no rule); SUT must reject 4xx\"\"\"\n"
-    )
-    sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    row = dict(row)\n")
-    sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
-    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
-    sb.append("    assume(seed.status_code == 201)\n")
-    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
-    sb.append(transitionRequestCall(pop, nonPath))
-    sb.append(
-      "    assert 400 <= response.status_code < 500, " +
-        s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
-    )
-    Right(GeneratedTest(name = testName, body = sb.toString, skipReason = None))
-
-  private def givenLineFor(rowStrategy: String, nonPath: List[NonPathInput]): String =
-    val rowPair = s"row=$rowStrategy()"
-    val extra   = nonPath.map(i => s"${i.argName}=${i.strategyExpr}")
-    val args    = (rowPair :: extra).mkString(", ")
-    s"@given($args)\n"
-
-  private def signatureFor(nonPath: List[NonPathInput]): String =
-    ("row" :: nonPath.map(_.argName)).mkString(", ")
-
-  private def transitionRequestCall(pop: ProfiledOperation, nonPath: List[NonPathInput]): String =
-    val ep        = pop.endpoint
-    val pathParam = ep.pathParams.headOption.map(_.name)
-    val pathExpr =
-      pathParam match
-        case Some(p) =>
-          val rendered = ep.path.replace(s"{$p}", "{seeded_id}")
-          "f" + ExprToPython.pyString(rendered)
-        case None => ExprToPython.pyString(ep.path)
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
-    val bodyEntries = nonPath.collect:
-      case NonPathInput(n, arg, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $arg"
-    val queryEntries = nonPath.collect:
-      case NonPathInput(n, arg, NonPathKind.Query, _) => s"${ExprToPython.pyString(n)}: $arg"
-    val bodyExpr =
-      if bodyEntries.isEmpty then "" else s", json={${bodyEntries.mkString(", ")}}"
-    val queryExpr =
-      if queryEntries.isEmpty then "" else s", params={${queryEntries.mkString(", ")}}"
-    s"    response = client.$method($pathExpr$bodyExpr$queryExpr)\n"
-
-  private def stateFieldForEntity(entityName: String, ir: ServiceIRFull): Option[String] =
-    irStateFields(ir)
-      .find(f => relationTargetsEntity(stfType(f), entityName))
-      .map(stfName)
-
   private def buildPositiveTest(
       name: String,
       docstring: String,
@@ -730,7 +346,7 @@ object Behavioral:
         "@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
       )
     sb.append(s"def $name($sig):\n")
-    sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
+    sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
     sb.append(s"    response = ${requestCallExpr(pop)}\n")
@@ -789,7 +405,7 @@ object Behavioral:
         "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
       )
     sb.append(s"def $name($sig):\n")
-    sb.append(s"    \"\"\"${escapeDocstring(docstring)}\"\"\"\n")
+    sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
     sb.append(s"    response = ${requestCallExpr(pop)}\n")
@@ -854,444 +470,3 @@ object Behavioral:
   private def pythonPathLiteral(ep: EndpointSpec): String =
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
     else "f" + ExprToPython.pyString(ep.path)
-
-  final private case class StatusRestriction(
-      inputName: String,
-      stateName: String,
-      entityName: String,
-      fieldName: String,
-      requiredValue: String,
-      enumValues: List[String],
-      pkField: String
-  )
-
-  private def statusRestrictionPattern(
-      e: expr,
-      inputs: Set[String],
-      state: Set[String],
-      ir: ServiceIRFull
-  ): Option[StatusRestriction] =
-    e match
-      case BinaryOpF(
-            BEq(),
-            FieldAccessF(
-              IndexF(IdentifierF(stName, _), IdentifierF(inName, _), _),
-              field,
-              _
-            ),
-            rhs,
-            _
-          ) if inputs.contains(inName) && state.contains(stName) =>
-        for
-          entityName <- entityForStateField(stName, ir)
-          entity     <- entityByName(svcEntities(ir), entityName)
-          if Strategies.transitionEntityNames(ir).contains(entityName)
-          fieldDecl <- findFieldDeclFull(entFields(entity), field)
-          enumVals  <- enumValuesForField(fieldDecl, ir)
-          if enumVals.nonEmpty
-          rhsLit <- enumLiteralOf(rhs, enumVals)
-          pk     <- AdminModel.primaryKeyField(entity)
-          if enumVals.size >= 2
-        yield StatusRestriction(inName, stName, entityName, field, rhsLit, enumVals, pk)
-      case _ => None
-
-  private def entityForStateField(stateFieldName: String, ir: ServiceIRFull): Option[String] =
-    irStateFields(ir)
-      .find(f => stfName(f) == stateFieldName)
-      .map(stfType)
-      .flatMap(relationTargetEntityName)
-
-  private def statusRestrictionNegativeOrSkip(
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      ir: ServiceIRFull,
-      restriction: StatusRestriction,
-      idx: Int
-  ): Option[Either[TestSkip, GeneratedTest]] =
-    if pop.endpoint.pathParams.size != 1 then
-      Some(
-        Left(
-          TestSkip(
-            operName(opDecl),
-            s"requires[$idx]",
-            "status-restriction negative needs exactly one path input identifying the seeded entity; multi-path or zero-path shapes need multi-entity seed orchestration"
-          )
-        )
-      )
-    else
-      nonPathInputBindings(opDecl, pop, ir) match
-        case Left((paramName, reason)) =>
-          Some(
-            Left(
-              TestSkip(
-                operName(opDecl),
-                s"requires[$idx]",
-                s"status-restriction negative needs a generable strategy for input '$paramName': $reason"
-              )
-            )
-          )
-        case Right(nonPath) =>
-          Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
-
-  private def buildStatusRestrictionNegative(
-      opDecl: operation_decl,
-      pop: ProfiledOperation,
-      r: StatusRestriction,
-      nonPath: List[NonPathInput]
-  ): GeneratedTest =
-    val opSnake     = Naming.toSnakeCase(operName(opDecl))
-    val entitySnake = Naming.toSnakeCase(r.entityName)
-    val testName =
-      s"test_${opSnake}_negative_${r.stateName}_${r.fieldName}_not_${r.requiredValue.toLowerCase}"
-    val rowStrategy = Strategies.strategyFunctionName(r.entityName)
-    val pkKey       = ExprToPython.pyString(r.pkField)
-    val fieldKey    = ExprToPython.pyString(r.fieldName)
-    val wrongValues = r.enumValues.filterNot(_ == r.requiredValue)
-    val sampledFrom = wrongValues.map(ExprToPython.pyString).mkString("[", ", ", "]")
-    val extraGiven =
-      List("row" -> s"$rowStrategy()", "wrong_status" -> s"st.sampled_from($sampledFrom)") ++
-        nonPath.map(i => i.argName -> i.strategyExpr)
-    val givenArgs = extraGiven.map((n, e) => s"$n=$e").mkString(", ")
-    val sigParams = ("row" :: "wrong_status" :: nonPath.map(_.argName)).mkString(", ")
-    val sb        = new StringBuilder
-    sb.append(s"@given($givenArgs)\n")
-    sb.append(
-      "@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])\n"
-    )
-    sb.append(s"def $testName($sigParams):\n")
-    sb.append(
-      s"    \"\"\"requires '${r.stateName}[${r.inputName}].${r.fieldName} = ${r.requiredValue}' (negative): wrong status returns 4xx.\"\"\"\n"
-    )
-    sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    row = dict(row)\n")
-    sb.append(s"    row[$fieldKey] = wrong_status\n")
-    sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
-    sb.append("    assume(seed.status_code == 201)\n")
-    sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
-    sb.append(transitionRequestCall(pop, nonPath))
-    sb.append(
-      "    assert 400 <= response.status_code < 500, " +
-        s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
-    )
-    GeneratedTest(name = testName, body = sb.toString, skipReason = None)
-
-  private def invName(inv: invariant_decl, idx: Int): String =
-    SpecRestGenerated.invName(inv).getOrElse(s"anon_$idx")
-
-  private def prettyOneLine(e: expr): String =
-    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
-
-  private def escapeDocstring(s: String): String =
-    s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"")
-
-  private[testgen] object GuardSatisfier:
-
-    sealed trait FieldKind derives CanEqual
-    case object DateTimeField extends FieldKind
-    case object NumericField  extends FieldKind
-
-    sealed trait Fix derives CanEqual:
-      def writeKey: String
-      def reads: Set[String] = Set.empty
-      def lines: List[String]
-
-    private case class OrderedShiftField(
-        leftKey: String,
-        rightKey: String,
-        kind: FieldKind,
-        rightOptional: Boolean,
-        deltaSeconds: Int
-    ) extends Fix:
-      def writeKey: String            = leftKey
-      override def reads: Set[String] = Set(rightKey)
-      def lines: List[String] =
-        val lk      = ExprToPython.pyString(leftKey)
-        val rk      = ExprToPython.pyString(rightKey)
-        val anchor  = "datetime.datetime(2024, 1, 1)"
-        val parseR  = s"datetime.datetime.fromisoformat(row[$rk])"
-        val deltaPy = s"datetime.timedelta(seconds=$deltaSeconds)"
-        kind match
-          case DateTimeField =>
-            val anchorIfNone =
-              if rightOptional then List(s"if row[$rk] is None: row[$rk] = $anchor.isoformat()")
-              else Nil
-            anchorIfNone ++ List(s"row[$lk] = ($parseR + $deltaPy).isoformat()")
-          case NumericField =>
-            val anchorIfNone =
-              if rightOptional then List(s"if row[$rk] is None: row[$rk] = 0")
-              else Nil
-            val rhs =
-              if deltaSeconds == 0 then s"row[$rk]"
-              else if deltaSeconds > 0 then s"row[$rk] + $deltaSeconds"
-              else s"row[$rk] - ${-deltaSeconds}"
-            anchorIfNone ++ List(s"row[$lk] = $rhs")
-
-    private case class OrderedShiftConst(
-        field: String,
-        kind: FieldKind,
-        constPy: String,
-        deltaSeconds: Int
-    ) extends Fix:
-      def writeKey: String = field
-      def lines: List[String] =
-        val k = ExprToPython.pyString(field)
-        kind match
-          case NumericField =>
-            val rhs = deltaSeconds match
-              case 0          => constPy
-              case d if d > 0 => s"$constPy + $d"
-              case d          => s"$constPy - ${-d}"
-            List(s"row[$k] = $rhs")
-          case DateTimeField =>
-            // not currently reachable — spec syntax has no DateTime literal — but
-            // keep the branch coherent by treating the const as an ISO string.
-            val parsed = s"datetime.datetime.fromisoformat($constPy)"
-            val delta  = s"datetime.timedelta(seconds=$deltaSeconds)"
-            List(s"row[$k] = ($parsed + $delta).isoformat()")
-
-    private case class Assign(field: String, pyValue: String) extends Fix:
-      def writeKey: String = field
-      def lines: List[String] =
-        List(s"row[${ExprToPython.pyString(field)}] = $pyValue")
-
-    private case class NotNoneAnchor(field: String, anchor: String) extends Fix:
-      def writeKey: String = field
-      def lines: List[String] =
-        val k = ExprToPython.pyString(field)
-        List(s"if row[$k] is None: row[$k] = $anchor")
-
-    private case class ListOfSize(field: String, items: List[String]) extends Fix:
-      def writeKey: String = field
-      def lines: List[String] =
-        val k = ExprToPython.pyString(field)
-        List(s"row[$k] = [${items.mkString(", ")}]")
-
-    private case class ListAppend(field: String, pyElem: String, optional: Boolean) extends Fix:
-      def writeKey: String            = field
-      override def reads: Set[String] = Set(field)
-      def lines: List[String] =
-        val k      = ExprToPython.pyString(field)
-        val anchor = if optional then List(s"if row[$k] is None: row[$k] = []") else Nil
-        anchor ++ List(s"row[$k] = list(row[$k]) + [$pyElem]")
-
-    private case class NoOp(label: String) extends Fix:
-      def writeKey: String    = s"__noop:$label"
-      def lines: List[String] = Nil
-
-    def recognize(
-        guard: expr,
-        entity: entity_decl,
-        transitionField: String,
-        from: String,
-        ir: ServiceIRFull
-    ): Option[List[String]] =
-      collect(guard, entity, transitionField, from, ir).flatMap: fixes =>
-        val realFixes = fixes.filter:
-          case _: NoOp => false
-          case _       => true
-        val byKey = realFixes.groupBy(_.writeKey)
-        val conflict = byKey.exists: (_, group) =>
-          group.map(_.lines).distinct.size > 1
-        if conflict then None
-        else
-          val deduped = byKey.toList.sortBy(_._1).map(_._2.head)
-          topoOrder(deduped).map(_.flatMap(_.lines))
-
-    @scala.annotation.tailrec
-    private def topoStep(remaining: List[Fix], placed: List[Fix]): Option[List[Fix]] =
-      if remaining.isEmpty then Some(placed.reverse)
-      else
-        val pendingWrites = remaining.map(_.writeKey).toSet
-        val idx = remaining.indexWhere: f =>
-          f.reads.filterNot(_ == f.writeKey).forall(r => !pendingWrites.contains(r))
-        if idx < 0 then None
-        else
-          val (pre, mid) = remaining.splitAt(idx)
-          val picked     = mid.head
-          val rest       = pre ++ mid.tail
-          topoStep(rest, picked :: placed)
-
-    private def topoOrder(fixes: List[Fix]): Option[List[Fix]] = topoStep(fixes, Nil)
-
-    private def collect(
-        guard: expr,
-        entity: entity_decl,
-        transitionField: String,
-        from: String,
-        ir: ServiceIRFull
-    ): Option[List[Fix]] = guard match
-
-      case UnaryOpF(UNot(), inner, _) =>
-        negate(inner).flatMap(collect(_, entity, transitionField, from, ir))
-
-      case BinaryOpF(BAnd(), l, r, _) =>
-        for
-          a <- collect(l, entity, transitionField, from, ir)
-          b <- collect(r, entity, transitionField, from, ir)
-        yield a ++ b
-
-      case BinaryOpF(BEq(), IdentifierF(a, _), rhs, _) if a == transitionField =>
-        literalValueFor(rhs, ir).flatMap: py =>
-          if py == ExprToPython.pyString(from) then Some(List(NoOp(s"$a=$from")))
-          else None
-
-      case BinaryOpF(op, IdentifierF(a, _), IdentifierF(b, _), _)
-          if Set[bin_op](BGt(), BGe(), BLt(), BLe()).contains(op) =>
-        if a == transitionField || b == transitionField then None
-        else
-          for
-            fa <- findFieldDeclFull(entFields(entity), a)
-            fb <- findFieldDeclFull(entFields(entity), b)
-            kind <-
-              if isDateTimeType(svcTypeAliases(ir), fldType(fa)) &&
-                isDateTimeType(svcTypeAliases(ir), fldType(fb))
-              then Some(DateTimeField)
-              else if isNumericType(svcTypeAliases(ir), fldType(fa)) &&
-                isNumericType(svcTypeAliases(ir), fldType(fb))
-              then Some(NumericField)
-              else None
-          yield List(
-            OrderedShiftField(
-              leftKey = a,
-              rightKey = b,
-              kind = kind,
-              rightOptional = isOptionalType(svcTypeAliases(ir), fldType(fb)),
-              deltaSeconds = orderedDelta(op)
-            )
-          )
-
-      case BinaryOpF(op, IdentifierF(a, _), rhs, _)
-          if Set[bin_op](BGt(), BGe(), BLt(), BLe()).contains(op)
-            && a != transitionField =>
-        for
-          fa <- findFieldDeclFull(entFields(entity), a)
-          if isNumericType(svcTypeAliases(ir), fldType(fa))
-          constPy <- numericLiteralPy(rhs)
-        yield List(
-          OrderedShiftConst(
-            field = a,
-            kind = NumericField,
-            constPy = constPy,
-            deltaSeconds = orderedDelta(op)
-          )
-        )
-
-      case BinaryOpF(BEq(), IdentifierF(a, _), NoneLitF(_), _)
-          if a != transitionField =>
-        findFieldDeclFull(entFields(entity), a).flatMap: f =>
-          if isOptionalType(svcTypeAliases(ir), fldType(f)) then
-            Some(List(Assign(a, "None")))
-          else None
-
-      case BinaryOpF(BEq(), IdentifierF(a, _), rhs, _)
-          if a != transitionField =>
-        findFieldDeclFull(entFields(entity), a).flatMap: _ =>
-          literalValueFor(rhs, ir).map(py => List(Assign(a, py)))
-
-      case BinaryOpF(BNeq(), IdentifierF(a, _), NoneLitF(_), _)
-          if a != transitionField =>
-        findFieldDeclFull(entFields(entity), a).flatMap: f =>
-          notNoneAnchorFor(f, ir).map(anchor => List(NotNoneAnchor(a, anchor)))
-
-      case BinaryOpF(BIn(), lit, IdentifierF(field, _), _)
-          if field != transitionField =>
-        for
-          f     <- findFieldDeclFull(entFields(entity), field)
-          inner <- collectionElementType(svcTypeAliases(ir), fldType(f))
-          py    <- literalForElementType(lit, inner, ir)
-        yield List(ListAppend(field, py, isOptionalType(svcTypeAliases(ir), fldType(f))))
-
-      case BinaryOpF(op, lenOrCard, IntLitF(n, _), _)
-          if op match { case _: (BGt | BGe | BLt | BLe | BEq) => true; case _ => false } =>
-        for
-          field <- isLenOrCardOf(lenOrCard)
-          if field != transitionField
-          f       <- findFieldDeclFull(entFields(entity), field)
-          inner   <- collectionElementType(svcTypeAliases(ir), fldType(f))
-          size    <- desiredSize(op, n)
-          fillers <- buildFillers(size.toInt, inner, ir)
-        yield List(ListOfSize(field, fillers))
-
-      case _ => None
-
-    private def buildFillers(
-        size: Int,
-        inner: type_expr,
-        ir: ServiceIRFull
-    ): Option[List[String]] =
-      if size == 0 then Some(Nil)
-      else if isNumericType(svcTypeAliases(ir), inner) then
-        Some((0 until size).map(_.toString).toList)
-      else
-        inner match
-          case NamedTypeF("String", _) =>
-            Some((0 until size).map(i => ExprToPython.pyString(s"x$i")).toList)
-          case NamedTypeF("Bool", _) if size <= 2 =>
-            Some(List("True", "False").take(size))
-          case NamedTypeF(name, _) =>
-            svcEnums(ir).find(e => enmName(e) == name) match
-              case Some(e) if size <= enmVariants(e).size =>
-                Some(enmVariants(e).take(size).map(ExprToPython.pyString))
-              case _ => None
-          case _ => None
-
-    private def orderedDelta(op: bin_op): Int = op match
-      case _: BGt => 1
-      case _: BGe => 0
-      case _: BLt => -1
-      case _: BLe => 0
-      case _      => 0
-
-    private def numericLiteralPy(e: expr): Option[String] = e match
-      case IntLitF(v, _)   => Some(v.toString)
-      case FloatLitF(v, _) => Some(v.toString)
-      case _               => None
-
-    private def literalForElementType(
-        lit: expr,
-        inner: type_expr,
-        ir: ServiceIRFull
-    ): Option[String] =
-      val _ = inner
-      lit match
-        case StringLitF(s, _)          => Some(ExprToPython.pyString(s))
-        case IntLitF(v, _)             => Some(v.toString)
-        case FloatLitF(v, _)           => Some(v.toString)
-        case BoolLitF(v, _)            => Some(if v then "True" else "False")
-        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
-        case IdentifierF(name, _) =>
-          val enumNames = svcEnums(ir).flatMap(enmVariants).toSet
-          if enumNames.contains(name) then Some(ExprToPython.pyString(name))
-          else None
-        case _ => None
-
-    private def literalValueFor(rhs: expr, ir: ServiceIRFull): Option[String] =
-      rhs match
-        case EnumAccessF(_, member, _) => Some(ExprToPython.pyString(member))
-        case IdentifierF(name, _) =>
-          val enumNames = svcEnums(ir).flatMap(enmVariants).toSet
-          if enumNames.contains(name) then Some(ExprToPython.pyString(name))
-          else None
-        case StringLitF(s, _) => Some(ExprToPython.pyString(s))
-        case IntLitF(v, _)    => Some(v.toString)
-        case BoolLitF(v, _)   => Some(if v then "True" else "False")
-        case FloatLitF(v, _)  => Some(v.toString)
-        case _                => None
-
-    private def notNoneAnchorFor(f: field_decl, ir: ServiceIRFull): Option[String] =
-      val inner = fldType(f) match
-        case OptionTypeF(t, _) => t
-        case t                 => t
-      if isDateTimeType(svcTypeAliases(ir), inner) then
-        Some("datetime.datetime(2024, 1, 1).isoformat()")
-      else if isNumericType(svcTypeAliases(ir), inner) then Some("0")
-      else
-        inner match
-          case NamedTypeF("String", _) => Some(ExprToPython.pyString("x"))
-          case NamedTypeF("Bool", _)   => Some("True")
-          case NamedTypeF(name, _) =>
-            svcEnums(ir)
-              .find(e => enmName(e) == name)
-              .flatMap(e => enmVariants(e).headOption)
-              .map(ExprToPython.pyString)
-          case _ => None
