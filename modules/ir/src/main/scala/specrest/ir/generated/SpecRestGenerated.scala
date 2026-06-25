@@ -3451,41 +3451,82 @@ object SpecRestGenerated {
   def flattenAndAll(es: List[expr]): List[expr] =
     maps[expr, expr]((a: expr) => flattenAnd(a), es)
 
-  def isUPowerUnary(x0: expr): Boolean = x0 match {
-    case UnaryOpF(UPower(), uu, uv)       => true
-    case BinaryOpF(v, va, vb, vc)         => false
-    case UnaryOpF(UNot(), va, vb)         => false
-    case UnaryOpF(UNegate(), va, vb)      => false
-    case UnaryOpF(UCardinality(), va, vb) => false
-    case QuantifierF(v, va, vb, vc)       => false
-    case SomeWrapF(v, va)                 => false
-    case TheF(v, va, vb, vc)              => false
-    case FieldAccessF(v, va, vb)          => false
-    case EnumAccessF(v, va, vb)           => false
-    case IndexF(v, va, vb)                => false
-    case CallF(v, va, vb)                 => false
-    case PrimeF(v, va)                    => false
-    case PreF(v, va)                      => false
-    case WithF(v, va, vb)                 => false
-    case IfF(v, va, vb, vc)               => false
-    case LetF(v, va, vb, vc)              => false
-    case LambdaF(v, va, vb)               => false
-    case ConstructorF(v, va, vb)          => false
-    case SetLiteralF(v, va)               => false
-    case MapLiteralF(v, va)               => false
-    case SetComprehensionF(v, va, vb, vc) => false
-    case SeqLiteralF(v, va)               => false
-    case MatchesF(v, va, vb)              => false
-    case IntLitF(v, va)                   => false
-    case FloatLitF(v, va)                 => false
-    case StringLitF(v, va)                => false
-    case BoolLitF(v, va)                  => false
-    case NoneLitF(v)                      => false
-    case IdentifierF(v, va)               => false
+  def equal_un_op(x0: un_op, x1: un_op): Boolean = (x0, x1) match {
+    case (UCardinality(), UPower())       => false
+    case (UPower(), UCardinality())       => false
+    case (UNegate(), UPower())            => false
+    case (UPower(), UNegate())            => false
+    case (UNegate(), UCardinality())      => false
+    case (UCardinality(), UNegate())      => false
+    case (UNot(), UPower())               => false
+    case (UPower(), UNot())               => false
+    case (UNot(), UCardinality())         => false
+    case (UCardinality(), UNot())         => false
+    case (UNot(), UNegate())              => false
+    case (UNegate(), UNot())              => false
+    case (UPower(), UPower())             => true
+    case (UCardinality(), UCardinality()) => true
+    case (UNegate(), UNegate())           => true
+    case (UNot(), UNot())                 => true
   }
 
-  def requiresAlloy(e: expr): Boolean =
-    list_ex[expr]((a: expr) => isUPowerUnary(a), allSubexprs(e))
+  def requiresAlloy_bindings(x0: List[quantifier_binding]): Boolean = x0 match {
+    case Nil => false
+    case QuantifierBindingFull(nm, d, a, sp) :: bs =>
+      requiresAlloy(d) || requiresAlloy_bindings(bs)
+  }
+
+  def requiresAlloy_entries(x0: List[map_entry]): Boolean = x0 match {
+    case Nil => false
+    case MapEntryFull(k, v, sp) :: es =>
+      requiresAlloy(k) || (requiresAlloy(v) || requiresAlloy_entries(es))
+  }
+
+  def requiresAlloy_fields(x0: List[field_assign]): Boolean = x0 match {
+    case Nil => false
+    case FieldAssignFull(nm, v, sp) :: fs =>
+      requiresAlloy(v) || requiresAlloy_fields(fs)
+  }
+
+  def requiresAlloy_list(x0: List[expr]): Boolean = x0 match {
+    case Nil     => false
+    case x :: xs => requiresAlloy(x) || requiresAlloy_list(xs)
+  }
+
+  def requiresAlloy(x0: expr): Boolean = x0 match {
+    case UnaryOpF(op, e, sp)     => equal_un_op(op, UPower()) || requiresAlloy(e)
+    case BinaryOpF(op, l, r, sp) => requiresAlloy(l) || requiresAlloy(r)
+    case QuantifierF(q, bs, body, sp) =>
+      requiresAlloy_bindings(bs) || requiresAlloy(body)
+    case SomeWrapF(x, sp)            => requiresAlloy(x)
+    case TheF(nm, d, body, sp)       => requiresAlloy(d) || requiresAlloy(body)
+    case FieldAccessF(base, fld, sp) => requiresAlloy(base)
+    case EnumAccessF(base, mem, sp)  => requiresAlloy(base)
+    case IndexF(base, idx, sp)       => requiresAlloy(base) || requiresAlloy(idx)
+    case CallF(callee, args, sp) =>
+      requiresAlloy(callee) || requiresAlloy_list(args)
+    case PrimeF(x, sp) => requiresAlloy(x)
+    case PreF(x, sp)   => requiresAlloy(x)
+    case WithF(base, upds, sp) =>
+      requiresAlloy(base) || requiresAlloy_fields(upds)
+    case IfF(c, t, f, sp) =>
+      requiresAlloy(c) || (requiresAlloy(t) || requiresAlloy(f))
+    case LetF(nm, vala, body, sp) => requiresAlloy(vala) || requiresAlloy(body)
+    case LambdaF(param, body, sp) => requiresAlloy(body)
+    case ConstructorF(nm, fs, sp) => requiresAlloy_fields(fs)
+    case SetLiteralF(xs, sp)      => requiresAlloy_list(xs)
+    case MapLiteralF(es, sp)      => requiresAlloy_entries(es)
+    case SetComprehensionF(nm, d, pred, sp) =>
+      requiresAlloy(d) || requiresAlloy(pred)
+    case SeqLiteralF(xs, sp)  => requiresAlloy_list(xs)
+    case MatchesF(x, pat, sp) => requiresAlloy(x)
+    case IntLitF(n, sp)       => false
+    case FloatLitF(f, sp)     => false
+    case StringLitF(s, sp)    => false
+    case BoolLitF(b, sp)      => false
+    case NoneLitF(sp)         => false
+    case IdentifierF(n, sp)   => false
+  }
 
   def litClass(x0: expr): Option[lit_class] = x0 match {
     case IntLitF(uu, uv)                  => Some[lit_class](LcNumeric())
@@ -14747,25 +14788,6 @@ object SpecRestGenerated {
 
   def cvrQualifier(x0: convention_rule): Option[String] = x0 match {
     case ConventionRuleFull(x1, x2, x3, x4, x5) => x3
-  }
-
-  def equal_un_op(x0: un_op, x1: un_op): Boolean = (x0, x1) match {
-    case (UCardinality(), UPower())       => false
-    case (UPower(), UCardinality())       => false
-    case (UNegate(), UPower())            => false
-    case (UPower(), UNegate())            => false
-    case (UNegate(), UCardinality())      => false
-    case (UCardinality(), UNegate())      => false
-    case (UNot(), UPower())               => false
-    case (UPower(), UNot())               => false
-    case (UNot(), UCardinality())         => false
-    case (UCardinality(), UNot())         => false
-    case (UNot(), UNegate())              => false
-    case (UNegate(), UNot())              => false
-    case (UPower(), UPower())             => true
-    case (UCardinality(), UCardinality()) => true
-    case (UNegate(), UNegate())           => true
-    case (UNot(), UNot())                 => true
   }
 
   def ssdKind(x0: security_scheme_decl): security_scheme_kind = x0 match {
