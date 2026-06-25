@@ -19,7 +19,6 @@ session SpecRest_Semantics in semantics = SpecRest_IR +
     Semantics_Typing
     Semantics
     Semantics_Reference
-    Semantics_Inlining
     Translate
 
 session SpecRest_Soundness in soundness = SpecRest_Semantics +
@@ -33,6 +32,7 @@ session SpecRest_Soundness in soundness = SpecRest_Semantics +
     DirectSound
     DirectTotality
     DirectPreservation
+    Semantics_Inlining
 
 session SpecRest_Codegen in codegen = SpecRest_Semantics +
   options [document = false, threads = 0]
