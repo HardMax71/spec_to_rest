@@ -4813,34 +4813,78 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => false
   }
 
+  def intLitVal(x0: expr): Option[BigInt] = x0 match {
+    case IntLitF(n, uu)                   => Some[BigInt](n)
+    case BinaryOpF(v, va, vb, vc)         => None
+    case UnaryOpF(v, va, vb)              => None
+    case QuantifierF(v, va, vb, vc)       => None
+    case SomeWrapF(v, va)                 => None
+    case TheF(v, va, vb, vc)              => None
+    case FieldAccessF(v, va, vb)          => None
+    case EnumAccessF(v, va, vb)           => None
+    case IndexF(v, va, vb)                => None
+    case CallF(v, va, vb)                 => None
+    case PrimeF(v, va)                    => None
+    case PreF(v, va)                      => None
+    case WithF(v, va, vb)                 => None
+    case IfF(v, va, vb, vc)               => None
+    case LetF(v, va, vb, vc)              => None
+    case LambdaF(v, va, vb)               => None
+    case ConstructorF(v, va, vb)          => None
+    case SetLiteralF(v, va)               => None
+    case MapLiteralF(v, va)               => None
+    case SetComprehensionF(v, va, vb, vc) => None
+    case SeqLiteralF(v, va)               => None
+    case MatchesF(v, va, vb)              => None
+    case FloatLitF(v, va)                 => None
+    case StringLitF(v, va)                => None
+    case BoolLitF(v, va)                  => None
+    case NoneLitF(v)                      => None
+    case IdentifierF(v, va)               => None
+  }
+
   def decomposeAtom(e: expr): refinement_atom =
     e match {
       case BinaryOpF(op, l, rhs, _) =>
         !isRefinementCmp(op) match {
           case true => RaUnknown(e)
-          case false => rhs match {
-              case BinaryOpF(_, _, _, _)         => RaUnknown(e)
-              case UnaryOpF(_, _, _)             => RaUnknown(e)
-              case QuantifierF(_, _, _, _)       => RaUnknown(e)
-              case SomeWrapF(_, _)               => RaUnknown(e)
-              case TheF(_, _, _, _)              => RaUnknown(e)
-              case FieldAccessF(_, _, _)         => RaUnknown(e)
-              case EnumAccessF(_, _, _)          => RaUnknown(e)
-              case IndexF(_, _, _)               => RaUnknown(e)
-              case CallF(_, _, _)                => RaUnknown(e)
-              case PrimeF(_, _)                  => RaUnknown(e)
-              case PreF(_, _)                    => RaUnknown(e)
-              case WithF(_, _, _)                => RaUnknown(e)
-              case IfF(_, _, _, _)               => RaUnknown(e)
-              case LetF(_, _, _, _)              => RaUnknown(e)
-              case LambdaF(_, _, _)              => RaUnknown(e)
-              case ConstructorF(_, _, _)         => RaUnknown(e)
-              case SetLiteralF(_, _)             => RaUnknown(e)
-              case MapLiteralF(_, _)             => RaUnknown(e)
-              case SetComprehensionF(_, _, _, _) => RaUnknown(e)
-              case SeqLiteralF(_, _)             => RaUnknown(e)
-              case MatchesF(_, _, _)             => RaUnknown(e)
-              case IntLitF(n, _) =>
+          case false => intLitVal(rhs) match {
+              case None =>
+                intLitVal(l) match {
+                  case None => RaUnknown(e)
+                  case Some(n) =>
+                    val opa =
+                      (op match {
+                        case BAnd()       => op
+                        case BOr()        => op
+                        case BImplies()   => op
+                        case BIff()       => op
+                        case BEq()        => op
+                        case BNeq()       => op
+                        case BLt()        => BGt()
+                        case BGt()        => BLt()
+                        case BLe()        => BGe()
+                        case BGe()        => BLe()
+                        case BIn()        => op
+                        case BNotIn()     => op
+                        case BSubset()    => op
+                        case BUnion()     => op
+                        case BIntersect() => op
+                        case BDiff()      => op
+                        case BAdd()       => op
+                        case BSub()       => op
+                        case BMul()       => op
+                        case BDiv()       => op
+                      }): bin_op;
+                    isLenOfValue(rhs) match {
+                      case true => RaLenCmp(opa, n)
+                      case false => isValueRef(rhs) match {
+                          case true  => RaValueCmp(opa, n)
+                          case false => RaUnknown(e)
+                        }
+                    }
+                }
+              case Some(n) =>
                 isLenOfValue(l) match {
                   case true => RaLenCmp(op, n)
                   case false => isValueRef(l) match {
@@ -4848,11 +4892,6 @@ object SpecRestGenerated {
                       case false => RaUnknown(e)
                     }
                 }
-              case FloatLitF(_, _)   => RaUnknown(e)
-              case StringLitF(_, _)  => RaUnknown(e)
-              case BoolLitF(_, _)    => RaUnknown(e)
-              case NoneLitF(_)       => RaUnknown(e)
-              case IdentifierF(_, _) => RaUnknown(e)
             }
         }
       case UnaryOpF(_, _, _)       => RaUnknown(e)
@@ -5632,11 +5671,16 @@ object SpecRestGenerated {
     case FieldAccessF(b, uz, va) => free_vars(b)
     case EnumAccessF(b, vb, vc)  => free_vars(b)
     case IndexF(b, i, vd)        => free_vars(b) ++ free_vars(i)
-    case CallF(c, args, ve)      => free_vars(c) ++ free_vars_list(args)
-    case PrimeF(e, vf)           => free_vars(e)
-    case PreF(e, vg)             => free_vars(e)
-    case WithF(b, upds, vh)      => free_vars(b) ++ free_vars_fields(upds)
-    case IfF(c, t, e, vi)        => free_vars(c) ++ (free_vars(t) ++ free_vars(e))
+    case CallF(c, args, ve) =>
+      (identName(c) match {
+        case None    => free_vars(c)
+        case Some(_) => Nil
+      }) ++
+        free_vars_list(args)
+    case PrimeF(e, vf)      => free_vars(e)
+    case PreF(e, vg)        => free_vars(e)
+    case WithF(b, upds, vh) => free_vars(b) ++ free_vars_fields(upds)
+    case IfF(c, t, e, vi)   => free_vars(c) ++ (free_vars(t) ++ free_vars(e))
     case LetF(v, vala, body, vj) =>
       free_vars(vala) ++ remove_name(v, free_vars(body))
     case LambdaF(p, b, vk)        => remove_name(p, free_vars(b))

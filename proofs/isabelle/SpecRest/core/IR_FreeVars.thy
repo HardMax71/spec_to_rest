@@ -37,7 +37,8 @@ where
 | "free_vars (FieldAccessF b _ _)        = free_vars b"
 | "free_vars (EnumAccessF b _ _)         = free_vars b"
 | "free_vars (IndexF b i _)              = free_vars b @ free_vars i"
-| "free_vars (CallF c args _)            = free_vars c @ free_vars_list args"
+| "free_vars (CallF c args _)            =
+     (case identName c of Some _ \<Rightarrow> [] | None \<Rightarrow> free_vars c) @ free_vars_list args"
 | "free_vars (PrimeF e _)                = free_vars e"
 | "free_vars (PreF e _)                  = free_vars e"
 | "free_vars (WithF b upds _)            = free_vars b @ free_vars_fields upds"

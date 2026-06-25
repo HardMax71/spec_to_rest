@@ -100,6 +100,25 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
     assertEquals(res.minimum, Some(dec(42, 0)))
     assertEquals(res.maximum, Some(dec(42, 0)))
 
+  // -- Mirrored atoms (n <op> value): decomposeAtom flips the operator -----
+
+  List[(String, bin_op, Int, openapi_bounds => Option[decimal_lit], decimal_lit)](
+    ("n < value  = value > n  -> exclusive min", BLt(), 10, _.exclusiveMinimum, dec(10, 0)),
+    ("n <= value = value >= n -> inclusive min", BLe(), 10, _.minimum, dec(10, 0)),
+    ("n > value  = value < n  -> exclusive max", BGt(), 100, _.exclusiveMaximum, dec(100, 0)),
+    ("n >= value = value <= n -> inclusive max", BGe(), 100, _.maximum, dec(100, 0))
+  ).foreach: (name, op, n, field, expected) =>
+    test(s"Mirrored RaValueCmp: $name"):
+      assertEquals(field(walk(binOp(op, intL(n), valueRef))), Some(expected))
+
+  test("Mirrored RaValueCmp BEq pins both inclusive bounds"):
+    val res = walk(binOp(BEq(), intL(42), valueRef))
+    assertEquals(res.minimum, Some(dec(42, 0)))
+    assertEquals(res.maximum, Some(dec(42, 0)))
+
+  test("Mirrored RaLenCmp: n < len(value) = len(value) > n -> minLength n+1"):
+    assertEquals(walk(binOp(BLt(), intL(3), lenOfValue)).minLength, Some(i(4)))
+
   // -- RaLenCmp (Int path) ------------------------------------------------
 
   List[(String, bin_op, Int, openapi_bounds => Option[BigInt], Int)](
