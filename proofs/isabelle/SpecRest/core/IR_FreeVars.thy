@@ -37,7 +37,8 @@ where
 | "free_vars (FieldAccessF b _ _)        = free_vars b"
 | "free_vars (EnumAccessF b _ _)         = free_vars b"
 | "free_vars (IndexF b i _)              = free_vars b @ free_vars i"
-| "free_vars (CallF c args _)            = free_vars c @ free_vars_list args"
+| "free_vars (CallF c args _)            =
+     (case identName c of Some _ \<Rightarrow> [] | None \<Rightarrow> free_vars c) @ free_vars_list args"
 | "free_vars (PrimeF e _)                = free_vars e"
 | "free_vars (PreF e _)                  = free_vars e"
 | "free_vars (WithF b upds _)            = free_vars b @ free_vars_fields upds"
@@ -102,7 +103,8 @@ where
 | "subst x r (FieldAccessF b f sp)           = FieldAccessF (subst x r b) f sp"
 | "subst x r (EnumAccessF b m sp)            = EnumAccessF (subst x r b) m sp"
 | "subst x r (IndexF b i sp)                 = IndexF (subst x r b) (subst x r i) sp"
-| "subst x r (CallF c args sp)               = CallF (subst x r c) (subst_list x r args) sp"
+| "subst x r (CallF c args sp)               =
+     CallF (case identName c of Some _ \<Rightarrow> c | None \<Rightarrow> subst x r c) (subst_list x r args) sp"
 | "subst x r (PrimeF e sp)                   = PrimeF (subst x r e) sp"
 | "subst x r (PreF e sp)                     = PreF (subst x r e) sp"
 | "subst x r (WithF b upds sp)               = WithF (subst x r b) (subst_fields x r upds) sp"

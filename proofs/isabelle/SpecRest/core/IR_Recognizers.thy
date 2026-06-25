@@ -67,6 +67,10 @@ fun isRefinementCmp :: "bin_op \<Rightarrow> bool" where
 | "isRefinementCmp BNeq = True"
 | "isRefinementCmp _    = False"
 
+fun intLitVal :: "expr \<Rightarrow> int option" where
+  "intLitVal (IntLitF n _) = Some n"
+| "intLitVal _             = None"
+
 definition decomposeAtom :: "expr \<Rightarrow> refinement_atom" where
   "decomposeAtom e \<equiv>
      (case e of
@@ -77,12 +81,24 @@ definition decomposeAtom :: "expr \<Rightarrow> refinement_atom" where
            | _ \<Rightarrow> RaUnknown e)
       | BinaryOpF op l rhs sp \<Rightarrow>
           (if \<not> isRefinementCmp op then RaUnknown e
-           else (case rhs of
-                   IntLitF n _ \<Rightarrow>
+           else (case intLitVal rhs of
+                   Some n \<Rightarrow>
                      (if isLenOfValue l then RaLenCmp op n
                       else if isValueRef l then RaValueCmp op n
                       else RaUnknown e)
-                 | _ \<Rightarrow> RaUnknown e))
+                 | None \<Rightarrow>
+                     \<comment> \<open>mirrored shape \<open>n op value\<close>: flip the operator so the atom is
+                        still stated as \<open>value op' n\<close> (rangeOf does the same flip).
+                        Matching on \<open>intLitVal _ :: int option\<close> keeps extraction off the
+                        wide \<open>expr\<close> case (no constructor cross-product).\<close>
+                     (case intLitVal l of
+                        Some n \<Rightarrow>
+                          (let op' = (case op of BLt \<Rightarrow> BGt | BGt \<Rightarrow> BLt
+                                               | BLe \<Rightarrow> BGe | BGe \<Rightarrow> BLe | _ \<Rightarrow> op) in
+                             if isLenOfValue rhs then RaLenCmp op' n
+                             else if isValueRef rhs then RaValueCmp op' n
+                             else RaUnknown e)
+                      | None \<Rightarrow> RaUnknown e)))
       | CallF f args sp \<Rightarrow>
           (case (f, args) of
              (IdentifierF p _, [arg]) \<Rightarrow>

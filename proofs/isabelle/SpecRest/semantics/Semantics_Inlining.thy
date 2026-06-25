@@ -170,7 +170,7 @@ next
 next
   case (15 fs ps fuel s st env callee args sp env2)
   have agr: "\<forall>y. string_in_list y (free_vars_list args) \<longrightarrow> env_lookup env y = env_lookup env2 y"
-    using "15.prems" by (auto simp: env_lookup_def)
+    using "15.prems" by (cases callee) (auto simp: env_lookup_def)
   show ?case
   proof (cases fuel)
     case 0
