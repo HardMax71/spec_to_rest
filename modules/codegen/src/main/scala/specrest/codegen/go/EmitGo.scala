@@ -4,6 +4,7 @@ import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
+import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
@@ -193,7 +194,7 @@ object EmitGo:
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
-        .sortWith(byPathSpecificity)
+        .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
       buildEntityCtx(module, entity, entityOps)
 
     val needsTime    = entities.exists(_.needsTime)
@@ -816,7 +817,7 @@ object EmitGo:
       path = endpoint.path,
       chiPath = chiPath,
       successStatus = endpoint.successStatus,
-      routeKind = routeKindName(routeKind),
+      routeKind = EmitShared.routeKindName(routeKind),
       pathParams = pathParams,
       hasRequestBody = hasRequestBody,
       requestBodyType = requestBodyType,
@@ -1072,16 +1073,3 @@ object EmitGo:
 
   private def toCamelCase(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
-
-  private def routeKindName(rk: route_kind): String = rk match
-    case _: RkCreate   => "create"
-    case _: RkRead     => "read"
-    case _: RkList     => "list"
-    case _: RkDelete   => "delete"
-    case _: RkRedirect => "redirect"
-    case _: RkOther    => "other"
-
-  private def byPathSpecificity(a: GoOperation, b: GoOperation): Boolean =
-    val aCount = a.path.count(_ == '{')
-    val bCount = b.path.count(_ == '{')
-    aCount < bCount

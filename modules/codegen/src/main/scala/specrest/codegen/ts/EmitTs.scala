@@ -4,6 +4,7 @@ import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
+import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
@@ -191,7 +192,7 @@ object EmitTs:
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs))
-        .sortWith(byPathSpecificity)
+        .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
       val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
       buildEntityCtx(
         packageName,
@@ -930,7 +931,7 @@ object EmitTs:
       tsKernelServiceFn(
         op,
         handlerName,
-        routeKindName(routeKind),
+        EmitShared.routeKindName(routeKind),
         hasRequestBody,
         requestBodyType,
         typeLookup
@@ -943,7 +944,7 @@ object EmitTs:
       path = endpoint.path,
       expressPath = expressPath,
       successStatus = endpoint.successStatus,
-      routeKind = routeKindName(routeKind),
+      routeKind = EmitShared.routeKindName(routeKind),
       pathParams = pathParams,
       hasRequestBody = hasRequestBody,
       requestBodyType = requestBodyType,
@@ -1064,16 +1065,3 @@ object EmitTs:
           (endpoint.pathParams.map(p => toCamelCase(p.name)) ++ Option.when(hasRequestBody)("body"))
             .mkString(", ")
         (fn, routeArgs)
-
-  private def routeKindName(rk: route_kind): String = rk match
-    case _: RkCreate   => "create"
-    case _: RkRead     => "read"
-    case _: RkList     => "list"
-    case _: RkDelete   => "delete"
-    case _: RkRedirect => "redirect"
-    case _: RkOther    => "other"
-
-  private def byPathSpecificity(a: TsOperation, b: TsOperation): Boolean =
-    val aCount = a.path.count(_ == '{')
-    val bCount = b.path.count(_ == '{')
-    aCount < bCount

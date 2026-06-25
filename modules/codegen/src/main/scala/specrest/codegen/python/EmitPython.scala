@@ -3,6 +3,7 @@ package specrest.codegen.python
 import specrest.codegen.AuthSchemes
 import specrest.codegen.Compose
 import specrest.codegen.EmitOptions
+import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
@@ -282,7 +283,7 @@ object EmitPython:
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
         .map(op => enrichOperation(op, entity, typeLookup))
-        .sortWith(byPathSpecificity)
+        .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
 
       val imports        = collectEntityImports(entity, dialect)
       val routerImports  = collectRouterImports(entity, entityOps)
@@ -738,11 +739,6 @@ object EmitPython:
     else
       val entitySnake = Naming.toSnakeCase(entity.entityName)
       if pathParamName == s"${entitySnake}_id" then "id" else "id"
-
-  private def byPathSpecificity(a: EnrichedOperation, b: EnrichedOperation): Boolean =
-    val aCount = a.path.count(_ == '{')
-    val bCount = b.path.count(_ == '{')
-    aCount < bCount
 
   private def mergeStdlibImport(
       byModule: mutable.Map[String, mutable.Set[String]],
