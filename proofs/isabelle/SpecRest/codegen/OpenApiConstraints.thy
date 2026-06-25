@@ -17,7 +17,7 @@ text \<open>Constraint-bounds walker for OpenAPI schema emission. Lifts
   to preserve the user's input form exactly. Length bounds remain
   \<open>int\<close> because lengths can't be fractional.\<close>
 
-datatype decimal_lit = DecimalLit int int
+datatype (plugins only: code size) decimal_lit = DecimalLit int int
   \<comment> \<open>\<open>DecimalLit m e\<close> represents \<open>m * 10\<^sup>e\<close>.
        Examples: "3.14" \<rightharpoonup> DecimalLit 314 (-2), "5" \<rightharpoonup> DecimalLit 5 0,
                  "0.5" \<rightharpoonup> DecimalLit 5 (-1)\<close>
@@ -102,7 +102,7 @@ definition parseDecimalLit :: "String.literal \<Rightarrow> decimal_lit option" 
 text \<open>Bounds record. Length bounds stay \<open>int option\<close> (lengths can't be
   fractional); numeric bounds are \<open>decimal_lit option\<close>.\<close>
 
-datatype openapi_bounds = OpenApiBounds
+datatype (plugins only: code size) openapi_bounds = OpenApiBounds
   "int option"               \<comment> \<open>min_length (inclusive)\<close>
   "int option"               \<comment> \<open>max_length (inclusive)\<close>
   "decimal_lit option"       \<comment> \<open>minimum (inclusive)\<close>

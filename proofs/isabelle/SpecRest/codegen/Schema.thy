@@ -8,25 +8,25 @@ text \<open>Schema model mirroring \<open>specrest.convention.{ColumnSpec, Forei
   case classes via wildcard imports; a follow-up that retires the hand-written
   types will drop the suffix.\<close>
 
-datatype column_spec = ColumnSpec
+datatype (plugins only: code size) column_spec = ColumnSpec
   String.literal              \<comment> \<open>name\<close>
   String.literal              \<comment> \<open>sql_type\<close>
   bool                        \<comment> \<open>nullable\<close>
   "String.literal option"     \<comment> \<open>default_value\<close>
 
-datatype foreign_key_spec = ForeignKeySpec
+datatype (plugins only: code size) foreign_key_spec = ForeignKeySpec
   String.literal              \<comment> \<open>column\<close>
   String.literal              \<comment> \<open>ref_table\<close>
   String.literal              \<comment> \<open>ref_column\<close>
   String.literal              \<comment> \<open>on_delete\<close>
 
-datatype index_spec = IndexSpec
+datatype (plugins only: code size) index_spec = IndexSpec
   String.literal              \<comment> \<open>name\<close>
   "String.literal list"       \<comment> \<open>columns\<close>
   bool                        \<comment> \<open>unique\<close>
   "String.literal option"     \<comment> \<open>filter_clause\<close>
 
-datatype table_spec = TableSpec
+datatype (plugins only: code size) table_spec = TableSpec
   String.literal              \<comment> \<open>name\<close>
   String.literal              \<comment> \<open>entity_name\<close>
   "column_spec list"          \<comment> \<open>columns\<close>
@@ -35,9 +35,9 @@ datatype table_spec = TableSpec
   "String.literal list"       \<comment> \<open>checks\<close>
   "index_spec list"           \<comment> \<open>indexes\<close>
 
-datatype trigger_aggregate = SumAgg | CountAgg | MinAgg | MaxAgg
+datatype (plugins only: code size) trigger_aggregate = SumAgg | CountAgg | MinAgg | MaxAgg
 
-datatype trigger_spec = TriggerSpec
+datatype (plugins only: code size) trigger_spec = TriggerSpec
   String.literal              \<comment> \<open>name\<close>
   String.literal              \<comment> \<open>function_name\<close>
   String.literal              \<comment> \<open>target_table\<close>
@@ -47,7 +47,7 @@ datatype trigger_spec = TriggerSpec
   trigger_aggregate           \<comment> \<open>aggregate\<close>
   "String.literal option"     \<comment> \<open>source_column\<close>
 
-datatype database_schema = DatabaseSchema
+datatype (plugins only: code size) database_schema = DatabaseSchema
   "table_spec list"           \<comment> \<open>tables\<close>
   "trigger_spec list"         \<comment> \<open>triggers\<close>
 

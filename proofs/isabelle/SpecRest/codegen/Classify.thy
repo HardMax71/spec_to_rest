@@ -11,9 +11,9 @@ text \<open>Operation-classification ADTs and decision logic lifted from
   \<open>SynthesisStrategy\<close>, \<open>OperationClassification\<close>) are retired;
   consumers use these extracted forms directly.\<close>
 
-datatype synthesis_strategy = DirectEmit | LlmSynthesis
+datatype (plugins only: code size) synthesis_strategy = DirectEmit | LlmSynthesis
 
-datatype analysis_signals = AnalysisSignals
+datatype (plugins only: code size) analysis_signals = AnalysisSignals
   "String.literal list"     \<comment> \<open>mutatedRelations\<close>
   "String.literal list"     \<comment> \<open>preservedRelations\<close>
   bool                      \<comment> \<open>createsNewKey\<close>
@@ -49,7 +49,7 @@ where
   "setTargetEntityFieldCount v (AnalysisSignals m p c d _ w f t h) =
      AnalysisSignals m p c d v w f t h"
 
-datatype operation_classification = OperationClassification
+datatype (plugins only: code size) operation_classification = OperationClassification
   String.literal             \<comment> \<open>operationName\<close>
   operation_kind             \<comment> \<open>kind\<close>
   http_method                \<comment> \<open>method\<close>
@@ -73,7 +73,7 @@ primrec classificationStrategy :: "operation_classification \<Rightarrow> synthe
 primrec classificationSignals :: "operation_classification \<Rightarrow> analysis_signals" where
   "classificationSignals (OperationClassification _ _ _ _ _ _ sg) = sg"
 
-datatype classification_result = ClassificationResult
+datatype (plugins only: code size) classification_result = ClassificationResult
   operation_kind
   http_method
   String.literal             \<comment> \<open>matchedRule\<close>
@@ -182,7 +182,7 @@ text \<open>Scalar direct-emit recognisers (issue #407). A scalar-update ensures
   the emitted SQL cannot drift. Guards are the requires atoms an emitter
   can fold into the atomic UPDATE's WHERE clause.\<close>
 
-datatype scalar_rhs =
+datatype (plugins only: code size) scalar_rhs =
     SrLit int
   | SrSelf
   | SrAdd scalar_rhs scalar_rhs
@@ -229,9 +229,9 @@ where
       | _ \<Rightarrow> None)"
 | "scalarUpdateOf _ _ = None"
 
-datatype scalar_cmp = ScGt | ScGe | ScLt | ScLe | ScEq | ScNeq
+datatype (plugins only: code size) scalar_cmp = ScGt | ScGe | ScLt | ScLe | ScEq | ScNeq
 
-datatype scalar_guard =
+datatype (plugins only: code size) scalar_guard =
     SgTrue
   | SgCmp String.literal scalar_cmp int
 

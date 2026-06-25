@@ -20,7 +20,7 @@ text \<open>Language-neutral decision kernels shared by the per-target expressio
   \<open>ident_ctx\<close> is a positional datatype (not a \<open>record\<close>) so it extracts cleanly via
   \<open>Code_Target_Scala\<close>, mirroring the \<open>schema_object\<close> convention.\<close>
 
-datatype ident_ctx = IdentCtx
+datatype (plugins only: code size) ident_ctx = IdentCtx
   "String.literal list"   \<comment> \<open>reserved words (per target language)\<close>
   "String.literal list"   \<comment> \<open>bound variables in scope\<close>
   "String.literal option" \<comment> \<open>the bare-body output name, if any\<close>
@@ -31,7 +31,7 @@ datatype ident_ctx = IdentCtx
   "String.literal list"   \<comment> \<open>enum type names\<close>
   "String.literal list"   \<comment> \<open>all enum member values (flattened)\<close>
 
-datatype ident_class =
+datatype (plugins only: code size) ident_class =
     IcReserved
   | IcBound
   | IcBareBody
@@ -73,7 +73,7 @@ fun lookupArity :: "(String.literal \<times> int) list \<Rightarrow> String.lite
 | "lookupArity ((nm, ar) # rest) fname =
      (if nm = fname then Some ar else lookupArity rest fname)"
 
-datatype user_call_class = UcUnknown | UcWrongArity int | UcOk
+datatype (plugins only: code size) user_call_class = UcUnknown | UcWrongArity int | UcOk
 
 definition classifyUserCall ::
   "(String.literal \<times> int) list \<Rightarrow> (String.literal \<times> int) list

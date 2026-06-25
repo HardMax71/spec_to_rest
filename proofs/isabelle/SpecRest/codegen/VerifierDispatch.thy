@@ -19,9 +19,9 @@ text \<open>Verifier-dispatch and trust classification. Lifts the pure
   wrappers (global, requires, enabled, preservation, temporal) so the
   Scala caller becomes a thin delegation.\<close>
 
-datatype verifier_tool = VtZ3 | VtAlloy
+datatype (plugins only: code size) verifier_tool = VtZ3 | VtAlloy
 
-datatype trust_level = TlSound | TlBestEffort
+datatype (plugins only: code size) trust_level = TlSound | TlBestEffort
 
 text \<open>\<open>foldVerifier\<close>: any formula needs Alloy \<Longrightarrow> bundle goes Alloy.\<close>
 

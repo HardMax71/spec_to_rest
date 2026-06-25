@@ -17,12 +17,12 @@ text \<open>Lifted Alloy signature builder. Mirrors
   unsupported (\<open>alloyFieldTypeOf\<close> returned \<open>None\<close>); the Scala
   caller \<open>failAlloy\<close>'s with the matching diagnostic.\<close>
 
-datatype alloy_field = AlloyFieldLifted
+datatype (plugins only: code size) alloy_field = AlloyFieldLifted
   "String.literal"                  \<comment> \<open>field name\<close>
   alloy_field_multiplicity          \<comment> \<open>multiplicity tag\<close>
   "String.literal"                  \<comment> \<open>element sig name\<close>
 
-datatype alloy_sig = AlloySigLifted
+datatype (plugins only: code size) alloy_sig = AlloySigLifted
   "String.literal"                  \<comment> \<open>sig name\<close>
   bool                              \<comment> \<open>abstract\<close>
   bool                              \<comment> \<open>isOne\<close>

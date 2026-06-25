@@ -9,7 +9,7 @@ text \<open>Route-kind classification for the codegen + testgen route emitters.
   Constructor names carry an \<open>Rk\<close> prefix so the extracted \<open>RkList\<close> does
   not shadow \<open>scala.collection.immutable.List\<close>.\<close>
 
-datatype route_kind = RkCreate | RkRead | RkList | RkDelete | RkRedirect | RkOther
+datatype (plugins only: code size) route_kind = RkCreate | RkRead | RkList | RkDelete | RkRedirect | RkOther
 
 definition isRedirectStatus :: "int \<Rightarrow> bool" where
   "isRedirectStatus s = (s = 301 \<or> s = 302 \<or> s = 303 \<or> s = 307 \<or> s = 308)"
