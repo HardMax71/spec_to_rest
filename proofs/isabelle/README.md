@@ -19,7 +19,7 @@ proofs/isabelle/
 ├── README.md              this file
 ├── STATUS.md              proof-state ledger
 └── SpecRest/
-    ├── ROOT                 session graph (IR ← Semantics ← Soundness, Codegen)
+    ├── ROOT                 session graph (IR → Semantics → Soundness, Codegen)
     ├── core/                SpecRest_IR: IR (datatypes) + analysis layer
     │                        (IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars, IR_Analysis)
     ├── semantics/           SpecRest_Semantics: Smt(_Fresh), Semantics(_Eval/_Typing),
