@@ -100,7 +100,7 @@ class OpenApiConstraintsTest extends CatsEffectSuite:
     assertEquals(res.minimum, Some(dec(42, 0)))
     assertEquals(res.maximum, Some(dec(42, 0)))
 
-  // -- Mirrored atoms (n <op> value): decomposeAtom flips the operator -----
+  // -- Mirrored comparison atoms (n <op> value) --------------------------
 
   List[(String, bin_op, Int, openapi_bounds => Option[decimal_lit], decimal_lit)](
     ("n < value  = value > n  -> exclusive min", BLt(), 10, _.exclusiveMinimum, dec(10, 0)),

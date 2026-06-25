@@ -4272,7 +4272,14 @@ object SpecRestGenerated {
     case (x, r, EnumAccessF(b, m, sp))  => EnumAccessF(subst(x, r, b), m, sp)
     case (x, r, IndexF(b, i, sp))       => IndexF(subst(x, r, b), subst(x, r, i), sp)
     case (x, r, CallF(c, args, sp)) =>
-      CallF(subst(x, r, c), subst_list(x, r, args), sp)
+      CallF(
+        identName(c) match {
+          case None    => subst(x, r, c)
+          case Some(_) => c
+        },
+        subst_list(x, r, args),
+        sp
+      )
     case (x, r, PrimeF(e, sp)) => PrimeF(subst(x, r, e), sp)
     case (x, r, PreF(e, sp))   => PreF(subst(x, r, e), sp)
     case (x, r, WithF(b, upds, sp)) =>
