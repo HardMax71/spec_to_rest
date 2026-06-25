@@ -12,7 +12,7 @@ private[codegen] object EmitShared:
     case _: RkRedirect => "redirect"
     case _: RkOther    => "other"
 
-  // Routes with fewer path params are matched first (less specific before more
-  // specific), so a static path is never shadowed by a `{param}` catch-all.
+  // Fewer path params = more specific (a static path beats a `{param}` catch-all),
+  // so they sort first and a static path is never shadowed by a catch-all route.
   def byPathSpecificity(aPath: String, bPath: String): Boolean =
     aPath.count(_ == '{') < bPath.count(_ == '{')
