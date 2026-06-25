@@ -1,7 +1,7 @@
 theory DirectSound
   imports
     DirectSound_Desugar
-    SpecRest_Core.Semantics_Reference
+    SpecRest_Semantics.Semantics_Reference
 begin
 section \<open>Direct soundness: eval agrees with smtEval of translate\<close>
 

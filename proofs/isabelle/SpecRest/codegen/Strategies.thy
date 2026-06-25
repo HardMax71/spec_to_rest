@@ -1,5 +1,5 @@
 theory Strategies
-  imports SpecRest_Core.IR_Analysis SpecRest_Core.IR_Helpers
+  imports SpecRest_IR.IR_Analysis SpecRest_IR.IR_Helpers
 begin
 
 text \<open>Constraint-walker primitives for the testgen strategy derivation.

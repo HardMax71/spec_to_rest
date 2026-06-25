@@ -356,6 +356,9 @@ primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Ri
   "string_in_list y [] = False"
 | "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
 
+lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
+  by (induction xs) auto
+
 fun identName :: "expr \<Rightarrow> String.literal option" where
   "identName (IdentifierF rel _) = Some rel"
 | "identName _ = None"

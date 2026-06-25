@@ -1,5 +1,5 @@
 theory DirectPreservation
-  imports Preservation_WellTyped DirectTotality SpecRest_Core.Semantics_Reference
+  imports Preservation_WellTyped DirectTotality SpecRest_Semantics.Semantics_Reference
 begin
 
 text \<open>Typing preservation re-targeted at the surface semantics (#391 Stage 5d):

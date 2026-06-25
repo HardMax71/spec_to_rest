@@ -1,9 +1,9 @@
 theory Soundness_Framework
   imports
-    SpecRest_Core.Semantics
-    SpecRest_Core.Smt
-    SpecRest_Core.IR_Helpers
-    SpecRest_Core.IR_Analysis
+    SpecRest_Semantics.Semantics
+    SpecRest_Semantics.Smt
+    SpecRest_IR.IR_Helpers
+    SpecRest_IR.IR_Analysis
 begin
 
 

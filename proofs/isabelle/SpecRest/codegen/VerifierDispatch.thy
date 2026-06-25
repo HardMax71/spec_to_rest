@@ -1,5 +1,5 @@
 theory VerifierDispatch
-  imports SpecRest_Core.IR_Helpers SpecRest_Core.IR_Analysis SpecRest_Core.Translate
+  imports SpecRest_IR.IR_Helpers SpecRest_IR.IR_Analysis SpecRest_Semantics.Translate
 begin
 
 text \<open>Verifier-dispatch and trust classification. Lifts the pure

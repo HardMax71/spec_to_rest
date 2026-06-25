@@ -657,21 +657,25 @@ directory, and Isabelle rejected it:
 ***   for session "SpecRest_IR" vs. session "SpecRest"
 ```
 
-The fix it identified — one session per directory — is now in place. The base is three sessions,
-each `in` its own subdirectory, with `SpecRest_Soundness` and `SpecRest_Codegen` as independent
-siblings over `SpecRest_Core`:
+The fix it identified — one session per directory — is in place. The base was later split again
+along the IR/meaning seam (the datatype + analysis layer never imports the meaning layer), giving
+four sessions, each `in` its own subdirectory: `SpecRest_IR` → `SpecRest_Semantics` → independent
+siblings `SpecRest_Soundness` and `SpecRest_Codegen`.
 
-- `core/` → `SpecRest_Core` (IR, IR_Helpers, IR_Analysis, IR_Lower, Smt, Semantics, Translate)
+- `core/` → `SpecRest_IR` (IR datatypes + IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars,
+  IR_Analysis)
+- `semantics/` → `SpecRest_Semantics` (Smt(\_Fresh), Semantics(\_Eval/\_Typing),
+  Semantics_Reference, Semantics_Inlining, Translate)
 - `soundness/` → `SpecRest_Soundness`
 - `codegen/` → `SpecRest_Codegen` (schema/OpenAPI/Alloy/classify helpers + `Codegen.thy` export)
 
-Cross-session imports of `core/` theories are session-qualified
-(`imports SpecRest_Core.IR_Helpers`); same-session imports stay bare. Measured cold times: Core ≈
-128 s, Codegen ≈ 90 s, Soundness ≈ 21 s. A `codegen/` edit (the common codegen-lift case) now
-rebuilds only `SpecRest_Codegen` (~90 s), reusing the Core + Soundness heaps — down from the ~191 s
-monolith rebuild; a `Soundness.thy` edit rebuilds only `SpecRest_Soundness` (~21 s). This is the
-cache-layering win the earlier attempt deferred; `restore-keys` partial-hit reuse still applies on
-top. See `README.md` → Session structure.
+Cross-session imports are session-qualified (`imports SpecRest_IR.IR_Helpers` from `semantics/`,
+`SpecRest_Semantics.Translate` from `codegen/`); same-session imports stay bare. Measured cold
+times: IR ≈ 60 s, Semantics ≈ 110 s, Codegen ≈ 50 s, Soundness ≈ 25 s. A `codegen/` edit (the common
+codegen-lift case) rebuilds only `SpecRest_Codegen` (~50 s), reusing the IR + Semantics heaps
+(`SpecRest_Soundness` is a sibling, not a dependency — it is left untouched, not rebuilt); a
+`semantics/` edit (translate / eval lifts) reuses the ~60 s IR heap instead of re-elaborating it.
+`restore-keys` partial-hit reuse still applies on top. See `README.md` → Session structure.
 
 ## Dropped / Deferred
 

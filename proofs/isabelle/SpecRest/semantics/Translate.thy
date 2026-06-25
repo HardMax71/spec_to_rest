@@ -1,5 +1,5 @@
 theory Translate
-  imports IR IR_Analysis Smt
+  imports SpecRest_IR.IR SpecRest_IR.IR_Analysis Smt
 begin
 
 fun identName_smt :: "smt_term \<Rightarrow> String.literal option" where

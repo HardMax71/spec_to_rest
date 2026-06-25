@@ -1,5 +1,5 @@
 theory ParseTemporal
-  imports SpecRest_Core.IR
+  imports SpecRest_IR.IR
 begin
 
 text \<open>Parse-don't-validate dispatcher for temporal declarations. Mirrors

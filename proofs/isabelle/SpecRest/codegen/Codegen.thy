@@ -1,9 +1,9 @@
 theory Codegen
   imports
-    SpecRest_Core.Semantics
-    SpecRest_Core.IR_Helpers
-    SpecRest_Core.IR_Analysis
-    SpecRest_Core.Translate
+    SpecRest_Semantics.Semantics
+    SpecRest_IR.IR_Helpers
+    SpecRest_IR.IR_Analysis
+    SpecRest_Semantics.Translate
     TopoSort
     Schema
     MigrationOps

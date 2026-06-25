@@ -1,5 +1,5 @@
 theory DafnyTransform
-  imports SpecRest_Core.IR_Analysis SpecRest_Core.IR_Helpers "HOL-Library.Code_Target_Numeral"
+  imports SpecRest_IR.IR_Analysis SpecRest_IR.IR_Helpers "HOL-Library.Code_Target_Numeral"
 begin
 
 text \<open>Lift of \<open>convention.dafny.Generator.rewriteEntityFieldRefs\<close>: rewrite every free
