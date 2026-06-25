@@ -16,15 +16,18 @@ trait BehavioralTestSupport extends CatsEffectSuite:
   protected def asSynthesized(profiled: ProfiledService): ProfiledService =
     SynthFixture.asSynthesized(profiled)
 
-  protected def loadProfiled(path: String) =
-    val src = scala.io.Source.fromFile(path).getLines.mkString("\n")
+  private def buildProfiled(src: String, label: String) =
     Parse.parseSpec(src).flatMap:
       case Right(parsed) =>
         Builder.buildIR(parsed.tree).map:
           case Right(ir) =>
             asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
-          case Left(err) => fail(s"build error: $err")
-      case Left(err) => fail(s"parse error: $err")
+          case Left(err) => fail(s"build error for $label: $err")
+      case Left(err) => fail(s"parse error for $label: $err")
+
+  protected def loadProfiled(path: String) =
+    val src = scala.util.Using.resource(scala.io.Source.fromFile(path))(_.getLines.mkString("\n"))
+    buildProfiled(src, path)
 
   protected def sensitiveInputSpec(inputName: String, conventionsBlock: String): String =
     s"""|service AuthLite {
@@ -45,23 +48,9 @@ trait BehavioralTestSupport extends CatsEffectSuite:
         |}
         |""".stripMargin
 
-  protected def profileSource(label: String, src: String) =
-    Parse.parseSpec(src).flatMap:
-      case Right(parsed) =>
-        Builder.buildIR(parsed.tree).map:
-          case Right(ir) =>
-            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
-          case Left(err) => fail(s"build error for $label: $err")
-      case Left(err) => fail(s"parse error for $label: $err")
+  protected def profileSource(label: String, src: String) = buildProfiled(src, label)
 
-  protected def loadProfiledFromSpec(spec: String) =
-    Parse.parseSpec(spec).flatMap:
-      case Right(parsed) =>
-        Builder.buildIR(parsed.tree).map:
-          case Right(ir) =>
-            asSynthesized(Annotate.buildProfiledService(ir, "python-fastapi-postgres"))
-          case Left(err) => fail(s"build error: $err")
-      case Left(err) => fail(s"parse error: $err")
+  protected def loadProfiledFromSpec(spec: String) = buildProfiled(spec, "spec")
 
   protected def cardinalitySpec =
     """|service Demo {
