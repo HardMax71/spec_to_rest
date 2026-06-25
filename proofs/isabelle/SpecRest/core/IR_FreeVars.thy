@@ -2,23 +2,14 @@ theory IR_FreeVars
   imports IR
 begin
 
-text \<open>Phase 9\<gamma> (free-var helpers): monomorphic \<open>qb_names\<close>,
-  \<open>remove_name\<close>, \<open>remove_names\<close> avoid the polymorphic \<open>map\<close>/\<open>filter\<close>
-  HOFs that blow up Isabelle build wall-time when used inside large mutual
-  \<open>fun\<close> declarations.\<close>
+text \<open>Phase 9\<gamma> (free-var helpers): the monomorphic \<open>qb_names\<close> avoids the
+  polymorphic \<open>map\<close>/\<open>filter\<close> HOFs that blow up Isabelle build wall-time when
+  used inside large mutual \<open>fun\<close> declarations. The companion list-removal
+  primitives \<open>remove_name\<close> / \<open>remove_names\<close> live in \<open>Names\<close>.\<close>
 
 fun qb_names :: "quantifier_binding list \<Rightarrow> String.literal list" where
   "qb_names [] = []"
 | "qb_names (QuantifierBindingFull n _ _ _ # bs) = n # qb_names bs"
-
-fun remove_name :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
-  "remove_name _ [] = []"
-| "remove_name n (x # xs) =
-     (if x = n then remove_name n xs else x # remove_name n xs)"
-
-fun remove_names :: "String.literal list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
-  "remove_names []       xs = xs"
-| "remove_names (n # ns) xs = remove_name n (remove_names ns xs)"
 
 text \<open>Phase 9\<gamma> (\<open>free_vars\<close>): collects the names of all free identifiers
   in an \<open>expr\<close>, respecting binders (\<open>LetF\<close>, \<open>LambdaF\<close>,

@@ -3233,6 +3233,20 @@ object SpecRestGenerated {
       }
   }
 
+  def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
+    case (y, Nil)     => false
+    case (y, x :: xs) => x == y || string_in_list(y, xs)
+  }
+
+  def fresh_in(n: nat, base: String, avoid: List[String]): String =
+    equal_nat(n, zero_nat) match {
+      case true => base
+      case false => string_in_list(base, avoid) match {
+          case true  => fresh_in(minus_nat(n, one_nat), base + "_", avoid)
+          case false => base
+        }
+    }
+
   def is_none[A](x0: Option[A]): Boolean = x0 match {
     case None    => true
     case Some(x) => false
@@ -3443,6 +3457,9 @@ object SpecRestGenerated {
         case Some(y) => y :: map_filter[A, B](f, xs)
       }
   }
+
+  def fresh_var(base: String, avoid: List[String]): String =
+    fresh_in(Suc(size_list[String](avoid)), base, avoid)
 
   def fkColumn(x0: foreign_key_spec): String = x0 match {
     case ForeignKeySpec(c, uu, uv, uw) => c
@@ -4252,11 +4269,6 @@ object SpecRestGenerated {
     case NoneLitF(v)                      => None
   }
 
-  def string_in_list(y: String, x1: List[String]): Boolean = (y, x1) match {
-    case (y, Nil)     => false
-    case (y, x :: xs) => x == y || string_in_list(y, xs)
-  }
-
   def typeStripSpans(x0: type_expr): type_expr = x0 match {
     case NamedTypeF(n, uu) => NamedTypeF(n, None)
     case SetTypeF(t, uv)   => SetTypeF(typeStripSpans(t), None)
@@ -4521,6 +4533,15 @@ object SpecRestGenerated {
     case IdentifierF(v, va)               => false
   }
 
+  def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
+    case (uu, Nil) => Nil
+    case (n, x :: xs) =>
+      x == n match {
+        case true  => remove_name(n, xs)
+        case false => x :: remove_name(n, xs)
+      }
+  }
+
   def columnName(x0: column_spec): String = x0 match {
     case ColumnSpec(n, uu, uv, uw) => n
   }
@@ -4559,6 +4580,11 @@ object SpecRestGenerated {
     case BUnion()     => false
     case BIntersect() => false
     case BDiff()      => false
+  }
+
+  def remove_names(x0: List[String], xs: List[String]): List[String] = (x0, xs) match {
+    case (Nil, xs)     => xs
+    case (n :: ns, xs) => remove_name(n, remove_names(ns, xs))
   }
 
   def isRedirectStatus(s: BigInt): Boolean =
@@ -4732,15 +4758,6 @@ object SpecRestGenerated {
     case BMul()       => None
     case BDiv()       => None
   }
-
-  def fresh_in(n: nat, base: String, avoid: List[String]): String =
-    equal_nat(n, zero_nat) match {
-      case true => base
-      case false => string_in_list(base, avoid) match {
-          case true  => fresh_in(minus_nat(n, one_nat), base + "_", avoid)
-          case false => base
-        }
-    }
 
   def emptyIntConstraint: int_constraint = IntConstraint(None, None, Nil)
 
@@ -5253,9 +5270,6 @@ object SpecRestGenerated {
     case TableSpec(uu, uv, uw, ux, uy, uz, ixs) => ixs
   }
 
-  def fresh_var(base: String, avoid: List[String]): String =
-    fresh_in(Suc(size_list[String](avoid)), base, avoid)
-
   def range_arg(x0: expr): Option[String] = x0 match {
     case CallF(IdentifierF(nm, uu), List(IdentifierF(rel, uv)), uw) =>
       nm == "range" || nm == "ran" match {
@@ -5675,20 +5689,6 @@ object SpecRestGenerated {
   def is_builtin_int_func(nm: String): Boolean =
     nm == "seconds" ||
       (nm == "minutes" || (nm == "hours" || (nm == "days" || nm == "weeks")))
-
-  def remove_name(uu: String, x1: List[String]): List[String] = (uu, x1) match {
-    case (uu, Nil) => Nil
-    case (n, x :: xs) =>
-      x == n match {
-        case true  => remove_name(n, xs)
-        case false => x :: remove_name(n, xs)
-      }
-  }
-
-  def remove_names(x0: List[String], xs: List[String]): List[String] = (x0, xs) match {
-    case (Nil, xs)     => xs
-    case (n :: ns, xs) => remove_name(n, remove_names(ns, xs))
-  }
 
   def free_vars_bindings(x0: List[quantifier_binding]): List[String] = x0 match {
     case Nil => Nil

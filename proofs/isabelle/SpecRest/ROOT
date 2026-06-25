@@ -3,6 +3,7 @@ chapter SpecRest
 session SpecRest_IR in core = HOL +
   options [document = false, threads = 0]
   theories
+    Names
     IR
     IR_Helpers
     IR_Recognizers
@@ -13,7 +14,6 @@ session SpecRest_IR in core = HOL +
 session SpecRest_Semantics in semantics = SpecRest_IR +
   options [document = false, threads = 0]
   theories
-    Smt_Fresh
     Smt
     Semantics_Eval
     Semantics_Typing

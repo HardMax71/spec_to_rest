@@ -1,5 +1,5 @@
 theory IR
-  imports Main "HOL.Rat"
+  imports Names "HOL.Rat"
 begin
 
 fun asciiToIntAcc :: "integer list \<Rightarrow> int \<Rightarrow> int option" where
@@ -346,18 +346,6 @@ datatype (plugins only: code size) service_ir =
                   (svcPredicates: "predicate_decl list") (svcConventions: "conventions_decl option")
                   (svcSecurity: "security_scheme_decl list") (svcSpan: option_span)
 
-text \<open>\<open>string_in_list\<close> is the monomorphic membership predicate over
-  \<open>String.literal list\<close>. Hoisted to the top of the file because using
-  \<open>list_ex (\<lambda>n. n = x) xs\<close> inside \<open>fun\<close> declarations triggers heavy
-  pattern-overlap analysis — see \<open>createPatternOf\<close> elaboration cost in
-  a baseline profile (~106 s for a single 8-line \<open>fun\<close>).\<close>
-
-primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> bool" where
-  "string_in_list y [] = False"
-| "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
-
-lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
-  by (induction xs) auto
 
 fun identName :: "expr \<Rightarrow> String.literal option" where
   "identName (IdentifierF rel _) = Some rel"

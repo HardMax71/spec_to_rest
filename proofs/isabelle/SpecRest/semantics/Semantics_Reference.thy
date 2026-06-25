@@ -293,18 +293,6 @@ termination
                      | Inr (Inr (Inr (fs, ps, fuel, s, st, env, var, dmv, body))) \<Rightarrow> Suc (length dmv))]")
      (auto dest: beq_comp_size)
 
-lemma string_in_list_append [simp]:
-  "string_in_list y (xs @ ys) = (string_in_list y xs \<or> string_in_list y ys)"
-  by (induction xs) auto
-
-lemma string_in_list_remove_name [simp]:
-  "string_in_list y (remove_name n xs) = (y \<noteq> n \<and> string_in_list y xs)"
-  by (induction xs) auto
-
-lemma string_in_list_remove_names [simp]:
-  "string_in_list y (remove_names ns xs) = (\<not> string_in_list y ns \<and> string_in_list y xs)"
-  by (induction ns) auto
-
 lemma eval_list_length:
   "eval_list fs ps fuel s st env es = Some vs \<Longrightarrow> length vs = length es"
   by (induction es arbitrary: vs) (auto split: option.splits)
