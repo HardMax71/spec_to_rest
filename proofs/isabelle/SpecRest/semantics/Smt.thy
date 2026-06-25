@@ -1,5 +1,5 @@
 theory Smt
-  imports SpecRest_IR.IR Smt_Fresh "HOL.Rat"
+  imports SpecRest_IR.IR "HOL.Rat"
 begin
 
 datatype (plugins only: code size) smt_sort =

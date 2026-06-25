@@ -1,6 +1,49 @@
-theory Smt_Fresh
-  imports SpecRest_IR.IR
+theory Names
+  imports Main
 begin
+
+text \<open>Variable / identifier mechanics over \<open>String.literal\<close>, used throughout the
+  IR and SMT layers: list membership, name removal, and fresh-name generation.
+  Centralised here (rather than scattered across IR / Smt) so the string-handling
+  primitives are one self-contained, datatype-independent module.\<close>
+
+text \<open>\<open>string_in_list\<close> is the monomorphic membership predicate over
+  \<open>String.literal list\<close>. Preferred over \<open>list_ex (\<lambda>n. n = x) xs\<close> inside \<open>fun\<close>
+  declarations, which triggers heavy pattern-overlap analysis — see
+  \<open>createPatternOf\<close> elaboration cost in a baseline profile (~106 s for a single
+  8-line \<open>fun\<close>).\<close>
+
+primrec string_in_list :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> bool" where
+  "string_in_list y [] = False"
+| "string_in_list y (x # xs) = (x = y \<or> string_in_list y xs)"
+
+lemma string_in_list_iff: "string_in_list y xs = (y \<in> set xs)"
+  by (induction xs) auto
+
+lemma string_in_list_append [simp]:
+  "string_in_list y (xs @ ys) = (string_in_list y xs \<or> string_in_list y ys)"
+  by (induction xs) auto
+
+text \<open>Monomorphic \<open>remove_name\<close> / \<open>remove_names\<close> avoid the polymorphic
+  \<open>map\<close>/\<open>filter\<close> HOFs that blow up Isabelle build wall-time when used inside
+  large mutual \<open>fun\<close> declarations.\<close>
+
+fun remove_name :: "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "remove_name _ [] = []"
+| "remove_name n (x # xs) =
+     (if x = n then remove_name n xs else x # remove_name n xs)"
+
+fun remove_names :: "String.literal list \<Rightarrow> String.literal list \<Rightarrow> String.literal list" where
+  "remove_names []       xs = xs"
+| "remove_names (n # ns) xs = remove_name n (remove_names ns xs)"
+
+lemma string_in_list_remove_name [simp]:
+  "string_in_list y (remove_name n xs) = (y \<noteq> n \<and> string_in_list y xs)"
+  by (induction xs) auto
+
+lemma string_in_list_remove_names [simp]:
+  "string_in_list y (remove_names ns xs) = (\<not> string_in_list y ns \<and> string_in_list y xs)"
+  by (induction ns) auto
 
 text \<open>\<open>fresh_var base avoid\<close>: the first of \<open>base\<close>, \<open>base_\<close>, \<open>base__\<close>, ...
   not in \<open>avoid\<close>. The candidates have strictly increasing lengths, so among
