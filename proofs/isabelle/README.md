@@ -19,10 +19,13 @@ proofs/isabelle/
 ├── README.md              this file
 ├── STATUS.md              proof-state ledger
 └── SpecRest/
-    ├── ROOT                 session graph (SpecRest_Core ← Soundness, Codegen)
-    ├── core/                SpecRest_Core: IR, IR_Helpers, IR_Analysis, IR_Lower, Smt,
-    │                        Semantics, Translate (definitional kernel)
-    ├── soundness/           SpecRest_Soundness: Soundness.thy
+    ├── ROOT                 session graph (IR ← Semantics ← Soundness, Codegen)
+    ├── core/                SpecRest_IR: IR (datatypes) + analysis layer
+    │                        (IR_Helpers, IR_Recognizers, IR_Lint, IR_FreeVars, IR_Analysis)
+    ├── semantics/           SpecRest_Semantics: Smt(_Fresh), Semantics(_Eval/_Typing),
+    │                        Semantics_Reference, Semantics_Inlining, Translate
+    ├── soundness/           SpecRest_Soundness: Soundness_Framework, Preservation_*,
+    │                        DirectSound(_*), DirectTotality, DirectPreservation
     └── codegen/             SpecRest_Codegen: schema/OpenAPI/Alloy/classify helpers +
                              Codegen.thy (export_code)
 ```
@@ -33,35 +36,40 @@ proofs/isabelle/
 isabelle build -d proofs/isabelle/SpecRest -b SpecRest_Soundness SpecRest_Codegen
 ```
 
-(`SpecRest_Core` builds automatically as the shared parent.) The first build downloads/compiles
-`HOL` and `HOL-Library` heaps (~5-10 minutes); subsequent builds reuse them. Heap files cache under
-`~/.isabelle/Isabelle2025-2/heaps/`.
+(`SpecRest_IR` and `SpecRest_Semantics` build automatically as shared parents.) The first build
+downloads/compiles `HOL` and `HOL-Library` heaps (~5-10 minutes); subsequent builds reuse them. Heap
+files cache under `~/.isabelle/Isabelle2025-2/heaps/`.
 
 ### Session structure (incremental builds)
 
-The proof base is split into three sessions so an edit only re-checks the sessions it touches —
-Isabelle's build/cache unit is the _session_, and an unchanged session's heap is reused.
-`SpecRest_Soundness` and `SpecRest_Codegen` are independent siblings over `SpecRest_Core`:
+The proof base is split into four sessions so an edit only re-checks the sessions it touches —
+Isabelle's build/cache unit is the _session_, and an unchanged session's heap is reused. The IR
+datatype + analysis layer (`SpecRest_IR`) is self-contained and never imports the meaning layer, so
+it sits below `SpecRest_Semantics`; `SpecRest_Soundness` and `SpecRest_Codegen` are independent
+siblings over the meaning layer:
 
 ```mermaid
 graph TD
-  Core["SpecRest_Core — core/<br/>IR, Semantics, Translate, Smt, …"]
-  Core --> Soundness["SpecRest_Soundness — soundness/"]
-  Core --> Codegen["SpecRest_Codegen — codegen/<br/>schema/OpenAPI/Alloy/classify + export_code"]
+  IR["SpecRest_IR — core/<br/>IR datatypes + analysis (free_vars, recognizers, lint)"]
+  IR --> Sem["SpecRest_Semantics — semantics/<br/>Smt, Semantics, Translate, reference eval"]
+  Sem --> Soundness["SpecRest_Soundness — soundness/"]
+  Sem --> Codegen["SpecRest_Codegen — codegen/<br/>schema/OpenAPI/Alloy/classify + export_code"]
 ```
 
-| Edit                                              | Rebuilds             | Reuses (skips)   | Cold time |
-| ------------------------------------------------- | -------------------- | ---------------- | --------- |
-| a `codegen/` theory (common case — codegen lifts) | `SpecRest_Codegen`   | Core + Soundness | ~90 s     |
-| `soundness/Soundness.thy`                         | `SpecRest_Soundness` | Core + Codegen   | ~21 s     |
-| a `core/` theory                                  | everything           | —                | ~3.5 min  |
+| Edit                                              | Rebuilds                        | Reuses (skips)       | Cold time |
+| ------------------------------------------------- | ------------------------------- | -------------------- | --------- |
+| a `codegen/` theory (common case — codegen lifts) | `SpecRest_Codegen`              | IR + Semantics + Snd | ~50 s     |
+| a `soundness/` theory                             | `SpecRest_Soundness`            | IR + Semantics + Cg  | ~25 s     |
+| a `semantics/` theory (translate / eval lifts)    | Semantics + Soundness + Codegen | IR                   | ~2.5 min  |
+| an `core/` IR-layer theory                        | everything                      | —                    | ~3.5 min  |
 
-Measured on Isabelle2025-2: Core ≈ 128 s, Codegen ≈ 90 s, Soundness ≈ 21 s. A codegen lift thus
-drops from a full ~191 s monolith rebuild to a ~90 s `SpecRest_Codegen`-only rebuild.
+Measured on Isabelle2025-2: IR ≈ 60 s, Semantics ≈ 110 s, Codegen ≈ 50 s, Soundness ≈ 25 s. Editing
+the heavily-churned meaning layer now reuses the ~60 s IR heap instead of re-elaborating it.
 
 **Each session owns its own directory**, so a new theory must live in the subdirectory of its
-session, and any import of a `core/` theory from `codegen/` or `soundness/` must be
-session-qualified (e.g. `imports SpecRest_Core.IR_Helpers`); imports within a session stay bare.
+session, and any cross-session import must be session-qualified (e.g.
+`imports SpecRest_IR.IR_Helpers` from `semantics/`, `SpecRest_Semantics.Translate` from `codegen/`);
+imports within a session stay bare.
 
 ## Regenerating `SpecRestGenerated.scala`
 
