@@ -4,15 +4,15 @@ description: Reference for the python-fastapi-mysql deployment target
 ---
 
 This page documents only how the `python-fastapi-mysql` target **differs** from
-[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not listed here — file
+[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not listed here (file
 tree, naming conventions, HTTP contract, OpenAPI, the FastAPI app/Docker app stage, extension
-points, limitations — is identical; read the [PostgreSQL page](/targets/python/fastapi/postgres) for
+points, limitations) is identical; read the [PostgreSQL page](/targets/python/fastapi/postgres) for
 the full reference.
 
 The database axis is a pluggable `Dialect` strategy
 (`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`); it decides the
 SQLAlchemy column type, trigger shape, partial-index handling, and the connection / `docker-compose`
-wiring (`DialectView`). Selecting MySQL is one flag — no emitter or template changes.
+wiring (`DialectView`). Selecting MySQL is one flag: no emitter or template changes.
 
 ```bash
 sbt "cli/run compile --framework fastapi --db mysql --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
@@ -27,27 +27,27 @@ sbt "cli/run compile --framework fastapi --db mysql --ignore-verify --out /tmp/o
 | Database service  | `postgres` in compose   | `mysql:8.4` service in compose |
 | Unbounded strings | `TEXT`                  | `VARCHAR(255)`                 |
 
-- **Compose service.** The emitted `docker-compose.yml` provisions a `mysql:8.4` database service
+- The emitted `docker-compose.yml` provisions a `mysql:8.4` database service
   (replacing the Postgres one); the `migrations` and `app` services wait on its healthcheck. The app
   container is otherwise unchanged.
-- **String columns.** Unbounded string fields map to `VARCHAR(255)` rather than Postgres `TEXT`,
+- Unbounded string fields map to `VARCHAR(255)` rather than Postgres `TEXT`,
   since MySQL cannot index unbounded text without a key length.
-- **Column types.** Remaining Postgres-specific types are mapped to their MySQL equivalents by the
+- Remaining Postgres-specific types are mapped to their MySQL equivalents by the
   `Dialect`; the emitter is canonical.
-- **Test generation.** No difference. The default-on conformance / property / stateful suite
-  (opt out with `--no-tests`) emits here exactly as for PostgreSQL — the suite is dialect-invariant
+- Test generation is unchanged. The default-on conformance / property / stateful suite
+  (opt out with `--no-tests`) emits here exactly as for PostgreSQL: the suite is dialect-invariant
   (black-box HTTP, ORM-based admin reset) and is byte-identical across every fastapi dialect.
 
 ## CI gate
 
 `.github/workflows/python-build.yml` runs the `mysql` matrix leg: it emits the project
 (test suite included by default), runs `uv sync --all-extras`, and performs an Alembic
-`upgrade head → downgrade base → upgrade head` round-trip against a real `mysql:8.4` service —
+`upgrade head → downgrade base → upgrade head` round-trip against a real `mysql:8.4` service,
 proving the test-suite-included project generates, installs, and migrates on MySQL. The emitted suite is
-**dialect-invariant** — byte-identical across every fastapi dialect, asserted deterministically by
-`TestEmitTest` — so MySQL gets exactly the suite PostgreSQL does. (End-to-end execution of the
+**dialect-invariant**: byte-identical across every fastapi dialect, asserted deterministically by
+`TestEmitTest`, so MySQL gets exactly the suite PostgreSQL does. (End-to-end execution of the
 generated app/suite is exercised by the nightly mutation job; it needs `--with-synthesis` to fill
 non-CRUD bodies and is independent of the database axis.)
 
-If this page and the emitted output disagree, the emitter wins — file an issue or PR to correct the
+If this page and the emitted output disagree, the emitter wins, file an issue or PR to correct the
 doc.

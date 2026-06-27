@@ -4,15 +4,15 @@ description: Reference for the python-fastapi-sqlite deployment target
 ---
 
 This page documents only how the `python-fastapi-sqlite` target **differs** from
-[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not listed here — file
+[`python-fastapi-postgres`](/targets/python/fastapi/postgres). Everything not listed here (file
 tree, naming conventions, HTTP contract, OpenAPI, the FastAPI app/Docker app stage, extension
-points, limitations — is identical; read the [PostgreSQL page](/targets/python/fastapi/postgres) for
+points, limitations) is identical; read the [PostgreSQL page](/targets/python/fastapi/postgres) for
 the full reference.
 
 The database axis is a pluggable `Dialect` strategy
 (`modules/codegen/src/main/scala/specrest/codegen/migration/Dialect.scala`); it decides the
 SQLAlchemy column type, trigger shape, partial-index handling, and the connection / `docker-compose`
-wiring (`DialectView`). Selecting SQLite is one flag — no emitter or template changes.
+wiring (`DialectView`). Selecting SQLite is one flag: no emitter or template changes.
 
 ```bash
 sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
@@ -24,20 +24,20 @@ sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/
 | --------------------- | ----------------------------- | --------------------------------------------- |
 | Async driver          | `asyncpg`                     | `aiosqlite`                                   |
 | URL scheme            | `postgresql+asyncpg://`       | `sqlite+aiosqlite://`                         |
-| Database service      | `postgres` service in compose | **none** — file-backed, no compose DB service |
+| Database service      | `postgres` service in compose | **none**: file-backed, no compose DB service  |
 | Referential integrity | enforced natively             | `PRAGMA foreign_keys=ON` connection listener  |
 
-- **File-backed, no service.** The emitted `docker-compose.yml` has no database container and no
+- The emitted `docker-compose.yml` has no database container and no
   `migrations` service dependency on one; the database is a local file. The app container is
   otherwise unchanged.
-- **Foreign keys.** SQLite does not enforce foreign keys by default, so the emitted engine setup
+- SQLite does not enforce foreign keys by default, so the emitted engine setup
   registers a connection listener issuing `PRAGMA foreign_keys=ON`.
-- **Column types.** Postgres-specific column types are mapped to their SQLite equivalents by the
+- Postgres-specific column types are mapped to their SQLite equivalents by the
   `Dialect`; the canonical mapping is the emitter, which wins over this page if they disagree.
-- **Test generation.** No difference. The default-on conformance / property / stateful suite
-  (opt out with `--no-tests`) emits here exactly as for PostgreSQL — the suite is dialect-invariant
+- Test generation is unchanged. The default-on conformance / property / stateful suite
+  (opt out with `--no-tests`) emits here exactly as for PostgreSQL: the suite is dialect-invariant
   (black-box HTTP, ORM-based admin reset) and is byte-identical across every fastapi dialect.
-- **Serial primary keys.** A 64-bit serial PK maps to `sa.Integer()`, not `sa.BigInteger()`: SQLite
+- A 64-bit serial PK maps to `sa.Integer()`, not `sa.BigInteger()`: SQLite
   autoincrements only the `INTEGER PRIMARY KEY` rowid alias (itself 64-bit), so a `BIGINT` PK would
   silently not autoincrement. This matches the raw-SQL renderer's `Dialect.Sqlite.serialColumnDef`.
 
@@ -46,11 +46,11 @@ sbt "cli/run compile --framework fastapi --db sqlite --ignore-verify --out /tmp/
 `.github/workflows/python-build.yml` runs the `sqlite` matrix leg: it emits the project
 (test suite included by default), runs `uv sync --all-extras`, and performs an Alembic
 `upgrade head → downgrade base → upgrade head` round-trip against a real file database
-(`sqlite+aiosqlite`) — proving the test-suite-included project generates, installs, and migrates on
-SQLite. The emitted suite is **dialect-invariant** — byte-identical across every fastapi dialect,
-asserted deterministically by `TestEmitTest` — so SQLite gets exactly the suite PostgreSQL does.
+(`sqlite+aiosqlite`), proving the test-suite-included project generates, installs, and migrates on
+SQLite. The emitted suite is **dialect-invariant**: byte-identical across every fastapi dialect,
+asserted deterministically by `TestEmitTest`, so SQLite gets exactly the suite PostgreSQL does.
 (End-to-end execution of the generated app/suite is exercised by the nightly mutation job; it needs
 `--with-synthesis` to fill non-CRUD bodies and is independent of the database axis.)
 
-If this page and the emitted output disagree, the emitter wins — file an issue or PR to correct the
+If this page and the emitted output disagree, the emitter wins, file an issue or PR to correct the
 doc.

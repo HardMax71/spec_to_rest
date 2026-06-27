@@ -12,7 +12,7 @@ description: "Structural, behavioral, and stateful test generation from formal s
 > tests ([#25](https://github.com/HardMax71/spec_to_rest/issues/25)), §5 custom strategies
 > ([#134](https://github.com/HardMax71/spec_to_rest/issues/134)), §7 conformance runner
 > ([#23](https://github.com/HardMax71/spec_to_rest/issues/23)), §9 mutation testing gate
-> ([#135](https://github.com/HardMax71/spec_to_rest/issues/135)), plus M5.5–M5.10
+> ([#135](https://github.com/HardMax71/spec_to_rest/issues/135)), plus M5.5 to M5.10
 > follow-ups. §6 TLA+ trace validation remains a non-goal in v1. The shipped surface lives
 > in [`modules/testgen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/testgen)
 > (Scala 3); the live `compile` test-emission reference is
@@ -23,8 +23,6 @@ description: "Structural, behavioral, and stateful test generation from formal s
 > Python code samples below are the spec-vision shapes;
 > emitted Python in `tests/*.py` is what the live shipped pipeline produces and is
 > documented in detail on the pipelines page.
-
----
 
 ## Table of contents
 
@@ -38,8 +36,6 @@ description: "Structural, behavioral, and stateful test generation from formal s
 8. [Spec-to-Test Mapping Table](#8-spec-to-test-mapping-table)
 9. [Test Quality Metrics](#9-test-quality-metrics)
 10. [Comparison with Existing Testing Approaches](#10-comparison-with-existing-testing-approaches)
-
----
 
 ## 1. Architecture overview
 
@@ -66,8 +62,6 @@ flowchart TD
 | Behavioral (Hypothesis properties)  | Single-operation postcondition failures, precondition bypass, wrong return values                                | Multi-step invariant drift, state corruption across operation sequences      |
 | Stateful (Hypothesis state machine) | Multi-step invariant violations, illegal state transitions, resource lifecycle bugs, ordering-dependent failures | Performance issues, concurrency bugs (unless parallel testing is added)      |
 
----
-
 ## 2. Schemathesis integration (structural layer)
 
 ### 2.1 How we generate Schemathesis configuration from the spec
@@ -79,11 +73,11 @@ specification.
 
 However, we augment the basic Schemathesis run with:
 
-1. **Custom checks** derived from the formal spec's `ensures` and `invariant` clauses
-2. **Stateful test links** derived from operation input/output relationships
-3. **Test profiles** that control depth and breadth of exploration
-4. **Auth configuration** generated from the spec's security declarations
-5. **Database seeding** scripts generated from the spec's initial state
+1. Custom checks derived from the formal spec's `ensures` and `invariant` clauses
+2. Stateful test links derived from operation input/output relationships
+3. Test profiles that control depth and breadth of exploration
+4. Auth configuration generated from the spec's security declarations
+5. Database seeding scripts generated from the spec's initial state
 
 ### 2.2 Test profiles
 
@@ -346,8 +340,6 @@ test-structural:
 test-structural-exhaustive:
 	SPEC_TEST_PROFILE=exhaustive pytest tests/test_structural.py -v --tb=long
 ```
-
----
 
 ## 3. Hypothesis property tests (behavioral layer)
 
@@ -1688,8 +1680,6 @@ def test_invariants_hold_after_place_order(lines):
     check_order_invariants()
 ```
 
----
-
 ## 4. Hypothesis stateful testing (state machine layer)
 
 The stateful test layer builds a `RuleBasedStateMachine` that mirrors the spec's abstract state.
@@ -2468,8 +2458,6 @@ TestOrderSystem.settings = settings(
 )
 ```
 
----
-
 ## 5. Custom Hypothesis strategies from spec types
 
 Every entity in the spec with invariants generates a corresponding Hypothesis strategy that only
@@ -2768,8 +2756,6 @@ def order_inputs(draw, existing_customer_ids: list[str], existing_product_ids: l
     return {"customer": customer, "lines": lines}
 ```
 
----
-
 ## 6. TLA+ trace validation (advanced)
 
 For services with temporal properties, state machines, eventual consistency, or complex
@@ -2792,11 +2778,11 @@ execution traces against them.
 The key insight from the MongoDB/TLA+ community is that trace validation can be reduced to
 constrained model checking:
 
-1. **Instrument** the running service to emit a trace of state transitions (operation name,
+1. Instrument the running service to emit a trace of state transitions (operation name,
    pre-state, post-state, timestamp).
-2. **Express** the trace as a constrained TLA+ specification that fixes the sequence of actions to
+2. Express the trace as a constrained TLA+ specification that fixes the sequence of actions to
    match the observed trace.
-3. **Use TLC** (the TLA+ model checker) to verify that the constrained trace is a valid behavior of
+3. Use TLC (the TLA+ model checker) to verify that the constrained trace is a valid behavior of
    the unconstrained specification.
 4. If TLC finds no valid assignment, the implementation violated the spec.
 
@@ -3076,8 +3062,6 @@ def test_execution_trace_conforms_to_spec():
         "See output above for the violating step."
     )
 ```
-
----
 
 ## 7. Conformance test runner architecture
 
@@ -3437,11 +3421,9 @@ When a test fails, the error message identifies which spec element was violated:
 | `test_*_rejects_nonexistent_*`    | `requires: key in state`        | Check 404 handling: is it returning wrong status?             |
 | `model_matches_service` invariant | Overall state consistency       | Most serious: the service and spec have diverged              |
 
----
-
 ## 8. Spec-to-test mapping table
 
-This is the comprehensive mapping from every possible spec element to the test artifacts it
+This is the full mapping from every possible spec element to the test artifacts it
 generates.
 
 ### 8.1 Entity-level elements
@@ -3508,8 +3490,6 @@ generates.
 | Liveness (`eventually X`) | TLA+ trace validation | Property eventually holds in trace | TLC model checker | `tests/test_tla_trace.py` |
 | Safety (`always X`)       | TLA+ trace validation | Property never violated in trace   | TLC model checker | `tests/test_tla_trace.py` |
 | Fairness (`leads-to`)     | TLA+ trace validation | If X then eventually Y             | TLC model checker | `tests/test_tla_trace.py` |
-
----
 
 ## 9. Test quality metrics
 
@@ -3581,20 +3561,18 @@ To compare the generated test suite against hand-written alternatives:
 
 #### Expected advantages of generated tests
 
-1. **Zero time to write**, tests are generated from the spec.
-2. **Zero maintenance when spec changes**, regenerate tests from updated spec.
-3. **No missed spec elements**, 100% spec coverage by construction.
-4. **Better shrinking**, Hypothesis's shrinking finds minimal counterexamples.
-5. **Broader input coverage**, property tests explore more inputs than example tests.
+1. Zero time to write, tests are generated from the spec.
+2. Zero maintenance when spec changes, regenerate tests from updated spec.
+3. No missed spec elements, 100% spec coverage by construction.
+4. Better shrinking, Hypothesis's shrinking finds minimal counterexamples.
+5. Broader input coverage, property tests explore more inputs than example tests.
 
 #### Expected disadvantages
 
-1. **Slower execution**, property tests run many examples per test function.
-2. **Harder to debug**, generated test names are less intuitive than hand-written ones.
-3. **Cannot test unstated requirements**, only tests what the spec declares.
-4. **Requires a running service**, integration tests, rather than unit tests.
-
----
+1. Slower execution, property tests run many examples per test function.
+2. Harder to debug, generated test names are less intuitive than hand-written ones.
+3. Cannot test unstated requirements, only tests what the spec declares.
+4. Requires a running service, integration tests, rather than unit tests.
 
 ## 10. Comparison with existing testing approaches
 
@@ -3620,7 +3598,7 @@ To compare the generated test suite against hand-written alternatives:
 - Cannot verify behavioral postconditions (e.g., "the returned code was fresh")
 - Stateful testing is limited to OpenAPI Links (data flow only, no model comparison)
 - No invariant checking beyond schema validation
-- **What we add.** Behavioral property tests that check ensures clauses, stateful tests that
+- What we add: behavioral property tests that check ensures clauses, stateful tests that
   maintain a model and compare it against the service, invariant checks after every operation
 
 #### Restler (microsoft research)
@@ -3629,7 +3607,7 @@ To compare the generated test suite against hand-written alternatives:
 - Infers producer-consumer dependencies from OpenAPI
 - Does _not_ check postconditions or invariants
 - Fuzzing is unguided by a behavioral specification
-- **What we add.** Spec-guided testing that checks not just "does it crash?" but "does it satisfy
+- What we add: spec-guided testing that checks not just "does it crash?" but "does it satisfy
   the postconditions?" and "do invariants hold?"
 
 #### Evomaster
@@ -3638,21 +3616,21 @@ To compare the generated test suite against hand-written alternatives:
 - White-box: instruments the service to guide search
 - Good at achieving high line/branch coverage
 - Does _not_ check behavioral correctness (only crashes and 500s)
-- **What we add.** An oracle. EvoMaster finds inputs; we check outputs against the spec. The two
+- What we add: an oracle. EvoMaster finds inputs; we check outputs against the spec. The two
   approaches are complementary.
 
 #### Dredd (archived)
 
 - One request per documented endpoint, check response matches schema
 - No randomization, no edge cases, no stateful sequences
-- **What we add.** Everything beyond "does the happy path return the documented shape?"
+- What we add: everything beyond "does the happy path return the documented shape?"
 
 #### Pact (consumer-driven contracts)
 
 - Verifies that a provider satisfies consumer expectations
 - Consumer writes the contract, rather than the spec author
 - Does not test internal invariants or state transitions
-- **What we add.** Provider-side behavioral verification derived from the authoritative
+- What we add: provider-side behavioral verification derived from the authoritative
   specification, rather than from consumer expectations
 
 #### QuickCheck state machine testing (erlang/haskell)
@@ -3661,7 +3639,7 @@ To compare the generated test suite against hand-written alternatives:
 - Requires manually writing the state machine model in Erlang/Haskell
 - Excellent at finding bugs in stateful systems (used at Volvo, Ericsson)
 - No HTTP/REST awareness, no structural testing
-- **What we add.** Automatic generation of the state machine model from the spec, HTTP client
+- What we add: automatic generation of the state machine model from the spec, HTTP client
   integration, structural testing via Schemathesis, entity-level strategy generation
 
 #### Spec explorer (microsoft)
@@ -3670,7 +3648,7 @@ To compare the generated test suite against hand-written alternatives:
 - Explored state graphs, generated covering test suites
 - Saved 50 person-years at Microsoft
 - Visual Studio-only, rather than maintained, no REST awareness
-- **What we add.** REST-native, Python ecosystem, alive, spec-driven rather than code-driven
+- What we add: REST-native, Python ecosystem, alive, spec-driven rather than code-driven
 
 ### 10.3 What our approach cannot do (honest limitations)
 
@@ -3705,8 +3683,6 @@ To compare the generated test suite against hand-written alternatives:
 Our approach is the only one that covers the full spectrum from structural conformance (does the API
 match its schema?) through behavioral conformance (does each operation satisfy its postconditions?)
 to stateful conformance (do invariants hold across arbitrary operation sequences?).
-
----
 
 ## Appendix A: Requirements file
 

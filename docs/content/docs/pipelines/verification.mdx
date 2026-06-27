@@ -8,11 +8,11 @@ description: Z3 + Alloy 6 verification of .spec files before code generation
 The verification engine model-checks a `.spec` file against its own invariants before any code is
 generated. Two solvers are wired in, each owning a disjoint class of checks:
 
-- [**Z3 SMT solver**](https://github.com/Z3Prover/z3) (via
+- [Z3 SMT solver](https://github.com/Z3Prover/z3) (via
   [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey)) handles all
   first-order-expressible checks: invariant satisfiability, consistency, preservation, dead-op
   detection. Unbounded proof; fast.
-- [**Alloy 6**](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
+- [Alloy 6](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
   handles checks whose expression uses supported second-order constructs (currently powerset
   `^s`) or temporal declarations. Bounded-scope search only; scope 5 by default, tunable via
   `--alloy-scope`.
@@ -23,7 +23,7 @@ CLI output so the attribution is visible.
 
 For the per-feature shipped/planned/not-supported inventory of the verifier (44 rows
 covering temporal, powerset, set algebra, JSON output, narration, cross-solver,
-trust dimension, etc.), see **[Roadmap $\to$ Verification capabilities](/roadmap#verification-capabilities)**.
+trust dimension, etc.), see [Roadmap $\to$ Verification capabilities](/roadmap#verification-capabilities).
 
 ## Preservation VC shape
 
@@ -91,7 +91,7 @@ temporal alwaysOK:
   always(all u in users | u.verified)
 ```
 
-**Semantics in v1 (bounded single-state, not trace-based):**
+The v1 semantics are bounded single-state, not trace-based:
 
 - `always(P)` is checked by asking whether $I \land \neg P$ is satisfiable; if Alloy finds any
   $I$-satisfying state where $P$ is false within the current scope, the property is violated.
@@ -298,7 +298,7 @@ Exit `2` is a partial-success signal: the spec *may* still be correct, but the v
 not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
 diagnostic so CI / editors can surface the coverage gap alongside successes. Exit `4` is the same
 shape but driven by the verified subset: the skipped checks carry a `soundness_limitation`
-diagnostic, signalling the spec uses constructs the formal soundness theorem does not yet cover
+diagnostic, which signals that the spec uses constructs the formal soundness theorem does not yet cover
 (rather than constructs the translator does not handle). Verify routes every check that *does*
 run through the extracted (Isabelle-verified) translator; checks that would route through the
 hand-written translator at the *check-body* level always skip instead.
@@ -426,7 +426,7 @@ by editors, CI bots, and aggregators.
 ## Verification certificates
 
 The verifier can write per-check **VC artifacts** for replay and audit, and can extract
-**unsat cores** for diagnosing failure causes.
+unsat cores for diagnosing failure causes.
 
 ### Per-check VC dump (`--dump-vc`)
 
@@ -486,9 +486,9 @@ spec.spec:42:3: error: invariants are jointly unsatisfiable, no valid state exis
 
 Mechanism per backend:
 
-- **Z3** uses `Solver.assertAndTrack` with one tracker constant per assertion; after `unsat`,
+- Z3 uses `Solver.assertAndTrack` with one tracker constant per assertion; after `unsat`,
   `getUnsatCore()` returns the tracker names whose originating assertions form the core.
-- **Alloy** switches `SATFactory` to `minisat.prover` (the only proof-emitting solver bundled
+- Alloy switches `SATFactory` to `minisat.prover` (the only proof-emitting solver bundled
   in Pardinus 6.2.0), enables `coreGranularity = 1` + `coreMinimization = 1`, and reads
   `A4Solution.highLevelCore` after `unsat`. Each returned `Pos` is mapped back to a spec span
   via the line-map produced during `.als` rendering.
@@ -496,7 +496,7 @@ Mechanism per backend:
 `--explain` adds modest overhead (Z3 switches to assert-and-track; Alloy switches to a
 core-capable SAT backend and minimizes). Use it when investigating failures, not on every run.
 
-**Known limitation:** Alloy's `highLevelCore` is empty for contradictions that depend on
+Known limitation: Alloy's `highLevelCore` is empty for contradictions that depend on
 arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce a correct
 `unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
 contradictions return populated cores.
@@ -546,7 +546,7 @@ is unsettled and there is no concrete consumer today. Tracked separately in
 
 `--timeout` maps to a solver-native deadline (Z3's `timeout` parameter, Alloy's
 `Future.get(timeout, MILLISECONDS)`); there is no outer `IO.timeoutTo` wrapper. The
-`solver_timeout` diagnostic above is the only verifier-specific surface ,  the inner
+`solver_timeout` diagnostic above is the only verifier-specific surface; the inner
 deadline expiry produces a `CheckOutcome.Unknown` carrying that category. `0` disables the
 solver-native deadline; the 30 s default is conservative headroom for heavier preservation
 checks on large specs.
@@ -566,8 +566,8 @@ Each spec primitive maps to a Z3 theory sort. Integral and temporal types share 
 arithmetic on them verify directly); fractional types use Z3 `Real`; `String` uses Z3's
 native string sort; `UUID`, entities, and enums are uninterpreted sorts that support
 equality only. A named primitive alias inherits its base type's sort, so a String-refinement
-type (`type Code = String where P`) resolves to the native string sort -- with `P` applied at
-use sites -- rather than to an uninterpreted sort, and all first-class string operations
+type (`type Code = String where P`) resolves to the native string sort (with `P` applied at
+use sites) rather than to an uninterpreted sort, and all first-class string operations
 (concatenation, ordering, regex membership) apply to its values.
 
 | Spec type                              | Z3 sort                                    |
@@ -587,8 +587,8 @@ operands (lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` m
 sort is reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on
 any sort.
 
-Universal facts over the native string sort -- relation domain, frame, and refinement axioms
-quantified over a String-keyed relation -- are emitted with E-matching **patterns** (`:pattern`
+Universal facts over the native string sort (relation domain, frame, and refinement axioms
+quantified over a String-keyed relation) are emitted with E-matching **patterns** (`:pattern`
 on the relation lookup), so Z3 instantiates them on the ground keys appearing in the goal
 instead of falling back to model-based instantiation over the infinite string domain. Without
 the patterns, String-keyed relations push Z3 into the string theory under unbounded

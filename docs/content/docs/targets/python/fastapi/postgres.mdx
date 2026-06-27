@@ -127,13 +127,13 @@ The four `app/` layers keep a strict one-way dependency that mirrors FastAPI's i
 between the API boundary and persistence: routers depend on services, and services depend on
 models and schemas. Nothing flows the other way.
 
-- **`schemas/`** (Pydantic v2) is the API boundary. The read DTO sets
+- `schemas/` (Pydantic v2) is the API boundary. The read DTO sets
   `model_config = ConfigDict(from_attributes=True)`, so an ORM row becomes its response shape
   via `ReadSchema.model_validate(row)` rather than a hand-written mapper.
-- **`models/`** (SQLAlchemy 2.0) is pure persistence: `Mapped[...]` columns and `__tablename__`,
+- `models/` (SQLAlchemy 2.0) is pure persistence: `Mapped[...]` columns and `__tablename__`,
   and nothing more. A model never imports a schema and defines no custom `__init__`; it is built
   through SQLAlchemy's keyword constructor.
-- **`services/`** is the only layer aware of both shapes. A create handler constructs the model
+- `services/` is the only layer aware of both shapes. A create handler constructs the model
   with explicit keyword arguments (`Model(field=body.field, ...)`, unwrapping `SecretStr` inputs
   via `get_secret_value()` where present) and reads it back with `model_validate`.
 
@@ -168,10 +168,10 @@ exclusively in `alembic/versions/001_initial_schema.py` as
 `sa.ForeignKeyConstraint([...], [...])`. Two inference paths feed that DDL, both in
 `modules/convention/src/main/scala/specrest/convention/Schema.scala`:
 
-- **Name-based.** A field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
+- Name-based: a field called `<entity_snake>_id` (e.g. `user_id`, `order_id`) is matched
   against the entity set; the DDL column type is taken from the referenced entity's `id` type
   (`INTEGER` if the target's `id` is `Int`, `BIGINT` only when it's the synthetic `BIGSERIAL`).
-- **Type-based.** A field whose declared type *is* an entity (e.g. `owner: User`) produces a
+- Type-based: a field whose declared type *is* an entity (e.g. `owner: User`) produces a
   `<field>_id BIGINT` column with a FK constraint. This path is currently hardcoded to `BIGINT`
   regardless of the target entity's `id` type (`mapTypeToColumn` in `modules/convention/src/main/scala/specrest/convention/Schema.scala`).
 
@@ -306,20 +306,20 @@ volumes:
 
 Builder: `modules/codegen/src/main/scala/specrest/codegen/Compose.scala` (typed Compose model
 + recipes); rendered by `ComposeYaml.scala`. The `.hbs` template was removed in
-[M7.9](https://github.com/HardMax71/spec_to_rest/issues/63) — limits, restart policies,
+[M7.9](https://github.com/HardMax71/spec_to_rest/issues/63): limits, restart policies,
 and secret-env keys are now Scala constants in one place.
 
 ### Multi-environment overlays
 
 Alongside the base `docker-compose.yml`, three additional files ship with every compile:
 
-- **`docker-compose.override.yml.example`** — local-dev overrides. Copy to
+- `docker-compose.override.yml.example`: local-dev overrides. Copy to
   `docker-compose.override.yml` (Compose auto-loads it) and edit freely. The `.example`
   itself is regenerated on every compile; your copy is never touched.
-- **`docker-compose.staging.yml`** — staging overlay. `restart: on-failure`,
+- `docker-compose.staging.yml`: staging overlay. `restart: on-failure`,
   `memory: 256M`/`cpus: 0.25` on the app, mandatory `${KEY:?…}` substitution for every
   database secret. Scaffolded once; preserved across regeneration.
-- **`docker-compose.prod.yml`** — production overlay. `restart: unless-stopped`,
+- `docker-compose.prod.yml`: production overlay. `restart: unless-stopped`,
   `memory: 512M`/`cpus: 0.5` on the app, `memory: 1G`/`cpus: 1.0` on the db, no exposed
   database port, mandatory `${KEY:?…}` for every secret. Scaffolded once; preserved
   across regeneration.
@@ -339,7 +339,7 @@ with a clear error if any is missing.
 GitHub Actions workflow triggered on push/PR to `main` plus a nightly
 `schedule: '0 2 * * *'`. Two jobs (the second `needs: test`):
 
-- **test**, installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
+- `test`: installs `uv`, sets up Python 3.13, syncs deps, runs `ruff check app/`,
   `mypy app/`, `alembic upgrade head`, then `pytest tests/test_health.py`. After unit
   tests pass it mints a per-run `ADMIN_TOKEN` (the conformance suite authenticates
   against the `/admin` router with it), boots the app in the background, waits up to
@@ -350,11 +350,11 @@ GitHub Actions workflow triggered on push/PR to `main` plus a nightly
   results from the conformance phases are uploaded as an artifact on every run
   (`if: always()`). Postgres is provided by the workflow's `services:` block
   (`postgres:17-alpine`).
-- **docker**, `cp .env.example .env`, `docker compose up -d --build`, smoke `/health`
+- `docker`: `cp .env.example .env`, `docker compose up -d --build`, smoke `/health`
   with a 60 s timeout, then `docker compose down -v` (in `if: always()`).
 
 Schemathesis is invoked **inside** the conformance suite (the `tests/test_structural_*.py`
-files emitted by default — opt out with `--no-tests`) rather than directly from the workflow; see
+files emitted by default, opt out with `--no-tests`) rather than directly from the workflow; see
 [Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
 
 Template: `modules/codegen/src/main/resources/templates/python/fastapi/github/workflows/ci.yml.hbs`
@@ -364,7 +364,7 @@ dotfiles from `copyResources`; the emitted file is still `.github/workflows/ci.y
 ### Environment variables
 
 `.env.example` is emitted with sensible defaults; `app/config.py` loads it via `pydantic-settings`.
-The file has two sections — the always-required vars, then a commented-out
+The file has two sections: the always-required vars, then a commented-out
 "required for staging / production" block listing every secret the prod overlay's
 `${KEY:?…}` substitutions expect:
 
@@ -396,9 +396,9 @@ Regeneration overwrites every file in the emitted tree **except** a small set of
 user-owned files that the compiler scaffolds once and never touches again. The supported,
 lossless ways to influence the output are:
 
-- **`app/extensions/__init__.py`** — scaffolded on first compile, preserved on every
+- `app/extensions/__init__.py`: scaffolded on first compile, preserved on every
   subsequent compile. The generated `app/main.py` calls `register(app)` from this module
-  once, **before** mounting any spec-derived router — so middleware added here wraps every
+  once, **before** mounting any spec-derived router, so middleware added here wraps every
   generated endpoint and routes declared here take precedence on path collisions. Use it
   for custom endpoints, lifecycle hooks, or middleware that should live next to the
   generated code but survive regeneration:
@@ -417,8 +417,8 @@ lossless ways to influence the output are:
   ```
 
   `spec-to-rest compile --dry-run` reports this file as `preserve` on every run after the
-  first, distinguishing it from `create` / `update` / `unchanged`.
-- **Convention overrides** declared inside a service-level `conventions { ... }` block. Each
+  first, distinct from `create` / `update` / `unchanged`.
+- Convention overrides are declared inside a service-level `conventions { ... }` block. Each
   rule is `Target.property = value`, with an optional quoted qualifier between the property and
   `=` for properties like `http_header` that address a named slot:
   `Target.http_header "Name" = expr`. Example from `fixtures/spec/url_shortener.spec`:
@@ -437,22 +437,22 @@ lossless ways to influence the output are:
   These live inside the spec and survive regeneration. Grammar rule:
   `conventionRule: UPPER_IDENT DOT lowerIdent STRING_LIT? EQ expr` in `modules/parser/src/main/antlr4/Spec.g4`.
   See [Convention Engine](/design/convention-engine) for the full property list.
-- **Profile selection.** Switching targets (`python-fastapi-sqlite`, `go-chi-postgres`,
+- Profile selection switches targets (`python-fastapi-sqlite`, `go-chi-postgres`,
   `ts-express-mysql`, …) without editing emitted code.
 
 Manual edits to any file other than `app/extensions/__init__.py` will be lost on the next
 compile; the generated `README.md` warns consumers of this. In-file protected-region markers
 (fences that splice user code into otherwise-generated bodies) are intentionally not
-provided — sidecar extension files are the supported mechanism.
+provided. Sidecar extension files are the supported mechanism.
 
 ## CI gate
 
 `.github/workflows/python-build.yml` re-runs `compile --framework fastapi --db
 <dialect>` on every PR that touches the Python templates, profile, emitter, or
 the shared migration renderer, then runs `uv sync` and an Alembic round-trip
-(`upgrade head → downgrade base → upgrade head`) against a real database — a
+(`upgrade head → downgrade base → upgrade head`) against a real database, a
 matrix over **postgres, sqlite, and mysql** (`postgres:17` / `mysql:8.4`
-service containers; SQLite file-backed) — so the emitted
+service containers; SQLite file-backed), so the emitted
 `alembic/versions/*.py` is proven to apply and reverse on every supported
 dialect, not just that it imports.
 
@@ -460,7 +460,7 @@ dialect, not just that it imports.
 
 What this target does **not** generate today, with tracking issues:
 
-- **Synthesised operation bodies for non-CRUD operations.** Transitions, side-effects, and
+- Synthesised operation bodies for non-CRUD operations: transitions, side-effects, and
   redirects whose body shape doesn't match the entity create schema emit
   `raise NotImplementedError(...)` stubs by default (see
   `modules/codegen/src/main/resources/templates/python/fastapi/services/entity.py.hbs`).

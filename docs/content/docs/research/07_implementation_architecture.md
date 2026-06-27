@@ -21,8 +21,6 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 > [testgen](https://github.com/HardMax71/spec_to_rest/tree/main/modules/testgen),
 > [CLI](https://github.com/HardMax71/spec_to_rest/tree/main/modules/cli).
 
----
-
 ## Table of contents
 
 1. [Language Choice for the Compiler Itself](#1-language-choice-for-the-compiler-itself)
@@ -35,8 +33,6 @@ description: "Compiler toolchain, parser technology, IR design, and build plan"
 8. [Dependency Management and Distribution](#8-dependency-management-and-distribution)
 9. [Build Plan with Milestones](#9-build-plan-with-milestones)
 10. [Risk Mitigation](#10-risk-mitigation)
-
----
 
 ## 1. Language choice for the compiler itself
 
@@ -123,7 +119,7 @@ s.add(And(code_len >= 6, code_len <= 10))
 result = s.check()  # sat
 ```
 
-**LLM API integration.** Best-in-class. The `anthropic` Python SDK is Anthropic's primary SDK.
+**LLM API integration.** The strongest option here. The `anthropic` Python SDK is Anthropic's primary SDK.
 OpenAI, Cohere, and every other LLM provider ship Python SDKs first. Streaming, tool use, batch APIs
 are all production-grade.
 
@@ -135,8 +131,6 @@ platform-specific quirks. Docker is the reliable fallback.
 **Assessment.** Best for prototyping and integration with Z3/LLM ecosystems. The packaging story is
 the main liability, mitigated by Docker distribution. Type annotations with mypy provide adequate
 safety for a project of this scale.
-
----
 
 ### 1.2 Rust
 
@@ -216,8 +210,6 @@ runtime dependencies.
 vs Python for compiler code). The Z3 and LLM integration stories are adequate but not first-class.
 Good choice if the project outlives prototyping and performance matters (large specs with many
 operations).
-
----
 
 ### 1.3 TypeScript/node
 
@@ -303,8 +295,6 @@ single-binary distribution.
 **Assessment.** Good middle ground. TypeScript provides static typing with fast iteration. The Z3
 story is the weakest link. Tree-sitter has native JS bindings. Best choice if the team is JS-native
 and prioritizes development speed over solver integration quality.
-
----
 
 ### 1.4 Go
 
@@ -397,8 +387,6 @@ verbose error handling makes compiler code significantly more boilerplate. Go's 
 makes IR representation awkward (must use interfaces with type switches). Not recommended for this
 project.
 
----
-
 ### 1.5 Kotlin/JVM
 
 #### Parser code example (ANTLR4 + Kotlin)
@@ -459,8 +447,6 @@ ANTLR4 is the gold standard parser generator and it targets Kotlin/Java natively
 classes provide excellent sum type support for IR representation. The main cost is JVM distribution
 weight, mitigated by GraalVM native-image. Recommended if the team is JVM-proficient.
 
----
-
 ### 1.6 Comparative matrix
 
 | Criterion               | Python         | Rust           | TypeScript     | Go             | Kotlin         |
@@ -514,8 +500,6 @@ truth for the IR ADT is
 (extracted to
 [`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
 by `Code_Target_Scala`).
-
----
 
 ## 2. Parser technology
 
@@ -663,8 +647,6 @@ class Parser:
 
         self.error(f"expected expression, got {tok.kind}")
 ```
-
----
 
 ### 2.2 ANTLR4
 
@@ -836,8 +818,6 @@ collects multiple errors before aborting.
 VS Code syntax highlighting, and Language Server Protocol (LSP) implementations can use the ANTLR
 parser for completions and diagnostics.
 
----
-
 ### 2.3 Tree-sitter
 
 #### Complete tree-sitter grammar for a significant subset
@@ -972,8 +952,6 @@ and incremental parsing in editors that support tree-sitter (Neovim, Helix, Zed,
 tree-sitter extension). The incremental parsing is especially valuable for an IDE/LSP scenario where
 specs are edited live.
 
----
-
 ### 2.4 PEG parsers
 
 **pest (Rust) grammar snippet:**
@@ -1027,8 +1005,6 @@ restructuring the grammar into precedence-climbing or Pratt-style layers. Backtr
 choice (`/`) can cause exponential parse times on pathological inputs, though pest mitigates this
 with packrat memoization.
 
----
-
 ### 2.5 Xtext (eclipse)
 
 #### Grammar snippet
@@ -1070,8 +1046,6 @@ server for VS Code. This is the lowest-effort path to a complete IDE experience.
 ecosystem is Eclipse-centric and has declined in mindshare since 2020. Not recommended unless the
 team is already in the Eclipse ecosystem.
 
----
-
 ### 2.6 Parser technology recommendation
 
 **Decision: ANTLR4 via the `antlr-ng` TypeScript target.**
@@ -1104,23 +1078,21 @@ JVM dependencies at build time.
 #### Phase plan
 
 - All phases: Use the ANTLR4 grammar (Section 2.2) with the `antlr-ng` TypeScript runtime. ANTLR4
-  generates a robust parser with visitor/listener patterns that integrate cleanly with TypeScript
+  generates a parser with visitor/listener patterns that integrate cleanly with TypeScript
   interfaces for the IR.
 - IDE: Generate a tree-sitter grammar from the ANTLR4 grammar (tools exist for this conversion) for
   editor syntax highlighting. The LSP server will use the ANTLR4 parser directly for completions and
   diagnostics.
-
----
 
 ## 3. Intermediate representation (ir) design
 
 The IR is the central nervous system of the compiler. Every stage reads from or writes to the IR. It
 must be:
 
-- **Complete**: represent everything in the spec
-- **Annotatable**: the convention engine and verifier add information
-- **Serializable**: for debugging, caching, and incremental compilation
-- **Traversable**: visitors/pattern matching for each compiler stage
+- complete enough to represent everything in the spec
+- annotatable, so the convention engine and verifier can add information
+- serializable for debugging, caching, and incremental compilation
+- traversable by visitors or pattern matching at each compiler stage
 
 ### 3.1 Complete IR type definitions
 
@@ -1726,8 +1698,6 @@ def deserialize_ir(text: str) -> ServiceIR:
     return _reconstruct_service_ir(data)
 ```
 
----
-
 ## 4. Solver integration architecture
 
 ### 4.1 Z3 integration
@@ -1890,8 +1860,6 @@ def check_operation_preserves_invariants():
 If Z3 returns `unknown`, report a warning rather than an error. The user can increase the timeout or
 accept the risk.
 
----
-
 ### 4.2 Alloy integration
 
 #### How to invoke alloyapi from JVM (Kotlin)
@@ -1995,8 +1963,6 @@ Alloy Analyzer returns `A4Solution` objects. Key fields:
 
 For subprocess-based integration (TypeScript), run `java -jar alloy.jar` and parse stdout. The
 output format is XML (`-xml` flag) or text. XML parsing gives structured access to atoms and tuples.
-
----
 
 ### 4.3 Dafny integration
 
@@ -2139,8 +2105,6 @@ class DafnyGenerator:
 
         return "\n".join(lines)
 ```
-
----
 
 ### 4.4 LLM API integration
 
@@ -2355,8 +2319,6 @@ def call_with_retry(fn, max_retries=3, base_delay=1.0):
     raise RuntimeError(f"API call failed after {max_retries} retries")
 ```
 
----
-
 ## 5. Project structure
 
 ```tree
@@ -2515,26 +2477,23 @@ spec-to-rest/
 
 ### Key design choices in the project structure
 
-1. **`src/spec_to_rest/` layout**: Uses the `src/` layout recommended by the Python Packaging
-   Authority. This prevents accidental imports of the source tree during testing (tests import the
-   installed package, rather than the local directory).
+1. Project source lives under `src/spec_to_rest/`, the `src/` layout recommended by the Python
+   Packaging Authority. This prevents accidental imports of the source tree during testing (tests
+   import the installed package, rather than the local directory).
 
-2. **Templates as package data**: The `emit/templates/` directory contains Jinja2 templates that are
-   installed as package data. This ensures they are available when the compiler is installed via
-   pip.
+2. The `emit/templates/` directory contains Jinja2 templates installed as package data. They are
+   available when the compiler is installed via pip.
 
-3. **Separate `ast.py` and `ir/types.py`**: The AST (raw parse tree) and IR (desugared, resolved)
-   are distinct types. The `ir/builder.py` transforms one to the other. This separation allows AST
-   changes (syntax evolution) without breaking the rest of the compiler.
+3. `ast.py` and `ir/types.py` are kept apart because the AST (raw parse tree) and IR (desugared,
+   resolved) are distinct types. The `ir/builder.py` transforms one to the other. This separation
+   allows AST changes (syntax evolution) without breaking the rest of the compiler.
 
-4. **`conventions/profiles/`**: Each target platform (Python/FastAPI, Go/chi, TypeScript/Express)
+4. Under `conventions/profiles/`, each target platform (Python/FastAPI, Go/chi, TypeScript/Express)
    has its own convention profile module. The profile defines target-specific naming, typing, and
    structure conventions. This is the extension point for adding new targets.
 
-5. **`tests/fixtures/expected/`**: Golden file outputs for snapshot testing. When code generation
+5. `tests/fixtures/expected/` holds golden file outputs for snapshot testing. When code generation
    changes, `pytest --update-snapshots` regenerates these.
-
----
 
 ## 6. CLI design
 
@@ -2810,8 +2769,6 @@ $ docker run --rm -v $(pwd):/workspace -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
     spec-to-rest/compiler:latest \
     generate --target python-fastapi --output /workspace/generated /workspace/spec.rest
 ```
-
----
 
 ## 7. Testing strategy for the compiler itself
 
@@ -3233,8 +3190,6 @@ def test_ir_serialization_roundtrip(spec_text):
     assert len(ir.entities) == len(ir2.entities)
 ```
 
----
-
 ## 8. Dependency management and distribution
 
 ### 8.1 Dependencies (Python examples shown for illustrative reference)
@@ -3374,8 +3329,6 @@ cache_dir = ".spec-to-rest-cache"
 The compiler should never log or display the API key. If `--no-synthesis` is set, no API key is
 needed.
 
----
-
 ## 9. Build plan with milestones
 
 ### Phase 1: Parser + convention engine MVP (~4 weeks)
@@ -3432,8 +3385,6 @@ shortener spec.
 - Generated code passes linting (ruff) and type checking (mypy)
 - 80%+ test coverage on the compiler itself
 
----
-
 ### Phase 2: Spec verification (~3 weeks)
 
 **Goal:** `spec-to-rest check spec.rest` catches spec errors before code generation.
@@ -3471,11 +3422,9 @@ shortener spec.
 - Implement `--verify-timeout` and graceful timeout handling
 - Write integration tests for all verification scenarios
 
----
-
 ### Phase 3: Test generation (~3 weeks)
 
-**Goal.** Generated service includes comprehensive tests derived from the spec.
+**Goal.** Generated service includes thorough tests derived from the spec.
 
 **Week 8: Property Tests**
 
@@ -3505,8 +3454,6 @@ shortener spec.
   - Stateful test options
   - Custom checks from spec invariants
 - Deliverable: `cd generated && schemathesis run openapi.yaml` runs API fuzzing tests
-
----
 
 ### Phase 4: LLM synthesis (~4 weeks)
 
@@ -3549,9 +3496,7 @@ shortener spec.
   - Post-process generated Python to integrate with FastAPI app
   - Handle Dafny runtime library dependency
 - Implement integration of synthesized code with convention-generated scaffolding
-- Deliverable: Synthesized code plugs into generated service seamlessly
-
----
+- Deliverable: Synthesized code plugs into generated service cleanly
 
 ### Phase 5: Multi-target support (~4 weeks)
 
@@ -3585,8 +3530,6 @@ shortener spec.
 - Write golden file tests for TypeScript output
 - Deliverable: `spec-to-rest generate --target ts-express spec.rest`
 
----
-
 ### Phase 6: Polish (~2 weeks)
 
 **Week 19: Error Messages and Documentation**
@@ -3611,8 +3554,6 @@ shortener spec.
   - GitHub Action publish
 - Deliverable: v0.1.0 release
 
----
-
 ## 10. Risk mitigation
 
 ### Risk 1: Parser is too hard or grammar keeps changing
@@ -3633,8 +3574,6 @@ shortener spec.
 **Escalation.** If grammar design takes more than 2 weeks, freeze the grammar and revisit in
 Phase 6. A slightly awkward grammar that works is better than a perfect grammar that doesn't ship.
 
----
-
 ### Risk 2: Z3 integration is fragile or slow
 
 **Probability.** Medium-High **Impact:** Delays Phase 2 or produces unreliable verification
@@ -3652,8 +3591,6 @@ Phase 6. A slightly awkward grammar that works is better than a perfect grammar 
 
 **Escalation.** If Z3 integration takes more than 2 weeks, ship Phase 2 with parse-level checks only
 (type resolution, name resolution, basic consistency) and defer SMT-based verification.
-
----
 
 ### Risk 3: Dafny is too slow or produces non-idiomatic code
 
@@ -3676,8 +3613,6 @@ Phase 6. A slightly awkward grammar that works is better than a perfect grammar 
 **Escalation.** If Dafny integration takes more than 3 weeks, ship Phase 4 with LLM synthesis only
 (no formal verification). The LLM generates target-language code directly, checked by type system
 and tests rather than Dafny proofs.
-
----
 
 ### Risk 4: LLM costs too high
 
@@ -3704,8 +3639,6 @@ and tests rather than Dafny proofs.
 | E-commerce (15 ops)    | 5 synthesized  | 15-40 calls | $0.30-1.20     |
 | Large service (30 ops) | 10 synthesized | 30-80 calls | $0.60-2.50     |
 
----
-
 ### Risk 5: Generated code quality is poor
 
 **Probability.** Medium **Impact:** Users don't trust the compiler; adoption stalls
@@ -3725,8 +3658,6 @@ and tests rather than Dafny proofs.
 5. Include the spec as a comment in the generated code. Users can see exactly which spec element
    produced which code, making manual adjustments easier.
 
----
-
 ### Risk 6: Convention engine makes wrong decisions
 
 **Probability.** Medium **Impact:** Generated HTTP API doesn't match user expectations
@@ -3742,8 +3673,6 @@ and tests rather than Dafny proofs.
    etc.).
 5. When the convention engine is uncertain (e.g., an operation that both reads and writes state),
    emit a warning suggesting the user add an explicit convention override.
-
----
 
 ### Risk 7: TypeScript ecosystem limitations
 
@@ -3765,8 +3694,6 @@ binaries for some integrations
    - multiprocessing for parallel verification and LLM calls
    - C extension for the parser (via tree-sitter Python bindings)
 
----
-
 ### Risk 8: Spec language design is wrong
 
 **Probability.** Medium-High (most likely risk) **Impact:** Fundamental rework needed; wasted effort
@@ -3787,8 +3714,6 @@ on parser/IR
    developer adoption (not academics), and it went through multiple syntax iterations based on user
    feedback.
 
----
-
 ### Summary decision matrix
 
 | Risk                                    | Probability | Impact   | Mitigation Cost          | Priority |
@@ -3805,8 +3730,6 @@ on parser/IR
 The highest-priority risk is getting the spec language design right. This is addressed by aggressive
 prototyping: build the simplest possible end-to-end flow (Phase 1) and iterate on the language based
 on real usage. Every other risk has a fallback that keeps the project moving forward.
-
----
 
 <!-- Added: gradual adoption strategy (gap analysis) -->
 

@@ -5,7 +5,7 @@ description: compile emits a native behavioral/stateful/structural conformance s
 
 `spec-to-rest compile` produces a property-test conformance suite alongside the
 generated service (**emitted by default**; pass `--no-tests` to opt out),
-**rendered in the target's own language** — pytest + Hypothesis +
+rendered in the target's own language: pytest + Hypothesis +
 Schemathesis for `python-fastapi-*`, Vitest + fast-check for `ts-express-*`, `go test` +
 rapid for `go-chi-*` (all nine targets: each language × postgres / sqlite / mysql). Each
 `ensures` clause becomes a positive property test; each `<input> in <state>` requires clause
@@ -14,7 +14,7 @@ check. The examples on this page show the Python (fastapi) rendering; see
 [Native multi-language emission](#native-multi-language-emission) for how the same
 spec-derived logic renders into TypeScript and Go.
 
-Looking for the **design rationale and the full vision** (structural + behavioral + stateful
+Looking for the design rationale and the full vision (structural + behavioral + stateful
 layers, conformance runner, mutation testing)? See
 [Test Generation Pipeline](/research/05_test_generation). This page documents what test
 emission actually delivers today; the nightly mutation-testing CI gate that
@@ -56,19 +56,19 @@ state/output scoping, the strategy derivation from IR types) is single-sourced a
 language-agnostic. Only the leaf rendering varies, behind the `Backend.scala` seam in
 `modules/testgen`:
 
-- **`ExprBackend`** — translates an IR expression to the target language
+- `ExprBackend`: translates an IR expression to the target language
   (`ExprToPython` / `TsExprBackend` / `GoExprBackend`). Each backend returns
-  the shared `Translated.Emit(text) | Translated.Skip(reason, span)` ADT — a
+  the shared `Translated.Emit(text) | Translated.Skip(reason, span)` ADT, a
   language-agnostic result, despite the historical `ExprPy` name (renamed in #308).
-- **`Builtins`** (in `modules/convention`) — the single registry of spec-language
+- `Builtins` (in `modules/convention`): the single registry of spec-language
   builtin functions (`len`, `dom`, `now`, `hash`, `minutes`/`hours`/`seconds`,
   `abs`, `sum`, ...). Each entry carries per-backend emit lambdas plus import
   metadata. Adding a new builtin is one struct entry, automatically picked up by
   all three backends and the lint allowlist via `Builtins.names`.
-- **`StrategyBackend`** — renders a spec type into a generator
+- `StrategyBackend`: renders a spec type into a generator
   (`PythonHypothesisStrategy` `st.*` / `TsFastCheckStrategy` `fc.*` /
   `GoRapidStrategy` `rapid`).
-- **`HarnessTemplates`** — the language-native scaffold (pytest+conftest /
+- `HarnessTemplates`: the language-native scaffold (pytest+conftest /
   Vitest+`_client.ts` / `go test`+`conf_*.go`), selected by `TestBackend`.
 
 The `Behavioral` / `Stateful` / `Structural` decision predicates are shared by all
@@ -84,8 +84,8 @@ bug.
 | `ts-express-*` | Vitest + fast-check | structural-lite (reuse the Strategies seam: type-valid input per non-stub op, assert no 5xx) | `node tests/run_conformance.mjs <profile>` / `npm test` |
 | `go-chi-*` | `go test` + rapid | structural-lite (same) | `bash tests/run_conformance.sh <profile>` / `go test -tags conformance ./tests/...` |
 
-**Structural-lite** (ts/go): schemathesis has no TS/Go peer, so rather than reimplement
-an OpenAPI/JSON-Schema fuzzer the structural phase reuses the IR `Strategies` seam — for
+Structural-lite (ts/go): schemathesis has no TS/Go peer, so rather than reimplement
+an OpenAPI/JSON-Schema fuzzer the structural phase reuses the IR `Strategies` seam: for
 every non-stub operation it generates type-valid inputs, calls with a per-case
 `/admin/reset`, and asserts the server did not 5xx (schemathesis's core
 "documented, no server error" check, minus full schema validation). Fail-loud stubs are
@@ -107,7 +107,7 @@ Each backend's per-target page documents the exact file layout and run commands:
 
 ## What gets generated
 
-The table below is the **`python-fastapi-*`** layout; the Vitest and `go test`
+The table below is the `python-fastapi-*` layout; the Vitest and `go test`
 backends emit the analogous set in their own conventions (see the per-target pages and
 [Native multi-language emission](#native-multi-language-emission) above).
 
@@ -153,7 +153,7 @@ def test_shorten_ensures_0(url):
     assert ((response_data["code"]) not in (pre_state["store"])), "ensures violated: ensures: (code not in pre(store))"
 ```
 
-**State-dependent preconditions are partially covered.** If `requires` references a state
+State-dependent preconditions are partially covered. If `requires` references a state
 field (e.g., `requires: code in store`), positive ensures tests for the *generic* case are
 skipped; driving the system into the precondition-satisfying state requires either calls
 to other operations or direct seed-writes. For the *transition* case (operation referenced
@@ -297,9 +297,9 @@ For specs that declare a state machine via `transition X { entity: E; field: f; 
 testgen synthesizes per-`via`-operation behavioral tests that drive the entity directly into
 each `from` status using a generated seed admin endpoint, then exercise the operation:
 
-- **Positive** test per legal `(from, to)` rule. Seed entity in `from`, call the via operation,
+- Positive test per legal `(from, to)` rule. Seed entity in `from`, call the via operation,
   assert 2xx and the entity's `field` post-state equals `to`.
-- **Negative** test per illegal `from` (every value of the field's enum that is *not* a
+- Negative test per illegal `from` (every value of the field's enum that is *not* a
   `from`-state for `via X`). Seed entity in that state, call the via operation, assert 4xx.
 
 Setup uses `POST /admin/seed/<entity>`, emitted by `AdminRouter.scala` for every
@@ -390,28 +390,28 @@ shift LHS off it.
 Anything outside the table above keeps the skip with reason
 `guard '<expr>' not representable in seed dict (see #152)`. Cases that fall back:
 
-- **User function calls** other than `len(...)` (e.g. `is_valid_email(addr)`,
+- User function calls other than `len(...)` (e.g. `is_valid_email(addr)`,
   `paymentCaptured(order_id)`): would need runtime predicate evaluation.
-- **Set/map/seq arithmetic** beyond cardinality and membership (e.g.
+- Set/map/seq arithmetic beyond cardinality and membership (e.g.
   `tags - banned = {}`, `tags = other_tags`).
-- **Nested field access** on either side (e.g. `parent.status = ARCHIVED`,
+- Nested field access on either side (e.g. `parent.status = ARCHIVED`,
   `priority.level > 3`): would need multi-entity seed orchestration; the
   recognizer only accepts bare `Identifier` operands of the seeded entity.
-- **`Pre(...)` / `Prime(...)`.** References system pre-/post-state, not the
+- `Pre(...)` / `Prime(...)`: references system pre-/post-state, not the
   row being seeded; structurally not row-local.
-- **Compound RHS expressions** other than the literal forms in the table
+- Compound RHS expressions other than the literal forms in the table
   (e.g. `a > b + 1`, `a > some_function()`).
-- **Mismatched operand kinds** in ordered comparison (one DateTime-ish, one
+- Mismatched operand kinds in ordered comparison (one DateTime-ish, one
   numeric); the recognizer requires the same kind on both sides.
-- **Transition-field self-equality contradicting the rule's `from`** (e.g.
+- Transition-field self-equality contradicting the rule's `from` (e.g.
   rule `LOW -> HIGH ... when phase = HIGH`; the guard can never hold for any
   row of phase=LOW).
-- **Conjunctions where any branch fails recognition.** All-or-nothing across
+- Conjunctions where any branch fails recognition: all-or-nothing across
   an `and` tree; a partial pass would silently miss the unrecognized branch.
-- **Conflicting fixes within a conjunction** (e.g. `a > b and a < b` produces
+- Conflicting fixes within a conjunction (e.g. `a > b and a < b` produces
   two writes to `row[a]` with different RHS); recognition fails fast rather
   than emitting an unsatisfiable test.
-- **Top-level `or` / `implies`.** Pick-a-branch ambiguity; reduce to a
+- Top-level `or` / `implies`: pick-a-branch ambiguity; reduce to a
   conjunction and re-spec the rule if you want a deterministic test.
 
 ### Body and query inputs on `via` operations (#155)
@@ -459,16 +459,16 @@ separate concern from #155.)
 
 ### Other skipped categories
 
-- **Non-enum transition field.** If `field: <name>` resolves to a type other than an enum
+- Non-enum transition field: if `field: <name>` resolves to a type other than an enum
   (or alias of an enum), the entire `TransitionDecl` is skipped; illegal-from enumeration
   is undefined for non-enum status fields.
-- **Unknown via operation.** A `via X` whose `X` has no matching `operation` declaration is
+- Unknown via operation: a `via X` whose `X` has no matching `operation` declaration is
   skipped. Spec lint should catch this; the skip is a defensive backstop.
-- **Multi-path or zero-path via operation.** Transition tests need exactly one path
+- Multi-path or zero-path via operation: transition tests need exactly one path
   parameter to identify the seeded entity; nested-path shapes
   (e.g., `/orders/{order_id}/items/{item_id}`) and zero-path shapes are skipped pending
   multi-entity seed orchestration.
-- **Non-generable body or query input.** If `Strategies.expressionFor(...)` returns
+- Non-generable body or query input: if `Strategies.expressionFor(...)` returns
   `Skip` for any non-path input (most commonly `Map`/`Relation`-typed bodies), the via
   is skipped with a reason naming the input and the un-generable type.
 
@@ -543,9 +543,9 @@ testgen splits the single `<entity>_ids` bundle into one bundle per enum value:
 
 Rules then route ids through bundles by status:
 
-- **Create**: `@rule(target=<initial-status-bundle>, ...)`, pushes the new id into the
+- Create: `@rule(target=<initial-status-bundle>, ...)`, pushes the new id into the
   bundle for the status the ensures sets.
-- **Unguarded transition** (no `when` clause): one Python rule per `TransitionRule`,
+- Unguarded transition (no `when` clause): one Python rule per `TransitionRule`,
   named `<via>_from_<from>_to_<to>`. Decorator is
   `@rule(target=<to>_bundle, <id>=consumes(<from>_bundle))`. The body asserts strict
   success and `return`s the id, Hypothesis transfers it from `<from>` into `<to>`.
@@ -553,7 +553,7 @@ Rules then route ids through bundles by status:
   rules share the same via and `from` but differ in `to`. An operation that fires from
   multiple `from`-states (e.g., `Archive` from both `TODO` and `DONE`) emits one rule
   per source bundle (`archive_from_todo_to_archived`, `archive_from_done_to_archived`).
-- **Guarded transition** (has a `when` clause that bundle membership cannot guarantee):
+- Guarded transition (has a `when` clause that bundle membership cannot guarantee):
   same `consumes`+`target` shape, but the body branches:
   ```python
   if response.status_code == <success>:
@@ -564,8 +564,8 @@ Rules then route ids through bundles by status:
       assert False, ...
   ```
   `multiple()` with no arguments tells Hypothesis "no result"; the id leaves the source
-  bundle without being added to the target, keeping bundle/SUT bookkeeping consistent.
-- **Read / Update / Replace / SideEffect** with an id parameter:
+  bundle without being added to the target, so bundle/SUT bookkeeping stays consistent.
+- Read / Update / Replace / SideEffect with an id parameter:
   - If `requires` is just `<id> in <state>` (membership only), the rule draws from
     `st.one_of(<all-status-bundles>)` and asserts strict success, bundle membership
     fully covers the precondition by construction.
@@ -575,7 +575,7 @@ Rules then route ids through bundles by status:
   - If `requires` includes any unrecognized non-key conjunct (or a `state[id].field` access
     on a field that isn't the entity's transition field), the rule draws from
     `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
-- **Delete**:
+- Delete:
   - With a recognized status restriction that narrows to a single bundle, `consumes(<bundle>)`, strict.
   - With just `<id> in <state>` membership, a multi-bundle restriction, or any unrecognized
     requires conjunct, non-consuming `st.one_of(...)` + loose. (`consumes(st.one_of(...))` is
@@ -591,11 +591,11 @@ shape. `url_shortener` and `safe_counter` outputs stay byte-identical.
 For each rule, testgen decides whether to assert the success status strictly or to also
 accept any 4xx (the SUT rejecting because its own preconditions failed):
 
-- **Strict** (`assert response.status_code == <success>`): used for `Create` rules,
+- Strict (`assert response.status_code == <success>`): used for `Create` rules,
   unguarded transition rules (bundle membership guarantees the precondition by
   construction), and rules whose every `requires` clause is either trivially `true` or
   a `<input> in <state>` pattern that is satisfied by construction via bundle membership.
-- **Loose** (`if-elif`-`else`, accepting `<success>` or `400..499`): used for rules with
+- Loose (`if-elif`-`else`, accepting `<success>` or `400..499`): used for rules with
   any other state-dependent precondition (e.g., transition guards like
   `todos[id].status = TODO` that aren't recognised by the per-status splitter, or
   `when`-clause time guards like `updated_at > completed_at`). A 4xx response there is
@@ -633,10 +633,10 @@ Alongside the per-clause behavioral tests and the hand-rolled stateful state mac
 testgen emits a `tests/test_structural_<service>.py` that wires
 [Schemathesis](https://schemathesis.readthedocs.io/) to the project's `openapi.yaml`.
 Schemathesis fuzzes every `(method, path)` declared in the schema and validates
-responses against the OpenAPI shape, catching wrong status codes, missing endpoints,
+responses against the OpenAPI shape. It catches wrong status codes, missing endpoints,
 content-type drift, and 5xx unhandled exceptions. The structural file is orthogonal
-to M5.2: the M5.2 stateful tests verify the **spec contract**; the M5.3 structural
-tests verify the **schema contract**.
+to M5.2: the M5.2 stateful tests verify the spec contract; the M5.3 structural
+tests verify the schema contract.
 
 The generated file is self-contained: it reads `SPEC_TEST_BASE_URL` and `SPEC_TEST_PROFILE`
 from the environment, declares the three profiles inline (see [Profiles](#profiles)
@@ -797,16 +797,16 @@ Spec fields whose names match `SensitiveFields.isSensitive` (exact: `password`,
 `_api_key`, `_token`) get sensitivity-aware handling at every stage of the generated
 suite:
 
-- **Hypothesis behavioral tests.** Sensitive operation inputs are wrapped in
+- Hypothesis behavioral tests: sensitive operation inputs are wrapped in
   `redact(...)` from `tests/redaction.py`. The wrapper returns a `_RedactedStr`
   (a `str` subclass with `__repr__` masking), so failing-example output shows
   `password=<redacted len=N>` instead of the raw value. JSON serialization is
   unaffected; the wire format is identical to a plain string.
-- **Schemathesis structural tests.** A `@schemathesis.hook` `before_call`
+- Schemathesis structural tests: a `@schemathesis.hook` `before_call`
   registers itself with a `_SENSITIVE_BODY_FIELDS` frozenset scoped to the
   operations in the current spec; sensitive body fields are wrapped in
   `_RedactedStr` before the request is sent, so failing-case output is masked.
-- **Service-side logs.** `app/redaction.py` configures structlog with a
+- Service-side logs: `app/redaction.py` configures structlog with a
   `redact_sensitive` processor in the chain. Every log line (application code,
   uvicorn access logs, uvicorn errors) runs through the same processor; sensitive
   keys at any depth in the structured event dict become `***REDACTED***`. The
@@ -847,8 +847,8 @@ a length/regex.
 ## Coverage on canonical fixtures
 
 `ExprToPython` covers every `Expr` constructor in the IR, no translator coverage gaps
-remain. The remaining `Translated.Skip` outputs split into (i) **unbacked-scalar-state
-floor** — state fields not backed by an entity table get projected as `null` by the
+remain. The remaining `Translated.Skip` outputs split into (i) unbacked-scalar-state
+floor: state fields not backed by an entity table get projected as `null` by the
 admin `/state` endpoint, so they can't be asserted black-box (`safe_counter.count`,
 `url_shortener.base_url`, `todo_list.next_id`, `edge_cases.plain`, `auth_service.next_*_id`),
 (ii) user errors in the spec (unbound identifier, undeclared function, wrong arity,
@@ -971,10 +971,10 @@ sbt "cli/run compile --strict-strategies --out /tmp/svc fixtures/spec/auth_servi
 
 Two synthesis gaps trip the gate:
 
-1. **Unhandled `where` constraint**, e.g., `type Code = String where custom_pred(value)`
+1. Unhandled `where` constraint, e.g., `type Code = String where custom_pred(value)`
    produces `st.text()` plus a `# testgen-skip:` note. The synthesized strategy
    is too permissive (custom_pred is not enforced).
-2. **Unsupported base type**, e.g., `type Mapping = Map<String, Int>` falls
+2. Unsupported base type, e.g., `type Mapping = Map<String, Int>` falls
    through to `st.nothing()`. The synthesized strategy is unusable.
 
 Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
@@ -1028,5 +1028,5 @@ separate `extern predicate` mechanism, out of scope here.
 ## Limitations and follow-up issues
 
 For the live test-generation follow-up backlog (state-dependent preconditions on
-non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen — both shipped — and the historical M5.12
-default-on test emission), see **[Roadmap $\to$ Test generation follow-ups](/roadmap#test-generation-follow-ups)**.
+non-transition ops, `GuardSatisfier` extensions, M5.11 multi-target test gen (both shipped) and the historical M5.12
+default-on test emission), see [Roadmap $\to$ Test generation follow-ups](/roadmap#test-generation-follow-ups).

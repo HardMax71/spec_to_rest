@@ -12,7 +12,7 @@ description: "Multi-target code emission from verified intermediate representati
 > [`modules/codegen/`](https://github.com/HardMax71/spec_to_rest/tree/main/modules/codegen)
 > and emits the `python-fastapi-postgres` target via Handlebars templates, see the
 > live [Python + FastAPI + PostgreSQL target reference](/targets/python/fastapi/postgres).
-> The Dafny integration (Phase 6, [#27–32](https://github.com/HardMax71/spec_to_rest/issues/27))
+> The Dafny integration (Phase 6, [#27-32](https://github.com/HardMax71/spec_to_rest/issues/27))
 > is **not yet implemented**; the generated services raise `NotImplementedError` for
 > non-trivial operation bodies until that work lands. Multi-target emission (Go/chi
 > [#33](https://github.com/HardMax71/spec_to_rest/issues/33), TS/Express
@@ -20,8 +20,6 @@ description: "Multi-target code emission from verified intermediate representati
 > not yet on `main`. Python-shaped code samples below are design sketches; the
 > implementation language is Scala 3 (see
 > [Architecture](/design/architecture)).
-
----
 
 ## Table of contents
 
@@ -39,24 +37,20 @@ description: "Multi-target code emission from verified intermediate representati
 9. [Extensibility](#9-extensibility)
 10. [Comparison with Existing Generators](#10-comparison-with-existing-generators)
 
----
-
 ## 1. What gets generated
 
 The code generation pipeline receives four inputs:
 
-- **IR** from the spec parser (entities, state, operations, invariants)
-- **Convention engine outputs** (HTTP method mapping, DB schema, validation rules)
-- **Verified Dafny code** for non-trivial operations (compiled to target language)
-- **Test specifications** derived from the spec (properties, state machines, conformance config)
+- IR from the spec parser (entities, state, operations, invariants)
+- Convention engine outputs (HTTP method mapping, DB schema, validation rules)
+- Verified Dafny code for non-trivial operations (compiled to target language)
+- Test specifications derived from the spec (properties, state machines, conformance config)
 
 It produces a complete, runnable project: not stubs or skeletons, but working code you can
 `docker-compose up` and start using immediately.
 
 The following subsections show the full file manifest and complete generated code for the URL
-shortener spec from the comprehensive analysis (Section 7.2 of document 00).
-
----
+shortener spec from the analysis (Section 7.2 of document 00).
 
 ### 1.1 Python-fastapi-postgres
 
@@ -1298,8 +1292,6 @@ docker-down:  ## Stop all services
 	docker compose down -v
 ```
 
----
-
 ### 1.2 Go-chi-postgres
 
 #### Directory structure
@@ -1744,8 +1736,6 @@ lang: sql
 DROP TABLE IF EXISTS store;
 ```
 
----
-
 ### 1.3 Typescript-express-prisma
 
 #### Directory structure
@@ -2130,8 +2120,6 @@ urlShortenerRouter.delete("/:code", async (req: Request, res: Response) => {
 });
 ```
 
----
-
 ## 2. Template architecture
 
 ### 2.1 Template engine selection
@@ -2168,7 +2156,7 @@ classes) extracted from Isabelle by `Code_Target_Scala`. The Handlebars engine r
 types live in
 [`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
 (extracted; do not hand-edit) and `modules/profile/.../Types.scala`. The conceptual shape
-(extracted Scala uses positional letters `a`/`b`/`c`/… instead of English field names, see
+(extracted Scala uses positional letters `a`/`b`/`c`/... instead of English field names, see
 [`IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
 for the source-of-truth definitions):
 
@@ -2372,18 +2360,16 @@ templates/
 
 #### Preventing template rot
 
-1. **Template tests**: Each template has a golden-file test. The test renders the template with the
+1. Template tests: Each template has a golden-file test. The test renders the template with the
    URL shortener IR and compares the output to the checked-in golden file. Any change to a template
    that alters output triggers a diff review.
 
-2. **Compilation gate**: After rendering, the generated project is compiled/type-checked as a CI
+2. Compilation gate: After rendering, the generated project is compiled/type-checked as a CI
    step. For Python: `ruff check + mypy`. For Go: `go build + go vet`. For TypeScript:
    `tsc --noEmit`. Templates that produce code with lint errors fail CI.
 
-3. **Integration gate**: The generated project is started in Docker, and the generated tests are run
+3. Integration gate: The generated project is started in Docker, and the generated tests are run
    against it. Templates that produce code with test failures fail CI.
-
----
 
 ## 3. Database migration generation
 
@@ -2422,11 +2408,11 @@ engine translates each state relation into DDL.
 > column type is the dialect's interpretation of the generic type. Two deliberate
 > deviations from the conceptual table above:
 >
-> - **Unbounded `String` on MySQL maps to `VARCHAR(255)`, not `TEXT`.** MySQL
+> - Unbounded `String` on MySQL maps to `VARCHAR(255)`, not `TEXT`. MySQL
 >   cannot index/`PRIMARY KEY`/`UNIQUE`/foreign-key a `TEXT` column without a
 >   prefix length (error 1170), and the schema indexes FK and identifier
 >   columns. `VARCHAR(255)` keeps every generated column indexable.
-> - **`DateTime` uses `sa.DateTime()` (no timezone) on SQLite and MySQL**, and
+> - `DateTime` uses `sa.DateTime()` (no timezone) on SQLite and MySQL, and
 >   `JSONB` collapses to the generic `sa.JSON()` (Postgres keeps
 >   `postgresql.JSONB()`). SQLite enforces foreign keys via a
 >   `PRAGMA foreign_keys=ON` connection listener (runtime engine + Alembic env).
@@ -2440,13 +2426,13 @@ engine translates each state relation into DDL.
 Primary keys come from the left side of state relations (the key domain). Additional indexes are
 inferred from:
 
-1. **Query patterns in operations**: If `Resolve` looks up by `code`, and `code` is already the PK,
+1. Query patterns in operations: If `Resolve` looks up by `code`, and `code` is already the PK,
    no additional index is needed. If a list operation filters by `created_at`, a btree index is
    added.
 
-2. **Foreign key columns**: Always indexed (PostgreSQL does not auto-index FK targets).
+2. Foreign key columns: Always indexed (PostgreSQL does not auto-index FK targets).
 
-3. **Unique constraints from invariants**: `invariant: unique(email)` produces a unique index.
+3. Unique constraints from invariants: `invariant: unique(email)` produces a unique index.
 
 ### 3.3 Migration versioning strategy
 
@@ -2669,8 +2655,6 @@ CREATE TRIGGER trg_recalc_order_total
 
 COMMIT;
 ```
-
----
 
 ## 4. OpenAPI spec generation
 
@@ -2941,8 +2925,6 @@ tags:
     description: Health and metrics endpoints
 ```
 
----
-
 ## 5. Dafny output integration
 
 ### 5.1 The compilation pipeline
@@ -3004,10 +2986,10 @@ module ShortCodeGen {
 
 When Dafny compiles to Python, the output has specific traits:
 
-1. **Uses Dafny runtime library**: `import _dafny` provides `Seq`, `Map`, `Set`, etc.
-2. **Non-idiomatic types**: Dafny strings become `_dafny.Seq` of characters, rather than native `str`.
-3. **Class-based structure**: Each module becomes a class with static methods.
-4. **No async support**: Dafny output is synchronous; async wrapping is needed for FastAPI.
+1. Uses Dafny runtime library: `import _dafny` provides `Seq`, `Map`, `Set`, etc.
+2. Non-idiomatic types: Dafny strings become `_dafny.Seq` of characters, rather than native `str`.
+3. Class-based structure: Each module becomes a class with static methods.
+4. No async support: Dafny output is synchronous; async wrapping is needed for FastAPI.
 
 #### Example Dafny-compiled Python (simplified)
 
@@ -3099,8 +3081,6 @@ Each target requires the Dafny runtime library:
 
 The runtime is included automatically when any operation uses Dafny output. When no operations
 require Dafny (pure CRUD services), the runtime dependency is omitted entirely.
-
----
 
 ## 6. Infrastructure code generation
 
@@ -3264,8 +3244,6 @@ migrate:    ## Run database migrations
 The implementation varies by target but the interface is identical, so users can switch between
 Python, Go, and TypeScript projects and use the same commands.
 
----
-
 ## 7. Quality assurance of generated code
 
 ### 7.1 Static analysis pipeline
@@ -3312,9 +3290,9 @@ cases that hand-written tests miss.
 To validate that generated code is production-quality, the pipeline includes a benchmark suite that
 compares generated code against hand-written equivalents on three axes:
 
-1. **Correctness**: Do the generated tests pass? Do hand-written tests (if any) pass?
-2. **Performance**: Request latency and throughput under load (wrk/hey).
-3. **Code quality metrics**: Lines of code, cyclomatic complexity, dependency count.
+1. Correctness: Do the generated tests pass? Do hand-written tests (if any) pass?
+2. Performance: Request latency and throughput under load (wrk/hey).
+3. Code quality metrics: Lines of code, cyclomatic complexity, dependency count.
 
 The benchmark is optional and runs in CI when a `benchmark` label is applied to a PR. It produces a
 markdown report:
@@ -3331,8 +3309,6 @@ markdown report:
 
 The expected outcome is that generated code is slightly more verbose (due to explicit contracts) but
 equivalent in performance, since the hot path is database I/O regardless.
-
----
 
 ## 8. Incremental regeneration
 
@@ -3447,8 +3423,6 @@ This runs:
 
 The manifest file tracks which files were generated, so the compiler knows what to `git add` and
 what to leave alone.
-
----
 
 ## 9. Extensibility
 
@@ -3588,8 +3562,6 @@ class UrlShortenerService:
     async def shorten(self, request):
         return await self._shorten_impl(self._session, request)
 ```
-
----
 
 ## 10. Comparison with existing generators
 
@@ -3816,8 +3788,6 @@ The key differentiator is that no existing tool combines behavioral specificatio
 generation. JHipster comes closest on the "complete output" axis; Smithy-Dafny comes closest on the
 "verified output" axis. Our compiler merges both.
 
----
-
 ## Appendix A: Code generation pipeline implementation sketch
 
 The orchestrator that drives the entire pipeline:
@@ -3893,8 +3863,6 @@ class CodeGenerationPipeline:
         elif self.target.startswith("typescript"):
             subprocess.run(["npx", "tsc", "--noEmit"], cwd=output_dir, check=True)
 ```
-
----
 
 ## Appendix B: Template example, router generation (Jinja2)
 
@@ -3975,8 +3943,6 @@ async def {{ op.name | snake_case }}(
 This template, when rendered with the URL shortener IR, produces the `app/routers/url_shortener.py`
 file shown in Section 1.1.
 
----
-
 ## Appendix C: End-to-end generation sequence
 
 The complete sequence from spec input to running service:
@@ -4021,8 +3987,6 @@ The complete sequence from spec input to running service:
 Total wall-clock time for steps 2-8 (the compiler): under 30 seconds for a URL-shortener-sized spec.
 Under 5 minutes for a 20-operation service with Dafny verification in the loop.
 
----
-
 <!-- Added: observability in generated code (gap analysis) -->
 
 ## 11. Observability in generated services
@@ -4051,9 +4015,9 @@ Generated services use structured JSON logging (not plaintext). Every log entry 
 
 Implementation per target:
 
-- **Python/FastAPI:** `structlog` with JSON renderer, middleware that injects request context
-- **Go/chi:** `slog` with JSON handler, middleware that injects request context
-- **TypeScript/Express:** `pino` with JSON transport, middleware that injects request context
+- Python/FastAPI: `structlog` with JSON renderer, middleware that injects request context
+- Go/chi: `slog` with JSON handler, middleware that injects request context
+- TypeScript/Express: `pino` with JSON transport, middleware that injects request context
 
 Sensitive fields (marked `@sensitive` in the spec or matching patterns like `password`, `token`,
 `secret`) are automatically redacted in log output.

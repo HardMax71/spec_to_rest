@@ -5,21 +5,21 @@ description: Type a spec, see its IR and Dafny kernel without installing the CLI
 
 import { Playground } from "@/components/playground";
 
-The editor below sends your spec to `spec-to-rest` running server-side on the same container as this docs site — bundled into the image, invoked by an in-process API route. No auth, no separate backend.
+The editor below sends your spec to `spec-to-rest` running server-side on the same container as this docs site, bundled into the image, invoked by an in-process API route. No auth, no separate backend.
 
 <Playground />
 
 ### What each target does
 
-- `check` — parse + lint; empty stdout on success, pointer to the failing rule on error.
-- `summary` — entity / op / invariant counts and per-op classification.
-- `ir` — internal representation as Scala case-class text.
-- `dafny` — generated verification kernel (datatypes, `ServiceStateInv`, per-op `requires` / `ensures` / `modifies` headers).
+- `check`: parse + lint; empty stdout on success, pointer to the failing rule on error.
+- `summary`: entity / op / invariant counts and per-op classification.
+- `ir`: internal representation as Scala case-class text.
+- `dafny`: generated verification kernel (datatypes, `ServiceStateInv`, per-op `requires` / `ensures` / `modifies` headers).
 
 ### What about compile / verify / synth?
 
-All three run in the playground too — they're already bundled in the same `spec-to-rest` binary that powers the inspect targets. `verify` does the Alloy / Z3 model check; `compile` emits the full per-framework + per-DB output (`fastapi` Python / `express` TypeScript / `chi` Go × `sqlite` / `postgres` / `mysql`) which the UI renders as a file tree; `synth` invokes the LLM CEGIS loop and needs a key you provide (the playground never stores it; it's forwarded as a header for that single request and discarded).
+All three run in the playground too. They're already bundled in the same `spec-to-rest` binary that powers the inspect targets. `verify` does the Alloy / Z3 model check; `compile` emits the full per-framework + per-DB output (`fastapi` Python / `express` TypeScript / `chi` Go × `sqlite` / `postgres` / `mysql`) which the UI renders as a file tree; `synth` invokes the LLM CEGIS loop and needs a key you provide (the playground never stores it; it's forwarded as a header for that single request and discarded).
 
-For long-running work — `verify` on a complex spec or `synth` with multi-iteration repair — [installing the CLI](/install) is still faster (~50 ms cold start vs cold-VM boot, no spec-size cap, no per-request wall-clock limit).
+For long-running work like `verify` on a complex spec or `synth` with multi-iteration repair, [installing the CLI](/install) is still faster (~50 ms cold start vs cold-VM boot, no spec-size cap, no per-request wall-clock limit).
 
 The examples dropdown is populated from [`fixtures/spec/`](https://github.com/HardMax71/spec_to_rest/tree/main/fixtures/spec) at build time by [`build-playground-examples.mjs`](https://github.com/HardMax71/spec_to_rest/blob/main/docs/scripts/build-playground-examples.mjs). Broken / negative-test / oversize (>16 KB) specs are excluded; the rest are exactly the specs used by the project's own conformance and lint suites.

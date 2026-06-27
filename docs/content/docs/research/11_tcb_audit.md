@@ -16,10 +16,10 @@ notes. This page is the single ledger.
 
 `verify` issues per-check verdicts of one of:
 
-- **`sat`**, the check holds. Z3 found no counterexample within the timeout.
-- **`unsat`**, the check fails. Z3 (or Alloy) produced a model violating the property.
-- **`unknown`**, Z3 timed out or hit incompleteness; result indeterminate.
-- **`skipped`**, the check was not run; the diagnostic categorizes why.
+- `sat`, the check holds. Z3 found no counterexample within the timeout.
+- `unsat`, the check fails. Z3 (or Alloy) produced a model violating the property.
+- `unknown`, Z3 timed out or hit incompleteness; result indeterminate.
+- `skipped`, the check was not run; the diagnostic categorizes why.
 
 Each verdict carries a **trust tag** in the JSON report:
 
@@ -119,13 +119,13 @@ the boundaries. The rest of the trust closure either shrinks or stays the same.
 
 The bridge handles edge cases the verified `smt_term` ADT does not distinguish:
 
-- **`TInDom(name, _)` over a set-typed state constant.** The verified semantics expects a relation;
+- `TInDom(name, _)` over a set-typed state constant. The verified semantics expects a relation;
   a set constant is treated as set-membership. This is sound under the well-typed-IR assumption but
   is not formally backed by the soundness theorem.
-- **`TForallRel(v, name, _)` where `name` is a set-typed constant or operation input.** Bridge
+- `TForallRel(v, name, _)` where `name` is a set-typed constant or operation input. Bridge
   emits a quantifier with a set-membership guard or, for genuinely unknown sorts, an
   unconstrained quantifier (matching the hand-written translator's pre-#192 behavior).
-- **`TSetMember`, `TSetUnion`, `TSetIntersect`, `TSetDiff`** sort checks. The bridge replicates the
+- `TSetMember`, `TSetUnion`, `TSetIntersect`, `TSetDiff` sort checks. The bridge replicates the
   hand-written translator's sort-mismatch errors so ill-typed specs surface a translator-level
   diagnostic rather than a Z3 solve-time failure.
 
@@ -137,11 +137,11 @@ verified `expr` ADT make different distinctions; the bridge has to bridge that g
 
 The Isabelle subset will not, on any reasonable horizon, cover:
 
-- **Regex matching (`MatchesF`).** Z3's string theory is slow and incomplete; the soundness story
+- Regex matching (`MatchesF`). Z3's string theory is slow and incomplete; the soundness story
   for arbitrary regex against strings is its own multi-month theory project.
-- **Calls to user-defined `fun` predicates with arbitrary bodies.** Per-spec inlining can extend
+- Calls to user-defined `fun` predicates with arbitrary bodies. Per-spec inlining can extend
   soundness to specific bodies but cannot anticipate every shape a spec author writes.
-- **Aggregate forms over unbounded universes** (e.g., `MapLiteralF` keyed by an infinite type).
+- Aggregate forms over unbounded universes (e.g., `MapLiteralF` keyed by an infinite type).
   Z3 can sometimes solve these via skolemization but the soundness statement would require a
   bounded enumeration we are not willing to mandate.
 

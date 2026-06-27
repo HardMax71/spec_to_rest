@@ -2,7 +2,7 @@
 
 The docs site is a Next.js (standalone) app served by a Fly machine. The same image bundles the
 `spec-to-rest` native binary so the `/playground` page's `/api/compile` route can `exec` the CLI
-directly — no separate backend, no CORS, no env-var dance.
+directly: no separate backend, no CORS, no env-var dance.
 
 ## Layout
 
@@ -28,7 +28,7 @@ docs/app/api/health/       Fly healthcheck target
 | `release: published` | `deploy` only, with the new release's tag baked into the image |
 | `workflow_dispatch`  | `deploy` with optional `cli_version` input                     |
 
-Releases trigger redeploys automatically — when `release-please` publishes `vX.Y.Z`, the `Site`
+Releases trigger redeploys automatically. When `release-please` publishes `vX.Y.Z`, the `Site`
 workflow fires with that tag, rebuilds the image (CLI binary pulled from
 `releases/download/vX.Y.Z/spec-to-rest-linux-amd64.tar.gz`), and Fly does a rolling deploy.
 
@@ -36,9 +36,9 @@ workflow fires with that tag, rebuilds the image (CLI binary pulled from
 
 The `/api/compile` route exposes every spec-to-rest subcommand: `check`, `inspect` (summary / IR /
 Dafny), `verify`, `compile` (per-framework and per-DB output), and `synth` (bring-your-own LLM key).
-Per-target hard limits live in `docs/app/api/compile/route.ts` — currently 50 KB spec, 256 KB
-output, and per-target wall-clock caps (8 s for inspect, 60 s for verify, 30 s for compile, 600 s
-for synth).
+Per-target hard limits live in `docs/app/api/compile/route.ts`: currently 50 KB spec, 256 KB output,
+and per-target wall-clock caps (8 s for inspect, 60 s for verify, 30 s for compile, 600 s for
+synth).
 
 ## Building locally
 

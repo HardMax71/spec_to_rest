@@ -7,8 +7,6 @@ description: "Assessment of LLVM MLIR for the spec-to-REST DSL compiler"
 > building the spec-to-REST compiler. Covers architecture, dialect creation, parsing story,
 > boilerplate costs, learning curve, non-ML uses, alternatives, and a final recommendation.
 
----
-
 ## Table of contents
 
 1. [What MLIR Actually Is](#1-what-mlir-actually-is)
@@ -24,20 +22,18 @@ description: "Assessment of LLVM MLIR for the spec-to-REST DSL compiler"
 11. [Recommendation](#11-recommendation)
 12. [Sources](#12-sources)
 
----
-
 ## 1. What MLIR actually is
 
 MLIR is a **compiler infrastructure framework**, rather than a compiler, rather than a language, rather than a parser. It
 provides:
 
-- **A generic SSA-based IR format** with operations, regions, blocks, and values
-- **An extensible dialect system** where you define your own operations, types, and attributes as
+- A generic SSA-based IR format with operations, regions, blocks, and values
+- An extensible dialect system where you define your own operations, types, and attributes as
   first-class IR constructs
-- **A transformation/pass infrastructure** for writing optimization and lowering passes
-- **A progressive lowering model** where high-level domain operations are incrementally lowered
+- A transformation/pass infrastructure for writing optimization and lowering passes
+- A progressive lowering model where high-level domain operations are incrementally lowered
   through intermediate dialects down to machine code (via LLVM IR)
-- **Built-in dialects** for common patterns: `arith`, `func`, `scf` (structured control flow),
+- Built-in dialects for common patterns: `arith`, `func`, `scf` (structured control flow),
   `affine` (loop nests), `memref` (memory), `llvm` (LLVM IR)
 
 The key architectural insight: MLIR lets multiple levels of abstraction coexist in a single IR. A
@@ -48,8 +44,6 @@ Despite the name, the "ML" in MLIR does **not** stand for Machine Learning. Chri
 creator) and the LLVM community have explicitly stated it was conceived as general-purpose compiler
 infrastructure. The official MLIR website describes it as "a novel approach to building reusable and
 extensible compiler infrastructure" with no ML-specific limitation.
-
----
 
 ## 2. Does MLIR help with parsing?
 
@@ -102,8 +96,6 @@ Language) for broader portability.
 Our spec language needs a parser regardless. Whether we use MLIR or not, we still need to build a
 lexer, parser, and AST, using ANTLR, tree-sitter, pest, hand-written recursive descent, or
 similar. MLIR does not reduce this work at all.
-
----
 
 ## 3. Custom dialect creation: What it takes
 
@@ -215,8 +207,6 @@ Jeremy Kun's tutorial on building a polynomial dialect noted that progression sp
 acknowledged confusion with TableGen's `class` vs `def` distinction and uncertainty about optimal
 file organization. He described the generated files as "multi-thousand line implementation files."
 
----
-
 ## 4. The C++ requirement
 
 **MLIR is written in C++ and requires C++ for dialect definitions.** This is non-negotiable in
@@ -224,13 +214,13 @@ upstream MLIR.
 
 ### What this means practically
 
-- **Build times.** Compiling MLIR from source takes ~1 hour on a laptop, ~10 minutes on a desktop.
+- Compiling MLIR from source takes ~1 hour on a laptop, ~10 minutes on a desktop.
   This is a one-time cost, but iterating on dialect changes requires incremental rebuilds of
   generated C++ code.
-- **Toolchain.** Requires a full LLVM/Clang toolchain, CMake, and TableGen.
-- **Developer profile.** The official MLIR introduction page assumes "knowledge of C++ and advanced
+- MLIR requires a full LLVM/Clang toolchain, CMake, and TableGen.
+- The official MLIR introduction page assumes "knowledge of C++ and advanced
   Python, along with passing familiarity with NVIDIA CUDA."
-- **Integration with Python/Rust/TS.** Our spec-to-REST compiler is designed around Python
+- Our spec-to-REST compiler is designed around Python
   (primary), Rust (alternative), or TypeScript as implementation languages. Using MLIR means either
   (a) rewriting in C++, (b) maintaining a C++ MLIR component that communicates with our main
   codebase via IPC/FFI, or (c) using xDSL (Python, see Section 9).
@@ -248,8 +238,6 @@ MLIR would:
 4. Complicate distribution (native binaries vs. pure Python)
 5. Provide no benefit for our actual bottleneck (parsing, constraint solving, code generation via
    templates)
-
----
 
 ## 5. Non-ML uses of MLIR
 
@@ -297,24 +285,22 @@ operations that benefit from optimization, lowering, and eventually code generat
 instructions.** Hardware synthesis, HPC loop nests, cryptographic circuits, database query plans,
 these all have optimization-rich compilation pipelines where multi-level IR is genuinely valuable.
 
----
-
 ## 6. What MLIR gives that simpler approaches don't
 
 ### What MLIR provides
 
-1. **Multi-level IR coexistence.** Different abstraction levels in one representation, with
+1. Multi-level IR coexistence: different abstraction levels in one representation, with
    well-defined lowering between them
-2. **Verification infrastructure.** Built-in operation verification, type checking, and trait-based
+2. Verification infrastructure: built-in operation verification, type checking, and trait-based
    constraints
-3. **Pass infrastructure.** Sophisticated pass management, scheduling, and dependency tracking for
+3. Pass infrastructure: pass management, scheduling, and dependency tracking for
    IR transformations
-4. **Rewrite pattern system.** Declarative (DRR/PDLL) and programmatic pattern matching for IR
+4. Rewrite pattern system: declarative (DRR/PDLL) and programmatic pattern matching for IR
    transformations
-5. **SSA form.** Automatic SSA construction and dominance analysis
-6. **Serialization.** Textual and bytecode IR formats with round-tripping
-7. **Ecosystem.** Access to LLVM backend for native code generation
-8. **Community.** Active development, conferences, weekly public meetings
+5. SSA form: automatic SSA construction and dominance analysis
+6. Serialization: textual and bytecode IR formats with round-tripping
+7. Ecosystem: access to LLVM backend for native code generation
+8. Community: active development, conferences, weekly public meetings
 
 ### What our compiler actually needs
 
@@ -360,25 +346,21 @@ class ServiceIR:
 This is a data structure. MLIR's infrastructure for operation scheduling, memory analysis, loop
 transformations, vectorization, and LLVM lowering is irrelevant here.
 
----
-
 ## 7. REST/web service dsls on MLIR
 
 **None found.** After extensive searching, there are zero examples of REST API, web service, or
-HTTP-related DSLs built on MLIR. This is not an oversight, it reflects the fundamental mismatch
+HTTP-related DSLs built on MLIR. This is not an oversight, it reflects the core mismatch
 described in Section 6.
 
 The closest adjacent projects:
 
-- **Substrait MLIR** represents database query plans (data processing, rather than web services)
-- **JSIR** analyzes JavaScript code (code analysis, rather than service specification)
-- **P4HIR** handles network packet processing (low-level networking, not HTTP APIs)
+- Substrait MLIR represents database query plans (data processing, rather than web services)
+- JSIR analyzes JavaScript code (code analysis, rather than service specification)
+- P4HIR handles network packet processing (low-level networking, not HTTP APIs)
 
 Existing REST/API specification tools (OpenAPI, TypeSpec, Smithy, Ballerina) all use their own
 purpose-built parsers and IRs. None use MLIR or any general-purpose compiler IR framework, because
 API specifications are structural/declarative, rather than computational.
-
----
 
 ## 8. Learning curve
 
@@ -397,29 +379,27 @@ The learning curve for MLIR is widely acknowledged as steep.
 
 ### Specific pain points
 
-1. **TableGen is its own language**, you must learn ODS, which is a DSL embedded in TableGen,
+1. TableGen is its own language. You must learn ODS, which is a DSL embedded in TableGen,
    itself a record-based DSL. So you are learning a DSL-within-a-DSL to define your DSL.
-2. **C++ templates**, MLIR's C++ layer uses heavy template metaprogramming
-3. **Build system**, CMake + TableGen code generation adds complexity
-4. **Sparse documentation**, many intermediate topics lack documentation; you often read source
+2. MLIR's C++ layer uses heavy template metaprogramming
+3. CMake + TableGen code generation adds complexity
+4. Many intermediate topics lack documentation; you often read source
    code
-5. **Moving target**, MLIR APIs evolve rapidly; code from tutorials may not compile against
+5. MLIR APIs evolve rapidly; code from tutorials may not compile against
    current HEAD
 
 ### Estimated timeline
 
 For a developer experienced in compilers but new to MLIR:
 
-- **1-2 weeks:** Complete Toy tutorial, understand basic concepts
-- **2-4 weeks:** Build a trivial custom dialect with a few operations
-- **1-3 months:** Build a useful dialect with custom types, lowering passes, and transformations
-- **3-6 months:** Become productive at debugging MLIR issues and extending the dialect
+- 1-2 weeks: complete Toy tutorial, understand basic concepts
+- 2-4 weeks: build a trivial custom dialect with a few operations
+- 1-3 months: build a useful dialect with custom types, lowering passes, and transformations
+- 3-6 months: become productive at debugging MLIR issues and extending the dialect
 
 For a developer NOT experienced in compilers or C++:
 
-- **Add 2-4 months** to each estimate above
-
----
+- Add 2-4 months to each estimate above
 
 ## 9. Xdsl: The Python alternative
 
@@ -428,13 +408,13 @@ deserves separate consideration because it removes the C++ barrier.
 
 ### What xdsl offers
 
-- **Pure Python:** `pip install xdsl`, no C++ compilation needed
-- **MLIR-compatible IR format.** Same textual representation, can exchange IR with MLIR
-- **Python dialect definitions.** Define operations, types, and transformations in Python instead of
+- Pure Python: `pip install xdsl`, no C++ compilation needed
+- MLIR-compatible IR format: same textual representation, can exchange IR with MLIR
+- Python dialect definitions: define operations, types, and transformations in Python instead of
   TableGen/C++
-- **Rapid prototyping.** Designed for "fast prototyping of MLIR concepts before upstreaming to MLIR
+- Rapid prototyping: designed for "fast prototyping of MLIR concepts before upstreaming to MLIR
   itself"
-- **IRDL support.** Dialects can be defined using IRDL (Intermediate Representation Definition
+- IRDL support: dialects can be defined using IRDL (Intermediate Representation Definition
   Language) for portability
 
 ### Compilation speed
@@ -445,7 +425,7 @@ deserves separate consideration because it removes the C++ barrier.
 
 ### Does xdsl change the recommendation?
 
-xDSL removes the C++ barrier but not the fundamental mismatch. Even with Python dialect definitions,
+xDSL removes the C++ barrier but not the core mismatch. Even with Python dialect definitions,
 we would still be using SSA-based IR infrastructure designed for computational optimization on a
 declarative specification language. The infrastructure would provide:
 
@@ -456,8 +436,6 @@ declarative specification language. The infrastructure would provide:
 
 The question isn't "can we make it work" but "does it earn its keep." xDSL adds a dependency and a
 conceptual framework (dialects, operations, regions, blocks) that maps awkwardly to our domain.
-
----
 
 ## 10. Fit assessment for spec-to-REST
 
@@ -479,12 +457,12 @@ conceptual framework (dialects, operations, regions, blocks) that maps awkwardly
 
 Projects that benefit from MLIR share these characteristics:
 
-1. **Computational domain.** Operations transform data through computation (arithmetic, memory
+1. Computational domain: operations transform data through computation (arithmetic, memory
    access, control flow)
-2. **Optimization-rich pipeline.** Multiple optimization passes that benefit from SSA analysis,
+2. Optimization-rich pipeline: multiple optimization passes that benefit from SSA analysis,
    dominance, loop analysis
-3. **Hardware targeting.** Need to lower to specific hardware (GPUs, TPUs, FPGAs, ASICs)
-4. **Multi-level abstraction.** Genuine benefit from representing the same program at different
+3. Hardware targeting: need to lower to specific hardware (GPUs, TPUs, FPGAs, ASICs)
+4. Multi-level abstraction: genuine benefit from representing the same program at different
    abstraction levels simultaneously
 
 Our spec-to-REST compiler has **none of these characteristics.** Our pipeline is:
@@ -496,8 +474,6 @@ Spec text -> Parse -> Typed IR -> Constraint check (Z3) -> Convention mapping ->
 This is a **translation pipeline**, rather than a **compilation pipeline.** We translate specifications into
 code using conventions and templates. We don't optimize computations, we don't lower through
 abstraction levels, and we don't target hardware.
-
----
 
 ## 11. Recommendation
 
@@ -511,22 +487,22 @@ infrastructure, and has proven its value in hardware design (CIRCT), HPC (Flang)
 
 The existing architecture in document 07 is correct:
 
-1. **Parser.** ANTLR, tree-sitter, pest (Rust), or hand-written recursive descent, all are
+1. Parser: ANTLR, tree-sitter, pest (Rust), or hand-written recursive descent, all are
    appropriate for our grammar complexity
-2. **IR.** Python dataclasses (or Rust structs / TypeScript interfaces) forming a typed AST and
+2. IR: Python dataclasses (or Rust structs / TypeScript interfaces) forming a typed AST and
    service IR. No SSA, no regions, no blocks, just a clean data model
-3. **Transformations.** Straightforward Python functions that walk the IR and apply convention rules
-4. **Code generation.** Jinja2 (Python) / askama (Rust) / EJS (TypeScript) template engines
-5. **Verification.** Z3 via its Python bindings (the primary Z3 interface)
+3. Transformations: straightforward Python functions that walk the IR and apply convention rules
+4. Code generation: Jinja2 (Python) / askama (Rust) / EJS (TypeScript) template engines
+5. Verification: Z3 via its Python bindings (the primary Z3 interface)
 
 ### When MLIR _would_ make sense
 
 If the spec-to-REST project evolved to include:
 
-- **Runtime optimization** of generated service code (JIT compilation of hot paths)
-- **Hardware targeting** (generating FPGA-accelerated request processing)
-- **Formal verification via compilation** (lowering specs through proof-carrying code)
-- **A general-purpose programming language** as the spec language
+- Runtime optimization of generated service code (JIT compilation of hot paths)
+- Hardware targeting (generating FPGA-accelerated request processing)
+- Formal verification via compilation (lowering specs through proof-carrying code)
+- A general-purpose programming language as the spec language
 
 ...then MLIR might become relevant. But for a specification-to-code translation tool, it adds
 complexity without proportionate value.
@@ -564,8 +540,6 @@ class TargetIR:
 This gives us explicit abstraction levels and a clear lowering pipeline, the architectural insight
 from MLIR, without the C++ build system, TableGen DSL, SSA infrastructure, or months of learning
 curve.
-
----
 
 ## 12. Sources
 

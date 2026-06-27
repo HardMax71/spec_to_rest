@@ -5,8 +5,8 @@
 Both are gated by the required `check-branch-name` job (`.github/workflows/branch-name.yml`,
 token-free):
 
-- **Branch:** `<type>/<slug>`, e.g. `refactor/decouple-model-schema`.
-- **PR title:** a [Conventional Commit](https://www.conventionalcommits.org/), e.g.
+- Branch: `<type>/<slug>`, e.g. `refactor/decouple-model-schema`.
+- PR title: a [Conventional Commit](https://www.conventionalcommits.org/), e.g.
   `refactor: decouple model from schema`.
 
 `<type>` is one of `feat`, `fix`, `docs`, `chore`, `refactor`, `perf`, `ci`, `build`, `test`,
@@ -36,21 +36,21 @@ Pushing a new commit to a PR cancels that PR's in-progress runs (`concurrency` w
 
 ## Architecture enforcement
 
-The module dependency graph in `build.sbt` (`dependsOn`) _is_ the architecture — an illegal
-cross-module import simply won't compile. On top of that, [`modules/arch`](modules/arch) is a
-test-only module whose [ArchUnit](https://www.archunit.org/) test (`ArchitectureTest`) turns the
-architecture into an **explicit, executable spec** and catches what the build graph alone can't.
+The module dependency graph in `build.sbt` (`dependsOn`) _is_ the architecture: an illegal
+cross-module import won't compile. On top of that, [`modules/arch`](modules/arch) is a test-only
+module whose [ArchUnit](https://www.archunit.org/) test (`ArchitectureTest`) turns the architecture
+into an **explicit, executable spec** and catches what the build graph alone can't.
 
 `sbt arch/test` asserts, against every module's compiled bytecode:
 
-- **module layering** — a `layeredArchitecture` mirroring the `dependsOn` graph (each module may
-  only be accessed by its declared dependents);
-- **package-level cycle freedom** (sbt only forbids _module_ cycles);
-- **`verify`** (the trusted soundness core) depends on no downstream layer;
-- **`convention`** does not reach into downstream layers (so it can't re-accrete into a grab-bag).
+- module layering, a `layeredArchitecture` mirroring the `dependsOn` graph (each module may only be
+  accessed by its declared dependents);
+- package-level cycle freedom (sbt only forbids _module_ cycles);
+- `verify` (the trusted soundness core) depends on no downstream layer;
+- `convention` does not reach into downstream layers (so it can't re-accrete into a grab-bag).
 
-**When you add a module or change a `dependsOn`, update the `layeredArchitecture` rule in
-`ArchitectureTest.scala`** (the `.layer(...)` definitions and the `.mayOnlyBeAccessedByLayers(...)`
+When you add a module or change a `dependsOn`, update the `layeredArchitecture` rule in
+`ArchitectureTest.scala` (the `.layer(...)` definitions and the `.mayOnlyBeAccessedByLayers(...)`
 lists), or `arch/test` will fail. Those lists are **production** dependents only: the test analyzes
 main bytecode (`DO_NOT_INCLUDE_TESTS`), so a test-scope dependency (e.g. `convention % Test`) is
 _not_ an accessor and must not be listed.
@@ -59,9 +59,9 @@ _not_ an accessor and must not be listed.
 
 Two bots own the update PR stream, split by ecosystem:
 
-- **Dependabot** (`.github/dependabot.yml`) — GitHub Actions and the `/docs` npm workspace. Weekly
+- Dependabot (`.github/dependabot.yml`) covers GitHub Actions and the `/docs` npm workspace. Weekly
   cadence, grouped per ecosystem.
-- **scala-steward** (`.scala-steward.conf`, `.github/workflows/scala-steward.yml`) — sbt:
+- scala-steward (`.scala-steward.conf`, `.github/workflows/scala-steward.yml`) covers sbt:
   `build.sbt` library deps, `project/plugins.sbt`, and `project/build.properties`. Weekly cron
   (Mondays, 08:00 UTC) plus `workflow_dispatch` for ad-hoc runs.
 
@@ -73,14 +73,14 @@ setup doesn't produce duplicate PRs. The decision and trade-off vs Renovate is r
 
 Three sbt families are grouped so a single PR bumps all sibling artifacts together:
 
-- **circe** (`io.circe:*`) — `circe-core`, `circe-generic`, `circe-parser` share a version pin
+- `circe` (`io.circe:*`): `circe-core`, `circe-generic`, `circe-parser` share a version pin
   (`circeVersion` in `build.sbt`); split bumps wedge compilation.
-- **alloy** (`org.alloytools:*`) — `alloy.application`, `alloy.core`, `pardinus.core`,
+- `alloy` (`org.alloytools:*`): `alloy.application`, `alloy.core`, `pardinus.core`,
   `pardinus.native` likewise share `alloyVersion` and ship as one upstream release.
-- **munit** (artifact `munit*`) — `munit` and `munit-cats-effect` are separate group IDs but version
-  in lockstep with Cats Effect / munit releases; grouping by artifact glob covers both.
+- `munit` (artifact `munit*`): `munit` and `munit-cats-effect` are separate group IDs but version in
+  lockstep with Cats Effect / munit releases; grouping by artifact glob covers both.
 
-Pre-releases (`-RC`, `-M`, `-alpha`, `-beta`) are filtered out — we only track stable.
+Pre-releases (`-RC`, `-M`, `-alpha`, `-beta`) are filtered out; we only track stable.
 
 ### Token
 

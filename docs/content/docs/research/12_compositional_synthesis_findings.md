@@ -5,8 +5,6 @@ description: Why we pivoted M6.7 from operation decomposition to hint-augmentati
 
 > **Status:** decision-of-record. Authored 2026-05-10 alongside [issue #227](https://github.com/HardMax71/spec_to_rest/issues/227). Read this if you want to understand why our M6.6 graduated-fallback ladder skips the L2 (decomposition) level and why M6.7 instead targets monolithic synthesis improvements via DafnyPro-style hint-augmentation.
 
-## TL;DR
-
 When M6.6 shipped the graduated-fallback orchestrator (L1 prompt strategies → L3 model escalation → L4 skeleton emit), level **L2, operation decomposition** was deferred under the explicit caveat that compositional verification with LLMs is research-grade. Three benchmark papers published between July 2025 and POPL 2026 turned that caveat into hard data:
 
 - LLMs hit a **3.69% Pass@1 / 7% Pass@8 ceiling** on multi-function Dafny programs (DafnyComp, 13 frontier models).
@@ -31,17 +29,17 @@ flowchart TD
 
 The reasoning was: when monolithic synthesis fails because the operation is *complex*, an LLM might propose a useful decomposition into sub-methods, each of which is small enough that the same CEGIS pipeline can verify it. Compose the verified subs to get a verified parent. The research/03 example was `ShipOrder = UpdateOrderStatus + DecrementInventory`.
 
-This is a clean architectural idea. The problem is that the empirical evidence, finally available in 2025–2026, says it does not work.
+This is a clean architectural idea. The problem is that the empirical evidence, finally available in 2025-2026, says it does not work.
 
 ## The empirical picture
 
 ### DafnyComp (xu et al., [arXiv:2509.23061](https://arxiv.org/abs/2509.23061), sept 2025)
 
-Direct, decisive evidence on the planned pipeline shape. The benchmark synthesizes 300 multi-function Dafny programs by chaining 2–5 functions from `LeetCodeDataset`, with type-compatible interfaces and real data dependencies. 13 frontier models were evaluated zero-shot (GPT-4o, GPT-4-turbo, Claude 3.5, Claude 3.7, Gemini 2.5, DeepSeek-v3.1, Qwen, plus reasoning-specialized variants QwQ-32B and DeepSeek-R1).
+Direct, decisive evidence on the planned pipeline shape. The benchmark synthesizes 300 multi-function Dafny programs by chaining 2-5 functions from `LeetCodeDataset`, with type-compatible interfaces and real data dependencies. 13 frontier models were evaluated zero-shot (GPT-4o, GPT-4-turbo, Claude 3.5, Claude 3.7, Gemini 2.5, DeepSeek-v3.1, Qwen, plus reasoning-specialized variants QwQ-32B and DeepSeek-R1).
 
 Headline results:
 
-| Metric | DafnyBench (single-function) | DafnyComp (2–5 functions) | Δ |
+| Metric | DafnyBench (single-function) | DafnyComp (2-5 functions) | Δ |
 |---|---|---|---|
 | Syntax correctness | ~99% | 95.67% | −3.3pp |
 | **Verification success (Pass@1)** | **58%** | **3.69%** | **−54pp** |
@@ -55,7 +53,7 @@ The paper's failure-mode breakdown (% of failed cases attributable to each cause
 | Failure mode | Share | Description |
 |---|---|---|
 | **Specification fragility** | **39.2%** | Sub-functions with locally-correct but weakly-framed contracts cannot propagate properties through call sites. The downstream caller needs `ensures result >= 0`; the callee only ensured "what it computes," not the bound the caller depends on. |
-| Implementation–proof misalignment | 21.7% | Plausible-looking invariants generated independently of the actual code path; pattern-matched rather than proven. |
+| Implementation-proof misalignment | 21.7% | Plausible-looking invariants generated independently of the actual code path; pattern-matched rather than proven. |
 | Reasoning instability | 14.1% | Inductive reasoning collapses across iterations: loop invariants fail to accumulate, recursive termination arguments break. |
 | Other | 25.0% | Misc. |
 
@@ -94,16 +92,16 @@ Result: **Claude Sonnet 3.5 + DafnyPro = 86% on DafnyBench**, a +16pp improvemen
 
 DafnyPro is **single-function only**. The paper does not address the compositional case. But the diff-checker we already shipped in M6.4 (`DiffChecker.scala`), and the pruner is implicit in our `ResponseParser` rejection of unparseable bodies. The missing ingredient is **hint-augmentation**, and that's where the +16pp delta lives.
 
-### Other 2025–2026 work checked
+### Other 2025-2026 work checked
 
-- **VERINA** ([arXiv:2505.23135](https://arxiv.org/pdf/2505.23135), May 2025), Dafny + Lean benchmark; confirms the compositional gap, no inference-time technique advances the SOTA.
-- **VeriCoding** ([arXiv:2509.22908](https://arxiv.org/pdf/2509.22908), Sept 2025), multi-method verified synthesis benchmark; supports the same pattern.
-- **Clover** (SAIV 2024, [Stanford](https://theory.stanford.edu/~barrett/pubs/SSP+24.pdf)), closed-loop monolithic synthesis with feedback. The original CEGIS-with-Dafny paradigm. Reports 87% acceptance / 100% rejection on ground-truth single-function programs. Not compositional.
-- **DafnyBench** ([Loughridge et al.](https://namin.seas.harvard.edu/pubs/dafnybench.pdf), Harvard 2024), the underlying single-function benchmark. ~58% baseline against which DafnyPro measured its +16pp delta.
-- **"LLM-Based Code Translation Needs Formal Compositional Reasoning"** ([Anshumaan et al.](https://openreview.net/forum?id=wGj8LU2EOf), 2025), design points for injecting formal signals into translation; explicitly treats compositional reasoning as a known gap to fill, rather than a solved problem.
-- **Autoformalization survey** ([Weng et al., arXiv:2505.23486](https://arxiv.org/abs/2505.23486)), explicitly notes "systems that can generalize compositionally" remains an open problem.
+- VERINA ([arXiv:2505.23135](https://arxiv.org/pdf/2505.23135), May 2025), Dafny + Lean benchmark; confirms the compositional gap, no inference-time technique advances the SOTA.
+- VeriCoding ([arXiv:2509.22908](https://arxiv.org/pdf/2509.22908), Sept 2025), multi-method verified synthesis benchmark; supports the same pattern.
+- Clover (SAIV 2024, [Stanford](https://theory.stanford.edu/~barrett/pubs/SSP+24.pdf)), closed-loop monolithic synthesis with feedback. The original CEGIS-with-Dafny paradigm. Reports 87% acceptance / 100% rejection on ground-truth single-function programs. Not compositional.
+- DafnyBench ([Loughridge et al.](https://namin.seas.harvard.edu/pubs/dafnybench.pdf), Harvard 2024), the underlying single-function benchmark. ~58% baseline against which DafnyPro measured its +16pp delta.
+- "LLM-Based Code Translation Needs Formal Compositional Reasoning" ([Anshumaan et al.](https://openreview.net/forum?id=wGj8LU2EOf), 2025), design points for injecting formal signals into translation; explicitly treats compositional reasoning as a known gap to fill, rather than a solved problem.
+- Autoformalization survey ([Weng et al., arXiv:2505.23486](https://arxiv.org/abs/2505.23486)), explicitly notes "systems that can generalize compositionally" remains an open problem.
 
-There is no evidence from any 2024–2026 source that an *inference-time* decomposition strategy beats *monolithic* prompting on compositional Dafny. We searched.
+There is no evidence from any 2024-2026 source that an *inference-time* decomposition strategy beats *monolithic* prompting on compositional Dafny. We searched.
 
 ## What this means for our pipeline
 
@@ -122,11 +120,11 @@ Cost to ship that: ~1000 LoC, ~1 week of engineering, dilution of the M6.5/M6.6 
 
 Instead of L2, M6.7 implements a hint-augmentation module modelled on DafnyPro:
 
-- **`HintLibrary`**, a small, hand-curated repository of Dafny proof patterns indexed by `VerifierError.category` (`postcondition_violation`, `loop_invariant_failure`, `decreases_failure`, `precondition_violation`, etc.). Each hint is a short Dafny snippet showing how a similar issue was resolved.
-- **PromptBuilder integration**, when `CegisLoop` repairs after a failed verification, the most relevant hints for the failure category are injected as in-context examples in the repair prompt.
-- **CLI flag**, `synth verify --with-hints` (default ON when `--fallback` is enabled, off for strict CEGIS so the M6.4 contract is preserved).
+- `HintLibrary`, a small, hand-curated repository of Dafny proof patterns indexed by `VerifierError.category` (`postcondition_violation`, `loop_invariant_failure`, `decreases_failure`, `precondition_violation`, etc.). Each hint is a short Dafny snippet showing how a similar issue was resolved.
+- PromptBuilder integration: when `CegisLoop` repairs after a failed verification, the most relevant hints for the failure category are injected as in-context examples in the repair prompt.
+- CLI flag `synth verify --with-hints` (default ON when `--fallback` is enabled, off for strict CEGIS so the M6.4 contract is preserved).
 
-Expected leverage based on DafnyPro's reported +16pp:
+Expected gain based on DafnyPro's reported +16pp:
 
 | Pipeline stage | Without hints (today) | With hints (target) |
 |---|---|---|
@@ -139,10 +137,10 @@ We also **do not** ship a pass-rate AC, there is no real-LLM A/B test in CI (cos
 
 ## What's deferred
 
-- **L2 / operation decomposition**, closed as wontfix-now. Re-open if (a) a published inference-time technique reaches >50% on DafnyComp, or (b) we want to invest in RL training infrastructure (out of scope for this project).
-- **Pass@128 scaling**, Re:Form-level sampling budgets are out of scope; would require a `CegisBudget.maxIterations >= 64` configuration and a much larger cost cap.
-- **Cross-family LLM escalation** (Anthropic ↔ OpenAI within one fallback run), already in M6.6 backlog; orthogonal to compositional question.
-- **Automatic hint discovery**, DafnyPro hand-curates hints from the training corpus; we hand-curate from successful CEGIS runs in our codebase. Auto-mining from a verified-bodies cache is a follow-up if the manual library proves valuable.
+- L2 / operation decomposition, closed as wontfix-now. Re-open if (a) a published inference-time technique reaches >50% on DafnyComp, or (b) we want to invest in RL training infrastructure (out of scope for this project).
+- Pass@128 scaling, Re:Form-level sampling budgets are out of scope; would require a `CegisBudget.maxIterations >= 64` configuration and a much larger cost cap.
+- Cross-family LLM escalation (Anthropic ↔ OpenAI within one fallback run), already in M6.6 backlog; orthogonal to compositional question.
+- Automatic hint discovery, DafnyPro hand-curates hints from the training corpus; we hand-curate from successful CEGIS runs in our codebase. Auto-mining from a verified-bodies cache is a follow-up if the manual library proves valuable.
 
 ## Sources
 

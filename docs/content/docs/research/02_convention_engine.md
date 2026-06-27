@@ -1,6 +1,6 @@
 ---
 title: "Convention Engine"
-description: "Why the M1–M10 rules look the way they do: full design rationale, edge cases, override semantics"
+description: "Why the M1-M10 rules look the way they do: full design rationale, edge cases, override semantics"
 ---
 
 > Research document for the spec-to-REST Convention Engine. It takes an abstract formal
@@ -10,8 +10,6 @@ description: "Why the M1–M10 rules look the way they do: full design rationale
 >
 > Looking for the **live, code-anchored reference** of how the current compiler applies these
 > rules? See [Convention Engine Reference](/design/convention-engine).
-
----
 
 ## Table of contents
 
@@ -33,8 +31,6 @@ description: "Why the M1–M10 rules look the way they do: full design rationale
 6. [Convention Profiles (Deployment Targets)](#6-convention-profiles-deployment-targets)
 7. [Comparison with Existing Convention Systems](#7-comparison-with-existing-convention-systems)
 8. [Implementation Architecture](#8-implementation-architecture)
-
----
 
 ## 1. Design philosophy
 
@@ -61,8 +57,6 @@ the full REST + DB + validation + serialization stack.
 
 5. **When in doubt, follow RFC 7231 and REST best practices**, the engine does not invent novel
    HTTP semantics. It maps to well-understood patterns.
-
----
 
 ## 2. The complete convention ruleset
 
@@ -562,8 +556,6 @@ The engine generates default messages from the clause structure:
 
 These messages are overridable via the conventions block.
 
----
-
 ## 3. Convention override system
 
 ### 3.1 Override syntax
@@ -685,8 +677,6 @@ correctness:
 
 Users can, however, override the _presentation_ of these (error messages, status codes, column
 names) without removing the underlying check.
-
----
 
 ## 4. Worked examples
 
@@ -1714,8 +1704,6 @@ GET /users/{user_id}/feed?after=eyJpZCI6NDJ9&limit=20
 
 This is activated via `global.pagination.strategy = "cursor"` in the conventions block.
 
----
-
 ## 5. Edge cases and ambiguities
 
 ### 5.1 Operations that both read AND write
@@ -1944,8 +1932,6 @@ The engine generates:
    `{"url": "...", "events": ["order.placed"]}`
 2. A webhook delivery table in the DB
 3. Async delivery logic that POSTs to registered URLs after the operation completes
-
----
 
 ## 6. Convention profiles (deployment targets)
 
@@ -2232,8 +2218,6 @@ public class ShortCode {
 }
 ```
 
----
-
 ## 7. Comparison with existing convention systems
 
 ### 7.1 Ruby on Rails (convention over configuration)
@@ -2379,8 +2363,6 @@ public class ShortCode {
 | State machines           | Manual                 | Manual           | Manual             | Not modeled      | Not modeled            | **Auto-detected from transitions** |
 | Multi-target             | Ruby only              | Java/Spring only | Python only        | 7+ languages     | 40+ (variable quality) | **4 targets (high quality)**       |
 
----
-
 ## 8. Implementation architecture
 
 ### 8.1 Internal structure
@@ -2428,7 +2410,7 @@ The entity analyzer classifies each entity in the spec:
 It also builds a relationship graph (the live IR shape is extracted from Isabelle to
 [`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
 with the `*Full` case classes; sketch below uses English field names for readability,
-the extracted positional shape uses `a`/`b`/`c`/…):
+the extracted positional shape uses `a`/`b`/`c`/...):
 
 ```scala
 enum EntityClassification derives CanEqual:
@@ -2531,7 +2513,7 @@ val HttpMethodRules: List[ConventionRule] = List(
 ```
 
 `Classify.scala` realises this as a top-down `if/else` over `AnalysisSignals`,
-emitting the matched rule's name (`"M1"`–`"M10"`) into
+emitting the matched rule's name (`"M1"`-`"M10"`) into
 `OperationClassification.matchedRule`. M6 (`CreateChild`) is reserved in the
 enum but no current dispatch arm produces it.
 
@@ -2736,15 +2718,13 @@ output triggers a test failure, forcing explicit review of the change.
 The convention engine processes each operation independently (no cross-operation dependencies except
 for path conflict detection). This means:
 
-- **Time complexity.** O(E + O \* R) where E = number of entities, O = number of operations, R =
+- Time complexity. O(E + O \* R) where E = number of entities, O = number of operations, R =
   number of rules. For a typical service with 10 entities and 30 operations, this is
   sub-millisecond.
-- **Memory.** The engine holds the full spec IR and produces the full output in memory. For any
+- Memory. The engine holds the full spec IR and produces the full output in memory. For any
   reasonable spec (thousands of entities), this is trivially small.
-- **No I/O.** The engine does no file reading, network access, or database queries. It is a pure
+- No I/O. The engine does no file reading, network access, or database queries. It is a pure
   computation.
-
----
 
 ## Appendix A: Complete decision tree (pseudocode)
 
@@ -2866,8 +2846,6 @@ function determine_status_codes(op, classification, spec):
 | `A -> set B`    | Every A has zero or more Bs | Junction table                 | `likes: User -> set Post`          |
 | `A -> B` (bare) | Same as `A -> one B`        | NOT NULL FK                    | Default multiplicity               |
 
----
-
 <!-- Added: security defaults (gap analysis) -->
 
 ## Appendix D: Security defaults in generated code
@@ -2916,8 +2894,6 @@ requests receive HTTP 429 with a `Retry-After` header.
 | String field max length | 10,000 chars (unless entity specifies otherwise)                  | Per-field `where` constraint        |
 | Regex complexity check  | Enabled, rejects ReDoS-vulnerable patterns in entity invariants | `global.regex_safety_check = false` |
 | SQL injection           | Prevented by default (ORM + parameterized queries)                | Not overridable                     |
-
----
 
 <!-- Added: API versioning (gap analysis) -->
 
@@ -2972,8 +2948,6 @@ media type and routes accordingly. This follows GitHub API conventions.
 | `url_prefix` (default) | `/v1/shorten` |   | `application/json`                  |
 | `header`               | `/shorten`    | `X-API-Version: 1` | `application/json`                  |
 | `content_type`         | `/shorten`    |   | `application/vnd.myservice.v1+json` |
-
----
 
 <!-- Added: caching conventions (gap analysis) -->
 

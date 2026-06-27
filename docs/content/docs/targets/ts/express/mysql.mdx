@@ -5,8 +5,8 @@ description: Reference for the ts-express-mysql deployment target
 
 This page documents only how the `ts-express-mysql` target **differs** from
 [`ts-express-postgres`](/targets/ts/express/postgres). Everything not listed
-here — file tree, naming conventions, HTTP contract, OpenAPI, the Express app,
-Dafny integration, extension points — is identical; read the
+here (file tree, naming conventions, HTTP contract, OpenAPI, the Express app,
+Dafny integration, extension points) is identical; read the
 [PostgreSQL page](/targets/ts/express/postgres) for the full reference.
 
 The database axis is a pluggable `Dialect` strategy
@@ -14,7 +14,7 @@ The database axis is a pluggable `Dialect` strategy
 the TS-side `TsDbView` in `EmitTs.scala`; together they decide the Prisma
 `provider`, the raw-SQL column types in `migration.sql`, the connection URL, and
 the `docker-compose` / generated-CI database service. Selecting MySQL is one
-flag — no emitter or template changes.
+flag: no emitter or template changes.
 
 ```bash
 sbt "cli/run compile --framework express --db mysql --ignore-verify --out /tmp/out fixtures/spec/url_shortener.spec"
@@ -31,23 +31,24 @@ sbt "cli/run compile --framework express --db mysql --ignore-verify --out /tmp/o
 | Schema native types | `@db.Text`, `@db.Timestamptz()`, …          | none (Prisma MySQL defaults)                   |
 | Unbounded strings   | `TEXT`                                       | `VARCHAR(255)`                                 |
 
-- **Compose / CI service.** The emitted `docker-compose.yml` and
-  `.github/workflows/ci.yml` provision a `mysql:8.4` service (replacing the
-  Postgres one).
-- **No native type attributes.** The generated `schema.prisma` models omit the
-  Postgres-only `@db.*` native types; Prisma's MySQL provider defaults are valid
-  and the actual column types come from the hand-rendered, dialect-aware
-  `migration.sql`.
-- **Column types.** `String→VARCHAR(255)`, `Int→BIGINT`, `Float→DOUBLE`,
-  `Bool→TINYINT(1)`, `DateTime→DATETIME`, `Date→DATE`, `UUID→CHAR(36)`,
-  `Decimal→DECIMAL`, `Bytes→LONGBLOB`. A 32-bit `SERIAL` PK stays
-  `INT AUTO_INCREMENT` (not widened to `BIGINT`). The emitter is canonical.
-- **Surrogate primary key.** As on the
-  [PostgreSQL target](/targets/ts/express/postgres#type-mapping), the synthesized
-  `id` is `Int` / `number` in the Prisma model even though the column is
-  `BIGINT AUTO_INCREMENT` — a deliberate v0 choice (the JSON `bigint` story is
-  fragile). `prisma generate` / `tsc` / `migrate deploy` are unaffected; the
-  model↔DB width only needs reconciling under `prisma migrate dev` / `db pull`.
+The emitted `docker-compose.yml` and `.github/workflows/ci.yml` provision a
+`mysql:8.4` service (replacing the Postgres one).
+
+The generated `schema.prisma` models omit the Postgres-only `@db.*` native types;
+Prisma's MySQL provider defaults are valid and the actual column types come from
+the hand-rendered, dialect-aware `migration.sql`.
+
+The column types are `String→VARCHAR(255)`, `Int→BIGINT`, `Float→DOUBLE`,
+`Bool→TINYINT(1)`, `DateTime→DATETIME`, `Date→DATE`, `UUID→CHAR(36)`,
+`Decimal→DECIMAL`, and `Bytes→LONGBLOB`. A 32-bit `SERIAL` PK stays
+`INT AUTO_INCREMENT` (not widened to `BIGINT`). The emitter is canonical.
+
+The surrogate primary key follows the
+[PostgreSQL target](/targets/ts/express/postgres#type-mapping): the synthesized
+`id` is `Int` / `number` in the Prisma model even though the column is
+`BIGINT AUTO_INCREMENT`, a deliberate v0 choice (the JSON `bigint` story is
+fragile). `prisma generate` / `tsc` / `migrate deploy` are unaffected; the
+model↔DB width only needs reconciling under `prisma migrate dev` / `db pull`.
 
 ## CI gate
 
@@ -61,5 +62,5 @@ round-trip against a real `mysql:8.4` service.
 > round-trip runs unchanged; the guardrail only affects local runs invoked from
 > an AI agent's shell.
 
-If this page and the emitted output disagree, the emitter wins — file an issue
+If this page and the emitted output disagree, the emitter wins; file an issue
 or PR to correct the doc.
