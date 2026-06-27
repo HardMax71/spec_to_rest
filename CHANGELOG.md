@@ -1,5 +1,81 @@
 # Changelog
 
+## [3.1.0](https://github.com/HardMax71/spec_to_rest/compare/v3.0.1...v3.1.0) (2026-06-27)
+
+
+### Features
+
+* **auth_service:** verifiable login rate-limiting — auth_service now fully verifies ([#461](https://github.com/HardMax71/spec_to_rest/issues/461)) ([ca1a12f](https://github.com/HardMax71/spec_to_rest/commit/ca1a12f77ed93eba4fbf25546ad45d3ebdf76d05))
+* **cli:** unify exit codes into ExitStatus and describe them in output ([#421](https://github.com/HardMax71/spec_to_rest/issues/421)) ([99bcc30](https://github.com/HardMax71/spec_to_rest/commit/99bcc30366967feeb5e676f6a3f308e65e09c2a2))
+* **codegen:** paginate list endpoints with limit/offset query params ([#464](https://github.com/HardMax71/spec_to_rest/issues/464)) ([b755cf7](https://github.com/HardMax71/spec_to_rest/commit/b755cf7d5d27191ed1d90f9ac919dbd61a9c617f))
+* **codegen:** synthesize verified Go service bodies via the Dafny kernel ([#465](https://github.com/HardMax71/spec_to_rest/issues/465)) ([033f779](https://github.com/HardMax71/spec_to_rest/commit/033f77967ec374bb059c1d701b1b2be214524114))
+* **codegen:** synthesize verified TypeScript service bodies via the Dafny kernel ([#466](https://github.com/HardMax71/spec_to_rest/issues/466)) ([5fa2900](https://github.com/HardMax71/spec_to_rest/commit/5fa2900fce0d709105934ea5493cd0b9d2d76d44))
+* **proofs:** lift sequence-append (seq + [elem]) into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#434](https://github.com/HardMax71/spec_to_rest/issues/434)) ([0f8ad6b](https://github.com/HardMax71/spec_to_rest/commit/0f8ad6bea59e5a5bdf90b9d4f07d19fe80d6ad2d))
+* **proofs:** lift the 1-arg builtin hash(x) into the verified subset as an uninterpreted String function ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#433](https://github.com/HardMax71/spec_to_rest/issues/433)) ([11cc1eb](https://github.com/HardMax71/spec_to_rest/commit/11cc1ebb11c4f50a12d65ef8dbaa7e7d7cf23df1))
+* **verify:** cardinality and domain-membership on primed/pre-state relations ([#425](https://github.com/HardMax71/spec_to_rest/issues/425)) ([6ca2438](https://github.com/HardMax71/spec_to_rest/commit/6ca24388c241e84a33364b4a17b15afd12b09112))
+* **verify:** coerce optional-numeric operands in arithmetic ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#446](https://github.com/HardMax71/spec_to_rest/issues/446)) ([b16bb30](https://github.com/HardMax71/spec_to_rest/commit/b16bb30626fe53c6149c043176a251ac0e2234f9))
+* **verify:** conditional relation-insert in ensures frames ([#456](https://github.com/HardMax71/spec_to_rest/issues/456)) ([512a5dc](https://github.com/HardMax71/spec_to_rest/commit/512a5dc40c1307eec02988c8337e76bb16bd9db0))
+* **verify:** encode set difference (set - set) in the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#445](https://github.com/HardMax71/spec_to_rest/issues/445)) ([8a6d8c6](https://github.com/HardMax71/spec_to_rest/commit/8a6d8c619a1779a7bb21f87f9e348319f4e1c9ca))
+* **verify:** encode set union (set + set) in the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#441](https://github.com/HardMax71/spec_to_rest/issues/441)) ([776e21e](https://github.com/HardMax71/spec_to_rest/commit/776e21ea9a6b579931dcbad282c426957e551c21))
+* **verify:** first-class String sort for String-refinement aliases via E-matching triggers ([#427](https://github.com/HardMax71/spec_to_rest/issues/427)) ([e300cb5](https://github.com/HardMax71/spec_to_rest/commit/e300cb58ffee3adca6de544724a8439733318c9a))
+* **verify:** frame relation-assignments nested in let/and + chained relation-insert ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#430](https://github.com/HardMax71/spec_to_rest/issues/430)) ([046dede](https://github.com/HardMax71/spec_to_rest/commit/046dede9340aba80dba6aebea3a6f4199fbe3de8))
+* **verify:** generalize the sum aggregate to computed lambda bodies ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#449](https://github.com/HardMax71/spec_to_rest/issues/449)) ([c10169c](https://github.com/HardMax71/spec_to_rest/commit/c10169c4f5f5944f53f14e755dfe89cb385e3413))
+* **verify:** infer the none-literal element sort from the with-update field type ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#432](https://github.com/HardMax71/spec_to_rest/issues/432)) ([f6bdbe1](https://github.com/HardMax71/spec_to_rest/commit/f6bdbe1409a468c43b668e0230fb679c9e55b4da))
+* **verify:** lift #(set-valued expr) cardinality into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#439](https://github.com/HardMax71/spec_to_rest/issues/439)) ([da9602a](https://github.com/HardMax71/spec_to_rest/commit/da9602a5beee28a65f779c24c7019187fc628fce))
+* **verify:** lift `all k in pre(X)` quantifiers into the verified subset ([#459](https://github.com/HardMax71/spec_to_rest/issues/459)) ([097c557](https://github.com/HardMax71/spec_to_rest/commit/097c55709f39fc6c8e003a3020d48da0aeb04483))
+* **verify:** lift existential/negative quantifiers over set domains into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#443](https://github.com/HardMax71/spec_to_rest/issues/443)) ([9df7c9b](https://github.com/HardMax71/spec_to_rest/commit/9df7c9b718f2ef9ba3ef78a5e2743ee168c9e73e))
+* **verify:** lift quantifiers over primed/pre-state relations into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#442](https://github.com/HardMax71/spec_to_rest/issues/442)) ([99a4b73](https://github.com/HardMax71/spec_to_rest/commit/99a4b73d946d147c675d4f21fceab946f15df96a))
+* **verify:** lift range-membership + optional-vs-base membership, flipping todo_list ListTodos ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#436](https://github.com/HardMax71/spec_to_rest/issues/436)) ([66d933e](https://github.com/HardMax71/spec_to_rest/commit/66d933e1d220ae4b0ae5836cf9d5faffa05d746b))
+* **verify:** lift relation literal-insert into the verified subset ([#426](https://github.com/HardMax71/spec_to_rest/issues/426)) ([47c967f](https://github.com/HardMax71/spec_to_rest/commit/47c967f75f141a6eee7f64c48569077bc9b02641))
+* **verify:** lift sum(coll, i =&gt; i.field) aggregates into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#437](https://github.com/HardMax71/spec_to_rest/issues/437)) ([7769d36](https://github.com/HardMax71/spec_to_rest/commit/7769d367913c45fb20d7ff546d0b0de936b61808))
+* **verify:** lift the (definite description) over set domains into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#444](https://github.com/HardMax71/spec_to_rest/issues/444)) ([3f4462c](https://github.com/HardMax71/spec_to_rest/commit/3f4462c0a8647e101f5b7abb381f493df9839e88))
+* **verify:** lift the days(n) builtin into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#447](https://github.com/HardMax71/spec_to_rest/issues/447)) ([974564b](https://github.com/HardMax71/spec_to_rest/commit/974564b327d4a4d6bfcb3d05da7a4498d4693ff8))
+* **verify:** lift the len(s) builtin into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#448](https://github.com/HardMax71/spec_to_rest/issues/448)) ([6392c35](https://github.com/HardMax71/spec_to_rest/commit/6392c352724bcdff36e5cdcf6044d60697bfa2ac))
+* **verify:** lift universal quantification over field-access sets into the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#440](https://github.com/HardMax71/spec_to_rest/issues/440)) ([57f1f14](https://github.com/HardMax71/spec_to_rest/commit/57f1f1460633ce2aeed90e0190cb155ffcb62733))
+* **verify:** model #-cardinality on entity-field Sets ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#438](https://github.com/HardMax71/spec_to_rest/issues/438)) ([510f5c2](https://github.com/HardMax71/spec_to_rest/commit/510f5c2600394602bd38ab0c756223f25ef7edb2))
+* **verify:** model Duration as the Int sort, completing the [#377](https://github.com/HardMax71/spec_to_rest/issues/377) temporal lift ([#422](https://github.com/HardMax71/spec_to_rest/issues/422)) ([c799c38](https://github.com/HardMax71/spec_to_rest/commit/c799c38ab842cf3bd37336592e4d4cbee69e1f98))
+* **verify:** model now() as an uninterpreted Int constant in the verified subset ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#429](https://github.com/HardMax71/spec_to_rest/issues/429)) ([4464a34](https://github.com/HardMax71/spec_to_rest/commit/4464a34aa8b908e82437db709a90c54060ebe5d7))
+* **verify:** resolve bare enum members + coerce base-vs-optional equality ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#431](https://github.com/HardMax71/spec_to_rest/issues/431)) ([823d392](https://github.com/HardMax71/spec_to_rest/commit/823d392619ab01556fd770d6f6c2631ed74409c6))
+* **verify:** support lexicographic ordering on String via str.&lt; ([#423](https://github.com/HardMax71/spec_to_rest/issues/423)) ([545ede2](https://github.com/HardMax71/spec_to_rest/commit/545ede2ef89c9419f821503beef000663cfe6163))
+* **verify:** support string concatenation via str.++ ([#424](https://github.com/HardMax71/spec_to_rest/issues/424)) ([69cbe31](https://github.com/HardMax71/spec_to_rest/commit/69cbe317c8a30f2e7f04cce59f7cb3fc59b396f8))
+* **verify:** type-directed range projection for value-sorted set comprehensions ([#420](https://github.com/HardMax71/spec_to_rest/issues/420)) ([#428](https://github.com/HardMax71/spec_to_rest/issues/428)) ([87363fe](https://github.com/HardMax71/spec_to_rest/commit/87363fec465ddbdaaebadfc844b2d9bd4fccaeef))
+
+
+### Bug Fixes
+
+* **auth_service:** hoist Logout's the so its session-update frames ([#457](https://github.com/HardMax71/spec_to_rest/issues/457)) ([e1dfe0b](https://github.com/HardMax71/spec_to_rest/commit/e1dfe0b3b8cde82c0adeebaa5cea76fba9c5c6e2))
+* **ecommerce:** complete payment/order consistency invariants — ecommerce fully verifies ([#462](https://github.com/HardMax71/spec_to_rest/issues/462)) ([3907959](https://github.com/HardMax71/spec_to_rest/commit/3907959d906b8bf04bdd7989cf449db69cf84524))
+* **parser:** `implies`/`iff` bind looser than `and`/`or` ([#463](https://github.com/HardMax71/spec_to_rest/issues/463)) ([7b27c88](https://github.com/HardMax71/spec_to_rest/commit/7b27c8866d1f1cc9fd1da0f3e11abe71956a578e))
+* **parser:** a let-binding scopes the rest of its requires/ensures block ([#453](https://github.com/HardMax71/spec_to_rest/issues/453)) ([400cdc0](https://github.com/HardMax71/spec_to_rest/commit/400cdc024997379177559a0afd8674034155be31))
+* **proofs:** exclude callee names from free_vars; recognize mirrored refinement atoms ([#473](https://github.com/HardMax71/spec_to_rest/issues/473)) ([9d93fbd](https://github.com/HardMax71/spec_to_rest/commit/9d93fbdd743988f2c9fec26a44ee0356aebbcaf5))
+* **testgen:** point Go/TS pending-skip messages at the real tracking issue ([#468](https://github.com/HardMax71/spec_to_rest/issues/468)) ([fd39b90](https://github.com/HardMax71/spec_to_rest/commit/fd39b90b3a91e67f71ef6f02b031d2718bbc6dbf))
+* **todo_list:** make nextIdFresh inductive so CreateTodo preserves it ([#455](https://github.com/HardMax71/spec_to_rest/issues/455)) ([57bdb53](https://github.com/HardMax71/spec_to_rest/commit/57bdb5391e0f0a5d2853cefc3023ec682308b5de))
+* **verify:** synthesize relation frames through let-bindings ([#458](https://github.com/HardMax71/spec_to_rest/issues/458)) ([3a2fd29](https://github.com/HardMax71/spec_to_rest/commit/3a2fd29d57e545715a28b0a79e4f4dfa90a206a6))
+
+
+### Code Refactoring
+
+* **auth_service:** model password-reset tokens as a dedicated relation ([#460](https://github.com/HardMax71/spec_to_rest/issues/460)) ([d2bb9e9](https://github.com/HardMax71/spec_to_rest/commit/d2bb9e93696a372063a2fb3bfa2d88b6f5837ef9))
+* **codegen:** dedup identical route-kind / path-specificity helpers across emitters ([#476](https://github.com/HardMax71/spec_to_rest/issues/476)) ([3d94199](https://github.com/HardMax71/spec_to_rest/commit/3d941998c9e56e3e3f16f84bda7127fde86bc267))
+* decouple Z3 bridge support ([#452](https://github.com/HardMax71/spec_to_rest/issues/452)) ([885bc66](https://github.com/HardMax71/spec_to_rest/commit/885bc66595887aca3c0d2d0348a4185b6695b338))
+* **proofs:** centralize name/variable mechanics into Names.thy ([#479](https://github.com/HardMax71/spec_to_rest/issues/479)) ([3bf142d](https://github.com/HardMax71/spec_to_rest/commit/3bf142d997c33f586e351cb8701fac68f725579f))
+* **proofs:** define requiresAlloy as a fun, dropping the 31-lemma simp wall ([#477](https://github.com/HardMax71/spec_to_rest/issues/477)) ([adfb890](https://github.com/HardMax71/spec_to_rest/commit/adfb890321e67cec6741a581813271663860aae6))
+* **proofs:** modularize the Isabelle proof layer (session + theory splits) ([#472](https://github.com/HardMax71/spec_to_rest/issues/472)) ([66c7257](https://github.com/HardMax71/spec_to_rest/commit/66c725793dbd044a65bbf02c8737435f6dc9ae35))
+* **proofs:** move Semantics_Inlining to the Soundness session ([#480](https://github.com/HardMax71/spec_to_rest/issues/480)) ([9e6c9fe](https://github.com/HardMax71/spec_to_rest/commit/9e6c9fe2548fc73d647aef02906b6d8c20759684))
+* **testgen:** split Behavioral.scala into cohesive sub-modules ([#474](https://github.com/HardMax71/spec_to_rest/issues/474)) ([0e11281](https://github.com/HardMax71/spec_to_rest/commit/0e1128108b57a3004537fcaec235676855e5d9e9))
+
+
+### Performance
+
+* **proofs:** prune BNF plugins on codegen datatypes (Codegen session ~20% faster) ([#478](https://github.com/HardMax71/spec_to_rest/issues/478)) ([967bb49](https://github.com/HardMax71/spec_to_rest/commit/967bb494c6e893d9ad46d7d5df7cc95fc1f70f65))
+
+
+### Documentation
+
+* **roadmap:** mark phases 7-8 shipped, reconcile stale ticket states ([#418](https://github.com/HardMax71/spec_to_rest/issues/418)) ([803cac1](https://github.com/HardMax71/spec_to_rest/commit/803cac1c8ac53a12af132d61ae511f5377803907))
+* scrub AI-writing tells from prose ([#481](https://github.com/HardMax71/spec_to_rest/issues/481)) ([c7bf8dc](https://github.com/HardMax71/spec_to_rest/commit/c7bf8dc27eea8d5d92de21eafad89efaa6b56d7a))
+* sync docs with shipped [#420](https://github.com/HardMax71/spec_to_rest/issues/420) work (precedence, synthesis targets, pagination, exit codes) ([#467](https://github.com/HardMax71/spec_to_rest/issues/467)) ([c21b486](https://github.com/HardMax71/spec_to_rest/commit/c21b486384376995d3d33e1ea092445db5cf8cfd))
+
 ## [3.0.1](https://github.com/HardMax71/spec_to_rest/compare/v3.0.0...v3.0.1) (2026-06-13)
 
 
