@@ -27,7 +27,7 @@ Code generation uses Handlebars templates (`handlebars.java`) for the
 ([#33](https://github.com/HardMax71/spec_to_rest/issues/33)), and
 `ts-express-postgres` ([#35](https://github.com/HardMax71/spec_to_rest/issues/35))
 targets. Test generation emits a native behavioral/stateful/structural conformance
-suite under `tests/` by default (opt out with `compile --no-tests`) — in the target's
+suite under `tests/` by default (opt out with `compile --no-tests`), in the target's
 own language (pytest+Hypothesis+Schemathesis / Vitest+fast-check / `go test`+rapid) via
 the `Backend.scala` seam, with the Python path held byte-identical as the differential
 oracle.
@@ -59,23 +59,23 @@ flowchart LR
   Map -.->|--with-synthesis| Synth["Synthesis<br/>(LLM + Dafny CEGIS)"]
 ```
 
-1. **Parse.** ANTLR4 grammar (`Spec.g4`) produces a CST that the builder lowers to a typed IR.
+1. Parse. ANTLR4 grammar (`Spec.g4`) produces a CST that the builder lowers to a typed IR.
    The parser auto-injects a short preamble (`isValidURI`, `isValidEmail`). See
    [Parser Implementation Notes](/pipelines/parser-implementation).
-2. **IR build.** CST becomes `ServiceIR`, a Scala 3 enum/case-class ADT, with span tracking.
-3. **Verify.** `verify` runs structural lints (L01-L06; see
+2. IR build. CST becomes `ServiceIR`, a Scala 3 enum/case-class ADT, with span tracking.
+3. Verify. `verify` runs structural lints (L01-L06; see
    [structural lints](/spec-language#structural-lints)) and then translates each obligation
    to either Z3 SMT-LIB or Alloy (non-overlapping routing) and checks it. The translator's
    correctness is mechanically validated by the universal `soundness` theorem in
    `proofs/isabelle/SpecRest/Soundness.thy`. The `compile` command treats `verify` as a
    hard gate (`--ignore-verify` to bypass).
-4. **Convention map.** The convention engine applies M1-M10 operation-classification
+4. Convention map. The convention engine applies M1-M10 operation-classification
    rules; user-supplied `conventions { ... }` overrides win where present. See
    [Convention Engine](/design/convention-engine).
-5. **Emit.** Handlebars templates produce the FastAPI project: `app/`, `db/`, `alembic/`,
+5. Emit. Handlebars templates produce the FastAPI project: `app/`, `db/`, `alembic/`,
    `tests/`, `Dockerfile`, `docker-compose.yml`, `openapi.yaml`, `.github/workflows/ci.yml`,
    `Makefile`, `pyproject.toml`.
-6. **Testgen (default; opt out with `--no-tests`).** Adds a conformance suite under
+6. Testgen (default; opt out with `--no-tests`). Adds a conformance suite under
    `tests/` derived from the same `requires`/`ensures`/`invariant` clauses, rendered in
    the target's native language behind the `Backend.scala` seam (single shared
    derivation, pluggable `ExprBackend`/`StrategyBackend`/`HarnessTemplates`); the Python

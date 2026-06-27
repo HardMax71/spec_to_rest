@@ -6,8 +6,6 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 > Research conducted 2026-04-05. Covers 10 tool/technique areas spanning property-based testing,
 > model-based testing, contract testing, trace validation, and API fuzzing.
 
----
-
 ## Table of contents
 
 1. [Schemathesis, property-based API testing from OpenAPI](#1-schemathesis)
@@ -26,8 +24,6 @@ description: "Deep dives on Schemathesis, Hypothesis, QuickCheck, TLA+ traces, a
 - [RESTler, stateful REST API fuzzing (Microsoft Research)](#appendix-a-restler-microsoft-research)
 - [NModel, open-source MBT framework](#appendix-b-nmodel)
 - [Comparative summary table](#comparative-summary)
-
----
 
 ## 1. Schemathesis
 
@@ -76,8 +72,6 @@ the single source of truth.
 - https://github.com/schemathesis/schemathesis
 - https://schemathesis.readthedocs.io/en/stable/explanations/stateful/
 - https://schemathesis.io/
-
----
 
 ## 2. Hypothesis
 
@@ -140,8 +134,6 @@ whatever the rules operate on. The framework was inspired by Erlang QuickCheck's
 
 - https://hypothesis.readthedocs.io/en/latest/stateful.html
 - https://hypothesis.works/articles/rule-based-stateful-testing/
-
----
 
 ## 3. TLA+ trace validation & test generation
 
@@ -214,7 +206,7 @@ validated against the spec (as behaviors the implementation actually produced).
 
 - TLC model checker: mature, used at AWS, MongoDB, Microsoft, Cockroach Labs
 - Trace validation: research-grade but rapidly maturing (2024-2025 papers)
-- OmniLink: cutting-edge research (2025), rather than yet a production tool
+- OmniLink: recent research (2025), rather than yet a production tool
 
 #### Key sources
 
@@ -222,8 +214,6 @@ validated against the spec (as behaviors the implementation actually produced).
 - https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs
 - https://arxiv.org/html/2601.11836
 - https://dl.acm.org/doi/fullHtml/10.1145/3559744.3559747
-
----
 
 ## 4. QuickCheck state machine testing
 
@@ -251,8 +241,8 @@ This comes "for free" from the state machine model.
 
 #### Related tools
 
-- **PropEr** (open-source Erlang): eqc-inspired, has `proper_statem`
-- **Makina** (Elixir): DSL that compiles to QuickCheck state machines via macros; improves
+- PropEr (open-source Erlang): eqc-inspired, has `proper_statem`
+- Makina (Elixir): DSL that compiles to QuickCheck state machines via macros; improves
   maintainability and reuse; encourages typed specifications
 
 ### 4b. quickcheck-state-machine (haskell)
@@ -285,8 +275,6 @@ tests by exploring this model.
 - https://www.quviq.com/documentation/eqc/overview-summary.html
 - https://icfp21.sigplan.org/details/erlang-2021-papers/4/Makina-A-New-QuickCheck-State-Machine-Library
 - https://github.com/stevana/quickcheck-state-machine
-
----
 
 ## 5. Model-based testing for REST APIs (tool landscape)
 
@@ -321,8 +309,6 @@ tests.
 
 - https://tools.openapis.org/categories/testing.html
 - https://www.softwaretestinghelp.com/api-testing-tools/
-
----
 
 ## 6. Pact, consumer-driven contract testing
 
@@ -379,8 +365,6 @@ separately. This is the inverse of tools like Schemathesis where the spec is wri
 - https://pactflow.io/how-pact-works/
 - https://github.com/pact-foundation/pact-net
 
----
-
 ## 7. Dredd, API description validation
 
 **What it is.** Command-line tool that validates a live API against its OpenAPI (or API Blueprint)
@@ -404,19 +388,17 @@ generates one test per documented endpoint/response combination. The difference:
 
 ### Maturity
 
-- **ARCHIVED** (November 2024, read-only repository)
+- ARCHIVED (November 2024, read-only repository)
 - 4,200+ GitHub stars, but no active development
 - Last release: v14.1.0 (November 2021)
 - OpenAPI 3 support was experimental and never completed
-- **Successor recommendation.** Schemathesis, Prism (Stoplight), or Spectral for linting +
+- Successor recommendation. Schemathesis, Prism (Stoplight), or Spectral for linting +
   Postman/Newman for execution
 
 ### Key sources
 
 - https://github.com/apiaryio/dredd
 - https://dredd.org/en/latest/how-it-works.html
-
----
 
 ## 8. Property-based testing from formal specifications
 
@@ -459,8 +441,6 @@ maintaining traceability between what stakeholders need and what tests validate.
 - https://link.springer.com/chapter/10.1007/978-3-642-17071-3_13
 - https://link.springer.com/article/10.1007/s10270-017-0647-0
 - https://dl.acm.org/doi/pdf/10.1145/263244.263267
-
----
 
 ## 9. Conformance testing: Formal model vs. implementation
 
@@ -518,8 +498,6 @@ Conformance is checked by comparing implementation behavior against model behavi
 - https://welltyped.systems/blog/verified-conformance-testing-for-dummies
 - https://www.sciencedirect.com/science/article/abs/pii/S0950584910001278
 - https://link.springer.com/content/pdf/10.1007/978-0-387-34883-4_12.pdf
-
----
 
 ## 10. Spec Explorer, Microsoft model-based testing
 
@@ -587,8 +565,6 @@ executable test cases from the graph.
 - https://learn.microsoft.com/en-us/archive/msdn-magazine/2013/december/model-based-testing-an-introduction-to-model-based-testing-and-spec-explorer
 - https://jon-jacky.github.io/NModel/
 
----
-
 ## Appendix A: RESTler (Microsoft Research)
 
 **What it is.** The first stateful REST API fuzzing tool. Automatically tests cloud services through
@@ -625,8 +601,6 @@ resources before consuming them.
 - https://github.com/microsoft/restler-fuzzer
 - https://www.microsoft.com/en-us/research/publication/restler-stateful-rest-api-fuzzing/
 
----
-
 ## Appendix B: NModel
 
 **What it is.** Open-source model-based testing framework for C#. Spiritual successor to Spec
@@ -646,8 +620,6 @@ machine; tools explore the state space and generate test cases.
 
 - https://jon-jacky.github.io/NModel/
 - http://staff.washington.edu/jon/modeling-book/
-
----
 
 ## Comparative summary
 

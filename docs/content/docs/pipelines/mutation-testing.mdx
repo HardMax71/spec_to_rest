@@ -30,7 +30,7 @@ independent (`fail-fast: false`).
 [`auth_service`](https://github.com/HardMax71/spec_to_rest/issues/149) is
 tracked for inclusion. Translation gap closed (skip rate now 4/40 = 10%,
 matching every other fixture's generic unbacked-scalar-state floor); remaining
-blocker is the synth-cache axis — every auth operation is `LLM_SYNTHESIS`, so
+blocker is the synth-cache axis: every auth operation is `LLM_SYNTHESIS`, so
 mutation-testing needs `--with-synthesis` against a committed verified-body
 cache that CI can read without LLM API calls. See [#149](https://github.com/HardMax71/spec_to_rest/issues/149).
 
@@ -155,7 +155,7 @@ stubs that `raise NotImplementedError` for any operation classified
 code (`app/main.py`, `app/database.py`, read-only CRUD shells like `list_all`
 above). Two shipped levers can widen that surface:
 
-- **Phase 6 handler synthesis from `ensures` clauses.** All seven M6 wedges
+- Phase 6 handler synthesis from `ensures` clauses. All seven M6 wedges
   are merged: operation classification
   ([#31](https://github.com/HardMax71/spec_to_rest/issues/31)), Dafny
   signature generation ([#32](https://github.com/HardMax71/spec_to_rest/issues/32)),
@@ -170,8 +170,8 @@ above). Two shipped levers can widen that surface:
   Dafny bodies instead of `NotImplementedError` stubs. The current matrix
   does not enable synthesis (CEGIS runs are wall-clock heavy compared to a
   90-minute mutation budget); flipping it on is a workflow tweak.
-- **Runtime enforcement of invariants/temporals
-  ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)).** Generated
+- Runtime enforcement of invariants/temporals
+  ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)). Generated
   services carry invariant / temporal property tests, OpenAPI
   `x-invariant`/`x-temporal` annotations, and a stateful-test temporal
   observer. The checks live *around* the bodies, so they raise the kill rate
@@ -180,15 +180,15 @@ above). Two shipped levers can widen that surface:
 
 For each survived mutation, decide:
 
-- **Genuine gap.** The spec ensures clause that should have caught this
+- Genuine gap: the spec ensures clause that should have caught this
   mutation is not being translated to a property test, or the property test
   is too lax. Fix is in [`Behavioral.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/testgen/src/main/scala/specrest/testgen/Behavioral.scala)
   or its callers.
-- **Equivalent mutation.** The mutation produces semantically identical
+- Equivalent mutation: the mutation produces semantically identical
   code (e.g., `await session.commit()` and `await session.flush()` agreeing
   on some paths, or a guard whose condition is implied by an earlier guard).
   Equivalents are inevitable; the 10% slack in the 90% threshold absorbs them.
-- **Test infrastructure gap.** The property test runs but its assertions
+- Test infrastructure gap: the property test runs but its assertions
   don't cover this code path (e.g., a status-code assertion that's lax
   enough to accept the mutated 200 alongside the original 201). Tighten the
   ensures expression in the spec or the assertion in `Behavioral.scala`.
@@ -252,12 +252,12 @@ setting a gate.
 
 ## Non-goals
 
-- **Per-PR mutation testing.** Too slow; the PR-time gate is the structural
+- Per-PR mutation testing. Too slow; the PR-time gate is the structural
   + behavioral + stateful conformance suite.
-- **Mutating Isabelle-extracted Scala** (`modules/ir/.../generated/`).
+- Mutating Isabelle-extracted Scala (`modules/ir/.../generated/`).
   That code is mechanically extracted from a verified Isabelle theory;
   surviving mutants there carry no test-quality signal, since the Isabelle
   proof is the correctness gate.
-- **Alternative engines** (cosmic-ray, MutPy). mutmut is the canonical
+- Alternative engines (cosmic-ray, MutPy). mutmut is the canonical
   choice today; switching engines is a much larger lift than tuning the
   current setup.

@@ -19,13 +19,11 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 > [M6.4 (#29)](https://github.com/HardMax71/spec_to_rest/issues/29), CEGIS feedback loop, **shipped**,
 > [M6.5 (#27)](https://github.com/HardMax71/spec_to_rest/issues/27), Dafny → target-language compilation, **shipped (Python)**,
 > [M6.6 (#30)](https://github.com/HardMax71/spec_to_rest/issues/30), graduated fallback strategy, **shipped (L1 prompt-strategy ladder + L3 model escalation + L4 skeleton emit + L5 synthesis report)**.
-> [M6.7 (#227)](https://github.com/HardMax71/spec_to_rest/issues/227), operation decomposition (L2), **closed without shipping** based on 2025–2026 empirical evidence (7% verification ceiling on compositional Dafny, Pass@4 plateau). Engineering effort redirected to **hint-augmentation** (DafnyPro-style, single-function +16pp). See [12_compositional_synthesis_findings.md](/research/12_compositional_synthesis_findings) for the full decision-of-record.
+> [M6.7 (#227)](https://github.com/HardMax71/spec_to_rest/issues/227), operation decomposition (L2), **closed without shipping** based on 2025-2026 empirical evidence (7% verification ceiling on compositional Dafny, Pass@4 plateau). Engineering effort redirected to **hint-augmentation** (DafnyPro-style, single-function +16pp). See [12_compositional_synthesis_findings.md](/research/12_compositional_synthesis_findings) for the full decision-of-record.
 > The Scala implementation lives in `modules/synth/` (`PromptBuilder`,
 > `ResponseParser`, `DiffChecker`, `Cache`, `Tracker`, `Synthesizer`, `CegisLoop`,
 > `DafnyVerifier`, plus Anthropic / OpenAI providers wrapping the official Java
 > SDKs). The Python code samples below remain useful as data-shape sketches.
-
----
 
 ## Table of contents
 
@@ -41,8 +39,6 @@ description: "CEGIS-based synthesis with Dafny verification and LLM generation"
 10. [End-to-End Pipeline Diagram](#10-end-to-end-pipeline-diagram)
 11. [Performance and Cost Analysis](#11-performance-and-cost-analysis)
 12. [Key References](#12-key-references)
-
----
 
 ## 1. Overview and motivation
 
@@ -65,8 +61,6 @@ LLM. On success, Dafny compiles the verified code to the target language (Python
 
 This document details every aspect of this pipeline.
 
----
-
 ## 2. The CEGIS loop architecture
 
 ### 2.1 Classical CEGIS background
@@ -74,8 +68,8 @@ This document details every aspect of this pipeline.
 Counter-Example Guided Inductive Synthesis (CEGIS) was introduced by Solar-Lezama et al. (2006) for
 program synthesis. The classical loop has two players:
 
-- **Synthesizer.** Proposes a candidate program that satisfies all seen examples.
-- **Verifier.** Checks the candidate against the full specification. If it fails, produces a
+- The synthesizer proposes a candidate program that satisfies all seen examples.
+- The verifier checks the candidate against the full specification. If it fails, it produces a
   counterexample, a concrete input where the candidate violates the spec.
 
 The loop terminates when either the verifier accepts (success) or the budget is exhausted (failure).
@@ -312,8 +306,6 @@ The CEGIS loop terminates when any of the following is true:
 
 When synthesis fails (the loop terminates without a verified candidate), we execute
 a graduated fallback (see Section 8 for full details).
-
----
 
 ## 3. Worked example: URL shortener `shorten` operation
 
@@ -778,8 +770,6 @@ func Shorten(st *ServiceState, url LongURL) (ShortCode, string) {
    database transactions, etc. The Dafny-compiled code is the "business logic kernel" that the
    infrastructure code calls.
 
----
-
 ## 4. Clover-style triangulation
 
 ### 4.1 Background: Stanford's Clover (2023)
@@ -1008,8 +998,6 @@ flowchart TD
 The critical insight: **only the anno-sound check is a hard gate.** The Dafny verifier is the only
 component that provides mathematical certainty. The other five checks are LLM-based heuristics that
 improve confidence and catch "technically correct but practically wrong" implementations.
-
----
 
 ## 5. Dafny as the verification IL
 
@@ -1269,8 +1257,6 @@ At compilation time, `{:extern}` methods become calls to the target language's i
 axiomatized behavior is assumed correct, this is where the verification boundary meets the
 unverified world. The convention engine generates the target-language implementations of these
 extern functions.
-
----
 
 ## 6. Prompt engineering for verified code generation
 
@@ -1606,8 +1592,6 @@ def localize_and_insert_placeholders(
     return candidate
 ```
 
----
-
 ## 7. When to use LLM vs direct emission
 
 ### 7.1 Decision matrix
@@ -1836,8 +1820,6 @@ def is_simple_crud(op: OperationIR) -> bool:
     return any(p() for p in patterns)
 ```
 
----
-
 ## 8. Handling synthesis failures
 
 ### 8.1 The graduated fallback strategy
@@ -1969,8 +1951,6 @@ Service: UrlShortener (5 operations)
   Manual review needed: Analytics
 ```
 
----
-
 ## 9. Security considerations
 
 ### 9.1 Preventing insecure code generation
@@ -2095,8 +2075,6 @@ def verify_sandboxed(candidate_path: str, timeout: int = 120) -> VerifyResult:
     return parse_verify_result(result)
 ```
 
----
-
 ## 10. End-to-end pipeline diagram
 
 ```mermaid
@@ -2161,8 +2139,6 @@ flowchart TD
     Tests["From spec IR:\n· Schemathesis config (structural fuzzing)\n· Hypothesis StateMachine (behavioral)\n· Property tests from ensures\n· Integration tests (CRUD sequences)"]
   end
 ```
-
----
 
 ## 11. Performance and cost analysis
 
@@ -2312,8 +2288,6 @@ second, while complex quantified formulas or map cardinality reasoning can take 
    Sonnet/Opus if the first attempt fails. Expected savings: 60-70% on LLM costs for the 86% of
    operations that pass on the first try.
 
----
-
 ## 12. Key references
 
 ### Primary research
@@ -2347,8 +2321,6 @@ second, while complex quantified formulas or map cardinality reasoning can take 
 | SAFE (MSR, 2024)                           | Self-evolving spec + proof synthesis. 43% on VerusBench.  |
 | Eudoxus/SPEAC (Berkeley, 2024)             | "Parent language" design for LLM alignment.               |
 | LMGPA (Northeastern, 2025)                 | LLM-guided TLA+ proof automation.                         |
-
----
 
 ## Appendix A: Error classification regular expressions
 
@@ -2474,11 +2446,11 @@ Your previous implementation of `{method_name}` was rejected by the Dafny verifi
 
 ### Error 1
 
-- **Type:** {error_1.category}
-- **Location:** line {error_1.line}, column {error_1.column}
-- **Message:** {error_1.message}
-- **Related clause:** `{error_1.related_clause}`
-- **Counterexample:** {error_1.counterexample or "not available"}
+- Type: {error_1.category}
+- Location: line {error_1.line}, column {error_1.column}
+- Message: {error_1.message}
+- Related clause: `{error_1.related_clause}`
+- Counterexample: {error_1.counterexample or "not available"}
 
 ### Error 2 (if any)
 
@@ -2630,8 +2602,6 @@ method GenerateCode() returns (code: string)
   code :| IsValidCode(code);
 }
 ```
-
----
 
 _End of document. This design is based on research surveyed in `00_comprehensive_analysis.md` and
 represents the detailed architecture for Phase 4 (LLM Synthesis Loop) of the spec-to-REST compiler

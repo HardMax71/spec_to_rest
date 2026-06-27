@@ -7,8 +7,6 @@ description: "Synthesis across 7 research domains for the spec-to-REST compiler"
 > 7 domains: Alloy-to-code tools, LLM+verification synthesis, spec-first REST generators, program
 > synthesis foundations, model-driven engineering, property-based testing, and service DSLs.
 
----
-
 ## 1. Executive Summary
 
 **The goal:** Write a formal behavioral specification of a REST service and have a compiler produce
@@ -35,76 +33,72 @@ a research moonshot.
 the structural side (full CRUD stacks from JDL). TLA+/P language are closest on the behavioral side
 (used at AWS on S3, DynamoDB). The gap between them is exactly what this compiler fills.
 
----
-
 ## 2. Prior Art: What Has Been Tried
 
 ### 2.1 Alchemy (2008) -- The Only Direct Predecessor
 
-- **Authors:** Krishnamurthi, Dougherty, Fisler, Yoo (WPI/Brown)
-- **What it did:** Compiled Alloy specs to database-backed implementations
-- **Pipeline:** Alloy sigs -> DB tables, Alloy predicates -> stored procedures, Alloy facts -> DB
+- Authors: Krishnamurthi, Dougherty, Fisler, Yoo (WPI/Brown)
+- What it did: Compiled Alloy specs to database-backed implementations
+- Pipeline: Alloy sigs -> DB tables, Alloy predicates -> stored procedures, Alloy facts -> DB
   integrity constraints
-- **Core algorithm:** Rewriting relational algebra formulas into database transaction code
-- **Why it died:** Research prototype, subset of Alloy only, no HTTP layer, no maintenance after
+- Core algorithm: Rewriting relational algebra formulas into database transaction code
+- Why it died: Research prototype, subset of Alloy only, no HTTP layer, no maintenance after
   2010
-- **Key insight we inherit:** The convention that "state-change predicates = write operations" and
+- Key insight we inherit: The convention that "state-change predicates = write operations" and
   "facts = integrity constraints" is directly applicable to REST services
-- **Paper:**
+- Paper:
   [FSE 2008](https://cs.brown.edu/~sk/Publications/Papers/Published/kdfy-alchemy-trans-alloy-spec-impl/)
-- **Improved algorithm:** [arXiv:1003.5350](https://arxiv.org/abs/1003.5350) (2010)
+- Improved algorithm: [arXiv:1003.5350](https://arxiv.org/abs/1003.5350) (2010)
 
 ### 2.2 Imperative Alloy (2010) -- Alloy-to-Prolog
 
-- **Author:** Joseph P. Near (MIT, Jackson's group)
-- **What it did:** Extended Alloy with imperative constructs, compiled to Prolog
-- **Key insight:** Prolog's native nondeterminism maps well to Alloy's declarative constraints
-- **Why it matters:** Shows that the relational-to-imperative translation is feasible for a useful
+- Author: Joseph P. Near (MIT, Jackson's group)
+- What it did: Extended Alloy with imperative constructs, compiled to Prolog
+- Key insight: Prolog's native nondeterminism maps well to Alloy's declarative constraints
+- Why it matters: Shows that the relational-to-imperative translation is feasible for a useful
   subset
-- **Thesis:**
+- Thesis:
   [people.csail.mit.edu/jnear/papers/jnear_ms.pdf](https://people.csail.mit.edu/jnear/papers/jnear_ms.pdf)
 
 ### 2.3 aRby (2014) -- Alloy Embedded in Ruby
 
-- **Authors:** Milicevic, Efrati, Jackson (MIT CSAIL)
-- **What it did:** Mixed imperative Ruby + declarative Alloy constraint solving in same program
-- **Key insight:** You can embed a spec language in an executable host and get both verification and
+- Authors: Milicevic, Efrati, Jackson (MIT CSAIL)
+- What it did: Mixed imperative Ruby + declarative Alloy constraint solving in same program
+- Key insight: You can embed a spec language in an executable host and get both verification and
   execution
-- **Status:** Inactive since 2014, 19 GitHub stars
-- **GitHub:** [github.com/sdg-mit/arby](https://github.com/sdg-mit/arby)
+- Status: Inactive since 2014, 19 GitHub stars
+- GitHub: [github.com/sdg-mit/arby](https://github.com/sdg-mit/arby)
 
 ### 2.4 Squander (2011) -- Alloy Specs as Java Annotations
 
-- **Authors:** Milicevic, Rayside, Yessenov, Jackson (MIT)
-- **What it did:** Java annotations with Alloy-like specs, solved at runtime against live heap via
+- Authors: Milicevic, Rayside, Yessenov, Jackson (MIT)
+- What it did: Java annotations with Alloy-like specs, solved at runtime against live heap via
   Kodkod/SAT
-- **Key insight:** Specs can be inline with executable code and enforced at runtime
-- **GitHub:**
+- Key insight: Specs can be inline with executable code and enforced at runtime
+- GitHub:
   [github.com/aleksandarmilicevic/squander](https://github.com/aleksandarmilicevic/squander)
 
 ### 2.5 Milicevic PhD Thesis (2015) -- Unifying Framework
 
-- **Title:** "Advancing Declarative Programming" (MIT)
-- **Covers:** aRby, Alloy\*, Squander, and SUNNY (a model-based reactive web framework)
-- **SUNNY is notable:** Domain-specific language with declarative constraints, runtime model
+- Title: "Advancing Declarative Programming" (MIT)
+- Covers: aRby, Alloy\*, Squander, and SUNNY (a model-based reactive web framework)
+- SUNNY is notable: Domain-specific language with declarative constraints, runtime model
   checking, online code generation, reactive UI updates. This is the closest historical precedent to
   what we want to build.
-- **PDF:**
+- PDF:
   [aleksandarmilicevic.github.io/papers/mit15-milicevic-phd.pdf](https://aleksandarmilicevic.github.io/papers/mit15-milicevic-phd.pdf)
 
 ### 2.6 Rosette (Active) -- The Spiritual Successor
 
-- **Author:** Emina Torlak (UW) -- also created Kodkod, Alloy's SAT backend
-- **What it does:** Solver-aided Racket programming. Write an interpreter for any DSL in Rosette,
+- Author: Emina Torlak (UW) -- also created Kodkod, Alloy's SAT backend
+- What it does: Solver-aided Racket programming. Write an interpreter for any DSL in Rosette,
   get synthesis/verification for free.
-- **Key capability:** `(synthesize #:forall input #:guarantee expr)` finds values for program holes
+- Key capability: `(synthesize #:forall input #:guarantee expr)` finds values for program holes
   satisfying all inputs
-- **Why it matters:** Demonstrates that the "DSL interpreter in a solver-aided host" pattern can
+- Why it matters: Demonstrates that the "DSL interpreter in a solver-aided host" pattern can
   make specs executable
-- **Status:** Active (v4.1), 688 stars
-- **Site:** [emina.github.io/rosette/](https://emina.github.io/rosette/)
-
----
+- Status: Active (v4.1), 688 stars
+- Site: [emina.github.io/rosette/](https://emina.github.io/rosette/)
 
 ## 3. The LLM+Verification Frontier (2023-2026)
 
@@ -160,8 +154,6 @@ code, how to validate a URL) needs synthesis. The research shows:
 4. **Clover's triangulation approach** is especially relevant: generate code + annotations +
    docstrings, cross-validate all three
 
----
-
 ## 4. Spec-First REST Tools: The Structural Side
 
 ### 4.1 Tools That Generate Code from API Specs
@@ -177,14 +169,14 @@ code, how to validate a URL) needs synthesis. The research shows:
 
 ### 4.2 Key Insights for Our Compiler
 
-- **OpenAPI Generator quality varies wildly** -- we should generate OpenAPI as an intermediate
+- OpenAPI Generator quality varies wildly -- we should generate OpenAPI as an intermediate
   artifact but not rely on third-party generators for the final code
-- **Smithy's trait system** is the best model for extensible API metadata
-- **JHipster is the closest existing tool** to what we want (spec -> running app), but it's
+- Smithy's trait system is the best model for extensible API metadata
+- JHipster is the closest existing tool to what we want (spec -> running app), but it's
   CRUD-only with no behavioral verification
-- **Ballerina proves** a language can be purpose-built for network services with structural typing
+- Ballerina proves a language can be purpose-built for network services with structural typing
   and first-class HTTP
-- **TypeSpec proves** a focused DSL can generate multiple output formats from a single source
+- TypeSpec proves a focused DSL can generate multiple output formats from a single source
 
 ### 4.3 Testing Tools That Verify Implementations Against Specs
 
@@ -195,8 +187,6 @@ code, how to validate a URL) needs synthesis. The research shows:
 | **EvoMaster**     | Evolutionary test generation               | 80 real bugs across 5 services                 | Active, 695 stars          |
 | **Dredd**         | Schema validation                          | Structural conformance                         | **Archived Nov 2024**      |
 | **Pact**          | Consumer-driven contracts                  | Integration mismatches                         | Active, mature             |
-
----
 
 ## 5. Formal Specification Languages: The Behavioral Side
 
@@ -219,19 +209,17 @@ AWS's P language is the closest to our target domain:
 
 - Specifies systems as **communicating state machines** (= microservices)
 - Used for S3's strong consistency migration, DynamoDB, MemoryDB, Aurora, EC2, IoT
-- **PObserve** (2023) validates production logs match P specs post-hoc
+- PObserve (2023) validates production logs match P specs post-hoc
 - But: P is verification-only, does not generate service code
 
 ### 5.3 Session Types -- Behavioral Types for Communication
 
-- **Scribble** (Imperial College) generates type-safe Java API channels from global protocol specs
+- Scribble (Imperial College) generates type-safe Java API channels from global protocol specs
 - Session types guarantee freedom from communication errors, deadlocks, livelocks
 - Implementations exist for 16+ languages
-- **Problem:** REST is stateless request-response; session types assume stateful multi-step sessions
-- **Opportunity:** Session types could model multi-step API workflows (create -> retrieve -> update
+- Problem: REST is stateless request-response; session types assume stateful multi-step sessions
+- Opportunity: Session types could model multi-step API workflows (create -> retrieve -> update
   -> delete)
-
----
 
 ## 6. The Compiler Architecture
 
@@ -257,10 +245,10 @@ flowchart TD
 
 A new DSL combining:
 
-- **Alloy-like** relational data modeling (sigs, fields, relations)
-- **TLA+/Quint-like** state transition definitions (pre/post conditions)
-- **VDM-like** operation modeling (requires/ensures)
-- **TypeSpec-like** API hints (when the user wants to override conventions)
+- Alloy-like relational data modeling (sigs, fields, relations)
+- TLA+/Quint-like state transition definitions (pre/post conditions)
+- VDM-like operation modeling (requires/ensures)
+- TypeSpec-like API hints (when the user wants to override conventions)
 
 See Section 7 for the language design.
 
@@ -313,13 +301,11 @@ JHipster does).
 
 Generate a test suite from the spec:
 
-- **Structural tests:** Schemathesis-style fuzzing against the generated OpenAPI
-- **Behavioral tests:** Hypothesis-style stateful tests encoding the spec's pre/postconditions as a
+- Structural tests: Schemathesis-style fuzzing against the generated OpenAPI
+- Behavioral tests: Hypothesis-style stateful tests encoding the spec's pre/postconditions as a
   state machine model (QuickCheck/Hypothesis `RuleBasedStateMachine`)
-- **Trace validation:** If the spec has temporal properties, generate TLA+ traces and validate
+- Trace validation: If the spec has temporal properties, generate TLA+ traces and validate
   against running system (MongoDB's approach, Kuppe et al. 2024)
-
----
 
 ## 7. The Spec Language Design
 
@@ -427,15 +413,13 @@ service UrlShortener {
 
 The convention engine handles the structural mapping. The LLM handles:
 
-- **How to generate a short code** (the algorithm inside `Shorten` -- hash? random? counter?)
-- **How to construct the short_url** (string concatenation with base URL)
-- **Any non-trivial computation** in operation bodies
+- How to generate a short code (the algorithm inside `Shorten` -- hash? random? counter?)
+- How to construct the short_url (string concatenation with base URL)
+- Any non-trivial computation in operation bodies
 
 The LLM generates these as Dafny functions with the spec's pre/postconditions as Dafny
 `requires`/`ensures` clauses. The Dafny verifier confirms correctness. Then Dafny compiles to the
 target language.
-
----
 
 ## 8. Technical Risks and Mitigations
 
@@ -481,7 +465,7 @@ fill the infrastructure gap. This is what JHipster does successfully.
 - Design the DSL to look like pseudocode (see Section 7.2)
 - Avoid mathematical notation -- use `not in` instead of `\notin`, `and` instead of `\land`
 - Provide error messages that explain what the spec means in plain English
-- Leverage LLMs to translate natural language requirements to spec language (Eudoxus approach)
+- Use LLMs to translate natural language requirements to spec language (Eudoxus approach)
 
 ### Risk 5: Verification of the Spec Itself is Incomplete
 
@@ -495,8 +479,6 @@ fill the infrastructure gap. This is what JHipster does successfully.
 - Accept that bounded verification catches most bugs (Amazon's experience: found bugs in every
   system)
 
----
-
 ## 9. Build Plan
 
 ### Phase 1: Spec Language + Convention Engine (Core)
@@ -504,14 +486,14 @@ fill the infrastructure gap. This is what JHipster does successfully.
 - Design and implement the DSL grammar (ANTLR4 via antlr-ng TypeScript target)
 - Implement the convention engine (spec IR -> HTTP mapping, DB schema, OpenAPI)
 - Generate: OpenAPI spec, SQL migrations, server stubs (one target language)
-- **Deliverable:** Given a spec, produce a running CRUD service with validation
-- **Estimated scope:** ~2000-3000 lines of code
+- Deliverable: Given a spec, produce a running CRUD service with validation
+- Estimated scope: ~2000-3000 lines of code
 
 ### Phase 2: Verification Engine
 
 - Integrate spec model-checking (compile to Alloy or Quint for analysis)
 - Verify spec consistency before code generation
-- **Deliverable:** Catch spec errors (conflicting invariants, unreachable operations) before
+- Deliverable: Catch spec errors (conflicting invariants, unreachable operations) before
   generating code
 
 ### Phase 3: Test Generation
@@ -519,7 +501,7 @@ fill the infrastructure gap. This is what JHipster does successfully.
 - Generate Schemathesis config from the produced OpenAPI
 - Generate Hypothesis `RuleBasedStateMachine` tests from spec operations
 - Generate property tests from `ensures` clauses
-- **Deliverable:** Run `make test` and get spec-derived conformance tests
+- Deliverable: Run `make test` and get spec-derived conformance tests
 
 ### Phase 4: LLM Synthesis Loop
 
@@ -527,16 +509,14 @@ fill the infrastructure gap. This is what JHipster does successfully.
 - Implement Clover-style triangulation (code + Dafny annotations + docstrings)
 - Implement CEGIS feedback loop with Dafny verifier
 - Compile verified Dafny to target language
-- **Deliverable:** Complex operations are synthesized and verified, not just stubbed
+- Deliverable: Complex operations are synthesized and verified, not just stubbed
 
 ### Phase 5: Multi-Target + Polish
 
 - Add Go, TypeScript targets
 - Add deployment artifacts (Dockerfile, docker-compose, CI config)
 - Add `conventions` override system
-- **Deliverable:** Production-quality generated services in 3 languages
-
----
+- Deliverable: Production-quality generated services in 3 languages
 
 ## 10. Key Sources
 
@@ -607,8 +587,6 @@ fill the infrastructure gap. This is what JHipster does successfully.
 | [Session Types Catalog](https://groups.inf.ed.ac.uk/abcd/session-implementations.html)         | Behavioral types for communication protocols    |
 | [Scribble Protocol Language](https://github.com/scribble/scribble-language-guide)              | Protocol-safe code generation from global types |
 
----
-
 ## 11. What Makes This Project Novel
 
 No existing tool combines all five of:
@@ -627,8 +605,6 @@ Individual pieces exist:
 - TLA+/Alloy do #1 (but no code generation)
 
 The compiler is the **integration** -- and that integration is the product.
-
----
 
 <!-- Added: competitive positioning vs AI coding agents (gap analysis) -->
 

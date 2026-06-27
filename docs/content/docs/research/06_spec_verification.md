@@ -19,8 +19,6 @@ description: "Model-checking specifications before code generation"
 > Quint is referenced here only as a comparison point. Python and TypeScript code
 > samples below are design illustrations; the production compiler is Scala 3.
 
----
-
 ## Table of contents
 
 1. [What Can Go Wrong in a Spec](#1-what-can-go-wrong-in-a-spec)
@@ -32,8 +30,6 @@ description: "Model-checking specifications before code generation"
 7. [Performance and Scalability](#7-performance-and-scalability)
 8. [Comparison with Existing Spec Checkers](#8-comparison-with-existing-spec-checkers)
 9. [Implementation Strategy](#9-implementation-strategy)
-
----
 
 ## 1. What can Go wrong in a spec
 
@@ -459,8 +455,6 @@ operation Resolve {
 If the entity invariant already guarantees `len(code.value) >= 6` for all ShortCodes in the store,
 then the length check in the requires clause is redundant. The verification engine can detect this
 and suggest simplification.
-
----
 
 ## 2. Verification techniques
 
@@ -1273,8 +1267,6 @@ module UrlShortener {
 }
 ```
 
----
-
 ## 3. The verification pipeline
 
 ### 3.1 Pipeline overview
@@ -1426,7 +1418,7 @@ exploration). The bound determines the depth of exploration.
 **Errors caught.** Sections 1.2.2, 1.2.3, 1.2.4, 1.3.2, 1.3.3.
 
 **Soundness.** Incomplete (bounded). A reachable state beyond the bound will not be found. However,
-bounded model checking is highly effective in practice: Alloy's "small scope hypothesis" says most
+bounded model checking is effective in practice: Alloy's "small scope hypothesis" says most
 bugs have small counterexamples.
 
 **Completeness.** Within bounds, complete. If it says "reachable within 5 steps," that is definitely
@@ -1487,8 +1479,6 @@ WARNING: Potential deadlock detected
     Step 2: HoldOrder("o1") -> { orders: { "o1": HELD } }
     Step 3: DEADLOCK -- no enabled operations
 ```
-
----
 
 ## 4. Invariant preservation checking (deep dive)
 
@@ -1894,8 +1884,6 @@ operation MergeSort {
 The `hint` is passed to the LLM during synthesis. The `lemma` is passed to Dafny as a separate
 `lemma` declaration that the verifier can use.
 
----
-
 ## 5. State machine verification
 
 ### 5.1 Extracting the state machine from the spec
@@ -2090,8 +2078,6 @@ Liveness check:
 - From PENDING, if PayOrder fires and then ReviewOrder fires, the order is stuck in REVIEW forever.
 - FAIL: Not every order eventually reaches a terminal state.
 
----
-
 ## 6. Error reporting
 
 ### 6.1 Inconsistency: Invariant violated by operation
@@ -2257,8 +2243,6 @@ ERROR: Type error at line 35
     p.name  > p.category   (String > String, lexicographic)
 ```
 
----
-
 ## 7. Performance and scalability
 
 ### 7.1 How verification time scales with spec size
@@ -2383,8 +2367,6 @@ The user sees results incrementally as they become available.
 - Total budget: 5 minutes (configurable).
 - Per-query budget: min(30s, total_budget / (N \* M + N + M)).
 - If total budget exhausted, report partial results and list unchecked pairs.
-
----
 
 ## 8. Comparison with existing spec checkers
 
@@ -2559,13 +2541,11 @@ Quint/TLC for temporal checking.
 4. **Quint.** For temporal property checking and state machine simulation. Called via the `quint`
    CLI.
 
----
-
 ## 9. Implementation strategy
 
 > **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/10_translator_soundness)
 > for the trust-chain framing, the 2024-2026 prior art, why Z3 proof reconstruction does not
-> work in 2026, and the M_L.0–M_L.4 milestone breakdown that delivered the IR → SMT-LIB
+> work in 2026, and the M_L.0-M_L.4 milestone breakdown that delivered the IR → SMT-LIB
 > translator-soundness theorem in Isabelle/HOL. Issue
 > [#88](https://github.com/HardMax71/spec_to_rest/issues/88) closed 2026-04-26 (post-pivot
 > via [#193](https://github.com/HardMax71/spec_to_rest/issues/193)); the universal
@@ -3011,18 +2991,18 @@ object Consistency:
 
 Behavioural notes that diverge from the original Python sketch:
 
-- **No staged early-termination on type errors.** Z3/Alloy translation reports
+- No staged early-termination on type errors. Z3/Alloy translation reports
   `TranslatorLimitation` per affected check (skipped, rather than fatal); the rest of the run
   continues. The CLI exit-code mapping in
   [`ExitStatus.forCheckResults`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/cli/src/main/scala/specrest/cli/ExitCodes.scala)
   surfaces translator gaps as exit `2` after the run.
-- **Per-check failures are data, rather than exceptions.** `runConsistencyChecks` returns
+- Per-check failures are data, rather than exceptions. `runConsistencyChecks` returns
   `IO[ConsistencyReport]`, failures stay inside `CheckResult.diagnostic`, so a
   partial-pass run still yields a populated report. `IO[Either[VerifyError, _]]` is
   reserved for parse / build / translator-level errors that abort the run.
-- **No `verify_incremental`.** Incremental verification is not on the current
+- No `verify_incremental`. Incremental verification is not on the current
   roadmap; the gate runs all checks in parallel via `parTraverseN(maxParallel)`.
-- **Exit-code mapping** lives separately in the `ExitStatus` enum (0 / 1 / 2 / 3 / 4), see
+- Exit-code mapping lives separately in the `ExitStatus` enum (0 / 1 / 2 / 3 / 4), see
   [Verification Engine, Exit codes](/pipelines/verification#exit-codes).
 
 
@@ -3049,11 +3029,11 @@ The user can choose to address them or proceed.
 
 #### Verification metadata propagates downstream
 
-- **Proven invariants** become runtime assertions in generated code (belt-and-suspenders).
-- **Proven preservation** allows the code generator to skip redundant checks.
-- **State machine properties** inform the generated API's HTTP status codes (e.g., a transition from
+- Proven invariants become runtime assertions in generated code (belt-and-suspenders).
+- Proven preservation allows the code generator to skip redundant checks.
+- State machine properties inform the generated API's HTTP status codes (e.g., a transition from
   an invalid state returns 409 Conflict).
-- **Counterexamples** from failed checks become test cases: the generated test suite includes the
+- Counterexamples from failed checks become test cases: the generated test suite includes the
   specific inputs that expose spec violations.
 
 ### 9.6 Architecture diagram
@@ -3192,8 +3172,6 @@ def test_deadlock_detection():
     report = SpecVerifier(ir).verify()
     assert any("deadlock" in r.message.lower() for r in report.results)
 ```
-
----
 
 ## Appendix A: Complete SMT-LIB translation for e-commerce order service
 

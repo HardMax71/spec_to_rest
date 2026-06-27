@@ -142,7 +142,7 @@ func Register(r chi.Router, db *bun.DB) {
 
 `spec-to-rest compile --dry-run` reports this file as `preserve` on every run after the
 first. Any other manual edit under `cmd/`, `internal/`, or `migrations/` is overwritten on
-the next compile. In-file protected-region markers are intentionally not provided — the
+the next compile. In-file protected-region markers are intentionally not provided; the
 sidecar package is the supported mechanism.
 
 ## Multi-environment compose
@@ -150,13 +150,13 @@ sidecar package is the supported mechanism.
 The base `docker-compose.yml` ships next to three additional files, all rendered from
 `modules/codegen/src/main/scala/specrest/codegen/Compose.scala`:
 
-- **`docker-compose.override.yml.example`** — local-dev hints. Copy to
+- `docker-compose.override.yml.example`: local-dev hints. Copy to
   `docker-compose.override.yml`; Compose auto-loads it next to the base. Regenerated
   on every compile, your renamed copy is never touched.
-- **`docker-compose.staging.yml`** — `restart: on-failure`, app `memory: 256M`/`cpus: 0.25`,
+- `docker-compose.staging.yml`: `restart: on-failure`, app `memory: 256M`/`cpus: 0.25`,
   db `memory: 512M`/`cpus: 0.5`, every database secret required via `${KEY:?…}`. Scaffolded
   once, then `preserve = true` (the file is never regenerated so you can tune the limits).
-- **`docker-compose.prod.yml`** — `restart: unless-stopped`, app `memory: 512M`/`cpus: 0.5`,
+- `docker-compose.prod.yml`: `restart: unless-stopped`, app `memory: 512M`/`cpus: 0.5`,
   db `memory: 1G`/`cpus: 1.0`, no exposed db port, every secret required via `${KEY:?…}`.
   Same preserve semantics as staging.
 
@@ -175,13 +175,13 @@ harden); the override.example still ships.
 the Go templates, profile, emitter, or the shared migration renderer it re-runs
 `compile --framework chi --db <dialect>`, then `go mod tidy && go vet && go build` against the
 emitted project **and** a `golang-migrate` round-trip (`up → down -all → up`) against a real
-`postgres:17` / `mysql:8.4` service (SQLite uses a file) — so the emitted `migrations/*.sql` is
+`postgres:17` / `mysql:8.4` service (SQLite uses a file), so the emitted `migrations/*.sql` is
 proven to apply and reverse on every supported dialect, not just that the Go code compiles.
 
 ## Test generation
 
 Conformance / property / stateful test generation is **on by default** (opt out with
-`--no-tests`) for **`go-chi-*` on every dialect** (postgres, sqlite, mysql), emitted in
+`--no-tests`) for `go-chi-*` on every dialect (postgres, sqlite, mysql), emitted in
 the target's own
 language: `go test` + [rapid](https://pkg.go.dev/pgregory.net/rapid) property tests, not
 Python. testgen plugs the Go renderers into the shared `Backend.scala` seam
@@ -196,14 +196,14 @@ The emitted suite lives under `tests/` (Go package `tests`, build-tagged `confor
 behavioral (`<svc>_behavioral_test.go`, positive-ensures under `rapid.Check`), stateful
 (`<svc>_stateful_test.go`, random operation sequences asserting invariants per step),
 and structural-lite (`<svc>_structural_test.go`, fuzzes every non-stub operation with
-type-valid input and asserts no 5xx — schemathesis's core check minus full schema
+type-valid input and asserts no 5xx, schemathesis's core check minus full schema
 validation; fail-loud stubs are honest-skipped exactly as the Python schemathesis
 renderer excludes them, recorded in `tests/_testgen_skips.json`). The
 `/admin/*` reset/state/seed router is a spec-derived `internal/admin/admin.go`,
 compiled into every build and guarded by bearer auth: with no `ADMIN_TOKEN`
 configured (the production default) the routes answer 404; with one configured,
 requests need `Authorization: Bearer $ADMIN_TOKEN`. The `conformance` build tag
-remains only on the test files themselves, as suite selection - `go test ./...`
+remains only on the test files themselves, as suite selection: `go test ./...`
 without the tag never runs the live-server suite.
 
 Run it against a plain production build:

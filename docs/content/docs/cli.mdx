@@ -24,9 +24,9 @@ subcommand exits with a numeric code; CI consumers should branch on these.
 
 These flags are accepted by every subcommand:
 
-- `--verbose` / `-v` — show stage timings and per-check breakdowns on stderr.
-- `--quiet` / `-q` — suppress everything except errors.
-- `--color` / `--no-color` — force ANSI color on or off. Default is auto: color
+- `--verbose` / `-v`: show stage timings and per-check breakdowns on stderr.
+- `--quiet` / `-q`: suppress everything except errors.
+- `--color` / `--no-color`: force ANSI color on or off. Default is auto: color
   is enabled when stderr is a TTY and `NO_COLOR` is not set. `CLICOLOR_FORCE=1`
   forces color even when piped.
 
@@ -36,55 +36,55 @@ These flags are accepted by every subcommand:
 sbt "cli/run compile [flags] <spec-file>"
 ```
 
-- `--framework <id>` / `-f` — framework (default `fastapi`). Known:
+- `--framework <id>` / `-f`: framework (default `fastapi`). Known:
   [fastapi](/targets/python/fastapi/postgres), [chi](/targets/go/chi/postgres),
   [express](/targets/ts/express/postgres).
-- `--db <id>` — database dialect (default `postgres`): `postgres`, `sqlite`,
-  `mysql`. The accepted set depends on the chosen framework.
-- `--lang <id>` — language (`python`, `go`, `ts`). Always accepted and
+- `--db <id>`: database dialect, `postgres` (default), `sqlite`, or `mysql`.
+  The accepted set depends on the chosen framework.
+- `--lang <id>`: language (`python`, `go`, `ts`). Always accepted and
   validated against the framework's supported languages; only _required_ when
   the framework supports more than one language (otherwise inferred). Passing
   a language the framework does not support (e.g. `--lang go --framework
   fastapi`) is a hard error, not a silent fallback.
 
 Any unsupported `(language, framework, database)` combination is rejected
-with a typed error that lists what the chosen framework actually supports —
-the resolver never warns-and-falls-back to a default target.
-- `--out <dir>` / `-o` — output directory (required).
-- `--dry-run` — run the full pipeline (parse, verify, build, in-memory emit)
+with a typed error that lists what the chosen framework actually supports.
+The resolver never warns-and-falls-back to a default target.
+- `--out <dir>` / `-o`: output directory (required).
+- `--dry-run`: run the full pipeline (parse, verify, build, in-memory emit)
   but do not write anything. Prints a manifest of `create` / `update` /
   `unchanged` / `preserve` actions per file. Exits 0 even when the plan is
   empty.
-- `--ignore-verify` — skip the verification gate. Emits unverified code with a
+- `--ignore-verify`: skip the verification gate. Emits unverified code with a
   warning. Use only for spec exploration.
-- `--no-tests` — opt out of test emission. The behavioral + stateful +
+- `--no-tests`: opt out of test emission. The behavioral + stateful +
   structural test suite (`tests/` directory) and the conformance runner are
   emitted **by default** for every supported target; pass `--no-tests` when
-  only the service skeleton is needed. Supported for **all nine targets**
+  only the service skeleton is needed. Supported for all nine targets
   (`python-fastapi-*`, `ts-express-*`, `go-chi-*` × postgres / sqlite /
   mysql); the suite is emitted in each target's native language (pytest +
   Hypothesis + Schemathesis / Vitest + fast-check / `go test` + rapid). See
   [Test Generation](/pipelines/test-generation).
-- `--strict-strategies` — fail compile when default test emission would
+- `--strict-strategies`: fail compile when default test emission would
   produce incomplete property strategies. No-op when combined with
   `--no-tests`. See [Test Generation](/pipelines/test-generation).
-- `--with-synthesis` — splice verified Dafny bodies (translated to the target
+- `--with-synthesis`: splice verified Dafny bodies (translated to the target
   language) into the emitted project. Requires `synth verify` to have populated
   the cache. See [LLM Integration](/synth/llm-integration).
-- `--allow-skeletons` — fall back to unverified skeleton bodies (from
+- `--allow-skeletons`: fall back to unverified skeleton bodies (from
   `synth verify --fallback`) when the verified cache misses. Generated handlers
   halt at runtime with a Dafny `HaltException` when invoked.
-- `--synthesis-partial` — use verified bodies where cached; for an
+- `--synthesis-partial`: use verified bodies where cached; for an
   `LLM_SYNTHESIS` op with no verified body, emit a fail-loud stub (skipped by
   testgen) instead of failing the build.
-- `--synthesis-model <name>` — model to look up in the cache (default
+- `--synthesis-model <name>`: model to look up in the cache (default
   `claude-sonnet-4-6`).
-- `--synthesis-temperature <num>` — temperature to look up in the cache
+- `--synthesis-temperature <num>`: temperature to look up in the cache
   (default `1.0`).
-- `--synthesis-cache-dir <path>` — override the cache root.
-- `--dafny-bin <path>` — path to the Dafny binary (defaults to `$DAFNY_BIN` or
+- `--synthesis-cache-dir <path>`: override the cache root.
+- `--dafny-bin <path>`: path to the Dafny binary (defaults to `$DAFNY_BIN` or
   `PATH`).
-- `--dafny-translate-timeout <sec>` — wall-clock timeout for `dafny translate`
+- `--dafny-translate-timeout <sec>`: wall-clock timeout for `dafny translate`
   (default 60s).
 
 ### `--dry-run` example
@@ -109,15 +109,15 @@ $ sbt "cli/run compile --framework fastapi --db postgres --ignore-verify \
 sbt "cli/run diff --framework <id> --db <id> --out <dir> <spec-file>"
 ```
 
-- `--framework`/`--db`/`--lang` — same target axes as `compile`.
-- `--out <dir>` / `-o` — directory to compare against (required).
-- `--ignore-verify` — compare regardless of whether the spec verifies.
-- `--no-tests` — exclude test files from drift detection. Matches `compile`'s
+- `--framework`/`--db`/`--lang`: same target axes as `compile`.
+- `--out <dir>` / `-o`: directory to compare against (required).
+- `--ignore-verify`: compare regardless of whether the spec verifies.
+- `--no-tests`: exclude test files from drift detection. Matches `compile`'s
   default-on behaviour: test files are included by default; pass `--no-tests`
   to skip them.
 
-`diff` exits **0** when the directory is in sync with what `compile` would
-produce, **1** when there is drift. The output lists only files that would be
+`diff` exits 0 when the directory is in sync with what `compile` would
+produce, 1 when there is drift. The output lists only files that would be
 created or updated; unchanged and user-preserved files are summarised at the
 bottom.
 
@@ -127,25 +127,25 @@ bottom.
 sbt "cli/run test --out <generated-dir> [--profile thorough] [--server-url ...]"
 ```
 
-- `--out <dir>` / `-o` — directory containing the previously emitted project
+- `--out <dir>` / `-o`: directory containing the previously emitted project
   (required). `test` globs `tests/run_conformance.*` and dispatches to the
   single file it finds; the file's shebang line declares the interpreter
   (`#!/usr/bin/env python3` / `node` / `bash`), so the wrapper carries no
   per-language mapping.
-- `--profile <name>` — conformance profile: `smoke` (fast), `thorough`
-  (default), `exhaustive` (multi-minute). Forwarded to the runner as
+- `--profile <name>`: conformance profile, one of `smoke` (fast), `thorough`
+  (default), or `exhaustive` (multi-minute). Forwarded to the runner as
   `argv[1]` and as `SPEC_TEST_PROFILE`.
-- `--server-url <url>` — base URL for the service under test. **Optional**;
+- `--server-url <url>`: base URL for the service under test. **Optional**;
   if omitted, each runner picks its own per-target default
   (`http://localhost:8000` for python-fastapi, `http://localhost:8080` for
   ts-express / go-chi). When set, exported as `SPEC_TEST_BASE_URL`. The
   service must be running with the same `ADMIN_TOKEN` that is exported to the
   runner, so it can authenticate against `/admin/reset` between phases.
-- `--runner-bin <path>` — override the interpreter read from the runner's
+- `--runner-bin <path>`: override the interpreter read from the runner's
   shebang.
 
 `test` is a thin uniform wrapper around the per-target runner that
-`compile` emits — same exit-code contract (0 / 1 / 2) and same
+`compile` emits, with the same exit-code contract (0 / 1 / 2) and the same
 `SPEC_TEST_*` env-var contract across all three languages. The runner
 itself is part of the [generated test suite](/pipelines/test-generation).
 For a project compiled with `--no-tests`, `test` exits 2 with a hint to
@@ -156,15 +156,15 @@ re-compile.
 See [Verification Pipeline](/pipelines/verification) for the full reference.
 The most useful flags for CI:
 
-- `--timeout <ms>` — per-check Z3/Alloy timeout (default 30000).
-- `--parallel <n>` — number of concurrent checks (`0` for serial; default is
+- `--timeout <ms>`: per-check Z3/Alloy timeout (default 30000).
+- `--parallel <n>`: number of concurrent checks (`0` for serial; default is
   the host's available processors).
-- `--json` / `--json-out <path>` — emit a machine-readable report to stdout or
+- `--json` / `--json-out <path>`: emit a machine-readable report to stdout or
   a file (suppresses text output). The `--dump-*` flags print the translation
   and exit before the solver runs.
-- `--explain` — extract Z3 unsat cores and surface contributing spec spans on
+- `--explain`: extract Z3 unsat cores and surface contributing spec spans on
   failures.
-- `--dump-smt` / `--dump-alloy` — write the translated SMT-LIB or Alloy source
+- `--dump-smt` / `--dump-alloy`: write the translated SMT-LIB or Alloy source
   and exit without running the solvers.
 
 ## `check` flags
@@ -180,10 +180,10 @@ sbt "cli/run check fixtures/spec/url_shortener.spec"
 
 `inspect` dumps internal compiler state for debugging.
 
-- `--format <fmt>` — `summary` (default), `json` (full IR + synthesis tally),
+- `--format <fmt>`: `summary` (default), `json` (full IR + synthesis tally),
   `ir` (raw IR `toString`), `dafny` (Dafny module skeleton), `dafny-prompt`
   (LLM prompt material per LLM_SYNTHESIS operation).
-- `--operation <name>` — filter `dafny-prompt` to a single operation.
+- `--operation <name>`: filter `dafny-prompt` to a single operation.
 
 ## Exit codes
 
@@ -196,7 +196,7 @@ sbt "cli/run check fixtures/spec/url_shortener.spec"
 | `4` | Trust limitation: a check completed but used a soundness-limited approximation. | `verify`. |
 
 CI consumers can treat `0` as pass, `1` as user error to surface verbatim,
-`2`–`3` as infrastructure problems requiring a retry or operator
+`2` and `3` as infrastructure problems requiring a retry or operator
 intervention, and `4` as a soft warning.
 
 ## Environment variables

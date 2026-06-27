@@ -6,7 +6,7 @@ description: Native binary, Docker image, GitHub Action, or from source
 `spec-to-rest` ships as a self-contained GraalVM native-image binary. Pick the
 form that fits your workflow.
 
-> **Just want to try a spec?** Skip the install - the [playground](/playground) page sends your spec to the same `spec-to-rest` binary running on the docs server (parse + IR + Dafny kernel; up to 50 KB / 8 s per request).
+> **Just want to try a spec?** Skip the install. The [playground](/playground) page sends your spec to the same `spec-to-rest` binary running on the docs server (parse + IR + Dafny kernel; up to 50 KB / 8 s per request).
 
 ## Native binary (recommended)
 
@@ -48,7 +48,7 @@ docker run --rm -v "$PWD:/workspace" \
 Tags: `:vX.Y.Z`, `:X.Y`, `:latest`. The image is `debian:bookworm-slim`-based,
 runs as a non-root `spec` user, and sets `WORKDIR /workspace`. The runtime
 layer adds only the shared libraries the GraalVM native-image binary needs at
-load time (`ca-certificates`, `libstdc++6`, `zlib1g`) - no JVM, no Dafny, no
+load time (`ca-certificates`, `libstdc++6`, `zlib1g`): no JVM, no Dafny, no
 Python. For `compile --with-synthesis` (needs Dafny) or `test` (needs Python),
 install those on the host and use the native binary instead.
 
@@ -56,7 +56,7 @@ install those on the host and use the native binary instead.
 
 The repo root exposes a composite action that downloads the right release
 archive for the runner platform. The action does **not** modify
-`$GITHUB_PATH` - it exposes the absolute binary path via the `binary-path`
+`$GITHUB_PATH`; it exposes the absolute binary path via the `binary-path`
 output, which subsequent steps invoke directly. This avoids writing to
 GitHub-managed environment files (a defence-in-depth pattern flagged by
 [zizmor](https://docs.zizmor.sh/audits/github-env/)) and keeps the
@@ -134,7 +134,7 @@ sbt cli/nativeImage
 ```
 
 The `cli` module aggregates all subcommands; subprojects (`ir`, `parser`,
-`verify`, `codegen`, …) are built transitively.
+`verify`, `codegen`, and the rest) are built transitively.
 
 ## Subcommand reference
 

@@ -10,8 +10,6 @@ description: "Why the DSL looks the way it does, survey, grammar rationale, sema
 > Looking for the **live syntax reference** (what to type when authoring a `.spec` file)? See
 > [Spec Language Reference](/spec-language).
 
----
-
 ## Table of contents
 
 1. [Survey of existing spec language syntax and semantics](#1-survey-of-existing-spec-language-syntax-and-semantics)
@@ -22,8 +20,6 @@ description: "Why the DSL looks the way it does, survey, grammar rationale, sema
 6. [Error messages and developer experience](#6-error-messages-and-developer-experience)
 7. [Comparison with alternatives](#7-comparison-with-alternatives)
 
----
-
 ## 1. Survey of existing spec language syntax and semantics
 
 We survey nine specification languages across four categories: relational modeling (Alloy),
@@ -31,10 +27,10 @@ state-transition systems (TLA+, Quint, Event-B, P language), operation modeling 
 (VDM-SL, Dafny), formal schemas (Z notation), and API description languages (TypeSpec, Smithy). For
 each language we show how it expresses the same four concepts:
 
-- **A "store" mapping short codes to URLs**
-- **A "shorten" operation that adds a new mapping**
-- **A "resolve" operation that looks up by code**
-- **An invariant that all stored URLs are valid**
+- A "store" mapping short codes to URLs
+- A "shorten" operation that adds a new mapping
+- A "resolve" operation that looks up by code
+- An invariant that all stored URLs are valid
 
 ### 1.1 Alloy 6
 
@@ -791,19 +787,17 @@ Our DSL must combine Alloy's relational modeling and multiplicities, VDM/Dafny's
 pre/postcondition syntax, Quint's developer-friendly syntax, and TypeSpec/Smithy's optional HTTP
 override capability. No existing language provides all of these.
 
----
-
 ## 2. Grammar design
 
 ### 2.1 Design principles
 
 The grammar follows these priorities:
 
-1. **Readability over conciseness**, prefer keywords to symbols
-2. **Familiar syntax**, brace-delimited blocks, dot-access, infix operators
-3. **Minimal ceremony**, no import boilerplate for common cases
-4. **Unambiguous**, every construct has exactly one parse
-5. **Incremental**, a minimal spec is valid; more detail can be added progressively
+1. Readability over conciseness, prefer keywords to symbols
+2. Familiar syntax, brace-delimited blocks, dot-access, infix operators
+3. Minimal ceremony, no import boilerplate for common cases
+4. Unambiguous, every construct has exactly one parse
+5. Incremental, a minimal spec is valid; more detail can be added progressively
 
 ### 2.2 Lexical rules
 
@@ -1259,25 +1253,23 @@ let_expr        = 'let' LOWER_IDENT '=' expr 'in' expr ;
 
 The grammar supports several conveniences:
 
-- **Trailing commas** are allowed in enum values, param lists, and set literals
-- **Multi-line ensures/requires**, each line in an ensures or requires block is implicitly
+- Trailing commas are allowed in enum values, param lists, and set literals
+- Multi-line ensures/requires, each line in an ensures or requires block is implicitly
   conjoined (AND'd together); newlines are significant separators within `expr_list` (see the
   `expr_list` production). Explicit `and` within a single line still works for inline conjunction.
-- **Primed state shorthand**, `store'` means "the state of `store` after this operation executes"
-- **pre() shorthand**, `pre(store)` is equivalent to referring to `store` without a prime (the
+- Primed state shorthand, `store'` means "the state of `store` after this operation executes"
+- pre() shorthand, `pre(store)` is equivalent to referring to `store` without a prime (the
   state before the operation); it exists for readability in ensures clauses where the unprimed name
   might be ambiguous
-- **Cardinality shorthand**, `#store` means `|store|` (the number of entries)
-- **Record update**, `expr with { field = val, ... }` creates a copy of the record with specified
+- Cardinality shorthand, `#store` means `|store|` (the number of entries)
+- Record update, `expr with { field = val, ... }` creates a copy of the record with specified
   fields changed
-- **some(v)**, wraps a value in `Option[T]`; distinct from the `some` quantifier which always uses
+- some(v), wraps a value in `Option[T]`; distinct from the `some` quantifier which always uses
   the `some x in S | P` form
-- **Constructors**, `TypeName { field = val, ... }` creates a new entity/record value
-- **Map/relation pairs**, `{a -> b, c -> d}` creates a map/relation literal
-- **Sequence literals**, `[a, b, c]` creates a `Seq` value
-- **Lambda shorthand**, `x => expr` for inline functions passed to `sum`, etc.
-
----
+- Constructors, `TypeName { field = val, ... }` creates a new entity/record value
+- Map/relation pairs, `{a -> b, c -> d}` creates a map/relation literal
+- Sequence literals, `[a, b, c]` creates a `Seq` value
+- Lambda shorthand, `x => expr` for inline functions passed to `sum`, etc.
 
 ## 3. Semantic model
 
@@ -1425,8 +1417,6 @@ When the convention engine maps these to a database schema:
 
 - `one` and `lone` become foreign key columns on the source table
 - `some` and `set` become junction tables with appropriate constraints
-
----
 
 ## 4. Worked examples
 
@@ -2512,8 +2502,6 @@ service OrderService {
 }
 ```
 
----
-
 ## 5. Type system deep dive
 
 ### 5.1 Primitive types and their constraints
@@ -2653,11 +2641,11 @@ Within the `where` clause, `value` refers to the instance being constrained.
 
 Refinement types generate:
 
-- **Database**: `CHECK` constraints
-- **API validation**: Request body validation rules (e.g., JSON Schema `pattern`, `minimum`,
+- Database: `CHECK` constraints
+- API validation: Request body validation rules (e.g., JSON Schema `pattern`, `minimum`,
   `maximum`)
-- **OpenAPI**: Corresponding schema constraints
-- **Runtime**: Validation functions that throw on violation
+- OpenAPI: Corresponding schema constraints
+- Runtime: Validation functions that throw on violation
 
 Refinement types are **not** separate types from their base, a `ShortCode` is a `String` with
 extra constraints. Any function that accepts `String` also accepts `ShortCode`. But a function that
@@ -2693,27 +2681,25 @@ The spec language uses explicit types in declarations but infers types in expres
 
 The type system has a simple subtyping hierarchy:
 
-1. **Refinement subtyping**: `type ShortCode = String where P` means `ShortCode <: String`. Any
+1. Refinement subtyping: `type ShortCode = String where P` means `ShortCode <: String`. Any
    `ShortCode` value can be used where a `String` is expected, but not vice versa.
 
-2. **Option subtyping**: `T <: Option[T]`, any value of type T can be used where `Option[T]` is
+2. Option subtyping: `T <: Option[T]`, any value of type T can be used where `Option[T]` is
    expected (it is implicitly wrapped in `some`).
 
-3. **Enum subtyping**: Enum types do not participate in subtyping. Each enum is a distinct type.
+3. Enum subtyping: Enum types do not participate in subtyping. Each enum is a distinct type.
 
-4. **Entity subtyping**: `entity Child extends Parent` means `Child <: Parent`. A `Child` value can
+4. Entity subtyping: `entity Child extends Parent` means `Child <: Parent`. A `Child` value can
    be used where a `Parent` is expected. Child inherits all fields and invariants, and may add new
    ones.
 
-5. **Collection subtyping**: Collections are **invariant** in their type parameter. `Set[Child]` is
+5. Collection subtyping: Collections are invariant in their type parameter. `Set[Child]` is
    NOT a subtype of `Set[Parent]`. This prevents runtime type errors.
 
-6. **Numeric compatibility**: `Int` values can be used where `Float` is expected (widening), but not
+6. Numeric compatibility: `Int` values can be used where `Float` is expected (widening), but not
    vice versa.
 
 Type errors are reported at spec-check time, before any code generation occurs.
-
----
 
 ## 6. Error messages and developer experience
 
@@ -2927,8 +2913,6 @@ Above each operation: "2 invariants apply" (clickable to list them). Above each 
 by operations: Shorten, Delete" (clickable). Above each transition: a visual state machine diagram
 rendered inline.
 
----
-
 ## 7. Comparison with alternatives
 
 ### 7.1 Why not just use Alloy directly
@@ -2939,25 +2923,25 @@ checking.
 
 Why it is insufficient for our purpose:
 
-1. **No HTTP concepts.** Alloy has no notion of requests, responses, status codes, or endpoints.
+1. No HTTP concepts. Alloy has no notion of requests, responses, status codes, or endpoints.
    Every REST mapping would need to be encoded as a convention outside Alloy.
 
-2. **Bounded semantics.** The Alloy Analyzer only checks properties up to a finite bound (e.g., "for
+2. Bounded semantics. The Alloy Analyzer only checks properties up to a finite bound (e.g., "for
    all models with at most 5 ShortCodes and 5 LongURLs"). This is useful for finding bugs but cannot
    prove properties for all sizes.
 
-3. **No code generation.** Alloy is analysis-only. Alchemy (2008) attempted Alloy-to-code
+3. No code generation. Alloy is analysis-only. Alchemy (2008) attempted Alloy-to-code
    compilation but it was a research prototype that died. There is no maintained path from Alloy to
    running code.
 
-4. **Unfamiliar syntax.** Alloy's `sig`/`fact`/`pred`/`assert` vocabulary and relational operators
+4. Unfamiliar syntax. Alloy's `sig`/`fact`/`pred`/`assert` vocabulary and relational operators
    (`.`, `~`, `^`, `+`, `&`) are unfamiliar to most developers. The learning curve is significant.
 
-5. **No input/output modeling.** Alloy predicates take parameters but there is no distinction
+5. No input/output modeling. Alloy predicates take parameters but there is no distinction
    between "input to an operation" and "output from an operation." This makes it impossible to
    derive request/response schemas automatically.
 
-6. **Weak string handling.** Alloy treats strings as opaque atoms. There is no way to express
+6. Weak string handling. Alloy treats strings as opaque atoms. There is no way to express
    constraints like "length >= 6" or "matches regex" natively.
 
 **What we take from Alloy.** Relational data modeling, multiplicities, the `sig`-like entity
@@ -2971,22 +2955,22 @@ DynamoDB, EBS, and others).
 
 Why it is insufficient:
 
-1. **No data modeling.** TLA+ has no concept of entities, fields, or multiplicities. Everything is a
+1. No data modeling. TLA+ has no concept of entities, fields, or multiplicities. Everything is a
    mathematical function or set. There is no way to declare that "a ShortCode has a value field of
    type String", you just have sets and functions.
 
-2. **No code generation.** TLA+ and Quint are verification-only. The model checker explores states
+2. No code generation. TLA+ and Quint are verification-only. The model checker explores states
    but produces no implementation code. Quint can generate traces but not service code.
 
-3. **No pre/postcondition structure.** TLA+ actions are predicates over current and next state.
+3. No pre/postcondition structure. TLA+ actions are predicates over current and next state.
    There is no syntactic distinction between preconditions (what must hold before) and
    postconditions (what must hold after). This makes it harder to derive HTTP status codes
    (precondition failure = 4xx) and validation logic.
 
-4. **Global state model.** TLA+ uses global variables with `UNCHANGED` for framing. This does not
+4. Global state model. TLA+ uses global variables with `UNCHANGED` for framing. This does not
    map well to REST services where each operation should declare what state it touches.
 
-5. **No type constraints.** TLA+ is untyped (Quint adds types but not refinement types). There is no
+5. No type constraints. TLA+ is untyped (Quint adds types but not refinement types). There is no
    way to express "ShortCode is a String of length 6 to 10."
 
 **What we take from TLA+/Quint.** Primed variables for post-state (`store'`), action semantics (each
@@ -2999,22 +2983,22 @@ of tools (editors, validators, code generators, testing tools).
 
 Why it is insufficient:
 
-1. **No behavioral specification.** OpenAPI describes the shape of requests and responses but says
+1. No behavioral specification. OpenAPI describes the shape of requests and responses but says
    nothing about what the operations do. You can say "POST /shorten accepts a URL and returns a
    code" but you cannot say "the returned code was not previously in the store" or "the store now
    has one more entry."
 
-2. **No state model.** OpenAPI has no concept of server-side state. There is no way to express "the
+2. No state model. OpenAPI has no concept of server-side state. There is no way to express "the
    service maintains a mapping of codes to URLs" or "deleting a code removes it from the mapping."
 
-3. **No invariants.** OpenAPI cannot express "all stored URLs are valid" or "no two users share the
+3. No invariants. OpenAPI cannot express "all stored URLs are valid" or "no two users share the
    same email." Schema constraints (patterns, min/max) apply to individual fields rather than cross-entity
    relationships.
 
-4. **No relationship between operations.** OpenAPI cannot express that "Resolve returns the URL that
+4. No relationship between operations. OpenAPI cannot express that "Resolve returns the URL that
    was stored by a previous Shorten call." Each endpoint is specified independently.
 
-5. **Verbose.** An OpenAPI spec for a simple URL shortener is hundreds of lines of YAML. Our DSL
+5. Verbose. An OpenAPI spec for a simple URL shortener is hundreds of lines of YAML. Our DSL
    expresses the same structural information plus behavioral specs in under 80 lines.
 
 **What we take from OpenAPI.** It is a compilation target. The convention engine emits OpenAPI specs
@@ -3028,22 +3012,22 @@ invariants, termination proofs, and compilation to 5+ languages.
 
 Why it is insufficient:
 
-1. **No convention engine.** Dafny requires the programmer to write the full implementation,
+1. No convention engine. Dafny requires the programmer to write the full implementation,
    including HTTP routing, request parsing, response serialization, database queries, and error
    handling. Our DSL delegates all of this to the convention engine.
 
-2. **Too low-level.** A Dafny implementation of a URL shortener requires explicit loop invariants,
+2. Too low-level. A Dafny implementation of a URL shortener requires explicit loop invariants,
    framing conditions (`modifies`), and implementation details that are not part of the
    specification. Our DSL only requires the "what," not the "how."
 
-3. **No relational modeling.** Dafny uses maps, sequences, and sets but has no concept of
+3. No relational modeling. Dafny uses maps, sequences, and sets but has no concept of
    multiplicities or relational joins. The type `map<string, string>` does not communicate that this
    is a partial function from codes to URLs.
 
-4. **No HTTP awareness.** Dafny has no decorators, annotations, or conventions for mapping
+4. No HTTP awareness. Dafny has no decorators, annotations, or conventions for mapping
    operations to REST endpoints.
 
-5. **String verification is weak.** Dafny struggles to verify properties of string operations
+5. String verification is weak. Dafny struggles to verify properties of string operations
    (length, pattern matching, concatenation). This is a limitation of the underlying Z3 SMT solver.
 
 **What we take from Dafny.** The `requires`/`ensures` syntax, `old()` for pre-state reference, and
@@ -3056,17 +3040,17 @@ multiple output formats (OpenAPI, JSON Schema, Protobuf).
 
 Why it is insufficient:
 
-1. **No behavioral verification.** TypeSpec describes API structure but cannot express what
+1. No behavioral verification. TypeSpec describes API structure but cannot express what
    operations do, what state they modify, or what invariants they maintain. It is a schema language,
    not a specification language.
 
-2. **No state model.** TypeSpec has no concept of server-side state. It describes the interface, not
+2. No state model. TypeSpec has no concept of server-side state. It describes the interface, not
    the behavior behind it.
 
-3. **No pre/postconditions.** TypeSpec's `@doc` decorators can describe behavior in natural language
+3. No pre/postconditions. TypeSpec's `@doc` decorators can describe behavior in natural language
    but this is not machine-checkable.
 
-4. **No invariants.** TypeSpec can constrain field values (patterns, min/max) but cannot express
+4. No invariants. TypeSpec can constrain field values (patterns, min/max) but cannot express
    cross-field or cross-entity invariants.
 
 **What we take from TypeSpec.** The decorator/annotation pattern for HTTP overrides, the syntax
@@ -3102,8 +3086,6 @@ This is analogous to how a modern web framework works, the developer writes busi
 framework handles routing, serialization, and middleware, but elevated to the specification level.
 Instead of writing business logic code, the developer writes behavioral contracts, and the compiler
 generates verified business logic code.
-
----
 
 ## Appendix A: Built-in functions
 
@@ -3214,8 +3196,6 @@ symbols with readable keywords.
 | Total function        | `-->`, `-> one`           | `-> one`                  |
 | Always (temporal)     | `[]`, `always`            | (future: `always`)        |
 | Eventually (temporal) | `<>`, `eventually`        | (future: `eventually`)    |
-
----
 
 <!-- Added: auth/authz model (gap analysis) -->
 
@@ -3351,8 +3331,6 @@ The auth model is formally verifiable: the model checker can confirm that every 
 reachable only through operations with appropriate guards, and that no operation accidentally
 exposes state without an ownership check.
 
----
-
 <!-- Added: concurrent access modeling (gap analysis) -->
 
 ## Appendix E: Concurrent access and conflict detection
@@ -3408,8 +3386,6 @@ The convention engine maps `version = expected_version` preconditions to:
 | `requires: resource.version = expected_version` | `UPDATE ... WHERE version = $v` + row-count check                         |
 | Version mismatch detected                       | HTTP 409 with `{ "code": "CONFLICT", "detail": "Resource was modified" }` |
 | `ETag` header                                   | Generated from `"{entity_type}:{id}:{version}"`                           |
-
----
 
 <!-- Added: external service calls as abstract effects (gap analysis) -->
 
@@ -3474,8 +3450,6 @@ operation PlaceOrder {
 The model checker verifies operation logic assuming effect postconditions hold. The conformance test
 suite provides mock implementations that satisfy the declared postconditions. The developer supplies
 production implementations.
-
----
 
 <!-- Added: non-determinism handling (gap analysis) -->
 
