@@ -3,17 +3,18 @@ title: "Grammar design"
 description: "Design principles, lexical rules, the full EBNF, operator precedence, and syntactic sugar"
 ---
 
-### 2.1 Design principles
+## Design principles
 
-The grammar follows these priorities:
+Five priorities shape the grammar. It favors readability over brevity, with a keyword where a bare
+symbol would read as cryptic. The surface stays familiar: brace-delimited blocks, dot access, and
+infix operators. It asks for little ceremony, with no import boilerplate in the common case. Every
+construct has exactly one parse. And a minimal spec is already valid, so detail goes on in layers.
 
-1. Readability over conciseness, prefer keywords to symbols
-2. Familiar syntax, brace-delimited blocks, dot-access, infix operators
-3. Minimal ceremony, no import boilerplate for common cases
-4. Unambiguous, every construct has exactly one parse
-5. Incremental, a minimal spec is valid; more detail can be added progressively
+The ANTLR grammar at
+[`Spec.g4`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/parser/src/main/antlr4/Spec.g4)
+is authoritative; the EBNF below renders it in a readable form.
 
-### 2.2 Lexical rules
+## Lexical rules
 
 ```text
 (* ---- Lexical Grammar ---- *)
@@ -38,22 +39,23 @@ ESCAPE          = '\' ('n' | 't' | 'r' | '\' | '"') ;
 REGEX_LIT       = '/' (REGEX_CHAR)+ '/' ;
 REGEX_CHAR      = <any Unicode except '/' and unescaped newline> ;
 
-(* Keywords -- reserved, cannot be used as identifiers *)
-KEYWORD         = 'service' | 'entity' | 'state' | 'operation'
-                | 'input' | 'output' | 'requires' | 'ensures'
-                | 'invariant' | 'fact' | 'conventions' | 'import'
-                | 'module' | 'type' | 'enum' | 'transition'
-                | 'one' | 'lone' | 'some' | 'set' | 'seq'
-                | 'all' | 'no' | 'exists' | 'let' | 'in'
+(* Keywords. Many also parse as identifiers in name positions; see lowerIdent. *)
+KEYWORD         = 'service' | 'entity' | 'enum' | 'type' | 'state'
+                | 'operation' | 'transition' | 'invariant' | 'temporal'
+                | 'fact' | 'conventions' | 'security' | 'import'
+                | 'function' | 'predicate' | 'extends'
+                | 'input' | 'output' | 'requires_auth' | 'requires'
+                | 'ensures' | 'field'
+                | 'one' | 'lone' | 'set'
+                | 'all' | 'some' | 'no' | 'exists' | 'let' | 'in'
                 | 'and' | 'or' | 'not' | 'implies' | 'iff'
                 | 'if' | 'then' | 'else'
                 | 'true' | 'false' | 'none'
                 | 'pre' | 'where' | 'with' | 'the' | 'matches'
-                | 'extends' | 'via' | 'when'
+                | 'via' | 'when'
                 | 'union' | 'intersect' | 'minus' | 'subset'
-                | 'function' | 'predicate'
                 | 'String' | 'Int' | 'Bool' | 'Float'
-                | 'DateTime' | 'Duration'
+                | 'DateTime' | 'Duration' | 'UUID'
                 | 'Set' | 'Map' | 'Seq' | 'Option' ;
 
 (* Operators *)
@@ -93,7 +95,7 @@ BLOCK_COMMENT   = '/*' <any>* '*/' ;
 WS              = (' ' | '\t' | '\r' | '\n')+ ;
 ```
 
-### 2.3 Full EBNF grammar
+## Full grammar
 
 ```text
 (* ============================================================ *)
@@ -115,10 +117,12 @@ service_member  = entity_decl
                 | operation_decl
                 | transition_decl
                 | invariant_decl
+                | temporal_decl
                 | fact_decl
                 | function_decl
                 | predicate_decl
                 | convention_block
+                | security_block
                 ;
 
 (* ============================================================ *)
@@ -172,7 +176,7 @@ base_type       = primitive_type
                 ;
 
 primitive_type  = 'String' | 'Int' | 'Bool' | 'Float'
-                | 'DateTime' | 'Duration' ;
+                | 'DateTime' | 'Duration' | 'UUID' ;
 
 compound_type   = set_type | map_type | seq_type ;
 
@@ -200,12 +204,15 @@ state_field     = LOWER_IDENT ':' type_expr ;
 (* Operation Declarations                                        *)
 (* ============================================================ *)
 
-operation_decl  = 'operation' UPPER_IDENT '{'
-                    [input_clause]
-                    [output_clause]
-                    [requires_clause]
-                    [ensures_clause]
-                  '}' ;
+operation_decl  = 'operation' UPPER_IDENT '{' { operation_clause } '}' ;
+
+(* Clauses may appear in any order, and a spec rarely uses all of them. *)
+operation_clause = input_clause
+                 | output_clause
+                 | requires_clause
+                 | ensures_clause
+                 | requires_auth_clause
+                 ;
 
 input_clause    = 'input' ':' param_list ;
 
@@ -218,6 +225,8 @@ param           = LOWER_IDENT ':' type_expr ;
 requires_clause = 'requires' ':' expr_list ;
 
 ensures_clause  = 'ensures' ':' expr_list ;
+
+requires_auth_clause = 'requires_auth' ':' LOWER_IDENT { ',' LOWER_IDENT } ;
 
 (* expr_list uses NEWLINE as separator. Within requires/ensures *)
 (* blocks, each line is an independent expression; all lines    *)
@@ -246,6 +255,8 @@ transition_rule = enum_value '->' enum_value 'via' UPPER_IDENT
 
 invariant_decl  = 'invariant' [LOWER_IDENT] ':' expr ;
 
+temporal_decl   = 'temporal' LOWER_IDENT ':' expr ;
+
 fact_decl       = 'fact' [LOWER_IDENT] ':' expr ;
 
 (* ============================================================ *)
@@ -265,19 +276,24 @@ predicate_decl  = 'predicate' LOWER_IDENT '(' [param_list] ')'
 (* Convention Overrides                                           *)
 (* ============================================================ *)
 
-convention_block = 'conventions' '{'
-                     { convention_rule }
-                   '}' ;
+convention_block = 'conventions' '{' { convention_rule } '}' ;
 
-convention_rule  = convention_target '.' convention_prop '=' convention_val ;
+convention_rule  = UPPER_IDENT '.' LOWER_IDENT [ '.' LOWER_IDENT ]
+                   [ STRING_LIT ] '=' expr ;
 
-convention_target = UPPER_IDENT ;
+(* The optional second LOWER_IDENT names a field (Entity.test_strategy.field); *)
+(* the optional STRING_LIT is a qualifier (http_header "Location" = output.url). *)
 
-convention_prop  = LOWER_IDENT
-                 | LOWER_IDENT STRING_LIT   (* e.g., http_header "Location" *)
-                 ;
+(* ============================================================ *)
+(* Security Schemes                                              *)
+(* ============================================================ *)
 
-convention_val   = STRING_LIT | INT_LIT | BOOL_LIT | expr ;
+security_block  = 'security' '{' { security_scheme } '}' ;
+
+security_scheme = LOWER_IDENT ':' UPPER_IDENT
+                  [ '(' security_arg { ',' security_arg } ')' ] ;
+
+security_arg    = LOWER_IDENT ':' STRING_LIT ;
 
 (* ============================================================ *)
 (* Expressions                                                   *)
@@ -286,18 +302,16 @@ convention_val   = STRING_LIT | INT_LIT | BOOL_LIT | expr ;
 (* Precedence from lowest (top) to highest (bottom).            *)
 (* See section 2.4 for the full precedence table.               *)
 
-expr            = or_expr ;
+expr            = implies_expr ;
+
+implies_expr    = or_expr [ ('implies' | 'iff') or_expr ] ;
 
 or_expr         = and_expr { 'or' and_expr } ;
 
 and_expr        = not_expr { 'and' not_expr } ;
 
 not_expr        = 'not' not_expr
-                | implies_expr
-                ;
-
-implies_expr    = comparison_expr ['implies' comparison_expr]
-                | comparison_expr ['iff' comparison_expr]
+                | comparison_expr
                 ;
 
 comparison_expr = set_op_expr { comp_op set_op_expr } ;
@@ -341,6 +355,7 @@ postfix_expr    = primary_expr { postfix_op } ;
 
 postfix_op      = PRIME                   (* primed: store' *)
                 | '.' LOWER_IDENT         (* field access *)
+                | '.' UPPER_IDENT         (* enum member: Status.Active *)
                 | '[' expr ']'            (* indexing *)
                 | '(' [arg_list] ')'      (* function call *)
                 ;
@@ -356,7 +371,7 @@ primary_expr    = INT_LIT
                 | REGEX_LIT
                 | 'none'                          (* Option empty value *)
                 | IDENT
-                | 'pre' '(' IDENT ')'            (* pre-state reference *)
+                | 'pre' '(' expr ')'             (* pre-state reference *)
                 | quantifier_expr
                 | the_expr
                 | some_wrap_expr
@@ -446,24 +461,26 @@ let_expr        = 'let' LOWER_IDENT '=' expr 'in' expr ;
 *)
 ```
 
-### 2.4 Operator precedence (highest to lowest)
+## Operator precedence
+
+Tightest binding at the top, following the alternative order in `Spec.g4`.
 
 | Precedence  | Operators                                                            | Associativity |
 | ----------- | -------------------------------------------------------------------- | ------------- |
-| 1 (highest) | `#` (cardinality), unary `-`, `^` (transitive closure)               | Right         |
-| 2           | `'` (prime), `.` (access), `[]` (index), `()` (call)                 | Left          |
-| 2.5         | `with { ... }` (record update)                                       | Left          |
-| 3           | `*`, `/`                                                             | Left          |
-| 4           | `+`, `-`                                                             | Left          |
-| 4.5         | `union`, `intersect`, `minus`                                        | Left          |
-| 5           | `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `not in`, `subset`, `matches` | Non-assoc     |
-| 6           | `not`                                                                | Right         |
-| 7           | `and`                                                                | Left          |
-| 8           | `or`                                                                 | Left          |
-| 9           | `implies`, `iff`                                                     | Right         |
-| 10 (lowest) | `all`, `some`, `no`, `exists`, `the` (quantifiers)                   | N/A           |
+| 1 (highest) | `'` (prime), `.` (field and enum access), `[]` (index), `()` (call)  | Left          |
+| 2           | `with { ... }` (record update)                                       | Left          |
+| 3           | `#` (cardinality), unary `-`, `^` (transitive closure)               | Right         |
+| 4           | `*`, `/`                                                             | Left          |
+| 5           | `+`, `-`                                                             | Left          |
+| 6           | `union`, `intersect`, `minus`                                        | Left          |
+| 7           | `=`, `!=`, `<`, `>`, `<=`, `>=`, `in`, `not in`, `subset`, `matches` | Non-assoc     |
+| 8           | `not`                                                                | Right         |
+| 9           | `and`                                                                | Left          |
+| 10          | `or`                                                                 | Left          |
+| 11          | `implies`, `iff`                                                     | Right         |
+| 12 (lowest) | `all`, `some`, `no`, `exists`, `the` (quantifiers)                   | N/A           |
 
-### 2.5 Syntactic sugar
+## Syntactic sugar
 
 The grammar supports several conveniences:
 
