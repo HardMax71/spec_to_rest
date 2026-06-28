@@ -2543,7 +2543,7 @@ Quint/TLC for temporal checking.
 
 ## 9. Implementation strategy
 
-> **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/10_translator_soundness)
+> **Forward pointer**: see [10. Mechanically Verified Translator Soundness](/research/translator_soundness)
 > for the trust-chain framing, the 2024-2026 prior art, why Z3 proof reconstruction does not
 > work in 2026, and the M_L.0-M_L.4 milestone breakdown that delivered the IR → SMT-LIB
 > translator-soundness theorem in Isabelle/HOL. Issue

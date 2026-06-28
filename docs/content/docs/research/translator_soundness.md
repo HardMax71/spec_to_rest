@@ -775,7 +775,7 @@ Inherits #88's non-goals, plus:
 
 ### 11.7 Spec_to_rest cross-references
 
-- [`docs/content/docs/research/06_spec_verification.md`](/research/06_spec_verification), verification pipeline design
+- [`docs/content/docs/research/spec_verification.md`](/research/spec_verification), verification pipeline design
 - [`docs/content/docs/spec-language.mdx`](/spec-language), current English-prose semantics
 - [Issue #88, Mechanically verified translator soundness](https://github.com/HardMax71/spec_to_rest/issues/88)
 - [Issue #77, Proof-certificate / unsat-core export (closed)](https://github.com/HardMax71/spec_to_rest/issues/77)
@@ -1366,7 +1366,7 @@ translator on the production verify path.
   translator.
 - Exit code 4 (`ExitStatus.Trust`): emitted when soundness skips are the only reason
   the run isn't clean. Subordinate to Backend (3), Violations (1), Translator (2).
-- TCB audit lives at `docs/research/11_tcb_audit.md`, the single ledger of what
+- TCB audit lives at `docs/research/tcb_audit.md`, the single ledger of what
   `verify`'s verdicts actually depend on.
 
 | Coverage v3 (post-#210) | `lower` returns | Trust |
