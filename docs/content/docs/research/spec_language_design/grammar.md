@@ -16,7 +16,7 @@ is authoritative; the EBNF below renders it in a readable form.
 
 ## Lexical rules
 
-```text
+```ebnf
 (* ---- Lexical Grammar ---- *)
 
 (* Identifiers *)
@@ -97,7 +97,7 @@ WS              = (' ' | '\t' | '\r' | '\n')+ ;
 
 ## Full grammar
 
-```text
+```ebnf
 (* ============================================================ *)
 (* Top-Level Structure                                           *)
 (* ============================================================ *)

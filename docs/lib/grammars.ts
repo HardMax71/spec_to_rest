@@ -75,3 +75,23 @@ export const specGrammar: LanguageRegistration = {
   ],
   repository: {},
 };
+
+export const ebnfGrammar: LanguageRegistration = {
+  name: "ebnf",
+  scopeName: "source.ebnf",
+  aliases: [],
+  patterns: [
+    { name: "comment.block.ebnf", begin: "\\(\\*", end: "\\*\\)" },
+    {
+      name: "string.quoted.single.ebnf",
+      begin: "'",
+      end: "'",
+      patterns: [{ match: "\\\\.", name: "constant.character.escape.ebnf" }],
+    },
+    { name: "support.type.ebnf", match: "\\b[A-Z][A-Z0-9_]*\\b" },
+    { name: "entity.name.function.ebnf", match: "\\b[a-z][A-Za-z0-9_]*\\b" },
+    { name: "keyword.operator.ebnf", match: "::=|=|\\||\\.\\.|[+*?]" },
+    { name: "punctuation.section.ebnf", match: "[(){}\\[\\];]" },
+  ],
+  repository: {},
+};
