@@ -1,191 +1,122 @@
 ---
 title: "Dafny"
-description: "Dafny as the verification IL: compilation, what it preserves, and the REST proof patterns"
+description: "Why Dafny is the verification IL, how a verified body compiles, and the REST proof patterns"
 ---
 
-## 5. Dafny as the verification IL
+## Why Dafny
 
-### 5.1 Why Dafny (not Coq, f\*, Verus, isabelle)
+The synthesized body has to be both verifiable and compilable to the service's language, and Dafny is
+the rare tool that does both. Its verification is auto-active: the proof lives inline with the code
+as `requires`, `ensures`, `invariant`, and `decreases` annotations, which an LLM can produce because
+they read like ordinary code. Tactic-based provers such as Coq or Isabelle want proof scripts in a
+separate metalanguage, which models handle far worse. It also compiles to several languages, and the
+three this project targets, Python, Go, and TypeScript (through Dafny's JavaScript backend), are all
+covered. And it has the benchmark ecosystem to back the bet: DafnyBench and DafnyPro report verification
+rates in the mid-eighties on thousands of methods, which no other verification language with an
+LLM-targeted benchmark matches.
 
-| Criterion             | Dafny                             | Coq                               | F\*/KaRaMeL             | Verus                  | Isabelle                   |
-| --------------------- | --------------------------------- | --------------------------------- | ----------------------- | ---------------------- | -------------------------- |
-| **Proof style**       | Auto-active (inline annotations)  | Tactic scripts                    | Mix of auto/manual      | Auto-active (Rust)     | Tactic scripts (Isar)      |
-| **LLM suitability**   | High, proof is inline with code | Low, tactics are opaque to LLMs | Medium                  | Medium, Rust subset  | Low, Isar is niche       |
-| **Target languages**  | C#, Java, Go, JS, Python          | OCaml (extraction)                | C (KaRaMeL)             | Rust only              | SML, OCaml, Haskell, Scala |
-| **LLM benchmarks**    | DafnyBench (86% SOTA)             | CoqGym (limited)                  | None                    | VerusBench (43% SAFE)  | PISA (limited)             |
-| **Industry adoption** | AWS (Cedar, smithy-dafny)         | CompCert, sel4                    | HACL\* (Firefox, Linux) | None yet               | seL4                       |
-| **Learning curve**    | Moderate                          | Very high                         | High                    | Low (if you know Rust) | Very high                  |
-| **Automation level**  | High (Z3 handles most VCs)        | Low (manual proofs)               | Medium                  | High                   | Medium                     |
+| Criterion         | Dafny                            | Coq                  | F\*                  | Verus            | Isabelle              |
+| ----------------- | -------------------------------- | -------------------- | -------------------- | ---------------- | --------------------- |
+| Proof style       | auto-active, inline              | tactic scripts       | mixed                | auto-active      | tactic scripts (Isar) |
+| LLM suitability    | high, proof is inline code       | low, opaque tactics  | medium               | medium           | low                   |
+| Compiles to       | C#, Java, Go, JS, Python         | OCaml extraction     | C (via KaRaMeL)      | Rust only        | SML, OCaml, Scala     |
+| Automation        | high, Z3 discharges most VCs     | low, manual          | medium               | high             | medium                |
+| Adoption          | AWS (Cedar, smithy-dafny)        | CompCert, seL4       | HACL\*               | early            | seL4                  |
 
-#### Dafny wins on three decisive factors
+The trade-off is real: Dafny's compiled output is not idiomatic and carries a runtime library. The
+pipeline accepts that by using Dafny only for the operation body, the business-logic kernel, and
+wrapping it in hand-written infrastructure rather than shipping the raw translation as the service.
 
-1. **Multi-language compilation.** Coq only extracts to OCaml. F\* only to C. Verus only to Rust.
-   Dafny compiles to 5 languages. For a REST compiler targeting Python, Go, and Java, this is
-   essential.
+## The compilation pipeline
 
-2. **LLM compatibility.** Auto-active verification means the proof is embedded in the code as
-   annotations (assertions, invariants, decreases clauses). LLMs can generate these because they
-   look like code comments. Tactic-based provers (Coq, Isabelle) require generating proof scripts in
-   a separate metalanguage that LLMs struggle with.
-
-3. **Benchmark ecosystem.** DafnyBench provides 782 programs with 17,324 methods. DafnyPro achieves
-   86% verification rate on this benchmark. No other verification language has comparable
-   LLM-targeted benchmarks or success rates.
-
-**The trade-off we accept.** Dafny's generated code requires a runtime library and is not idiomatic
-in the target language. We mitigate this by:
-
-- Using Dafny only for the "business logic kernel" (the operation body).
-- Wrapping the Dafny-generated code in hand-crafted, idiomatic infrastructure templates.
-- Post-processing the generated code to improve readability where possible.
-
-### 5.2 The Dafny compilation pipeline in detail
+Verification runs Dafny's own stack. The file goes through the frontend, lowers to Boogie, where each
+method becomes a procedure and the heap a global variable, and Boogie generates verification
+conditions by weakest-precondition calculus that Z3 discharges.
 
 ```mermaid
 flowchart TD
-  src["source.dfy"] --> FE["DAFNY FRONTEND\n1. Lexing/Parsing → AST\n2. Name resolution\n3. Type checking\n4. Ghost/compiled separation\n5. Well-formedness checks"]
-  FE --> Trans["DAFNY → BOOGIE TRANSLATION\nEach method becomes a Boogie procedure\nrequires/ensures/invariants/modifies mapped\nHeap modeled as Boogie global variable"]
-  Trans --> VC["BOOGIE VC GENERATION\nWeakest precondition calculus:\ncompute weakest condition at method entry\nVCs are first-order logic formulas"]
-  VC --> Z3["Z3 SMT SOLVER\nAttempts to find counterexample\nunsat → verified\nsat → counterexample found\nunknown → timeout"]
-  Z3 --> Agg["RESULT AGGREGATION\nAll unsat → VERIFIED\nAny sat → ERROR + counterexample\nAny unknown → TIMEOUT"]
+  src["source.dfy"] --> FE["Dafny frontend<br/>parse, resolve, type-check,<br/>ghost / compiled split"]
+  FE --> Trans["Dafny to Boogie<br/>each method a procedure,<br/>heap as a global"]
+  Trans --> VC["Boogie VC generation<br/>weakest-precondition calculus"]
+  VC --> Z3["Z3<br/>unsat = verified,<br/>sat = counterexample,<br/>unknown = timeout"]
 ```
 
-#### After verification succeeds, the compilation path
+Once the body verifies, `dafny translate` compiles the file to the target. The `DafnyTranslateCli`
+wrapper runs each translation in its own directory under a fixed `kernel.dfy` name, so the Go
+backend, which names the package after the file, produces a stable `package kernel`.
 
 ```mermaid
 flowchart TD
-  src["verified.dfy"] --> BE["DAFNY COMPILER BACKEND\n1. Ghost erasure (remove ghost vars, lemmas, asserts)\n2. Subset type compilation (constraints → runtime checks)\n3. Target-specific translation (Dafny AST → target AST → source)"]
+  src["verified.dfy"] --> BE["dafny translate<br/>ghost erasure,<br/>subset-type runtime checks,<br/>target translation"]
   BE --> Python
   BE --> Go
-  BE --> Java
-  BE --> JS
-  BE --> CSharp["C#"]
+  BE --> JavaScript
 ```
 
-### 5.3 What is preserved and what is lost
+## What survives compilation
 
-| Dafny Concept                              | After Compilation                                                          |
-| ------------------------------------------ | -------------------------------------------------------------------------- |
-| `requires` clauses                         | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `ensures` clauses                          | Erased (already verified) or compiled to runtime assertions (configurable) |
-| `invariant` (loop)                         | Erased (already verified)                                                  |
-| `decreases` clauses                        | Erased (already verified)                                                  |
-| Ghost variables                            | Erased entirely                                                            |
-| Lemma calls                                | Erased entirely                                                            |
-| `assert` statements                        | Erased or compiled to runtime assertions (configurable)                    |
-| Subset types (`type T = x: int \| x > 0`) | Runtime check on construction                                              |
-| Datatypes / classes                        | Compiled to target language classes                                        |
-| `map`, `seq`, `set`                        | Compiled to Dafny runtime library types                                    |
-| `:\|` (assign-such-that)                   | Compiled to search/iteration                                               |
-| `{:extern}` methods                        | Become FFI calls to target language libraries                              |
+Everything that existed only to convince the verifier is erased, because it has no runtime effect.
 
-**Correctness guarantee.** The verification ensures that IF the preconditions hold at runtime AND
-the `{:extern}` functions behave as axiomatized, THEN the postconditions will hold. Ghost code and
-proof annotations are erased because they were only needed to convince the verifier, they have no
-runtime effect.
+| Dafny construct                  | After compilation                                  |
+| -------------------------------- | -------------------------------------------------- |
+| `requires` / `ensures`           | erased; they were already proved                   |
+| loop `invariant`, `decreases`    | erased                                             |
+| ghost variables, lemma calls     | erased entirely                                    |
+| `assert`                         | erased                                             |
+| subset types                     | a runtime check on construction                    |
+| datatypes and classes            | target-language classes                            |
+| `map`, `seq`, `set`              | Dafny runtime-library types                        |
+| `:\|` (assign-such-that)         | a search or iteration                              |
 
-### 5.4 Dafny runtime library requirements
+So the guarantee that ships is conditional: if the preconditions hold at runtime and the
+axiomatized functions behave as assumed, the postconditions hold. Unknown calls such as `isValidURI`
+are axiomatized as opaque predicates with a trivially-true body. That is sound here because they
+appear only inside contracts, which are erased, so their runtime behavior never matters; the real
+validation lives in the convention engine's generated layer.
 
-Each target language requires the Dafny runtime library:
+## The runtime cost
 
-| Target     | Runtime Package                        | Size   | Notes                          |
-| ---------- | -------------------------------------- | ------ | ------------------------------ |
-| Python     | `dafny-runtime` (PyPI)                 | ~50KB  | Pure Python, no native deps    |
-| Go         | `github.com/dafny-lang/DafnyRuntimeGo` | ~100KB | Pure Go                        |
-| Java       | `dafny.jar`                            | ~200KB | Included in Dafny distribution |
-| JavaScript | `@anthropic-ai/dafny-runtime` (npm)    | ~80KB  | Pure JS, CommonJS + ESM        |
-| C#         | `DafnyRuntime.dll` (NuGet)             | ~150KB | .NET Standard 2.0              |
+Because the body is compiled by `dafny translate`, the output is not idiomatic. It leans on Dafny's
+runtime library for the target language, its `Map`, `Seq`, and `Set` types and big-integer
+arithmetic, and it reads like machine output: a `dafny.Map` rather than a `dict`, interface-heavy Go,
+a `:\|` that became a linear scan. None of that is a correctness problem, since the code is verified,
+but it is why the verified body is treated as a kernel. The convention engine wraps it in idiomatic,
+hand-written infrastructure, the HTTP handler, the validation, the database calls, rather than
+exposing the raw translation as the whole service.
 
-The runtime provides: `DafnyMap`, `DafnySequence`, `DafnySet`, `DafnyMultiset`, big integer
-arithmetic, and utility functions. These are immutable/persistent data structures that match Dafny's
-mathematical semantics.
+## Dafny patterns for REST operations
 
-### 5.5 Known issues with generated code quality
+A few shapes recur across generated skeletons.
 
-| Target | Issue                                                | Severity | Mitigation                                              |
-| ------ | ---------------------------------------------------- | -------- | ------------------------------------------------------- |
-| Python | Uses `dafny.Map` instead of `dict`                   | Medium   | Post-process to convert to native types at API boundary |
-| Python | Verbose class definitions                            | Low      | Post-process with formatter                             |
-| Go     | Uses interface types extensively                     | Medium   | Type assertions may be needed at boundaries             |
-| Go     | Non-idiomatic error handling (uses `Option` type)    | Medium   | Wrap in idiomatic Go error returns                      |
-| Java   | Generates raw types without generics sometimes       | Low      | Post-process to add type parameters                     |
-| JS     | CommonJS output by default                           | Low      | Configure ESM output                                    |
-| All    | `:\|` compiles to potentially slow iteration         | Medium   | Replace with efficient algorithm in infrastructure layer |
-
-### 5.6 Practical Dafny patterns for REST operations
-
-#### Pattern 1: Modeling database state
+State is a class of maps. A table is a `map` from key to row, a one-to-many relation a `map` to a
+set, a counter an `int`, and the state invariant a `predicate`:
 
 ```csharp
 class ServiceState {
-  // A table is a map from primary key to row data
   var users: map<UserId, User>
-
-  // A one-to-many relation is a map from parent key to set of child keys
   var user_posts: map<UserId, set<PostId>>
-
-  // A many-to-many relation is a set of pairs
-  var user_roles: set<(UserId, RoleId)>
-
-  // A counter or sequence generator
   var next_id: int
-
-  // Invariant: next_id is always greater than all existing IDs
-  ghost predicate Valid()
-    reads this
-  {
-    forall uid :: uid in users ==> uid.value < next_id
-  }
 }
+
+predicate Valid(st: ServiceState)
+  reads st
+{ forall uid :: uid in st.users ==> uid < st.next_id }
 ```
 
-#### Pattern 2: Modeling HTTP-like request/response
+CRUD operations are distinguished by what their `ensures` says about the table and its size. A create
+adds one key, a read leaves the table alone, an update keeps the size, a delete drops one key:
 
 ```csharp
-datatype HttpStatus = OK | Created | BadRequest | NotFound | Conflict | ServerError
-
-datatype ApiResult<T> = Success(value: T, status: HttpStatus)
-                       | Failure(error: string, status: HttpStatus)
-
-// An operation that can fail with a meaningful error
-method CreateUser(st: ServiceState, name: string, email: string)
-  returns (result: ApiResult<UserId>)
-  modifies st
-  requires |name| > 0
-  requires |email| > 0
-  ensures result.Success? ==>
-    result.value in st.users &&
-    st.users[result.value].name == name &&
-    |st.users| == |old(st.users)| + 1
-  ensures result.Failure? ==>
-    st.users == old(st.users)  // state unchanged on failure
-```
-
-#### Pattern 3: Ensures clauses for CRUD operations
-
-```csharp
-// CREATE: new entry added, exactly one more element
 method Create(st: ServiceState, id: K, val: V)
   modifies st
   requires id !in st.table
   ensures st.table == old(st.table)[id := val]
   ensures |st.table| == |old(st.table)| + 1
 
-// READ: state unchanged, correct value returned
-method Read(st: ServiceState, id: K)
-  returns (val: V)
+method Read(st: ServiceState, id: K) returns (val: V)
   requires id in st.table
-  ensures val == st.table[id]
-  ensures st.table == old(st.table)  // no mutation
+  ensures val == st.table[id] && st.table == old(st.table)
 
-// UPDATE: entry changed, count unchanged
-method Update(st: ServiceState, id: K, val: V)
-  modifies st
-  requires id in st.table
-  ensures st.table == old(st.table)[id := val]
-  ensures |st.table| == |old(st.table)|
-
-// DELETE: entry removed, exactly one fewer element
 method Delete(st: ServiceState, id: K)
   modifies st
   requires id in st.table
@@ -193,71 +124,26 @@ method Delete(st: ServiceState, id: K)
   ensures |st.table| == |old(st.table)| - 1
 ```
 
-#### Pattern 4: Stateful operations (state machines)
+A state-machine transition guards on the current state and pins everything else unchanged:
 
 ```csharp
-datatype OrderStatus = Pending | Confirmed | Shipped | Delivered | Cancelled
-
-// Ensures clauses encode valid state transitions
 method ConfirmOrder(st: ServiceState, orderId: OrderId)
   modifies st
   requires orderId in st.orders
-  requires st.orders[orderId].status == Pending  // can only confirm pending orders
+  requires st.orders[orderId].status == Pending
   ensures st.orders[orderId].status == Confirmed
-  ensures st.orders[orderId].items == old(st.orders[orderId].items)  // items unchanged
-  ensures forall oid :: oid in st.orders && oid != orderId ==>
-    st.orders[oid] == old(st.orders[oid])  // other orders unchanged
+  ensures forall oid :: oid in st.orders && oid != orderId ==> st.orders[oid] == old(st.orders[oid])
 ```
 
-#### Pattern 5: Operations with loops (decreases clauses)
+A loop needs a `decreases` clause to prove termination, usually a recursive ghost function pinning
+the expected result:
 
 ```csharp
-// Computing a total from a sequence of line items
-method ComputeTotal(items: seq<LineItem>) returns (total: int)
-  requires forall i :: 0 <= i < |items| ==> items[i].price >= 0
-  requires forall i :: 0 <= i < |items| ==> items[i].quantity >= 0
-  ensures total == SumPrices(items)  // matches a recursive ghost function
-  decreases |items|  // termination: sequence gets shorter
-{
-  if |items| == 0 {
-    total := 0;
-  } else {
-    var rest := ComputeTotal(items[1..]);
-    total := items[0].price * items[0].quantity + rest;
-  }
-}
-
-// Ghost function defining the expected sum (specification)
 ghost function SumPrices(items: seq<LineItem>): int
   decreases |items|
-{
-  if |items| == 0 then 0
-  else items[0].price * items[0].quantity + SumPrices(items[1..])
-}
+{ if |items| == 0 then 0 else items[0].price * items[0].quantity + SumPrices(items[1..]) }
+
+method ComputeTotal(items: seq<LineItem>) returns (total: int)
+  ensures total == SumPrices(items)
+  decreases |items|
 ```
-
-#### Pattern 6: Using `{:extern}` for FFI
-
-```csharp
-// External function: URI validation (implemented in target language)
-function {:extern "UrlShortener", "ValidateUri"} valid_uri_impl(s: string): bool
-
-// We axiomatize its behavior for verification:
-lemma {:axiom} ValidUriSpec(s: string)
-  ensures valid_uri_impl(s) <==> (
-    |s| > 0 &&
-    (s[..7] == "http://" || s[..8] == "https://")
-  )
-
-// External function: hash generation
-method {:extern "UrlShortener", "GenerateHash"} generate_hash(s: string)
-  returns (h: string)
-  ensures |h| == 8
-  ensures forall i :: 0 <= i < |h| ==>
-    ('a' <= h[i] <= 'z') || ('0' <= h[i] <= '9')
-```
-
-At compilation time, `{:extern}` methods become calls to the target language's implementation. The
-axiomatized behavior is assumed correct, this is where the verification boundary meets the
-unverified world. The convention engine generates the target-language implementations of these
-extern functions.
