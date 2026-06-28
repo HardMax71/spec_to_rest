@@ -1,5 +1,5 @@
 ---
-title: "Worked examples"
+title: "Examples"
 description: "Four complete specs: URL shortener, todo list, authentication, and e-commerce"
 ---
 
