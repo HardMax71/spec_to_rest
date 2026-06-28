@@ -24,17 +24,14 @@ and the verifier is Dafny, with Boogie and Z3 underneath.
 
 ```mermaid
 flowchart TD
-  Controller["CEGIS controller<br/>spec, context, target, budget"]
-  Controller -->|"1: Dafny signature"| SigGen["Signature generator<br/>spec IR to method sig +<br/>requires, ensures, modifies"]
+  Controller["CEGIS controller<br/>spec, context, target, budget"] -->|"1: Dafny signature"| SigGen["Signature generator<br/>spec IR to method sig +<br/>requires, ensures, modifies"]
   SigGen -->|"2: build prompt"| Prompt["Prompt constructor<br/>signature + context +<br/>few-shot + prior errors"]
   Prompt -->|"3: LLM call"| LLM["LLM<br/>candidate body"]
   LLM -->|"4: verify"| Verifier["Dafny verifier<br/>pass / fail + errors"]
   Verifier -->|"on fail"| ErrorParser["Error parser<br/>category, counterexample, hint"]
   ErrorParser -->|"feedback"| Prompt
   Verifier -->|"on success"| Compiler["Dafny compiler<br/>verified body to target"]
-  classDef cegis stroke:#dc2626,stroke-width:2px;
-  class Controller,SigGen,Prompt,LLM,Verifier,ErrorParser,Compiler cegis;
-  linkStyle default stroke:#dc2626;
+  style Controller,SigGen,Prompt,LLM,Verifier,ErrorParser,Compiler stroke:#dc2626,stroke-width:2px
 ```
 
 ## From spec to a Dafny skeleton
@@ -108,58 +105,48 @@ diff-check rejection, or a Dafny backend crash. On any exit short of success, th
 ```mermaid
 flowchart TD
   Input["Input: a .spec file"]
-  Input --> Parse
 
   subgraph Stage1["1: parsing"]
     Parse["spec to IR<br/>entities, state, operations, invariants"]
   end
-  Parse --> Classify
 
   subgraph Stage2["2: classification"]
-    Classify["classify each operation"]
-    Classify --> Direct["DirectEmit<br/>CRUD, simple lookups"]
+    Classify["classify each operation"] --> Direct["DirectEmit<br/>CRUD, simple lookups"]
     Classify --> NeedLLM["LlmSynthesis<br/>algorithms, computation, state"]
   end
-  Direct --> Assembler
-  NeedLLM --> S3a
 
   subgraph Stage3["3: synthesis (the CEGIS loop)"]
-    S3a["Dafny signature generation"]
-    S3b["Clover triangulation<br/>spec to docstring checks"]
-    S3c_prompt["Prompt<br/>skeleton + context + few-shot + hints"]
-    S3c_llm["LLM call to candidate body"]
-    S3c_diff["Diff-check: clauses unchanged?"]
-    S3c_verify["Dafny verifier"]
-    S3c_error["Error parser + feedback"]
-    S3c_fallback["Fallback<br/>retry, decompose, escalate, skeleton, report"]
-    S3d["Clover post-checks"]
-    S3e["Dafny compilation to target"]
-
-    S3a --> S3b --> S3c_prompt --> S3c_llm --> S3c_diff
-    S3c_diff -->|"yes"| S3c_verify
+    S3a["Dafny signature generation"] --> S3b["Clover triangulation<br/>spec to docstring checks"]
+    S3b --> S3c_prompt["Prompt<br/>skeleton + context + few-shot + hints"]
+    S3c_prompt --> S3c_llm["LLM call to candidate body"]
+    S3c_llm --> S3c_diff["Diff-check: clauses unchanged?"]
+    S3c_diff -->|"yes"| S3c_verify["Dafny verifier"]
     S3c_diff -->|"no, reject"| S3c_prompt
-    S3c_verify -->|"pass"| S3d
-    S3c_verify -->|"fail"| S3c_error
+    S3c_verify -->|"pass"| S3d["Clover post-checks"]
+    S3c_verify -->|"fail"| S3c_error["Error parser + feedback"]
     S3c_error -->|"budget ok"| S3c_prompt
-    S3c_error -->|"budget out"| S3c_fallback
+    S3c_error -->|"budget out"| S3c_fallback["Fallback<br/>retry, decompose, escalate, skeleton, report"]
     S3c_fallback --> S3c_prompt
-    S3d --> S3e
+    S3d --> S3e["Dafny compilation to target"]
   end
-  S3e --> Assembler
 
   subgraph Stage4["4: assembly"]
-    Conv["Convention outputs<br/>routes, validation, schema, OpenAPI, ORM"]
-    Assembler["Assembler into a complete project"]
-    Conv --> Assembler
+    Conv["Convention outputs<br/>routes, validation, schema, OpenAPI, ORM"] --> Assembler["Assembler into a complete project"]
   end
-  Assembler --> Tests
 
   subgraph Stage5["5: test generation"]
     Tests["Schemathesis, stateful, property, conformance"]
   end
 
-  classDef cegis stroke:#dc2626,stroke-width:2px;
-  class S3a,S3b,S3c_prompt,S3c_llm,S3c_diff,S3c_verify,S3c_error,S3c_fallback,S3d,S3e cegis;
+  Input --> Parse
+  Parse --> Classify
+  Direct --> Assembler
+  NeedLLM --> S3a
+  S3e --> Assembler
+  Assembler --> Tests
+
+  style S3a,S3b,S3c_prompt,S3c_llm,S3c_diff,S3c_verify,S3c_error,S3c_fallback,S3d,S3e stroke:#dc2626,stroke-width:2px
+  linkStyle 2,3,4,5,6,7,8,9,10,11,12,13 stroke:#dc2626
 ```
 
 The diagram traces a spec from file to finished service. Parsing and classification are shared, and
