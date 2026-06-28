@@ -1,229 +1,68 @@
 ---
 title: "How it compares"
-description: "The code generator against OpenAPI Generator, JHipster, and the rest"
+description: "The code generator against OpenAPI Generator, JHipster, Smithy, gRPC-gateway, Prisma, and Alembic"
 ---
 
-## 10. Comparison with existing generators
+No existing generator takes a behavioral spec and emits a complete, verified service, but several
+solve pieces of the problem, and the design borrows from each.
 
-### 10.1 OpenAPI generator
+## OpenAPI Generator
 
-**What it is.** Generates client SDKs and server stubs from OpenAPI specs. Supports 40+ targets.
+OpenAPI Generator covers more than forty targets from an OpenAPI document, with a deep community and
+solid schema-to-model generation. Its limits are the ones this project set out to avoid. Its server
+output is genuinely stubs, empty bodies with TODO comments, because OpenAPI is structural: there is
+no way to say an operation requires X and ensures Y. Quality varies by target, a 2023 study found
+roughly a third of generated Go clients did not compile, since each target has a different maintainer
+and no shared standard. What carries over is the template-per-target architecture and the mustache
+engine; what does not is the breadth-over-depth bet. This project keeps three targets compiling,
+tested, and idiomatic rather than forty that might not.
 
-#### What it does well
+## JHipster
 
-- Breadth: 40+ language targets means wide coverage.
-- Community: large contributor base, many edge cases handled.
-- Schema-to-model generation is solid for simple types.
+JHipster is the bar for completeness: a JDL domain model becomes a Spring stack that runs under
+`docker-compose up`, with migrations, security config, CI, and Docker all generated. But JDL is
+structural, CRUD over entities and relationships with no behavior, the backend is Java and Spring
+only, and the output is voluminous enough (hundreds of files for a two-entity project) that most of
+it goes unread. The completeness standard is what this project matches; the rigidity, the single
+backend, and the file sprawl are what it leaves, the URL shortener comes out as a few dozen files on
+any of three backends.
 
-#### What it does poorly
+## Smithy
 
-- Generated code often does not compile for less-popular targets. The Java and TypeScript targets
-  are well-maintained; Go and Rust targets frequently have issues. A 2023 study found that 30% of
-  generated Go clients had compilation errors.
-- Server stubs are truly stubs, empty method bodies with TODO comments. No business logic, no
-  database integration, no tests.
-- No behavioral specification support. The input is purely structural (OpenAPI), so there is no way
-  to express "this operation requires X and ensures Y."
-- Template quality varies wildly between targets because different maintainers own different targets
-  with no cross-target quality standard.
-- Generated code style is often non-idiomatic. Go code uses Java-style getters/setters. Python code
-  does not follow PEP 8 conventions.
+Smithy is the closest prior art on the verification axis. Every AWS SDK is generated from a Smithy
+model, its trait system (`@readonly`, `@paginated`, and the like) is a clean way to attach metadata,
+and smithy-dafny already compiles Smithy models to Dafny for verification before emitting target
+code, the same shape as this pipeline's [Dafny path](/research/llm_verifier_synthesis/dafny). Its
+model is AWS-centric and steep, though, and it is still structural: a trait cannot say an operation
+requires a row to exist and ensures another is added. The trait idea and the verify-through-Dafny
+architecture carry over; the AWS abstractions do not.
 
-#### What we should copy
+## gRPC-gateway, Prisma, and Alembic
 
-- The template-per-target architecture. Each target has its own template set.
-- The mustache template system is simple and well-understood.
-- The `--additional-properties` flag for customization per target.
+Three narrower tools each contribute one idea. gRPC-gateway maps RPC to REST from protobuf
+annotations and co-generates OpenAPI, but it is a Go-only proxy with no database or behavior, and the
+annotation-as-override and the co-generated spec are what carry over. Prisma's `schema.prisma` is one
+of the best data-modeling DSLs, and its migrate command diffs schema changes into SQL automatically,
+but it stops at data, TypeScript only, no routes or logic, and the schema-diff-to-migration approach
+is the model for this project's migrations. Alembic auto-generates Python migrations by comparing
+model metadata to the live database, with a revision chain and an up/down pattern worth copying,
+except this compiler diffs the spec against its own snapshot and so needs no database connection to
+produce one.
 
-#### What we should avoid
+## The differentiator
 
-- Trying to support 40+ targets. We target 3 (Python, Go, TypeScript) and make them excellent.
-- Generating stubs. Our output must be complete and runnable.
-- Relying on community maintainers for individual targets with no integration testing.
+| Capability              | OpenAPI Gen     | JHipster | Smithy                | gRPC-GW   | Prisma   | Alembic | Ours                  |
+| ----------------------- | --------------- | -------- | --------------------- | --------- | -------- | ------- | --------------------- |
+| Behavioral spec input   | no              | no       | no                    | no        | no       | no      | yes                   |
+| Complete service output | no, stubs       | yes      | partial               | no, proxy | no, ORM  | no      | structure; logic synthesized |
+| Targets                 | 40+, variable   | 1, Java  | 7+ clients            | 1, Go     | 1, TS    | 1, Python | 3, maintained       |
+| Migrations              | no              | yes      | no                    | no        | yes      | yes     | yes                   |
+| Generated tests         | no              | partial  | no                    | no        | no       | no      | yes                   |
+| Formal verification     | no              | no       | partial, smithy-dafny | no        | no       | no      | yes, Dafny            |
+| Docker and CI           | no              | yes      | no                    | no        | no       | no      | yes                   |
 
-### 10.2 JHipster
-
-**What it is.** Full-stack application generator. Produces Spring Boot + Angular/React/Vue from a
-domain model (JDL).
-
-#### What it does well
-
-- Generates COMPLETE, RUNNABLE applications. `docker-compose up` works out of the box. This is the
-  bar we must meet.
-- JDL (JHipster Domain Language) is simple and well-documented.
-- Produces production-quality code: Liquibase migrations, Spring Security config, CI/CD pipelines,
-  Docker files, Kubernetes manifests.
-- Extensive entity relationship support (one-to-many, many-to-many, enums, pagination).
-- Built-in support for microservice architectures (gateway, service discovery, config server).
-
-#### What it does poorly
-
-- CRUD-only. JDL defines entities and relationships, rather than behavior. There is no way to say "this
-  operation requires X and ensures Y."
-- Java/Spring only on the backend (with experimental .NET support). No Python, Go, or TypeScript
-  backend.
-- Opinionated to the point of rigidity. If you want something JHipster does not support (e.g., a
-  custom auth scheme), you fight the generator.
-- Overwhelming output: a simple 2-entity JHipster project generates 200+ files, most of which are
-  boilerplate the developer never reads.
-- No formal verification of any kind.
-
-#### What we should copy
-
-- The completeness standard: generated projects include migrations, Docker files, CI config, tests,
-  and documentation. Everything works.
-- The JDL syntax is a good model for how a simple DSL should feel.
-- The entity relationship mapping (including junction tables for many-to-many).
-
-#### What we should avoid
-
-- Generating 200+ files for a simple service. Our URL shortener should produce ~25 files.
-- Being opinionated about frontend framework. We generate backends only.
-- Locking into one backend ecosystem (Spring).
-
-### 10.3 Smithy code generators
-
-**What it is.** AWS's API design language. Smithy IDL defines the model; code generators produce
-clients and servers.
-
-#### What it does well
-
-- Production-proven: every AWS SDK is generated from Smithy models.
-- The trait system is elegant: `@readonly`, `@paginated`, `@httpQuery` are annotations that modify
-  code generation behavior without changing the model.
-- smithy-dafny exists: Smithy models can be compiled to Dafny for formal verification, then to
-  target languages. This is the closest prior art to our Dafny integration pipeline.
-- Clean separation between model (Smithy IDL), transform (code generators), and output (target
-  code).
-
-#### What it does poorly
-
-- AWS-centric. Smithy's type system and traits are designed for AWS services. Concepts like
-  "eventually consistent reads" and "pagination tokens" are baked in as first-class constructs.
-- Steep learning curve. The Smithy model requires understanding resource lifecycle, service
-  closures, and trait application order.
-- No behavioral specification. Smithy is purely structural. You can say "this operation takes X and
-  returns Y" but not "this operation requires that X is in the database and ensures that Y is
-  added."
-- Server code generation is still limited (mainly Java/Kotlin via smithy4s).
-
-#### What we should copy
-
-- The trait system for extensible metadata.
-- The smithy-dafny pipeline architecture for verified code generation.
-- The clean model-transform-output separation.
-
-#### What we should avoid
-
-- AWS-specific abstractions. Our DSL is domain-agnostic.
-- The complexity of the Smithy gradle build system.
-
-### 10.4 Grpc-gateway
-
-**What it is.** Generates a REST reverse proxy in Go from protobuf service definitions with HTTP
-annotations.
-
-#### What it does well
-
-- Battle-tested at massive scale (millions of requests per day at many companies).
-- Clean mapping from RPC to REST via annotations.
-- Generates OpenAPI from the same protobuf source.
-- The generated code is idiomatic Go.
-
-#### What it does poorly
-
-- Go-only server generation.
-- Protobuf is verbose for simple REST APIs.
-- No database integration. The generated code is a proxy; you still write the backend.
-- No behavioral contracts beyond input/output types.
-
-#### What we should copy
-
-- The annotation-based convention override system (`option (google.api.http) = {...}`).
-- The OpenAPI co-generation approach: produce the API spec alongside the server code.
-
-#### What we should avoid
-
-- Requiring protobuf as input. Our DSL should be simpler than protobuf.
-- Being proxy-only. We generate the complete service, rather than a proxy.
-
-### 10.5 Prisma
-
-**What it is.** ORM and schema management tool for TypeScript/JavaScript (with growing Rust and
-Python support). Schema-first: define models in `schema.prisma`, generate type-safe client code.
-
-#### What it does well
-
-- The `schema.prisma` DSL is one of the best-designed data modeling languages. Simple, readable,
-  powerful.
-- Migration generation is excellent: `prisma migrate dev` detects schema changes and generates SQL
-  migrations automatically.
-- Type-safe client: queries are statically typed, preventing runtime errors.
-- Introspection: can reverse-engineer an existing database into a schema.
-
-#### What it does poorly
-
-- Data modeling only. No HTTP routes, no business logic, no tests.
-- TypeScript/JavaScript only (Rust client is new, Python is community-maintained).
-- No behavioral contracts. You cannot express preconditions or postconditions.
-- The query engine is a Rust binary, adding deployment complexity.
-
-#### What we should copy
-
-- The migration generation approach: diff the old and new schemas, generate SQL.
-- The schema.prisma DSL design: simple, declarative, readable.
-- The introspection capability (future feature: import existing DB into spec).
-
-#### What we should avoid
-
-- Shipping a separate query engine binary. Our generated code uses the target's native ORM/database
-  driver.
-
-### 10.6 Sqlalchemy alembic
-
-**What it is.** Database migration tool for Python. Auto-generates migrations by comparing
-SQLAlchemy model metadata to the current database state.
-
-#### What it does well
-
-- Auto-detection of schema changes: add a column to a model, `alembic revision --autogenerate`
-  produces the migration.
-- Supports complex migrations: data migrations, multi-step changes, custom SQL.
-- The migration chain (revision graph) handles branching and merging.
-- Mature and battle-tested (used by most Python ORMs in production).
-
-#### What it does poorly
-
-- Python-only.
-- Auto-generation misses some changes (renamed columns appear as drop+add).
-- No support for behavioral constraints (CHECK constraints must be added manually).
-- No cross-language migration generation.
-
-#### What we should copy
-
-- The auto-generation approach: compare model state to database state, generate diff.
-- The revision chain for migration ordering.
-- The `upgrade()`/`downgrade()` pattern.
-
-#### What we should avoid
-
-- Depending on a running database for migration generation. Our compiler generates migrations from
-  the spec diff alone, without needing a database connection.
-
-### 10.7 Summary comparison matrix
-
-| Capability               | OpenAPI Gen        | JHipster | Smithy                 | gRPC-GW    | Prisma   | Alembic         | **Ours**             |
-| ------------------------ | ------------------ | -------- | ---------------------- | ---------- | -------- | --------------- | -------------------- |
-| Behavioral spec input    | No                 | No       | No                     | No         | No       | No              | **Yes**              |
-| Complete runnable output | No (stubs)         | **Yes**  | Partial                | No (proxy) | No (ORM) | No (migrations) | **Yes**              |
-| Multi-language targets   | 40+ (poor quality) | 1 (Java) | 7+ (clients)           | 1 (Go)     | 1 (TS)   | 1 (Python)      | **3 (high quality)** |
-| Database migrations      | No                 | **Yes**  | No                     | No         | **Yes**  | **Yes**         | **Yes**              |
-| Generated tests          | No                 | Partial  | No                     | No         | No       | No              | **Yes (3 tiers)**    |
-| Formal verification      | No                 | No       | Partial (smithy-dafny) | No         | No       | No              | **Yes (Dafny)**      |
-| OpenAPI co-generation    | Input, rather than output  | **Yes**  | **Yes**                | **Yes**    | No       | No              | **Yes**              |
-| Docker/infra generation  | No                 | **Yes**  | No                     | No         | No       | No              | **Yes**              |
-| Incremental regeneration | No                 | Partial  | No                     | No         | **Yes**  | **Yes**         | **Yes**              |
-
-The key differentiator is that no existing tool combines behavioral specification with complete code
-generation. JHipster comes closest on the "complete output" axis; Smithy-Dafny comes closest on the
-"verified output" axis. Our compiler merges both.
+No tool combines a behavioral spec with complete generation. JHipster comes closest on completeness,
+smithy-dafny on verification, and this project's wager is that both belong in one tool. The one
+honest asterisk is the operation bodies: the structure, the routes, schema, validation, tests, and
+infrastructure, is always emitted, but the logic inside each operation is verified only when
+synthesis runs, and otherwise ships as a fail-loud stub.
