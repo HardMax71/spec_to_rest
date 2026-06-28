@@ -158,7 +158,7 @@ a convention engine that maps structure to HTTP routes, a database schema, and O
 spec itself, synthesize the business logic through an LLM-plus-verifier loop, and generate conformance
 tests. The stage-by-stage detail is in [Architecture](/design/architecture), the convention mapping in
 [the convention engine](/design/convention-engine), and the implementation rationale in
-[Implementation Architecture](/research/implementation_architecture).
+[Implementation Architecture](/research/implementation_architecture/host-language).
 
 Each stage exists partly to clear a risk the research had already exposed. The widest was the
 abstraction gap: a spec says the store gains an entry, but real code has to settle transactions,
