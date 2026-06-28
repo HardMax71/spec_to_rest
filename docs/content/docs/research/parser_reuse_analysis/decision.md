@@ -63,4 +63,4 @@ version: Langium's companion type system cannot express refinement types, relati
 expressions, so most of the type checker has to be hand-built whichever way the choice goes, which
 erases Langium's main productivity argument; ANTLR's community dwarfs it; and ANTLR keeps the parser
 independent of any one framework. The full back-and-forth is the
-[DSL frameworks](/research/dsl_compiler_frameworks) survey.
+[DSL frameworks](/research/dsl_compiler_frameworks/decision) survey.
