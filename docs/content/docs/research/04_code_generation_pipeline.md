@@ -50,7 +50,7 @@ It produces a complete, runnable project: not stubs or skeletons, but working co
 `docker-compose up` and start using immediately.
 
 The following subsections show the full file manifest and complete generated code for the URL
-shortener spec from the analysis (Section 7.2 of document 00).
+shortener spec from the [spec language reference](/spec-language).
 
 ### 1.1 Python-fastapi-postgres
 
