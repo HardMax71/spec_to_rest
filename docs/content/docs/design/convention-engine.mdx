@@ -12,7 +12,7 @@ parsed `ServiceIR`, classifies each operation against the **M1-M10** rules, deri
 user-supplied convention overrides.
 
 For the design rationale, every rule, edge case, and override mechanism end-to-end,
-see [Convention Engine](/research/convention_engine).
+see [Convention Engine](/research/convention_engine/ruleset).
 
 The engine is **deterministic**: identical IR -> identical endpoint and schema decisions, every
 run. Authoritative source: `modules/convention/src/main/scala/specrest/convention/`.
@@ -42,7 +42,7 @@ the dispatch logic lives in
 [`Classify.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/convention/src/main/scala/specrest/convention/Classify.scala).
 M6 is reserved in the enum (`CreateChild`) but no current dispatch arm produces it, nested
 `POST /parent/{id}/child` is on the roadmap. See
-[Convention Engine section M6](/research/convention_engine) for the planned semantics.
+[Convention Engine section M6](/research/convention_engine/ruleset) for the planned semantics.
 
 ### Synthesis strategy (#31)
 
