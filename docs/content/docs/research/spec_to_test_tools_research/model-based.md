@@ -3,259 +3,109 @@ title: "Model-based testing"
 description: "TLA+ traces, the model-based landscape, conformance, Spec Explorer, and NModel"
 ---
 
-## 3. TLA+ trace validation & test generation
+## TLA+ traces and test generation
 
-**What it is.** A family of approaches that connect TLA+ formal specifications to real
-implementations by either (a) validating execution traces against the spec, or (b) generating test
-cases from the spec's state space.
+Two ways connect a TLA+ spec to a real implementation: validate execution traces against the spec, or
+generate tests from its state space.
 
-### 3a. trace validation (constrained model checking)
+Trace validation ([Kuppe et al., 2024](https://arxiv.org/abs/2404.16075)) instruments the
+implementation to emit a trace of state transitions, expresses that trace as a constrained TLA+ spec,
+and runs the TLC model checker to confirm the trace is a valid behavior, which reduces to whether some
+sequence of spec states matches the observed trace. Not every variable needs tracing: the model
+checker reconstructs the missing ones, trading a larger search space for less invasive
+instrumentation. The published experiments found spec-implementation discrepancies in every
+distributed program tested.
 
-#### Methodology (kuppe et al., 2024)
+[MongoDB](https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs)
+runs this in production, specifying its replication protocol in TLA+, capturing execution traces, and
+validating them against the spec while checking invariants. Five years in, the lessons are that the
+specs caught real algorithmic issues, that maintaining the conformance checking is significant ongoing
+effort, and that keeping specs in sync with an evolving implementation, "agile modelling," is the
+hardest part. [OmniLink (2025)](https://arxiv.org/html/2601.11836) pushes the idea to unmodified
+concurrent systems: it records operation start and end times as timeboxes (no code change), generates
+a fuzzer template from the TLA+ spec, uses the `rr` record-replay framework's chaos mode to randomize
+thread scheduling, and validates the observed behaviors against the spec via TLC. It found two
+previously unknown bugs across WiredTiger, BAT, and ConcurrentQueue, and outran Porcupine, the
+state-of-the-art linearizability checker, on 200k-plus-operation traces. A related strand
+([Fragoso Santos et al., 2022](https://dl.acm.org/doi/fullHtml/10.1145/3559744.3559747)) generates
+both code and tests from a TLA+ spec so the two are consistent by construction. The TLC checker
+underneath is mature (AWS, MongoDB, Microsoft, Cockroach Labs); trace validation is research-grade but
+maturing fast, and OmniLink is recent.
 
-1. Instrument the implementation to emit a trace (log) of state transitions.
-2. Express the trace as a constrained TLA+ specification.
-3. Use the TLC model checker to verify the trace is a valid behavior of the spec.
-4. The problem reduces to: "does there exist a sequence of spec states that matches the observed
-   trace?"
+## The landscape
 
-**Key insight, partial traces.** Not all specification variables need to be traced. The model
-checker can reconstruct missing information. This creates a tradeoff: less instrumentation = larger
-search space but less invasive changes to implementation code.
+In the REST world the OpenAPI spec is the de facto formal model, and the tools sit on a spectrum by
+how much formality they demand:
 
-#### Tooling
-
-- Java API for program instrumentation
-- TLA+ operator library for relating traces to specifications
-- Scripts to drive TLC model checker
-
-**Experimental results.** Found discrepancies between specs and implementations in all tested
-distributed programs.
-
-### 3b. mongodb's conformance checking
-
-MongoDB uses TLA+ to specify distributed algorithms (e.g., replication protocol). Their approach:
-
-1. Run implementation under test scenarios.
-2. Capture execution traces of state transitions.
-3. Validate traces against TLA+ specifications.
-4. Verify no invariants are violated.
-
-#### Lessons learned (after 5 years)
-
-- Formal specs caught real algorithmic issues.
-- Maintaining conformance checking requires significant ongoing effort.
-- Keeping specs in sync with evolving implementations is the hardest part.
-- "Agile modelling", specs must evolve with the codebase.
-
-### 3c. omnilink (2025), unmodified concurrent systems
-
-#### Methodology
-
-- Records operation start/end times as "timeboxes" (no code modification needed).
-- Automatically generates a fuzzer template from the TLA+ specification.
-- Uses `rr` record/replay framework's chaos mode to randomize thread scheduling.
-- Validates observed behaviors against the TLA+ spec via TLC.
-
-**Results.** Detected 2 previously unknown bugs in WiredTiger (MongoDB storage engine), BAT
-(concurrent search tree), and ConcurrentQueue. Outperformed Porcupine (state-of-art linearizability
-checker) on large traces (200k+ operations).
-
-### 3d. code + test generation from TLA+
-
-Academic work (Fragoso Santos et al., 2022) on generating both code and tests from TLA+ specs. The
-spec drives both artifacts, ensuring they are consistent by construction.
-
-**How specs connect to tests.** The TLA+ specification is the formal model. Tests are either
-generated from the state space (as valid behaviors the implementation must accept) or traces are
-validated against the spec (as behaviors the implementation actually produced).
-
-#### Maturity
-
-- TLC model checker: mature, used at AWS, MongoDB, Microsoft, Cockroach Labs
-- Trace validation: research-grade but rapidly maturing (2024-2025 papers)
-- OmniLink: recent research (2025), rather than yet a production tool
-
-#### Key sources
-
-- https://arxiv.org/abs/2404.16075
-- https://www.mongodb.com/company/blog/engineering/conformance-checking-at-mongodb-testing-our-code-matches-our-tla-specs
-- https://arxiv.org/html/2601.11836
-- https://dl.acm.org/doi/fullHtml/10.1145/3559744.3559747
-
-## 5. Model-based testing for REST APIs (tool landscape)
-
-### Overview of approaches
-
-| Approach          | Representative Tools        | Spec Input                 | What It Tests                                      |
+| Approach          | Representative tools        | Spec input                 | What it tests                                      |
 | ----------------- | --------------------------- | -------------------------- | -------------------------------------------------- |
-| Schema-driven PBT | Schemathesis, RESTler       | OpenAPI/Swagger            | Schema conformance, edge cases, stateful workflows |
-| Contract testing  | Pact, Spring Cloud Contract | Consumer-defined contracts | Service compatibility                              |
-| Spec validation   | Dredd, Prism                | OpenAPI/API Blueprint      | Doc-implementation sync                            |
-| Commercial MBT    | Tricentis Tosca             | Proprietary models         | End-to-end business flows                          |
-| Academic MBT      | Spec Explorer, NModel       | C#/formal models           | Protocol conformance                               |
+| Schema-driven PBT | Schemathesis, RESTler       | OpenAPI/Swagger            | schema conformance, edge cases, stateful workflows |
+| Contract testing  | Pact, Spring Cloud Contract | consumer-defined contracts | service compatibility                              |
+| Spec validation   | Dredd, Prism                | OpenAPI/API Blueprint      | doc-implementation sync                            |
+| Commercial MBT    | Tricentis Tosca             | proprietary models         | end-to-end business flows                          |
+| Academic MBT      | Spec Explorer, NModel       | C# or formal models        | protocol conformance                               |
 
-### Key insight: Spec-to-test spectrum
-
-```text
-Manual tests <-----> Schema validation <-----> PBT from spec <-----> Full MBT
-   (Postman)          (Dredd, Prism)      (Schemathesis)    (Spec Explorer)
-
-Less spec formality ---------------------------------> More spec formality
-Less automation -------------------------------------> More automation
-Less coverage ---------------------------------------> More coverage
-Less setup ------------------------------------------> More setup
+```mermaid
+flowchart LR
+  M["Manual tests<br/>Postman"] --> S["Schema validation<br/>Dredd, Prism"] --> P["PBT from spec<br/>Schemathesis"] --> F["Full MBT<br/>Spec Explorer"]
 ```
 
-**How specs connect to tests.** In the REST API world, the OpenAPI specification is the de facto
-"formal spec." Tools like Schemathesis and RESTler treat it as a machine-readable model from which
-to generate tests. The richer the spec (with examples, links, constraints), the better the generated
-tests.
+Formality, automation, coverage, and setup cost all rise from left to right, and the richer the spec
+(examples, links, constraints), the better the generated tests.
+[openapi.tools](https://tools.openapis.org/categories/testing.html) catalogs the testing tools in this
+space.
 
-#### Key sources
+## Conformance testing
 
-- https://tools.openapis.org/categories/testing.html
-- https://www.softwaretestinghelp.com/api-testing-tools/
+Conformance testing asks whether an implementation correctly realizes a formal model, and the
+conformance relation defines what "correctly" means. The dominant one for reactive systems is
+[ioco, input-output conformance](https://www.sciencedirect.com/topics/computer-science/conformance-testing):
+an implementation `i` conforms to spec `s` if, for every trace `s` can produce, the outputs `i`
+produces after that trace are a subset of the outputs `s` allows. The model can be any of several
+formalisms:
 
-## 9. Conformance testing: Formal model vs. implementation
-
-**Definition.** Verifying that an implementation correctly realizes the behavior specified by a
-formal model. The conformance relation defines what "correctly" means.
-
-### Theoretical foundation
-
-**ioco (input-output conformance):** The dominant conformance relation for reactive systems. An
-implementation `i` conforms to specification `s` (written `i ioco s`) if, for every trace that `s`
-can produce, the outputs that `i` produces after that trace are a subset of the outputs that `s`
-allows.
-
-#### Formal models used
-
-| Model Type                      | Expressiveness              | Typical Domain       |
+| Model type                      | Expressiveness              | Typical domain       |
 | ------------------------------- | --------------------------- | -------------------- |
-| FSM (Finite State Machine)      | States + transitions        | Protocol conformance |
-| LTS (Labeled Transition System) | Non-determinism, quiescence | Reactive systems     |
-| EFSM (Extended FSM)             | Data variables + guards     | Richer protocols     |
-| TFSM (Timed FSM)                | Real-time constraints       | Real-time systems    |
-| TLA+ specifications             | Arbitrary math              | Distributed systems  |
+| FSM (finite state machine)      | states and transitions      | protocol conformance |
+| LTS (labeled transition system) | non-determinism, quiescence | reactive systems     |
+| EFSM (extended FSM)             | data variables and guards   | richer protocols     |
+| TFSM (timed FSM)                | real-time constraints       | real-time systems    |
+| TLA+ specifications             | arbitrary math              | distributed systems  |
 
-### Test generation from formal models
+[Test generation from such a model](https://link.springer.com/content/pdf/10.1007/978-0-387-34883-4_12.pdf)
+aims to be sound (a conforming implementation passes every generated test) and
+[complete](https://www.sciencedirect.com/science/article/abs/pii/S0950584910001278) (a non-conforming
+one fails at least one), with coverage measured over states, transitions, or paths. The strongest
+variant is [differential fuzzing against a verified model](https://welltyped.systems/blog/verified-conformance-testing-for-dummies):
+build a small model proven correct, generate random operations, run them on both the model and the
+implementation, and treat any divergence as a real bug, because the model cannot be wrong. It fits
+state machines, protocols, financial logic, parsers, anything with strict invariants.
 
-**Soundness.** A conforming implementation passes all generated test cases. **Completeness:** A
-non-conforming implementation fails at least one test case.
+## Spec Explorer
 
-#### Coverage criteria
+[Spec Explorer](https://www.microsoft.com/en-us/research/project/model-based-testing-with-specexplorer/)
+is a Visual Studio extension from Microsoft Research, used internally for over a decade and credited
+with saving around 50 person-years. The model is written as a plain C#
+[model program](https://learn.microsoft.com/en-us/archive/msdn-magazine/2013/december/model-based-testing-an-introduction-to-model-based-testing-and-spec-explorer):
+fields are state, `[Rule]` methods are transitions, and `Condition.IsTrue(...)` guards them, so there
+is no new language to learn. A Cord script then constructs the model program, exploring the full state
+space, and slices it with regular-expression-like scenarios and synchronized parallel composition
+(`||`), which is what makes an infinite state space tractable. Spec Explorer explores that into a
+state graph, controllable states where the test sends a stimulus and observable ones where it expects
+a response, and turns the graph into human-readable Visual Studio or NUnit tests in test normal form,
+covering every transition. At Microsoft it drove Windows protocol-compliance testing (250 person-years
+of testing, roughly 40% saved), .NET, and OS components since 2004, and its rules of thumb for when
+MBT pays off are large or infinite state spaces, reactive or distributed or asynchronous systems,
+non-determinism, methods with many parameters, and requirements coverable many ways. The tooling is
+aging, though: Spec Explorer 2010 was the last extension release, and NModel is the open-source
+successor.
 
-- State coverage: every model state is visited
-- Transition coverage: every model transition is exercised
-- Path coverage: specific paths through the model are traversed
+## NModel
 
-### Verified model-based conformance testing
-
-#### Approach (differential fuzzing against verified model)
-
-1. Build a small, verified model (proven correct via formal proofs).
-2. Generate random operations.
-3. Execute on both the model and the real implementation.
-4. Compare outputs and states.
-5. Any divergence is a real bug (because the model is provably correct).
-
-**Best suited for.** State machines, protocols, financial logic, parsers, systems with strict
-invariants.
-
-**How specs connect to tests.** The formal model defines the "should" behavior. Test cases are
-generated by traversing the model's state space. The implementation is the system under test.
-Conformance is checked by comparing implementation behavior against model behavior.
-
-#### Key sources
-
-- https://www.sciencedirect.com/topics/computer-science/conformance-testing
-- https://welltyped.systems/blog/verified-conformance-testing-for-dummies
-- https://www.sciencedirect.com/science/article/abs/pii/S0950584910001278
-- https://link.springer.com/content/pdf/10.1007/978-0-387-34883-4_12.pdf
-
-## 10. Spec Explorer, Microsoft model-based testing
-
-**What it is.** A Visual Studio extension for model-based testing. Developed by Microsoft Research,
-used internally at Microsoft for 10+ years, saved an estimated 50 person-years of testing effort.
-
-### How it works
-
-### Step 1: Write model programs (c#)
-
-- System state = class fields
-- State transitions = rule methods with `[Rule]` attribute
-- Enabling conditions = `Condition.IsTrue(...)` calls
-- Model is pure C#, no new language to learn
-
-### Step 2: Define machines (cord scripting language)
-
-- `construct model program`, explores the full state space
-- Scenarios, regular-expression-like patterns of action sequences
-- `||` (synchronized parallel composition), slices behavior by intersecting a scenario with the
-  full model (critical for infinite state spaces)
-
-### Step 3: Explore & visualize
-
-- Spec Explorer generates a state graph from the model.
-- Circle states = controllable (test sends stimulus)
-- Diamond states = observable (test expects response from SUT)
-- Non-deterministic states = multiple possible SUT responses
-
-### Step 4: Generate tests
-
-- `construct test cases` converts explored behavior into "test normal form" (no state has multiple
-  outgoing call-return steps).
-- Traversal uses edge coverage (every transition covered at least once).
-- Generated code is human-readable Visual Studio unit tests or NUnit tests.
-
-#### Impact at microsoft
-
-- Used for Windows protocol compliance (250 person-years of testing; MBT saved ~50 person-years =
-  40% effort reduction)
-- Used for .NET framework, operating system components
-- Deployed since 2004
-
-#### When MBT pays off (microsoft's rules of thumb)
-
-- Infinite or very large state spaces
-- Reactive / distributed / asynchronous systems
-- Non-deterministic interactions
-- Methods with many complex parameters
-- Requirements that can be covered in multiple ways
-
-#### Current status
-
-- Spec Explorer 2010: last Visual Studio extension release
-- NModel: open-source successor (C# model programs, same conceptual approach)
-- The approach is mature but the specific tooling is aging
-
-**How specs connect to tests.** The C# model program _is_ the formal specification. Spec Explorer
-explores it as a state machine, generates a finite graph via scenario slicing, then produces
-executable test cases from the graph.
-
-#### Key sources
-
-- https://www.microsoft.com/en-us/research/project/model-based-testing-with-specexplorer/
-- https://learn.microsoft.com/en-us/archive/msdn-magazine/2013/december/model-based-testing-an-introduction-to-model-based-testing-and-spec-explorer
-- https://jon-jacky.github.io/NModel/
-
-## Appendix B: NModel
-
-**What it is.** Open-source model-based testing framework for C#. Spiritual successor to Spec
-Explorer, usable without Visual Studio.
-
-### Components
-
-- Library of attributes and data types for writing model programs in C#
-- `mpv` (Model Program Viewer), visualization and analysis
-- `mp2dot`, export to Graphviz DOT format
-- `ct`, test generation and execution tool
-
-**How specs connect to tests.** Same as Spec Explorer: model programs in C# define the state
-machine; tools explore the state space and generate test cases.
-
-### Key sources
-
-- https://jon-jacky.github.io/NModel/
-- http://staff.washington.edu/jon/modeling-book/
+[NModel](https://jon-jacky.github.io/NModel/) is the open-source model-based testing framework for C#,
+the Spec Explorer successor usable without Visual Studio. It is a library of attributes and types for
+writing C# model programs plus three tools: `mpv`, the model-program viewer for visualization and
+analysis; `mp2dot`, which exports to Graphviz DOT; and `ct`, for test generation and execution. The
+connection to tests is the same as Spec Explorer's, the C# model program is the specification, and the
+tools explore its state space and generate cases (the
+[modeling book](http://staff.washington.edu/jon/modeling-book/) is the long-form reference).
