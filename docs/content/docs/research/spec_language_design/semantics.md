@@ -3,147 +3,108 @@ title: "Semantic model"
 description: "State, pre and primed values, quantifiers, set and relation operations, and multiplicities"
 ---
 
-### 3.1 What is "State"?
+## State
 
-State is a **snapshot of all declared state fields at a point in time**. Formally:
+A state is the value of every declared state field at one point in time. A scalar field holds a
+single value; a relation field such as `store: ShortCode -> lone LongURL` holds a set of key-value
+pairs. The reference semantics in
+[`Semantics_Eval.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/semantics/Semantics_Eval.thy)
+records a state as four maps: scalars, relation domains, lookup pairs, and entity fields.
 
-```text
-State = { field_name -> value | field_name in state_decl.fields }
-```
+The initial state is empty. Nothing is in any relation and no scalar is set, and operations populate
+it from there. Each operation takes one state to the next, so a run is a trace `S0, S1, S2, ...`
+with `S0` the empty state.
 
-A state field holds a value of its declared type. For relation types (e.g.,
-`store: ShortCode -> lone LongURL`), the value is a set of tuples. For simple types, the value is a
-single element.
+## The pre-state and the post-state
 
-The system begins in the **initial state** where all relation-typed fields are empty sets/maps and
-all scalar fields hold their type's default value (empty string, 0, false, epoch time).
+Inside an `ensures` clause two views of the same field are in scope. `pre(store)` is the field as it
+stood before the operation ran, the same idea as `old(store)` in Dafny or `store~` in VDM. The
+primed `store'` is the field afterward. The clause is a predicate over both, and it has to hold for
+the pre-state and the post-state the operation produces.
 
-Each operation transforms one state into another. The sequence of states forms a **trace**:
-`S_0, S_1, S_2, ...` where `S_0` is the initial state and each subsequent state is the result of
-applying an operation.
+Following the TLA+ convention, an unprimed name in an `ensures` clause already means the pre-state,
+so `pre(store)` and `store` are the same thing there; `pre()` exists only to make the intent obvious
+where a bare name might read either way. In a `requires` clause the question never arises, since it
+runs before the operation and every field reference is the pre-state.
 
-### 3.2 What does `pre(store)` mean?
-
-Within an `ensures` clause, `pre(store)` refers to **the value of `store` in the state immediately
-before the operation executed**. It is equivalent to `old(store)` in Dafny or `store~` in VDM-SL.
-
-```text
+```spec
 operation Shorten {
   ensures:
-    code not in pre(store)    // code was NOT in store before this operation
-    store'[code] = url        // code IS in store after this operation
+    code not in pre(store)            // code was not in store before
+    store'[code] = url                // code maps to url after
+    #store' = #store + 1              // one more entry than before
 }
 ```
 
-The `pre()` function can wrap any state field name. It is only valid inside `ensures` clauses.
-Inside `requires` clauses, all state field references implicitly refer to the pre-state (since the
-requires clause is checked before the operation runs).
+The formal version carries a pre-state and a post-state together (`state_pair` in the reference
+semantics), and a mode picks which one a reference reads.
 
-### 3.3 What does `store'` mean?
+## Quantifiers
 
-The prime notation `store'` refers to **the value of `store` in the state immediately after the
-operation executes**. This is the post-state.
+A quantifier ranges over a collection. A binding is either membership (`x in S`) or by type
+(`x: User`, which ranges over the entity's instances).
 
-Formally, if operation `Op` transforms state `S` to state `S'`:
+| Form        | Syntax                  | Meaning                                                |
+| ----------- | ----------------------- | ------------------------------------------------------ |
+| Universal   | `all x in S \| P(x)`    | `P(x)` holds for every `x` in `S`                      |
+| Existential | `some x in S \| P(x)`   | `P(x)` holds for at least one `x` in `S` (`exists` is the same) |
+| None        | `no x in S \| P(x)`     | `P(x)` holds for no `x` in `S`, the same as `all x in S \| not P(x)` |
 
-- `store` (unprimed, in requires) = `S.store`
-- `pre(store)` (in ensures) = `S.store`
-- `store'` (primed, in ensures) = `S'.store`
+The collection can be a set, a sequence, a map (ranging over its keys), or the domain or range of a
+relation. Quantifiers nest:
 
-The ensures clause is a **predicate over the pre-state and post-state**. It must hold for the
-operation to be correct.
-
-In an `ensures` clause, an unprimed state field reference (`store`) refers to the **pre-state** (the
-state before the operation), following the TLA+ convention. This means `pre(store)` and `store` are
-synonymous in ensures clauses, `pre()` exists for readability when the intent might otherwise be
-ambiguous.
-
-```text
-ensures:
-  store'[code] = url          // post-state: code maps to url
-  #store' = #store + 1        // post-size = pre-size + 1 (unprimed = pre-state)
-  store' = store + {code -> url}  // post = pre + new mapping
-```
-
-### 3.4 How quantifiers work
-
-Four quantifier forms:
-
-| Quantifier        | Syntax                  | Meaning                                                                                    |
-| ----------------- | ----------------------- | ------------------------------------------------------------------------------------------ |
-| Universal         | `all x in S \| P(x)`    | For every element `x` in collection `S`, predicate `P(x)` holds                            |
-| Existential       | `some x in S \| P(x)`   | There exists at least one element `x` in `S` where `P(x)` holds                            |
-| Existential (alt) | `exists x in S \| P(x)` | Synonym for `some`                                                                         |
-| Negated universal | `no x in S \| P(x)`     | There is no element `x` in `S` where `P(x)` holds (equivalent to `all x in S \| not P(x)`) |
-
-The collection `S` can be any expression that evaluates to a set, sequence, map (iterates over
-keys), or the domain/range of a relation.
-
-Nested quantifiers are supported:
-
-```text
+```spec
 all c in store | all d in store |
-  (c != d) implies (store[c] != store[d])
-// No two codes map to the same URL
+  c != d implies store[c] != store[d]
 ```
 
-### 3.5 How set operations work
+## Set operations
 
-| Operation      | Syntax                          | Meaning                            |
-| -------------- | ------------------------------- | ---------------------------------- |
-| Union          | `A + B` or `A union B`          | All elements in A or B             |
-| Intersection   | `A & B` or `A intersect B`      | All elements in both A and B       |
-| Difference     | `A - B` or `A minus B`          | Elements in A but not in B         |
-| Cardinality    | `#A`                            | Number of elements in A            |
-| Membership     | `x in A`                        | True if x is an element of A       |
-| Non-membership | `x not in A`                    | True if x is not an element of A   |
-| Subset         | `A subset B`                    | True if every element of A is in B |
-| Empty check    | `#A = 0` or `no x in A \| true` | True if A has no elements          |
+| Operation      | Syntax                   | Meaning                          |
+| -------------- | ------------------------ | -------------------------------- |
+| Union          | `A union B` (or `A + B`) | elements in `A` or `B`           |
+| Intersection   | `A intersect B`          | elements in both `A` and `B`     |
+| Difference     | `A minus B`              | elements in `A` but not `B`      |
+| Cardinality    | `#A`                     | number of elements in `A`        |
+| Membership     | `x in A`, `x not in A`   | whether `x` is an element of `A` |
+| Subset         | `A subset B`             | every element of `A` is in `B`   |
 
-Set comprehensions create new sets:
+A set comprehension builds a new set:
 
-```text
+```spec
 { c in store | store[c].startsWith("https") }
-// The set of all codes whose URLs start with https
 ```
 
-### 3.6 How relation operations work
+That is the set of codes whose URL starts with `https`.
 
-Relations are sets of tuples. A state field `store: ShortCode -> lone LongURL` is a set of
-`(ShortCode, LongURL)` pairs.
+## Relation operations
 
-| Operation                    | Syntax                  | Meaning                                                               |
-| ---------------------------- | ----------------------- | --------------------------------------------------------------------- |
-| Lookup                       | `store[code]`           | The LongURL associated with code (if multiplicity allows exactly one) |
-| Domain                       | `dom(store)`            | The set of all ShortCodes that have mappings                          |
-| Range                        | `ran(store)`            | The set of all LongURLs that are mapped to                            |
-| Override                     | `store + {code -> url}` | Store with the code->url mapping added or replaced                    |
-| Removal                      | `store - {code}`        | Store with the code mapping removed                                   |
-| Restriction                  | `store \| S`            | Store restricted to codes in set S                                    |
-| Composition                  | `R . S`                 | Relational join: `{(a,c) \| exists b: (a,b) in R and (b,c) in S}`     |
-| Transitive closure           | `^R`                    | R composed with itself until fixed point                              |
-| Reflexive-transitive closure | `*R`                    | `^R + identity`                                                       |
+A relation is a set of key-value pairs, so `store: ShortCode -> lone LongURL` pairs each code with at
+most one URL.
 
-### 3.7 How multiplicities constrain relations
+| Operation          | Syntax                  | Meaning                                                   |
+| ------------------ | ----------------------- | --------------------------------------------------------- |
+| Lookup             | `store[code]`           | the URL for `code`, when the multiplicity allows one      |
+| Domain             | `dom(store)`            | the codes that have a mapping                             |
+| Range              | `ran(store)`            | the URLs that are mapped to                              |
+| Insert or replace  | `store + {code -> url}` | `store` with that pair added, or overwritten if `code` exists |
+| Transitive closure | `^store`                | `store` composed with itself to a fixed point            |
 
-Multiplicities appear in relation type declarations and constrain how many target values each source
-value can map to:
+Transitive closure is the one relation operator the SMT layer does not handle, so a spec that uses
+`^` routes to Alloy instead of Z3.
 
-| Multiplicity | Meaning                        | SQL Analogy                | Example                            |
+## Multiplicities
+
+A multiplicity on a relation type bounds how many targets each source maps to.
+
+| Multiplicity | Meaning                        | SQL analogy                | Example                            |
 | ------------ | ------------------------------ | -------------------------- | ---------------------------------- |
-| `one`        | Exactly one target per source  | `NOT NULL` foreign key     | `owner: User -> one Team`          |
-| `lone`       | Zero or one target per source  | Nullable foreign key       | `store: ShortCode -> lone LongURL` |
-| `some`       | One or more targets per source | Junction table, `NOT NULL` | `tags: Item -> some Tag`           |
-| `set`        | Any number (zero or more)      | Junction table, nullable   | `followers: User -> set User`      |
+| `one`        | exactly one target per source  | `NOT NULL` foreign key     | `owner: User -> one Team`          |
+| `lone`       | zero or one target per source  | nullable foreign key       | `store: ShortCode -> lone LongURL` |
+| `some`       | one or more targets per source | junction table, `NOT NULL` | `tags: Item -> some Tag`           |
+| `set`        | any number, zero or more       | junction table, nullable   | `followers: User -> set User`      |
 
-Multiplicities generate proof obligations:
-
-- `one`: every operation that adds to the source domain must also add a target
-- `lone`: operations may leave the target as "none" for a source
-- `some`: every operation that adds a source must add at least one target
-- `set`: no constraints on the number of targets
-
-When the convention engine maps these to a database schema:
-
-- `one` and `lone` become foreign key columns on the source table
-- `some` and `set` become junction tables with appropriate constraints
+These bounds become obligations the verifier checks. `one` requires every operation that adds a
+source to add a target; `lone` lets a source carry no target; `some` requires at least one target
+per source; `set` adds no constraint. The convention engine then turns `one` and `lone` into a
+foreign-key column on the source table, and `some` and `set` into a junction table.
