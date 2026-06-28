@@ -116,18 +116,8 @@ flowchart TD
   end
 
   subgraph Stage3["3: synthesis (the CEGIS loop)"]
-    S3a["Dafny signature generation"] --> S3b["Clover triangulation<br/>spec to docstring checks"]
-    S3b --> S3c_prompt["Prompt<br/>skeleton + context + few-shot + hints"]
-    S3c_prompt --> S3c_llm["LLM call to candidate body"]
-    S3c_llm --> S3c_diff["Diff-check: clauses unchanged?"]
-    S3c_diff -->|"yes"| S3c_verify["Dafny verifier"]
-    S3c_diff -->|"no, reject"| S3c_prompt
-    S3c_verify -->|"pass"| S3d["Clover post-checks"]
-    S3c_verify -->|"fail"| S3c_error["Error parser + feedback"]
-    S3c_error -->|"budget ok"| S3c_prompt
-    S3c_error -->|"budget out"| S3c_fallback["Fallback<br/>retry, decompose, escalate, skeleton, report"]
-    S3c_fallback --> S3c_prompt
-    S3d --> S3e["Dafny compilation to target"]
+    S3a["Dafny signature generation"] --> S3loop["CEGIS loop<br/>prompt, verify, repair"]
+    S3loop --> S3e["Dafny compilation to target"]
   end
 
   subgraph Stage4["4: assembly"]
@@ -145,8 +135,8 @@ flowchart TD
   S3e --> Assembler
   Assembler --> Tests
 
-  style S3a,S3b,S3c_prompt,S3c_llm,S3c_diff,S3c_verify,S3c_error,S3c_fallback,S3d,S3e stroke:#dc2626,stroke-width:2px
-  linkStyle 2,3,4,5,6,7,8,9,10,11,12,13 stroke:#dc2626
+  style S3a,S3loop,S3e stroke:#dc2626,stroke-width:2px
+  linkStyle 2,3 stroke:#dc2626
 ```
 
 The diagram traces a spec from file to finished service. Parsing and classification are shared, and
