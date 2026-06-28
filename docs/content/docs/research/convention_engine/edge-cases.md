@@ -1,231 +1,65 @@
 ---
 title: "Edge cases"
-description: "Read-and-write operations, multiple inputs, idempotency, pagination, and other ambiguous cases"
+description: "How the classifier and conventions handle reads-with-writes, multi-entity inputs, child resources, optional inputs, and collections"
 ---
 
-### 5.1 Operations that both read AND write
+The M-rules and the conventions block cover most operations cleanly. A few shapes need a closer look.
 
-**Example:** "Increment counter and return new value"
+## Operations that read and write
 
-```text
-operation IncrementViewCount {
-  input: code: ShortCode
-  output: new_count: Int
+An operation can mutate state and still return data, like incrementing a counter and returning the
+new value. The method comes from the mutation, never the read: if an operation changes any state
+relation it is not a `GET`, since `GET` must stay safe under RFC 7231. So a read-and-write operation
+lands on `POST`, `PUT`, `PATCH`, or `DELETE` by the same field-coverage rules as any other mutation,
+and the value it returns rides in the response body.
 
-  requires: code in store
+## Operations over several entities
 
-  ensures:
-    view_count'[code] = view_count[code] + 1
-    new_count = view_count'[code]
-    store' = store
-}
-```
+Some operations touch more than one entity and belong to no single resource. A transfer between two
+accounts is the stock example:
 
-**Resolution.** This mutates state (`view_count'` differs from `view_count`) AND returns data. The
-engine maps this to **POST** because the operation is not safe (it has side effects). GET would
-violate RFC 7231's safety requirement.
-
-**Rule.** If an operation mutates ANY state relation, it is not a GET, regardless of whether it also
-returns data. The method is determined by the mutation rules (M1-M6, M8-M10).
-
-### 5.2 Operations with multiple entity inputs
-
-**Example:** "Transfer between accounts"
-
-```text
+```spec
 operation Transfer {
   input: from_id: AccountId, to_id: AccountId, amount: Decimal
-
   requires:
     from_id in accounts
     to_id in accounts
     from_id != to_id
     accounts[from_id].balance >= amount
-    amount > 0
-
   ensures:
     accounts'[from_id].balance = accounts[from_id].balance - amount
-    accounts'[to_id].balance = accounts[to_id].balance + amount
+    accounts'[to_id].balance   = accounts[to_id].balance + amount
 }
 ```
 
-**Resolution.** This mutates existing entities but doesn't clearly belong to one resource. The
-engine applies Rule M8 (side-effect POST) and creates a top-level action endpoint:
+Neither id identifies a single target, so the classifier falls to M8, the catch-all mutation: the
+path is the operation name in kebab-case (`POST /transfer`), and both ids travel in the request body.
 
-- `POST /transfers` with body `{"from_id": 1, "to_id": 2, "amount": 100.00}`
+## Child resources
 
-The entity to use for the path is the _operation name itself_, treated as a verb-noun (Transfer ->
-`transfers`). Neither `from_id` nor `to_id` becomes a path parameter because neither uniquely
-identifies the target resource.
+A line item lives under an order, and the natural endpoint is `POST /orders/{order_id}/items`. The
+engine does not infer that nesting on its own. M6, the reserved rule for child creation, is not
+emitted by the classifier, so a parent-scoped path is an explicit `http_path` override rather than an
+automatic decision. That is exactly what `ecommerce.spec` does for its line-item and transition
+routes.
 
-**Rule.** When an operation takes multiple entity IDs as input and mutates both, the operation name
-becomes the resource name and all IDs go in the request body.
+## Optional inputs
 
-### 5.3 Operations that create child entities
+Optionality comes from the type, not a marker on the parameter. An input whose type is an `Option`,
+or a value reached through a `lone` relation, may be absent or null; anything else is required, and a
+missing value is a 422 at the request edge. On a `GET` an optional input is an optional query
+parameter, and on a body method it is an optional field.
 
-**Example:** "Add item to order"
+## Collection returns
 
-As shown in Example 4.2, the engine detects parent-child relationships from the state model and
-routes child creation to the parent's sub-collection:
+When an operation returns a set or a list, pagination is injected rather than left to the spec: the
+generated handler takes `page` and `limit` query parameters with the engine's defaults, and every
+target carries a pagination module of its own. Input fields whose names match entity fields become
+exact-match filters on the collection. Sorting is not inferred.
 
-- `POST /orders/{order_id}/line-items` (NOT `POST /line-items`)
+## What the engine does not do
 
-**Rule.** If entity B is a child of entity A (detected from `r: AId -> set B` in the state model),
-then creating B routes to `POST /{A_plural}/{a_id}/{B_plural}`.
-
-**Exception.** If B also exists independently (has its own top-level read operations not scoped to a
-parent), the engine generates BOTH:
-
-- `POST /orders/{order_id}/line-items` (create under parent)
-- `GET /line-items/{id}` (direct access by ID)
-
-### 5.4 Idempotency
-
-| HTTP Method   | Idempotent?         | Engine Behavior                                                                                   |
-| ------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
-| GET           | Yes (by definition) | No special handling                                                                               |
-| PUT           | Yes (by definition) | No special handling, full replacement is inherently idempotent                                  |
-| DELETE        | Yes (by definition) | Return 204 even if already deleted (do not return 404 on re-delete)                               |
-| PATCH         | Not necessarily     | No special handling                                                                               |
-| POST (create) | Not idempotent      | Engine generates an `Idempotency-Key` header option: clients can send a UUID, server deduplicates |
-| POST (action) | Not idempotent      | Same `Idempotency-Key` mechanism                                                                  |
-
-The `Idempotency-Key` mechanism is opt-in. The engine generates the infrastructure (a table to store
-idempotency keys and their responses) but only activates it when the conventions block enables it:
-
-```text
-conventions {
-  global.http_idempotency_key = true
-}
-```
-
-When enabled, the engine generates:
-
-```sql
-CREATE TABLE idempotency_keys (
-    key         UUID PRIMARY KEY,
-    endpoint    TEXT NOT NULL,
-    request_hash TEXT NOT NULL,
-    response_status INTEGER NOT NULL,
-    response_body JSONB,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at  TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '24 hours'
-);
-```
-
-### 5.5 Optional vs required inputs
-
-| Input Declaration                 | Treatment                       |
-| --------------------------------- | ------------------------------- |
-| `input: name: String`             | Required (422 if absent)        |
-| `input: name?: String`            | Optional (null/absent is valid) |
-| `input: name: String = "default"` | Optional with default value     |
-
-For GET operations, optional inputs become optional query parameters. For POST/PUT/PATCH, they
-become optional body fields (absent or null).
-
-### 5.6 Collection returns: Pagination, filtering, sorting
-
-When an operation returns a collection (`output: results: set Entity` or `list Entity`):
-
-1. **Pagination** is always injected (default: page-based with page=1, limit=20)
-2. **Filtering** is derived from the operation's input fields that match entity field names
-3. **Sorting** is injected if the operation's ensures clause references ordering (e.g.,
-   `sorted_by_time`)
-
-The engine generates query parameter documentation in the OpenAPI spec:
-
-```yaml
-parameters:
-  - name: page
-    in: query
-    schema: { type: integer, default: 1, minimum: 1 }
-  - name: limit
-    in: query
-    schema: { type: integer, default: 20, minimum: 1, maximum: 100 }
-  - name: sort_by
-    in: query
-    schema: { type: string, enum: [created_at, name, price] }
-  - name: sort_order
-    in: query
-    schema: { type: string, enum: [asc, desc], default: desc }
-```
-
-### 5.7 File uploads and binary data
-
-If an entity has a `Bytes` field or the spec mentions file/binary data:
-
-```text
-entity Attachment {
-  filename: String
-  content_type: String
-  data: Bytes
-}
-```
-
-The engine maps creation to a multipart/form-data endpoint:
-
-```text
-POST /attachments
-Content-Type: multipart/form-data
-
---boundary
-Content-Disposition: form-data; name="filename"
-document.pdf
---boundary
-Content-Disposition: form-data; name="content_type"
-application/pdf
---boundary
-Content-Disposition: form-data; name="data"; filename="document.pdf"
-Content-Type: application/octet-stream
-<binary data>
---boundary--
-```
-
-The database stores the binary data as BYTEA (Postgres) or stores a file path if
-`global.storage.binary = "filesystem"` is set in conventions.
-
-### 5.8 Async operations and long-running tasks
-
-If an operation's ensures clause references eventual consistency or the operation is annotated as
-async:
-
-```text
-operation ProcessLargeImport {
-  input: file: Bytes
-  output: job_id: JobId
-
-  requires: len(file) > 0
-
-  ensures:
-    // async: result available later
-    job_id not in pre(jobs)
-    jobs'[job_id].status = "pending"
-}
-```
-
-The engine generates:
-
-1. `POST /imports` -> 202 Accepted, body: `{"data": {"job_id": "uuid"}}`
-2. `GET /imports/{job_id}` -> 200 OK, body:
-   `{"data": {"status": "pending"|"running"|"completed"|"failed", "result": ...}}`
-
-The 202 status code signals that the request has been accepted but processing is not complete. The
-engine generates a polling endpoint automatically.
-
-### 5.9 Webhooks
-
-If the spec mentions notification or callback patterns:
-
-```text
-conventions {
-  PlaceOrder.http_webhook = "order.placed"
-}
-```
-
-The engine generates:
-
-1. A webhook registration endpoint: `POST /webhooks` with
-   `{"url": "...", "events": ["order.placed"]}`
-2. A webhook delivery table in the DB
-3. Async delivery logic that POSTs to registered URLs after the operation completes
+The target is synchronous, CRUD-shaped services, so a few patterns are out of scope today. There is
+no idempotency-key handling, no multipart or file-upload endpoint for `Bytes` fields (the column is
+generated, the upload route is not), no asynchronous `202`-and-poll flow, and no webhook registration
+or delivery. Each would need a new convention property and the codegen behind it, and none is built.
