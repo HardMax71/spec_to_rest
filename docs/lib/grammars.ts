@@ -51,7 +51,7 @@ export const specGrammar: LanguageRegistration = {
     {
       name: "keyword.control.spec",
       match:
-        "\\b(service|entity|enum|type|operation|invariant|state|input|output|transition|temporal|when|where|extends|via|conventions|fact|field|function|predicate|requires|ensures|implies|iff|if|then|else|let|with|the|pre|matches|always|eventually|fairness|before|after|until|since|import|return)\\b",
+        "\\b(service|entity|enum|type|operation|invariant|state|input|output|transition|temporal|when|where|extends|via|conventions|security|fact|field|function|predicate|requires_auth|requires|ensures|implies|iff|if|then|else|let|with|the|pre|matches|always|eventually|fairness|before|after|until|since|import|return)\\b",
     },
     {
       name: "keyword.operator.word.spec",

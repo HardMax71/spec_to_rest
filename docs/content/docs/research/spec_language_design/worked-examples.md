@@ -7,7 +7,7 @@ description: "Four complete specs: URL shortener, todo list, authentication, and
 
 This is the running example used throughout the document.
 
-```text
+```spec
 service UrlShortener {
 
   // --- Type Definitions ---
@@ -140,7 +140,7 @@ The conventions block overrides these defaults to give a cleaner API.
 
 ### 4.2 Example 2, todo list API
 
-```text
+```spec
 service TodoList {
 
   // --- Enums ---
@@ -381,7 +381,7 @@ service TodoList {
 
 ### 4.3 Example 3, user authentication service
 
-```text
+```spec
 service AuthService {
 
   // --- Types ---
@@ -653,7 +653,7 @@ service AuthService {
 
 ### 4.4 Example 4, e-commerce order service
 
-```text
+```spec
 service OrderService {
 
   // --- Types ---
