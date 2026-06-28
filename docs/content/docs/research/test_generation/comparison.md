@@ -46,15 +46,12 @@ the spec, wires it to an HTTP client, and runs the structural layer alongside it
 
 ```mermaid
 flowchart LR
-  S["Structural<br/>matches the schema?"]
-  B["Behavioral<br/>postconditions hold?"]
-  ST["Stateful<br/>invariants hold across sequences?"]
-  Fuzz["OpenAPI fuzzers<br/>Schemathesis, RESTler,<br/>EvoMaster, Dredd"] --> S
-  Model["Model-based<br/>QuickCheck SM, Spec Explorer"] --> B
-  Model --> ST
-  Ours["This generator,<br/>from one spec"] --> S
-  Ours --> B
-  Ours --> ST
+  Fuzz["OpenAPI fuzzers<br/>Schemathesis, RESTler,<br/>EvoMaster, Dredd"] --> F1["Structural"]
+  Model["Model-based<br/>QuickCheck SM,<br/>Spec Explorer"] --> M1["Behavioral"]
+  M1 --> M2["Stateful"]
+  Ours["This generator,<br/>from one spec"] --> O1["Structural"]
+  O1 --> O2["Behavioral"]
+  O2 --> O3["Stateful"]
   style Ours fill:#16a34a,stroke:#15803d,color:#ffffff
 ```
 
