@@ -11,6 +11,7 @@ import {
 } from "@shikijs/transformers";
 import { antlr4Grammar, specGrammar, ebnfGrammar } from "./lib/grammars";
 import remarkCliRun from "./lib/remark-cli-run";
+import remarkSpecFile from "./lib/remark-spec-file";
 import remarkRepoLinks from "./lib/remark-repo-links";
 import remarkTreeBlock from "./lib/remark-tree-block";
 import remarkUnlinkInHeadings from "./lib/remark-unlink-in-headings";
@@ -27,6 +28,7 @@ export default defineConfig({
     format: "md",
     remarkPlugins: [
       remarkMath,
+      remarkSpecFile,
       remarkMdxMermaid,
       remarkTreeBlock,
       remarkCliRun,
