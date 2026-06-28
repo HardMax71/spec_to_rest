@@ -1,124 +1,60 @@
 ---
 title: "Override system"
-description: "The conventions block: override syntax, categories, resolution order, and what cannot be overridden"
+description: "The conventions block: the property surface, qualifiers, validation, and what stays fixed"
 ---
 
-### 3.1 Override syntax
+Every default the engine picks can be redirected, but only from one place: the service-wide
+`conventions` block. There is no per-operation `with` clause. Each rule has the shape
+`Target.property [qualifier] = value`, where the target is an operation, an entity, a type alias, or
+an enum.
 
-Overrides live in the `conventions` block of the spec file. Every convention decision is addressable
-by a dotted path:
-
-```text
+```spec
 conventions {
-  // HTTP method override
-  Resolve.http_method = "GET"
+  Shorten.http_method         = "POST"
+  Shorten.http_path           = "/shorten"
+  Shorten.http_status_success = 201
 
-  // URL path override
-  Resolve.http_path = "/{code}"
-
-  // Status code override
-  Resolve.http_status_success = 302
-
-  // Custom header
+  Resolve.http_method            = "GET"
+  Resolve.http_path              = "/{code}"
+  Resolve.http_status_success    = 302
   Resolve.http_header "Location" = output.url
 
-  // DB table name override
-  ShortCode.db_table = "codes"
+  UrlMapping.db_table      = "url_mappings"
+  UrlMapping.db_timestamps = true
+  UrlMapping.plural        = "url_mappings"
 
-  // DB column type override
-  ShortCode.value_db_type = "VARCHAR(12)"
-
-  // DB index override
-  ShortCode.value_db_index = "unique"
-
-  // JSON field naming convention (global)
-  global.json_naming = "camelCase"    // "snake_case" | "camelCase" | "PascalCase"
-
-  // Envelope format (global)
-  global.response_envelope = "bare"   // "standard" | "bare" | "jsonapi"
-
-  // Pagination defaults (global)
-  global.pagination_default_limit = 50
-  global.pagination_max_limit = 200
-
-  // Authentication requirement
-  Shorten.http_auth = "bearer"        // "none" | "bearer" | "api_key" | "basic"
-  global.http_auth = "bearer"         // applied to all endpoints
-
-  // Soft delete behavior
-  Delete.http_soft_delete = true
-
-  // Custom error message
-  Resolve.requires_0_error_message = "Short code not found. It may have expired."
-
-  // Custom error code
-  Resolve.requires_0_error_code = "CODE_EXPIRED_OR_NOT_FOUND"
-
-  // Disable auto-generated timestamp columns
-  ShortCode.db_timestamps = false
-
-  // Custom plural form
-  ShortCode.plural = "codes"
-
-  // Sort the resource name override
-  Inventory.db_table = "inventory_levels"
+  ShortCode.strategy          = "tests.strategies_user:short_code"
+  User.test_strategy.password = "tests.strategies_user:strong_password"
 }
 ```
 
-### 3.2 Override categories
+## What you can set
 
-| Category           | Addressable Properties                                     | Example                                       |
-| ------------------ | ---------------------------------------------------------- | --------------------------------------------- |
-| **HTTP Method**    | `{Op}.http_method`                                         | `Shorten.http_method = "POST"`                |
-| **URL Path**       | `{Op}.http_path`                                           | `Resolve.http_path = "/go/{code}"`            |
-| **Status Codes**   | `{Op}.http_status_success`, `{Op}.http_status_{condition}` | `Shorten.http_status_success = 200`           |
-| **Headers**        | `{Op}.http_header "{Name}"`                                | `Resolve.http_header "Location" = output.url` |
-| **Auth**           | `{Op}.http_auth`, `global.http_auth`                       | `global.http_auth = "bearer"`                 |
-| **DB Table**       | `{Entity}.db_table`                                        | `User.db_table = "app_users"`                 |
-| **DB Column**      | `{Entity}.{field}_db_type`, `{Entity}.{field}_db_column`   | `User.email_db_column = "email_address"`      |
-| **DB Index**       | `{Entity}.{field}_db_index`                                | `User.email_db_index = "unique"`              |
-| **DB Timestamps**  | `{Entity}.db_timestamps`                                   | `AuditLog.db_timestamps = false`              |
-| **JSON Naming**    | `global.json_naming`                                       | `global.json_naming = "camelCase"`            |
-| **Envelope**       | `global.response_envelope`                                 | `global.response_envelope = "bare"`           |
-| **Pagination**     | `global.pagination_{prop}`                                 | `global.pagination_max_limit = 500`           |
-| **Pluralization**  | `{Entity}.plural`                                          | `Person.plural = "people"`                    |
-| **Error Messages** | `{Op}.requires_{n}_error_message`                          |   |
-| **Error Codes**    | `{Op}.requires_{n}_error_code`                             |   |
-| **Soft Delete**    | `{Op}.http_soft_delete`, `global.http_soft_delete`         | `global.http_soft_delete = true`              |
+On an operation: `http_method`, `http_path`, `http_status_success`, and `http_header "Name"`, where
+the header name is the qualifier and the value is an output field. On an entity: `db_table`,
+`db_timestamps`, and `plural`. The last two control test-data generation: `strategy` names a
+generator for a type alias or enum, and `test_strategy.field` names one per entity field, with the
+field as the qualifier. The full property and target matrix is in
+[the spec-language reference](/spec-language#convention-overrides).
 
-### 3.3 Override resolution order
+The set is deliberately small. It covers presentation, the method, path, status, headers, table and
+plural names, and the values a test harness invents, and it does not reach the parts of the output
+that carry the spec's guarantees.
 
-When multiple overrides could apply, they are resolved in this order (most specific wins):
+## Validation
 
-1. **Operation-level override** (e.g., `Shorten.http_method = "PUT"`)
-2. **Entity-level override** (e.g., `ShortCode.db_table = "codes"`)
-3. **Global override** (e.g., `global.http_auth = "bearer"`)
-4. **Profile default** (e.g., python-fastapi profile uses snake_case)
-5. **Engine default** (the rules in Section 2)
+`Validate.scala` checks each rule before anything is generated and reports a `ConventionDiagnostic`
+for a target that names no operation, entity, alias, or enum; an unknown property; a property that
+does not belong on its target, such as a `db_table` on an operation; a property that needs a
+qualifier and has none, such as `http_header` without a name; or a duplicate rule for the same
+target, property, and qualifier. A present override wins over the engine and profile default, and
+that is the whole of the precedence, since duplicates are rejected rather than ordered.
 
-### 3.4 Override conflicts
+## What stays fixed
 
-When overrides conflict with each other:
-
-| Conflict                                                               | Resolution                                                                |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Operation override conflicts with global override                      | Operation wins                                                            |
-| Two operation overrides for the same property                          | Compilation error: "Duplicate override for {path}"                        |
-| Override contradicts spec semantics (e.g., setting GET for a mutation) | Warning: "Override {path} may violate REST semantics: GET should be safe" |
-| Override sets an invalid value (e.g., `Op.http_method = "INVALID"`)    | Compilation error: "Invalid HTTP method: INVALID"                         |
-
-### 3.5 What cannot be overridden
-
-Some aspects are derived from the spec and cannot be overridden because doing so would break
-correctness:
-
-| Property                                                   | Why Not Overridable                                         |
-| ---------------------------------------------------------- | ----------------------------------------------------------- |
-| The _existence_ of validation checks from requires clauses | Removing a precondition check could violate spec guarantees |
-| The _existence_ of DB constraints from invariants          | Removing constraints could allow invalid state              |
-| The primary key column on a table                          | Surrogate keys are required for internal consistency        |
-| The `request_id` in error responses                        | Required for debugging/tracing                              |
-| Foreign key relationships derived from state relations     | Removing FK would break referential integrity               |
-
-Users can, however, override the _presentation_ of these (error messages, status codes, column
-names) without removing the underlying check.
+Because the block exposes only presentation, no property removes a check or a constraint. The
+validation a `requires` clause compiles to, the `CHECK` or `UNIQUE` a field invariant compiles to, a
+table's surrogate primary key, and the foreign keys derived from state relations all stand, since
+dropping any of them would let the generated service diverge from the spec it was proven against. You
+can rename a column, change a status code, or rewrite an error message; you cannot remove the check
+underneath it.
