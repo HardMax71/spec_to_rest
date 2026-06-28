@@ -10,7 +10,7 @@ and `Code_Target_Scala` extracts it, together with the verified `translate`, `ev
 functions, into
 [`SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala).
 So the IR the compiler pattern-matches on is the one the [soundness
-proof](/research/translator_soundness) reasons about, the same datatype, not a hand-written copy that
+proof](/research/translator_soundness/theorem) reasons about, the same datatype, not a hand-written copy that
 could drift away from it. That is the whole design decision; everything else follows from it.
 
 ## The extracted ADT

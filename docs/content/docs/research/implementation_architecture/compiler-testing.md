@@ -57,5 +57,5 @@ compiler runs is extracted from that proof rather than written alongside it. So 
 compiler is not trusted because its tests pass; it is trusted because it cannot diverge from the
 theorem it was extracted from. CI enforces this by building the `SpecRest_Soundness` and
 `SpecRest_Codegen` sessions on every change to the proofs, and a pre-commit hook refuses a commit
-whose proofs still contain a `sorry`. The [soundness track](/research/translator_soundness) is the
+whose proofs still contain a `sorry`. The [soundness track](/research/translator_soundness/theorem) is the
 full account.
