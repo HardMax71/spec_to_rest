@@ -186,6 +186,9 @@ Open follow-ups for the M6 synthesis pipeline. For the prose context, see
 | Few-shot examples machine-verified by `dafny verify` in CI | follow-up |
 | Counterexample formatting (Z3 model -> human-readable) | follow-up |
 | Cross-family escalation (Anthropic -> OpenAI) within one `--fallback` run | follow-up |
+| Automatic hint discovery, mining proof patterns from verified CEGIS runs instead of hand-curating `HintLibrary` | follow-up, deferred in [research/12](/research/compositional_synthesis_findings) |
+| Pass@128-scale sampling, raising `CegisBudget.maxIterations` by an order of magnitude for Re:Form-style gains | follow-up, deferred in [research/12](/research/compositional_synthesis_findings) |
+| Laurel-style assertion localization, inserting `assert` placeholders at the failing line for the model to fill | follow-up |
 
 ## Test generation follow-ups
 
@@ -197,6 +200,25 @@ For the prose context, see [Test Generation](/pipelines/test-generation).
 | Guards outside `>` / `>=` / `<` / `<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
 | Multi-target test gen (ts-express Vitest+fast-check, go-chi `go test`+rapid) | **shipped**: [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) via [#278](https://github.com/HardMax71/spec_to_rest/issues/278)/[#279](https://github.com/HardMax71/spec_to_rest/issues/279)/[#280](https://github.com/HardMax71/spec_to_rest/issues/280), closing [#265](https://github.com/HardMax71/spec_to_rest/issues/265) |
 | Default `--with-tests` after M5.4 | **shipped**: [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140); test emission is on by default for every supported target. The `--with-tests` flag was dropped (opting in to a default is meaningless); `--no-tests` is the opt-out. |
+
+## Convention engine follow-ups
+
+Operation shapes the convention engine does not generate yet. Each needs a new convention property
+plus the codegen behind it; see [Convention engine edge cases](/research/convention_engine/edge-cases).
+
+| Shape | Status |
+| ----- | ------ |
+| Nested resource creation, auto-detected `POST /{parent}/{id}/{child}` (M6 / `CreateChild`) | reserved in the classifier, not emitted; reachable today only via an `http_path` override |
+| Idempotency-key handling (`Idempotency-Key` header plus a dedup store) | not handled |
+| Multipart and file-upload endpoints for `Bytes` fields | not handled; the column is generated, the upload route is not |
+| Asynchronous operations (`202 Accepted` plus a polling endpoint) | not handled |
+| Webhook registration and delivery | not handled |
+
+## Tooling follow-ups
+
+| Concern | Status |
+| ------- | ------ |
+| Language server and editor integration (inline diagnostics, completion, go-to-definition) | not built; the only spec-aware tooling today is this site's Shiki highlighter, see [errors and developer experience](/research/spec_language_design/developer-experience) |
 
 <Collapsible title="Closed not-planned (decisions of record)">
 
