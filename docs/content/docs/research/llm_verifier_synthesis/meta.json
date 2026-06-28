@@ -2,7 +2,7 @@
   "title": "LLM and verifier loop",
   "pages": [
     "cegis-loop",
-    "worked-example",
+    "walkthrough",
     "dafny",
     "prompts",
     "triangulation-and-fallback",
