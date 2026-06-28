@@ -365,7 +365,7 @@ We estimate costs for a typical REST service with 10 operations:
 - 4 medium-complexity operations (map updates with some logic)
 - 2 high-complexity operations (algorithms, multi-table updates)
 
-LLM model: Claude Sonnet (or comparable) at ~$3/M input tokens, ~$15/M output tokens.
+LLM model: Claude Sonnet (or comparable) at ~\$3/M input tokens, ~\$15/M output tokens.
 
 Dafny verification: running on a modern 8-core machine with 16GB RAM.
 
@@ -376,7 +376,7 @@ Dafny verification: running on a modern 8-core machine with 16GB RAM.
 | Metric               | Value                      |
 | -------------------- | -------------------------- |
 | LLM calls            | 0                          |
-| Token cost           | $0.000                     |
+| Token cost           | \$0.000                     |
 | Verification time    | 0 (no Dafny involved)      |
 | Code generation time | <100ms (template emission) |
 
@@ -391,7 +391,7 @@ Based on DafnyPro's 86% first-try success rate:
 | Output tokens per iteration | ~500 (method body)                     |   |
 | Total input tokens          | ~3,000                                 | ~12,000       |
 | Total output tokens         | ~750                                   | ~3,000        |
-| LLM cost                    | ~$0.02                                 | ~$0.08        |
+| LLM cost                    | ~\$0.02                                 | ~\$0.08        |
 | Dafny verification time     | ~5s per iteration                      | ~30s          |
 | Total time per operation    | ~8s (LLM latency + verification)       | ~32s          |
 
@@ -406,7 +406,7 @@ These may require multiple iterations and possibly decomposition:
 | Output tokens per iteration | ~800                              |   |
 | Total input tokens          | ~15,000                           | ~30,000       |
 | Total output tokens         | ~4,000                            | ~8,000        |
-| LLM cost                    | ~$0.10                            | ~$0.20        |
+| LLM cost                    | ~\$0.10                            | ~\$0.20        |
 | Dafny verification time     | ~10s per iteration                | ~100s         |
 | Total time per operation    | ~40s                              | ~80s          |
 
@@ -414,34 +414,34 @@ These may require multiple iterations and possibly decomposition:
 
 | Check                         | LLM Calls | Tokens                     | Cost       |
 | ----------------------------- | --------- | -------------------------- | ---------- |
-| Docstring generation          | 1         | ~500 in, ~200 out          | ~$0.005    |
-| anno2doc check                | 1         | ~400 in, ~100 out          | ~$0.003    |
-| doc2anno check                | 1         | ~400 in, ~200 out          | ~$0.005    |
-| anno-complete check           | 1         | ~800 in, ~300 out          | ~$0.007    |
-| code2doc check                | 1         | ~600 in, ~100 out          | ~$0.003    |
-| doc2code check                | 1         | ~600 in, ~200 out          | ~$0.005    |
-| **Total per operation**       | **6**     | **~3,300 in, ~1,100 out**  | **~$0.03** |
-| **Total (6 synthesized ops)** | **36**    | **~19,800 in, ~6,600 out** | **~$0.18** |
+| Docstring generation          | 1         | ~500 in, ~200 out          | ~\$0.005    |
+| anno2doc check                | 1         | ~400 in, ~100 out          | ~\$0.003    |
+| doc2anno check                | 1         | ~400 in, ~200 out          | ~\$0.005    |
+| anno-complete check           | 1         | ~800 in, ~300 out          | ~\$0.007    |
+| code2doc check                | 1         | ~600 in, ~100 out          | ~\$0.003    |
+| doc2code check                | 1         | ~600 in, ~200 out          | ~\$0.005    |
+| **Total per operation**       | **6**     | **~3,300 in, ~1,100 out**  | **~\$0.03** |
+| **Total (6 synthesized ops)** | **36**    | **~19,800 in, ~6,600 out** | **~\$0.18** |
 
 ### 11.3 Total service cost
 
 | Component                 | Cost       | Time                     |
 | ------------------------- | ---------- | ------------------------ |
-| CRUD operations (4)       | $0.00      | <1s                      |
-| Medium operations (4)     | $0.08      | 32s                      |
-| High operations (2)       | $0.20      | 80s                      |
-| Triangulation (6 ops)     | $0.18      | 15s (parallel LLM calls) |
-| Dafny compilation (6 ops) | $0.00      | 10s                      |
-| Convention engine (all)   | $0.00      | 2s                       |
-| Test generation           | $0.00      | 1s                       |
-| **TOTAL**                 | **~$0.46** | **~2.5 minutes**         |
+| CRUD operations (4)       | \$0.00      | <1s                      |
+| Medium operations (4)     | \$0.08      | 32s                      |
+| High operations (2)       | \$0.20      | 80s                      |
+| Triangulation (6 ops)     | \$0.18      | 15s (parallel LLM calls) |
+| Dafny compilation (6 ops) | \$0.00      | 10s                      |
+| Convention engine (all)   | \$0.00      | 2s                       |
+| Test generation           | \$0.00      | 1s                       |
+| **TOTAL**                 | **~\$0.46** | **~2.5 minutes**         |
 
 ### 11.4 Comparison to manual development
 
 | Metric                  | Compiler                               | Manual Developer                      |
 | ----------------------- | -------------------------------------- | ------------------------------------- |
 | Time to working service | ~2.5 minutes                           | ~2-4 days (for a competent developer) |
-| Cost                    | ~$0.50                                 | ~$800-$1,600 (at $100/hr)             |
+| Cost                    | ~\$0.50                                 | ~\$800-\$1,600 (at \$100/hr)             |
 | Formal verification     | Yes (Dafny-verified)                   | Almost never done manually            |
 | Test coverage           | Auto-generated structural + behavioral | Manually written, often incomplete    |
 | OpenAPI spec            | Auto-generated, guaranteed consistent  | Manually maintained, often stale      |
@@ -452,10 +452,10 @@ These may require multiple iterations and possibly decomposition:
 
 | Service Size                | Operations | Est. Synth Ops | Est. Cost | Est. Time |
 | --------------------------- | ---------- | -------------- | --------- | --------- |
-| Small (URL shortener)       | 5          | 2              | ~$0.25    | ~1 min    |
-| Medium (blog platform)      | 15         | 6              | ~$0.75    | ~3 min    |
-| Large (e-commerce)          | 40         | 15             | ~$2.50    | ~8 min    |
-| Very large (enterprise ERP) | 100        | 40             | ~$8.00    | ~25 min   |
+| Small (URL shortener)       | 5          | 2              | ~\$0.25    | ~1 min    |
+| Medium (blog platform)      | 15         | 6              | ~\$0.75    | ~3 min    |
+| Large (e-commerce)          | 40         | 15             | ~\$2.50    | ~8 min    |
+| Very large (enterprise ERP) | 100        | 40             | ~\$8.00    | ~25 min   |
 
 **Note.** These estimates assume current (2026) LLM pricing. Costs have been decreasing ~50% per
 year. By 2027, these costs would be approximately halved.
