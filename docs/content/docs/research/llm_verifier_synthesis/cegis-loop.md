@@ -58,11 +58,11 @@ the [Dafny](/research/llm_verifier_synthesis/dafny) page.
 The prompt carries the skeleton, a natural-language description of the operation, one to three
 few-shot examples of similar verified methods, and, from the second iteration on, the previous body
 with the verifier's error. The LLM returns a body; the response parser extracts it from the markdown
-and splices it at the placeholder. Before anything runs, the diff-checker compares the candidate's
+and splices it at the placeholder. Before anything runs, the [diff-checker](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/DiffChecker.scala) compares the candidate's
 `requires`, `ensures`, and `modifies` against the originals and rejects the candidate outright if the
 model touched them, since the contract is not the model's to weaken.
 
-The verifier then runs the real Dafny binary:
+The verifier ([`DafnyVerifier`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/DafnyVerifier.scala)) then runs the real Dafny binary:
 
 ```text
 dafny verify --verification-time-limit=<seconds> --log-format=json;LogFileName=<log>
@@ -93,7 +93,7 @@ hint, then asks for a corrected body with the signature untouched.
 
 ## Termination
 
-The loop stops on success, when Dafny reports no errors, or when the budget runs out. The budget is
+The loop stops on success, when Dafny reports no errors, or when the budget runs out. The budget ([`CegisBudget`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/CegisBudget.scala)) is
 configurable and defaults to eight iterations, 100k input tokens, 50k output tokens, and one US
 dollar. It also stops when the same error category repeats three times in a row, which means the
 model is stuck, and on an infrastructure failure: a provider error, an unparseable response, a

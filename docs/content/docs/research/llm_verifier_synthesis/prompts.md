@@ -4,7 +4,7 @@ description: "The shipped system prompts, the three strategies, few-shot selecti
 ---
 
 The loop talks to the model through two prompts, an initial one and, after a failure, a repair one.
-Both are assembled by `PromptBuilder` from text in resource files under `/specrest/synth/prompts`, so
+Both are assembled by [`PromptBuilder`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/PromptBuilder.scala) from text in resource files under `/specrest/synth/prompts`, so
 the wording is versioned with the code rather than buried in the controller. The blocks below are the
 files as shipped.
 
@@ -37,7 +37,7 @@ examples.
 
 ## Three strategies
 
-The system message comes in three flavors, one per `PromptStrategy`, each its own resource file.
+The system message comes in three flavors, one per [`PromptStrategy`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/PromptStrategy.scala), each its own resource file.
 `ZeroShot` asks directly. `ChainOfThought` asks the model to reason about the obligations first.
 `PlanThenImplement` asks for a plan, then the body. The fallback walks them in order, ZeroShot, then
 ChainOfThought, then PlanThenImplement, so a retry is not the same request again; it is the same
@@ -47,7 +47,7 @@ request asked a different way. That escalation order lives on the
 ## Few-shot examples
 
 The examples are not retrieved by similarity. They are selected by the operation's kind,
-`selectFor(operation_kind)`, from a five-file library kept as resources. A create draws the
+[`selectFor(operation_kind)`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/FewShot.scala), from a five-file library kept as resources. A create draws the
 fresh-insert and counter examples, a delete draws map-remove, a filtered read draws the sequence-sum,
 and a transition draws the state-modify. Two of the files, verbatim:
 
@@ -100,7 +100,7 @@ Do not weaken contracts — the diff checker will reject any signature change.
 ```
 
 The user message adds the previous body, the verifier's error and the clause it failed, a
-counterexample when there is one, and a hint chosen for that error's category from `HintLibrary`. The
+counterexample when there is one, and a hint chosen for that error's category from [`HintLibrary`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/HintLibrary.scala). The
 hints are resource files too, each a small worked pattern. The one for a quantified-postcondition
 failure shows the helper-lemma trick and warns off the unsound shortcut:
 

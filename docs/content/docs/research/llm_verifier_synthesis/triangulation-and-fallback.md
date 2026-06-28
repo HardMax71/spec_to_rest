@@ -25,7 +25,7 @@ be a useful warning, but it is not certainty, so it is not what ships.
 ## The fallback ladder
 
 A CEGIS run has a budget, and budgets run out. When one does without a verified body,
-`FallbackOrchestrator` does not give up; it walks a plan of strategy-and-model combinations and, only
+[`FallbackOrchestrator`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/FallbackOrchestrator.scala) does not give up; it walks a plan of strategy-and-model combinations and, only
 if all of them fail, emits something compilable.
 
 ```mermaid

@@ -41,7 +41,7 @@ flowchart TD
   VC --> Z3["Z3<br/>unsat = verified,<br/>sat = counterexample,<br/>unknown = timeout"]
 ```
 
-Once the body verifies, `dafny translate` compiles the file to the target. The `DafnyTranslateCli`
+Once the body verifies, `dafny translate` compiles the file to the target. The [`DafnyTranslateCli`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/DafnyTranslator.scala)
 wrapper runs each translation in its own directory under a fixed `kernel.dfy` name, so the Go
 backend, which names the package after the file, produces a stable `package kernel`.
 
