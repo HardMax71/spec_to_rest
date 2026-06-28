@@ -3,28 +3,29 @@ title: "What the parser must handle"
 description: "The constructs the spec language has to parse"
 ---
 
-## 1. What our spec language needs
+The spec language is small but specific, and the constructs it has to parse are the yardstick every
+reuse candidate is measured against. They come straight from its
+[grammar](/research/spec_language_design/grammar).
 
-From the grammar design in `01_spec_language_design.md`, our DSL requires these core constructs that
-any reused parser must handle or be extended to handle:
+| Construct                 | What it is                                                      | Example                                                  |
+| ------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Entity declarations       | typed fields with multiplicities and inline `where` constraints | `entity UrlMapping { code: ShortCode where len(code) >= 6 }` |
+| State declarations        | mutable service state as typed relations                       | `state { store: ShortCode -> lone LongURL }`             |
+| Operations with contracts | input and output, plus requires and ensures                    | `operation Shorten { requires: ... ensures: ... }`       |
+| Invariants and facts      | global constraints that always hold                            | `invariant: isValidURI(url)`                             |
+| Transition declarations   | entity lifecycle state machines                                | `transition Lifecycle { Active -> Suspended via Suspend }` |
+| Convention blocks         | HTTP mapping overrides                                          | `conventions { Resolve.http_method = "GET" }`            |
+| Multiplicity annotations  | `one`, `lone`, `some`, `set` on relations                      | `tags: Post -> set Tag`                                  |
+| Quantified expressions    | `all`, `some`, `no`, `exists` over a set                       | `all c in store \| store[c] != none`                     |
+| Primed and pre-state      | after-state and before-state references                        | `store' = pre(store) + {code -> url}`                    |
+| Relational types          | typed relations with a multiplicity                            | `mapping: ShortCode -> lone LongURL`                     |
+| Refinement types          | a base type narrowed by a predicate                            | `type Email = String where value matches /.../`          |
+| Cardinality operator      | `#` for collection size                                        | `#store' = #store + 1`                                   |
+| Collection types          | parameterized `Set`, `Map`, `Seq`                              | `Set[UrlMapping]`, `Map[String, Int]`                    |
+| Enum declarations         | finite value types                                             | `enum Status { Active, Suspended, Deleted }`             |
 
-| Construct                     | Description                                             | Example                                             |
-| ----------------------------- | ------------------------------------------------------- | --------------------------------------------------- |
-| **Entity declarations**       | Typed fields with multiplicities and inline constraints | `entity User { name: String where len(name) >= 1 }` |
-| **State declarations**        | Mutable service state as typed collections              | `state { users: Set[User] }`                        |
-| **Operations with contracts** | Input/output + requires/ensures clauses                 | `operation Create { requires: ... ensures: ... }`   |
-| **Invariants and facts**      | Global constraints that must always hold                | `invariant: all u in users => len(u.email) > 0`     |
-| **Transition declarations**   | Entity lifecycle state machines                         | `Active -> Suspended via Suspend when ...`          |
-| **Convention blocks**         | HTTP mapping overrides                                  | `conventions { Resolve.http_method = "GET" }`       |
-| **Multiplicity annotations**  | `one`, `lone`, `some`, `set` on relations               | `owner: one User`                                   |
-| **Quantified expressions**    | `all`, `exists`, `no` with set comprehension            | `all u in users => u.email != ""`                   |
-| **Primed variables**          | After-state references                                  | `users' = users + {newUser}`                        |
-| **Relational types**          | Typed relations with multiplicity                       | `mapping: ShortCode -> lone LongURL`                |
-| **Refinement types**          | Types with constraint predicates                        | `type Email = String where matches(email_regex)`    |
-| **Cardinality operator**      | `#` for collection sizes                                | `#users' = #users + 1`                              |
-| **Set/Map/Seq collections**   | Parameterized collection types                          | `Set[User]`, `Map[String, Int]`, `Seq[Event]`       |
-| **Enum declarations**         | Finite value types for states                           | `enum Status { Active, Suspended, Deleted }`        |
-
-The key insight from the prior survey: **no existing language provides all of these**. Our DSL
-uniquely combines Alloy's relational modeling and multiplicities, VDM/Dafny's pre/postcondition
-syntax, Quint's developer-friendly syntax, and TypeSpec/Smithy's HTTP override capability.
+No single existing language offers all of them. The set borrows on purpose from several traditions:
+Alloy's relational modeling and multiplicities, the pre- and postcondition style of VDM and Dafny,
+Quint's readable surface syntax, and the HTTP-override idea from TypeSpec and Smithy. That spread is
+exactly why reusing one parser wholesale is hard, and the next two pages weigh the attempt, the
+formal-methods languages first, then the API description languages.
