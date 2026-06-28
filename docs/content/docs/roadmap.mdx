@@ -220,6 +220,17 @@ plus the codegen behind it; see [Convention engine edge cases](/research/convent
 | ------- | ------ |
 | Language server and editor integration (inline diagnostics, completion, go-to-definition) | not built; the only spec-aware tooling today is this site's Shiki highlighter, see [errors and developer experience](/research/spec_language_design/developer-experience) |
 
+## Code generation follow-ups
+
+Observability the emitter does not generate yet; each is an additive template plus a route or
+exporter. See [generated project](/research/code_generation_pipeline/generated-project).
+
+| Feature | Status |
+| ------- | ------ |
+| Distributed tracing (OpenTelemetry spans) in generated services | not built; only structured, redacted logging ships |
+| A Prometheus-style `/metrics` endpoint | not built |
+| A readiness `/ready` probe alongside the shipped `/health` liveness route | not built |
+
 <Collapsible title="Closed not-planned (decisions of record)">
 
 These items have closed issues with explicit rationale; they're not

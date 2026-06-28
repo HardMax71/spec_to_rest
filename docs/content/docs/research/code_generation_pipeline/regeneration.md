@@ -4,7 +4,7 @@ description: "How a project survives re-compilation, and how to add a target"
 ---
 
 Running `compile` again overwrites the spec-derived files; the generated README says so plainly, do
-not edit them, because the next run will. What survives is the one file the compiler never touches.
+not edit them, because the next run will. What survives is the handful of files the compiler refuses to overwrite once they exist.
 
 ## The extension point
 
@@ -34,7 +34,9 @@ route declared there wins a path collision against a generated one. That is the 
 surface, one function, called at a defined point. The Go and TypeScript targets ship the same shape,
 a `register` in their own `extensions` package. There are no protected-region markers in the
 generated files and no separate overrides mechanism; custom code lives in the extension file or not
-at all.
+at all. Internally each emitted file carries a `preserve` flag, and the same write-once rule keeps the
+staging and production compose overrides from being clobbered, so hand-tuned environment settings
+survive a recompile too.
 
 ## Migrations are the incremental part
 
