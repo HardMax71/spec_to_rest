@@ -8,7 +8,7 @@ description: "Synthesis across 7 research domains for the spec-to-REST compiler"
 > LLM-plus-verifier synthesis, spec-first REST generators, program synthesis, model-driven
 > engineering, property-based testing, and service DSLs.
 
-## 1. Executive Summary
+## What no one had built
 
 The goal was a single pass: write a formal behavioral specification of a REST service and have a
 compiler emit a complete, verified, running implementation, with HTTP, the database, the language,
@@ -33,7 +33,7 @@ behaviorally, used at Amazon on S3, DynamoDB, and
 [eight other systems](https://cacm.acm.org/practice/systems-correctness-practices-at-amazon-web-services/).
 Putting a behavioral spec and a verified, running service on one axis is what this compiler does.
 
-## 2. Prior Art: What Has Been Tried
+## What has been tried
 
 The most direct ancestor is
 [Alchemy](https://cs.brown.edu/~sk/Publications/Papers/Published/kdfy-alchemy-trans-alloy-spec-impl/)
@@ -60,7 +60,7 @@ descendant is Emina Torlak's [Rosette](https://emina.github.io/rosette/), built 
 SAT backend): write a DSL interpreter in solver-aided Racket and get synthesis and verification for
 free.
 
-## 3. The LLM-plus-verifier frontier (2023 to 2026)
+## The LLM-plus-verifier frontier (2023 to 2026)
 
 This is the most active area, and its systems almost all share one loop: the model proposes code, a
 verifier checks it, and on failure the error and a counterexample feed back until the proof goes
@@ -92,7 +92,7 @@ model reliably produces code a verifier accepts, the feedback loop is what makes
 than raw generation, Dafny is the place to verify before compiling onward, and Clover's cross-check
 of code against annotations and docstrings is the part worth copying.
 
-## 4. Spec-first REST tools: the structural side
+## Spec-first REST tools, the structural side
 
 A second body of work generates code from structural API descriptions.
 [openapi-generator](https://github.com/OpenAPITools/openapi-generator) turns OpenAPI YAML into stubs
@@ -121,7 +121,7 @@ tests; and [Dredd](https://github.com/apiaryio/dredd) did schema validation unti
 pioneered this kind of model-based testing years earlier. All of it finds problems; none generates
 the service.
 
-## 5. Formal specification languages: the behavioral side
+## Formal specification languages, the behavioral side
 
 On the behavioral side the field is deep, and the question is which ideas to borrow.
 
@@ -151,7 +151,7 @@ The trouble is that REST is stateless request and response while session types a
 multi-step conversation. They could still model a create-read-update-delete workflow if this project
 ever needs them.
 
-## 6. The design this produced
+## The design this produced
 
 The survey pointed to a five-stage pipeline, and that is what was built: parse the spec to an IR, run
 a convention engine that maps structure to HTTP routes, a database schema, and OpenAPI, verify the
