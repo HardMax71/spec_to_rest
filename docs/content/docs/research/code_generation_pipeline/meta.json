@@ -1,7 +1,7 @@
 {
   "title": "Code generation",
   "pages": [
-    "overview",
+    "generated-project",
     "templates",
     "regeneration",
     "comparison"
