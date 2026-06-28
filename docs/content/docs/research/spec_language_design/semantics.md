@@ -108,3 +108,15 @@ These bounds become obligations the verifier checks. `one` requires every operat
 source to add a target; `lone` lets a source carry no target; `some` requires at least one target
 per source; `set` adds no constraint. The convention engine then turns `one` and `lone` into a
 foreign-key column on the source table, and `some` and `set` into a junction table.
+
+## Non-determinism
+
+Some values are fixed only at runtime: a fresh short code, a timestamp, the next id. The language
+states them by constraint rather than by formula. A fresh value is existential, so `code not in
+pre(store)` says an unused code exists without naming it, and the synthesizer or convention engine
+chooses how to produce one (a hash, a counter, a random draw) while the verifier confirms that any
+choice meets the postcondition. A timestamp comes from the built-in `now()`, which the verifier
+treats as a fresh value no earlier than any previous one and which a controllable clock supplies in
+tests. A sequential id is `max(dom(posts)) + 1`, which the convention engine maps to an
+auto-increment column: the spec fixes the property, fresh and sequential, and leaves the mechanism to
+codegen.
