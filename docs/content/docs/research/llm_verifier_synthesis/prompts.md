@@ -122,8 +122,9 @@ diff-check catches that without spending a verification on it.
 
 ## Not built yet
 
-Two ideas from the literature shape the design but are not implemented. DafnyPro's proactive hint
-augmentation, injecting a proof lemma before the first attempt rather than after a failure, is
-roadmap work (issue #229), and Laurel's assertion localization, dropping `assert` placeholders at the
-failing line for the model to fill, is not built. Today the hints are reactive, attached to the
-repair prompt by error category.
+The hints today are hand-curated and reactive: a person wrote each one, and they attach to the repair
+prompt by error category. Two extensions from the literature are not in place. Automatic hint
+discovery, mining new patterns from the codebase's own verified runs instead of writing them by hand,
+is a follow-up. And Laurel's assertion localization, dropping `assert` placeholders at the failing
+line for the model to fill, is not built; the hints stay at the prompt level rather than editing the
+candidate.
