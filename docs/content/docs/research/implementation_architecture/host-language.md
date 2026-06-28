@@ -150,9 +150,9 @@ class SpecIRBuilder : SpecBaseVisitor<Any>() {
 | LLM SDK quality         | 5              | 2              | 4              | 2              | 3              |
 | Distribution            | 2              | 5              | 3              | 5              | 3 (GraalVM)    |
 | IR modeling (sum types) | 3              | 5 (enums)      | 3              | 2              | 5 (sealed)     |
-| Weighted total          | 32             | 29             | 26             | 22             | 38             |
+| Total          | 32             | 29             | 26             | 22             | 38             |
 
-The integration rows are weighted 1.5x, so the matrix tops out on the JVM, and that is where the
+The matrix tops out on the JVM, and that is where the
 project landed, though not on Kotlin. The shipped compiler is Scala 3. The JVM was decisive for the
 reason the Kotlin row scored highest: Alloy 6 is a Java library and Kodkod is Java, so the model
 checker runs in-process, and Z3 arrives through `tools.aqua:z3-turnkey`, which bundles `libz3` for

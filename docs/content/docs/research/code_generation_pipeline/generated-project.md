@@ -5,7 +5,7 @@ description: "What a compile run emits: the project layout, its infrastructure, 
 
 A `compile` run does not emit a single file; it emits a whole project, ready to run, test, and
 deploy. The exact files differ by target, and the per-target references under
-[deployment targets](/targets) are the authoritative listing. This page is the shape they share and
+[deployment targets](/targets/python/fastapi/postgres) are the authoritative listing. This page is the shape they share and
 the infrastructure they carry.
 
 ## What a project contains

@@ -265,7 +265,7 @@ operations
       return code
     )
   pre isValidURI(url)
-  post url = store~(RESULT) and
+  post url = store(RESULT) and
        RESULT not in set dom store~ and
        card dom store = card dom store~ + 1;
 

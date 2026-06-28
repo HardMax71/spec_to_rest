@@ -19,7 +19,7 @@ Without the `conventions` block, the engine infers the REST surface from each op
 | Operation | Inferred method                 | Inferred path          | Inferred status |
 | --------- | ------------------------------- | ---------------------- | --------------- |
 | Shorten   | POST (mutates state, has input) | `/url-mappings`        | 201             |
-| Resolve   | GET (reads state, no mutation)  | `/url-mappings/{code}` | 200             |
+| Resolve   | GET (read-oriented, bumps click_count)  | `/url-mappings/{code}` | 200             |
 | Delete    | DELETE (removes from state)     | `/url-mappings/{code}` | 204             |
 | ListAll   | GET (reads a collection)        | `/url-mappings`        | 200             |
 

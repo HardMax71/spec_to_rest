@@ -31,9 +31,9 @@ lemmas you need before the method declaration. Do not paraphrase or weaken
 contracts to make verification easier — that is rejected by the diff checker.
 ```
 
-The user message that follows it is built from four sections: the method signature, a prose
-description of the operation, the type definitions the body will touch, and one to three verified
-examples.
+The user message that follows it is built from five sections: the method signature, a prose
+description of the operation, the type definitions the body will touch, one to two verified
+examples, and the task to perform.
 
 ## Three strategies
 

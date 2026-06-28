@@ -22,7 +22,7 @@ is authoritative; the EBNF below renders it in a readable form.
 (* Identifiers *)
 IDENT           = LETTER (LETTER | DIGIT | '_')* ;
 UPPER_IDENT     = UPPER_LETTER (LETTER | DIGIT | '_')* ;
-LOWER_IDENT     = LOWER_LETTER (LETTER | DIGIT | '_')* ;
+LOWER_IDENT     = ( LOWER_LETTER | '_' ) (LETTER | DIGIT | '_')* ;
 
 LETTER          = 'a'..'z' | 'A'..'Z' ;
 UPPER_LETTER    = 'A'..'Z' ;
@@ -35,8 +35,8 @@ FLOAT_LIT       = DIGIT+ '.' DIGIT+ ;
 STRING_LIT      = '"' (CHAR | ESCAPE)* '"' ;
 BOOL_LIT        = 'true' | 'false' ;
 CHAR            = <any Unicode except '"' and '\'> ;
-ESCAPE          = '\' ('n' | 't' | 'r' | '\' | '"') ;
-REGEX_LIT       = '/' (REGEX_CHAR)+ '/' ;
+ESCAPE          = '\' <any character> ;
+REGEX_LIT       = '/' (REGEX_CHAR)+ '/' ;  (* lexed only after the 'matches' keyword *)
 REGEX_CHAR      = <any Unicode except '/' and unescaped newline> ;
 
 (* Keywords. Many also parse as identifiers in name positions; see lowerIdent. *)
@@ -167,7 +167,7 @@ type_alias      = 'type' UPPER_IDENT '=' type_expr ['where' expr] ;
 (* recursion. The relation arrow '->' is parsed as an optional  *)
 (* suffix on a base type, not as a separate recursive rule.     *)
 
-type_expr       = base_type [ '->' multiplicity base_type ] ;
+type_expr       = base_type [ '->' [ multiplicity ] base_type ] ;
 
 base_type       = primitive_type
                 | compound_type
@@ -234,7 +234,7 @@ requires_auth_clause = 'requires_auth' ':' LOWER_IDENT { ',' LOWER_IDENT } ;
 (* here: it separates consecutive expressions. Explicit 'and'   *)
 (* within a single line still works for inline conjunction.     *)
 
-expr_list       = expr { NEWLINE expr } ;
+expr_list       = expr { expr } ;
 
 (* ============================================================ *)
 (* Transition Declarations (State Machines)                      *)
@@ -391,7 +391,7 @@ primary_expr    = INT_LIT
 quantifier_expr = quantifier quant_binding { ',' quant_binding }
                   '|' expr ;
 
-quant_binding   = LOWER_IDENT 'in' expr ;
+quant_binding   = LOWER_IDENT ( 'in' | ':' ) expr ;
 
 quantifier      = 'all' | 'some' | 'no' | 'exists' ;
 

@@ -68,7 +68,7 @@ def ConstantOp : Foo_Op<"constant"> {
   let arguments = (ins F64ElementsAttr:$value);
   let results = (outs F64Tensor);
   let hasVerifier = 1;
-  let assemblyFormat = "$value attr-dict `:` type($input)";
+  let assemblyFormat = "$value attr-dict `:` type($value)";
 }
 
 def Foo_PolyType : TypeDef<Foo_Dialect, "Polynomial"> {

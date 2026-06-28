@@ -76,7 +76,7 @@ formalisms:
 aims to be sound (a conforming implementation passes every generated test) and
 [complete](https://www.sciencedirect.com/science/article/abs/pii/S0950584910001278) (a non-conforming
 one fails at least one), with coverage measured over states, transitions, or paths. The strongest
-variant is [differential fuzzing against a verified model](https://welltyped.systems/blog/verified-conformance-testing-for-dummies):
+variant is differential fuzzing against a verified model:
 build a small model proven correct, generate random operations, run them on both the model and the
 implementation, and treat any divergence as a real bug, because the model cannot be wrong. It fits
 state machines, protocols, financial logic, parsers, anything with strict invariants.

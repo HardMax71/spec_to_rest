@@ -114,12 +114,12 @@ specification elements map to different property shapes:
 | State machine              | behavioral property  | "after create, get returns the item"   |
 | Protocol rule              | sequence property    | "handshake must precede data transfer" |
 
-The [pipeline AWS describes](https://kiro.dev/blog/property-based-testing/) is to write acceptance
+The [pipeline Kiro describes](https://kiro.dev/blog/property-based-testing/) is to write acceptance
 criteria in natural language, extract universally-quantified properties ("for any valid X, P holds"),
 implement them as PBT tests in Hypothesis, QuickCheck, or fast-check, and let the framework generate,
 check, and shrink. The insight, that the properties are
 [another representation of the specification](https://link.springer.com/article/10.1007/s10270-017-0647-0),
 keeps traceability between what stakeholders need and what tests check, and the underlying technique
-goes back to the [original QuickCheck](https://dl.acm.org/doi/pdf/10.1145/263244.263267). In practice
+goes back to the [original QuickCheck](https://dl.acm.org/doi/10.1145/351240.351266). In practice
 this is how Amazon tests S3 and DynamoDB invariants, Volvo automotive protocols, Stripe financial
 logic, and Ericsson telecom protocols.

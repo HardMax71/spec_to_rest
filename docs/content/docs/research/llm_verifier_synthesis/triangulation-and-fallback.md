@@ -58,7 +58,7 @@ the pipeline already handles.
 
 ## The report
 
-Every run ends in a report. Each operation is marked verified, direct-emitted, or fallen through to a
+Every run ends in a report. Each operation is marked verified or fallen through to a
 skeleton, with its iteration count. It is the one place that states plainly which operations a person
 still has to finish.
 
@@ -67,7 +67,6 @@ Service: UrlShortener
 
   Shorten ....... VERIFIED      (3 iterations)
   Resolve ....... VERIFIED      (2 iterations)
-  Delete ........ DIRECT_EMIT
   ListAll ....... VERIFIED      (1 iteration)
 ```
 

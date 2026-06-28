@@ -11,7 +11,7 @@ compiles a `.hbs` source inline and applies it to a context object, with a coupl
 
 ## The template tree
 
-Templates sit under `templates/<language>/<framework>/`, one tree per target:
+Templates sit under `modules/codegen/src/main/resources/templates/<language>/<framework>/`, one tree per target, each file a `.hbs` named after the output it renders:
 
 ```text
 templates/
