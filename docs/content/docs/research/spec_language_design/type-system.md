@@ -1,69 +1,59 @@
 ---
 title: "Type system"
-description: "Primitives, compounds, entity and relation types, refinements, inference, and subtyping"
+description: "Primitives, compounds, entity and relation types, refinements, expression types, and compatibility"
 ---
 
-### 5.1 Primitive types and their constraints
+## Primitive types
 
-| Type       | Values                       | Default | SQL Mapping                | JSON Mapping        |
-| ---------- | ---------------------------- | ------- | -------------------------- | ------------------- |
-| `String`   | Unicode text                 | `""`    | `TEXT` or `VARCHAR(n)`     | `string`            |
-| `Int`      | Arbitrary-precision integers | `0`     | `INTEGER` or `BIGINT`      | `integer`           |
-| `Float`    | IEEE 754 double              | `0.0`   | `DOUBLE PRECISION`         | `number`            |
-| `Bool`     | `true`, `false`              | `false` | `BOOLEAN`                  | `boolean`           |
-| `DateTime` | UTC timestamp                | epoch   | `TIMESTAMP WITH TIME ZONE` | `string` (ISO 8601) |
+| Type       | Values                       | Default | SQL                    | JSON                |
+| ---------- | ---------------------------- | ------- | ---------------------- | ------------------- |
+| `String`   | Unicode text                 | `""`    | `TEXT` or `VARCHAR(n)` | string              |
+| `Int`      | arbitrary-precision integers | `0`     | `INTEGER` or `BIGINT`  | integer             |
+| `Float`    | IEEE 754 double              | `0.0`   | `DOUBLE PRECISION`     | number              |
+| `Bool`     | `true`, `false`              | `false` | `BOOLEAN`              | boolean             |
+| `DateTime` | UTC timestamp                | epoch   | `TIMESTAMPTZ`          | string (ISO 8601)   |
+| `Duration` | a span of time               | `0`     | `BIGINT` (seconds)     | integer             |
+| `UUID`     | a UUID                       | none    | `UUID` or `TEXT`       | string              |
 
-Primitive types have no subtypes. Each primitive can be refined with a `where` clause to create a
-named constrained type.
+Underneath, the verifier's type system has four scalar types: `Bool`, `Int`, `Real`, and `String`.
+`DateTime` and `Duration` are integers (an epoch and a count of seconds), and `UUID` is a string.
+No primitive has subtypes, and any of them refines into a named, constrained type with a `where`
+clause.
 
-### 5.2 Compound types
+## Compound types
 
-`Set[T]` is an unordered collection of unique values of type T.
+`Set[T]` is an unordered collection of unique values; `Seq[T]` is ordered and may repeat; `Map[K, V]`
+maps keys to values; `Option[T]` is a value or `none`.
 
-```text
-tags: Set[String]           // SQL: junction table or JSON array
-                            // JSON: array (unique values enforced at app layer)
+```spec
+tags:           Set[String]
+login_attempts: Seq[LoginAttempt]
+settings:       Map[String, String]
+description:    Option[String]
 ```
 
-`Seq[T]` is an ordered sequence of values of type T and may contain duplicates.
+A `Set[T]` becomes a JSON array, with uniqueness enforced in the application layer, backed by either
+a JSON column or a junction table. A `Seq[T]` keeps an ordering column. An `Option[T]` is a nullable
+column.
 
-```text
-login_attempts: Seq[LoginAttempt]   // SQL: table with ordering column
-                                    // JSON: array
-```
+## Entity types and tables
 
-`Map[K, V]` is a mapping from keys of type K to values of type V.
+Each `entity` maps to a database table:
 
-```text
-settings: Map[String, String]       // SQL: key-value table or JSON column
-                                    // JSON: object
-```
+| Entity feature           | Database mapping                                                  |
+| ------------------------ | ----------------------------------------------------------------- |
+| Entity name              | table name, pluralized and snake_case                             |
+| Primitive field          | column                                                            |
+| `Option[T]` field        | nullable column                                                   |
+| `Set[T]` of a primitive  | JSON array column or junction table                               |
+| `Set[T]` of an entity    | junction table                                                    |
+| Entity-typed field       | foreign-key column                                                |
+| `where` on a field       | `CHECK` constraint                                                |
+| Entity `invariant`       | `CHECK` constraint where SQL can express it, else app validation  |
 
-`Option[T]` is either a value of type T or `none`.
+For example,
 
-```text
-description: Option[String]         // SQL: nullable column
-                                    // JSON: field may be absent or null
-```
-
-### 5.3 Entity types and database tables
-
-Each `entity` declaration maps to a database table. The mapping follows these rules:
-
-| Entity Feature                           | Database Mapping                                                           |
-| ---------------------------------------- | -------------------------------------------------------------------------- |
-| Entity name                              | Table name (pluralized, snake_case)                                        |
-| Field with primitive type                | Column                                                                     |
-| Field with `Option[T]`                   | Nullable column                                                            |
-| Field with `Set[T]` where T is primitive | JSON array column or junction table                                        |
-| Field with `Set[T]` where T is entity    | Junction table                                                             |
-| Field with entity type                   | Foreign key column                                                         |
-| `where` clause on field                  | `CHECK` constraint                                                         |
-| Entity `invariant`                       | `CHECK` constraint (if expressible in SQL) or application-level validation |
-
-Example:
-
-```text
+```spec
 entity Todo {
   id: Int where value > 0
   title: String where len(value) >= 1 and len(value) <= 200
@@ -72,7 +62,7 @@ entity Todo {
 }
 ```
 
-Generates:
+generates:
 
 ```sql
 CREATE TABLE todos (
@@ -83,119 +73,87 @@ CREATE TABLE todos (
 );
 ```
 
-### 5.4 Relation types and database foreign keys
+## Relation types and foreign keys
 
-A relation type `A -> mult B` declares a relationship between type A and type B with the given
-multiplicity.
+A relation type `A -> mult B` relates `A` and `B` with a multiplicity:
 
-| Relation Type | Database Mapping                                                   |
-| ------------- | ------------------------------------------------------------------ |
-| `A -> one B`  | Column on A's table: `b_id INTEGER NOT NULL REFERENCES b(id)`      |
-| `A -> lone B` | Column on A's table: `b_id INTEGER REFERENCES b(id)` (nullable)    |
-| `A -> some B` | Junction table with at least-one constraint (trigger or app-level) |
-| `A -> set B`  | Junction table: `a_b(a_id REFERENCES a, b_id REFERENCES b)`        |
+| Relation      | Database mapping                                                   |
+| ------------- | ----------------------------------------------------------------- |
+| `A -> one B`  | column on `A`: `b_id INTEGER NOT NULL REFERENCES b(id)`           |
+| `A -> lone B` | nullable column on `A`: `b_id INTEGER REFERENCES b(id)`           |
+| `A -> some B` | junction table with an at-least-one constraint (trigger or app)   |
+| `A -> set B`  | junction table `a_b(a_id REFERENCES a, b_id REFERENCES b)`        |
 
-State-level relations map to the core data model:
+A state relation maps the same way:
 
-```text
+```spec
 state {
   store: ShortCode -> lone LongURL
 }
 ```
 
-This creates either a single table with both columns or two tables with a foreign key, depending on
-whether ShortCode and LongURL are entities or value types.
+Whether that becomes one table or two joined by a foreign key depends on whether `ShortCode` and
+`LongURL` are entities or value types.
 
-### 5.5 Parametric types
+## Parametric types
 
-The type system supports parameterized types:
+`Set[T]`, `Map[K, V]`, `Seq[T]`, and `Option[T]` are the only parametric types, and there are no
+user-defined generics. Keeping the set closed means every type has a clear database and JSON mapping.
 
-```text
-Set[T]          -- for any type T
-Map[K, V]       -- for any types K, V
-Seq[T]          -- for any type T
-Option[T]       -- for any type T
-```
+## Refinement types
 
-These are the only parametric types in the language. Users cannot define their own generic types.
-This keeps the type system simple and ensures every type has a clear database and JSON mapping.
+A `where` clause refines a base type with a predicate that must always hold. Inside the clause,
+`value` is the instance being constrained.
 
-### 5.6 Refinement types (constrained types)
-
-The `where` clause creates a refinement type, a base type with an additional predicate that must
-always hold:
-
-```text
-type ShortCode = String where len(value) >= 6 and len(value) <= 10
-                            and value matches /^[a-zA-Z0-9]+$/
-
-type Money = Int where value >= 0
-
+```spec
+type ShortCode  = String where len(value) >= 6 and len(value) <= 10
+                             and value matches /^[a-zA-Z0-9]+$/
+type Money      = Int where value >= 0
 type Percentage = Float where value >= 0.0 and value <= 100.0
-
-type Email = String where value matches /^[^@]+@[^@]+\.[^@]+$/
+type Email      = String where value matches /^[^@]+@[^@]+\.[^@]+$/
 ```
 
-Within the `where` clause, `value` refers to the instance being constrained.
+A refinement compiles to a `CHECK` constraint, request-body validation, the matching OpenAPI schema
+constraint, and a runtime check. It is not a separate type from its base: `ShortCode` is a `String`
+with extra constraints, so anything that takes a `String` takes a `ShortCode`. The reverse needs the
+constraint proven or checked, since an arbitrary `String` is not a valid `ShortCode`.
 
-Refinement types generate:
+## The type of an expression
 
-- Database: `CHECK` constraints
-- API validation: Request body validation rules (e.g., JSON Schema `pattern`, `minimum`,
-  `maximum`)
-- OpenAPI: Corresponding schema constraints
-- Runtime: Validation functions that throw on violation
+Declarations carry explicit types, and each expression then has a determined type.
 
-Refinement types are **not** separate types from their base, a `ShortCode` is a `String` with
-extra constraints. Any function that accepts `String` also accepts `ShortCode`. But a function that
-requires `ShortCode` does not accept an arbitrary `String` (the constraint must be proven or checked
-at runtime).
+| Expression               | Type                                                |
+| ------------------------ | --------------------------------------------------- |
+| integer literal          | `Int`                                               |
+| float literal            | `Float`                                             |
+| string literal           | `String`                                            |
+| boolean literal          | `Bool`                                              |
+| a field reference        | the field's declared type                           |
+| `entity.field`           | that field's type                                   |
+| `store[key]`             | the relation's target type                          |
+| `dom(rel)`               | a `Set` of the source type                          |
+| `ran(rel)`               | a `Set` of the target type                          |
+| `#collection`            | `Int`                                               |
+| `a + b` on `Int`         | `Int`                                               |
+| `a + b` on sets          | the same set type                                   |
+| `a and b`                | `Bool`                                              |
+| `x in S`                 | `Bool`                                              |
+| `pre(field)`, `field'`   | the field's type                                    |
+| `if c then a else b`     | the branches' shared type (numeric branches widen)  |
+| a quantifier             | `Bool`                                              |
 
-### 5.7 Type inference rules
+## Subtyping and compatibility
 
-The spec language uses explicit types in declarations but infers types in expressions:
+The type layer keeps a few compatibility rules rather than a full subtype lattice. A numeric value
+widens: an `Int` is accepted where a `Float` is expected, never the reverse, since the verifier joins
+`Int` and `Real` to `Real`. A refined type stands in for its base, because it is that base with a
+constraint. A bare value is accepted where an `Option[T]` is expected, wrapped in `some`. Enums are
+distinct types that do not widen into one another, and collections are invariant in their element
+type, so a `Set[Child]` is not a `Set[Parent]`.
 
-| Expression                  | Inferred Type                                                                  |
-| --------------------------- | ------------------------------------------------------------------------------ |
-| Integer literal             | `Int`                                                                          |
-| Float literal               | `Float`                                                                        |
-| String literal              | `String`                                                                       |
-| Boolean literal             | `Bool`                                                                         |
-| `field_name` (in operation) | Type of the field from state declaration                                       |
-| `entity.field`              | Type of that field in the entity                                               |
-| `store[key]`                | Target type of the relation (e.g., `LongURL` from `ShortCode -> lone LongURL`) |
-| `dom(rel)`                  | `Set[SourceType]`                                                              |
-| `ran(rel)`                  | `Set[TargetType]`                                                              |
-| `#collection`               | `Int`                                                                          |
-| `a + b` (both Int)          | `Int`                                                                          |
-| `a + b` (sets)              | Same set type                                                                  |
-| `a and b`                   | `Bool`                                                                         |
-| `x in S`                    | `Bool`                                                                         |
-| `pre(field)`                | Same type as `field`                                                           |
-| `field'`                    | Same type as `field`                                                           |
-| `if c then a else b`        | Least common supertype of a and b                                              |
-| Quantifier expression       | `Bool`                                                                         |
+Entity inheritance is structural. `entity Child extends Parent` gives `Child` all of `Parent`'s
+fields and invariants and lets it add more, but the type layer treats each entity as its own type, so
+substituting a `Child` for a `Parent` is not something it checks.
 
-### 5.8 Subtyping and compatibility rules
-
-The type system has a simple subtyping hierarchy:
-
-1. Refinement subtyping: `type ShortCode = String where P` means `ShortCode <: String`. Any
-   `ShortCode` value can be used where a `String` is expected, but not vice versa.
-
-2. Option subtyping: `T <: Option[T]`, any value of type T can be used where `Option[T]` is
-   expected (it is implicitly wrapped in `some`).
-
-3. Enum subtyping: Enum types do not participate in subtyping. Each enum is a distinct type.
-
-4. Entity subtyping: `entity Child extends Parent` means `Child <: Parent`. A `Child` value can
-   be used where a `Parent` is expected. Child inherits all fields and invariants, and may add new
-   ones.
-
-5. Collection subtyping: Collections are invariant in their type parameter. `Set[Child]` is
-   NOT a subtype of `Set[Parent]`. This prevents runtime type errors.
-
-6. Numeric compatibility: `Int` values can be used where `Float` is expected (widening), but not
-   vice versa.
-
-Type errors are reported at spec-check time, before any code generation occurs.
+Type checking is partial today. The `check` command runs a narrow structural lint, `L01`, that
+catches a literal used at the wrong type; a full type checker is future work.
