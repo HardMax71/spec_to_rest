@@ -1,114 +1,75 @@
 ---
 title: "How it compares"
-description: "The test generator against manual, snapshot, and contract testing"
+description: "The test generator against OpenAPI fuzzers, contract tests, and model-based testing"
 ---
 
-## 10. Comparison with existing testing approaches
+Plenty of tools generate API tests; what sets this one apart is the span. It is the only approach
+that derives structural, behavioral, and stateful checks from a single formal spec.
 
-### 10.1 Comparison matrix
+| Approach                 | Structural         | Behavioral                  | Stateful                    | From a spec        | Auto-generated | Shrinks |
+| ------------------------ | ------------------ | --------------------------- | --------------------------- | ------------------ | -------------- | ------- |
+| This generator           | yes (Schemathesis) | yes (Hypothesis properties) | yes (Hypothesis state machine) | yes             | yes            | yes     |
+| Schemathesis alone       | yes                | no                          | links only                  | OpenAPI only       | yes            | partial |
+| RESTler                  | partial            | no                          | fuzzing                     | OpenAPI only       | yes            | no      |
+| EvoMaster                | yes                | no                          | evolutionary                | OpenAPI only       | yes            | no      |
+| Dredd                    | yes                | no                          | no                          | OpenAPI only       | yes            | no      |
+| Pact                     | no                 | contracts                   | no                          | consumer-driven    | partial        | no      |
+| QuickCheck state machine | no                 | yes                         | yes                         | hand-written model | no             | yes     |
+| Spec Explorer            | no                 | yes                         | yes                         | C# model           | yes            | no      |
+| Hand-written             | varies             | varies                      | varies                      | no                 | no             | no      |
 
-| Approach                | Structural         | Behavioral             | Stateful             | From Formal Spec       | Auto-Generated          | Shrinking |
-| ----------------------- | ------------------ | ---------------------- | -------------------- | ---------------------- | ----------------------- | --------- |
-| **Our approach**        | Yes (Schemathesis) | Yes (Hypothesis props) | Yes (Hypothesis SM)  | Yes                    | Yes                     | Yes       |
-| **Schemathesis alone**  | Yes                | No                     | Partial (links only) | From OpenAPI only      | Yes                     | Partial   |
-| **RESTler**             | Partial            | No                     | Yes (fuzzing)        | From OpenAPI only      | Yes                     | No        |
-| **EvoMaster**           | Yes                | No                     | Yes (evolutionary)   | From OpenAPI only      | Yes                     | No        |
-| **Dredd**               | Yes                | No                     | No                   | From OpenAPI/Blueprint | Yes                     | No        |
-| **Pact**                | No                 | Partial (contracts)    | No                   | No (consumer-driven)   | Partial                 | No        |
-| **QuickCheck SM**       | No                 | Yes                    | Yes                  | From model             | No (hand-written model) | Yes       |
-| **Spec Explorer**       | No                 | Yes                    | Yes                  | From C# model          | Yes                     | No        |
-| **Hand-written pytest** | Depends            | Depends                | Depends              | No                     | No                      | No        |
+## What the others miss
 
-### 10.2 What each approach misses
+The OpenAPI fuzzers, Schemathesis, RESTler, EvoMaster, and the archived Dredd, all drive the API from
+its OpenAPI surface and check that responses do not crash and match the declared schema. None of them
+has a behavioral oracle: they cannot tell whether the returned short code was actually fresh, or
+whether an invariant still holds, because nothing in OpenAPI says so. That is the gap this generator
+fills, the `ensures`-derived assertions and the post-step invariant checks. EvoMaster is the
+interesting case, complementary rather than competing: its evolutionary search is good at finding
+inputs that reach deep code paths, and those inputs still need an oracle to judge the outputs, which
+is exactly what the spec supplies.
 
-#### Schemathesis alone
+Pact sits in a different quadrant. It is consumer-driven: a consumer writes the contract it expects,
+and Pact checks the provider honors it. That is useful at integration boundaries, but it tests
+expectations, not the service's own invariants, and the contract comes from a consumer rather than the
+authoritative spec.
 
-- Checks structural conformance (schemas, status codes, content types)
-- Cannot verify behavioral postconditions (e.g., "the returned code was fresh")
-- Stateful testing is limited to OpenAPI Links (data flow only, no model comparison)
-- No invariant checking beyond schema validation
-- What we add: behavioral property tests that check ensures clauses, stateful tests that
-  maintain a model and compare it against the service, invariant checks after every operation
+The closest conceptual match is model-based testing. QuickCheck-style state-machine testing (used to
+great effect at Ericsson and Volvo) and Microsoft's Spec Explorer both drive sequences of operations
+against a model and check the result, which is precisely the stateful layer here. The difference is
+where the model comes from and what surrounds it. QuickCheck's model is hand-written in Erlang or
+Haskell; Spec Explorer's was a C# program tied to a Visual Studio tool that is no longer maintained;
+neither is REST-aware or does structural testing. This generator derives the state-machine model from
+the spec, wires it to an HTTP client, and runs the structural layer alongside it.
 
-#### Restler (microsoft research)
+## The coverage spectrum
 
-- Excellent at finding security bugs (500 errors, resource leaks)
-- Infers producer-consumer dependencies from OpenAPI
-- Does _not_ check postconditions or invariants
-- Fuzzing is unguided by a behavioral specification
-- What we add: spec-guided testing that checks not just "does it crash?" but "does it satisfy
-  the postconditions?" and "do invariants hold?"
-
-#### Evomaster
-
-- Evolutionary search for inputs that maximize code coverage
-- White-box: instruments the service to guide search
-- Good at achieving high line/branch coverage
-- Does _not_ check behavioral correctness (only crashes and 500s)
-- What we add: an oracle. EvoMaster finds inputs; we check outputs against the spec. The two
-  approaches are complementary.
-
-#### Dredd (archived)
-
-- One request per documented endpoint, check response matches schema
-- No randomization, no edge cases, no stateful sequences
-- What we add: everything beyond "does the happy path return the documented shape?"
-
-#### Pact (consumer-driven contracts)
-
-- Verifies that a provider satisfies consumer expectations
-- Consumer writes the contract, rather than the spec author
-- Does not test internal invariants or state transitions
-- What we add: provider-side behavioral verification derived from the authoritative
-  specification, rather than from consumer expectations
-
-#### QuickCheck state machine testing (erlang/haskell)
-
-- The closest conceptual match to our stateful testing layer
-- Requires manually writing the state machine model in Erlang/Haskell
-- Excellent at finding bugs in stateful systems (used at Volvo, Ericsson)
-- No HTTP/REST awareness, no structural testing
-- What we add: automatic generation of the state machine model from the spec, HTTP client
-  integration, structural testing via Schemathesis, entity-level strategy generation
-
-#### Spec explorer (microsoft)
-
-- Model-based testing from C# model programs
-- Explored state graphs, generated covering test suites
-- Saved 50 person-years at Microsoft
-- Visual Studio-only, rather than maintained, no REST awareness
-- What we add: REST-native, Python ecosystem, alive, spec-driven rather than code-driven
-
-### 10.3 What our approach cannot do (honest limitations)
-
-| Limitation                             | Why                                                                           | Mitigation                                                                                                   |
-| -------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Cannot test unstated requirements      | Tests derive from spec; if the spec omits a requirement, no test is generated | Supplement with hand-written tests for domain-specific edge cases                                            |
-| Cannot test performance/latency        | Spec does not declare performance requirements                                | Separate performance testing (e.g., Locust, k6)                                                              |
-| Cannot test concurrent race conditions | Hypothesis SM is sequential by default                                        | Use Hypothesis's `@given` with `st.runner()` for limited parallelism; use TLA+ for full concurrency analysis |
-| Cannot test UI/frontend                | Spec covers API behavior only                                                 | Separate frontend testing                                                                                    |
-| Cannot test third-party integrations   | Spec describes the service's own behavior                                     | Mock external dependencies in test fixtures                                                                  |
-| Slower than unit tests                 | Integration tests require a running service                                   | Use `smoke` profile for fast feedback, `exhaustive` for release gates                                        |
-
-### 10.4 Positioning on the testing spectrum
-
-```text
-                    Structural                    Behavioral
-                    conformance                   conformance
-                    |                             |
-  Dredd ---------->|                              |
-  Schemathesis --->|------->                      |
-  RESTler -------->|----------->                  |
-  EvoMaster ------>|--------------->              |
-  Pact ----------->|                  |           |
-  QuickCheck SM    |                  |---------->|
-  Spec Explorer    |                  |---------->|
-  Our approach --->|--------------------------------->|
-                   ^                                  ^
-                   Least                              Most
-                   coverage                           coverage
+```mermaid
+flowchart LR
+  S["Structural<br/>matches the schema?"]
+  B["Behavioral<br/>postconditions hold?"]
+  ST["Stateful<br/>invariants hold across sequences?"]
+  Fuzz["OpenAPI fuzzers<br/>Schemathesis, RESTler,<br/>EvoMaster, Dredd"] --> S
+  Model["Model-based<br/>QuickCheck SM, Spec Explorer"] --> B
+  Model --> ST
+  Ours["This generator,<br/>from one spec"] --> S
+  Ours --> B
+  Ours --> ST
+  style Ours fill:#16a34a,stroke:#15803d,color:#ffffff
 ```
 
-Our approach is the only one that covers the full spectrum from structural conformance (does the API
-match its schema?) through behavioral conformance (does each operation satisfy its postconditions?)
-to stateful conformance (do invariants hold across arbitrary operation sequences?).
+The fuzzers cover the structural floor; the model-based tools cover behavior and state but skip the
+structural surface; this generator is the only one that reaches all three from one source.
+
+## What this cannot do
+
+The honesty is in the limits. Because every test derives from the spec, an unstated requirement has no
+test, so domain edge cases the spec does not mention still want hand-written coverage. Performance and
+latency go untested, the spec does not declare them, and a load tool like k6 or Locust is the right
+instrument. Concurrency is the sharper gap: the stateful layer drives operations in sequence, so it
+will not surface a race between two interleaved requests, and catching those would need a model
+checker like TLA+, which is out of scope here rather than part of the generated suite. The spec
+describes one service's API, so the UI and third-party integrations fall outside it, mock external
+dependencies in fixtures. And the suite runs against a live service rather than in-process, which
+makes it slower than unit tests; the conformance runner takes a `smoke` profile for fast local
+feedback and a fuller profile for release gates.
