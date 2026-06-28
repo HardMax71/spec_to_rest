@@ -9,14 +9,15 @@ import {
   transformerNotationFocus,
   transformerNotationHighlight,
 } from "@shikijs/transformers";
-import { antlr4Grammar, specGrammar } from "./lib/grammars";
+import { antlr4Grammar, specGrammar, ebnfGrammar } from "./lib/grammars";
 import remarkCliRun from "./lib/remark-cli-run";
+import remarkSpecFile from "./lib/remark-spec-file";
 import remarkRepoLinks from "./lib/remark-repo-links";
 import remarkTreeBlock from "./lib/remark-tree-block";
 import remarkUnlinkInHeadings from "./lib/remark-unlink-in-headings";
 import { createCustomRehypeCode } from "./lib/rehype-code-factory";
 
-const customRehypeCode = createCustomRehypeCode([antlr4Grammar, specGrammar]);
+const customRehypeCode = createCustomRehypeCode([antlr4Grammar, specGrammar, ebnfGrammar]);
 
 export const docs = defineDocs({
   dir: "content/docs",
@@ -27,6 +28,7 @@ export default defineConfig({
     format: "md",
     remarkPlugins: [
       remarkMath,
+      remarkSpecFile,
       remarkMdxMermaid,
       remarkTreeBlock,
       remarkCliRun,

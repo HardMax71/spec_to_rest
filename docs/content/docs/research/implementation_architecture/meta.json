@@ -1,0 +1,8 @@
+{
+  "title": "Compiler implementation",
+  "pages": [
+    "host-language",
+    "ir-design",
+    "compiler-testing"
+  ]
+}

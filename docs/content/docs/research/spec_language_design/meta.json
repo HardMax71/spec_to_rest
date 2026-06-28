@@ -1,0 +1,12 @@
+{
+  "title": "Spec language foundations",
+  "pages": [
+    "survey",
+    "grammar",
+    "semantics",
+    "worked-examples",
+    "type-system",
+    "developer-experience",
+    "comparison"
+  ]
+}

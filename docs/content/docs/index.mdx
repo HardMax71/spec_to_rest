@@ -247,6 +247,7 @@ admits, the generated handlers leave every invariant intact.
         <th className="p-3 font-medium">Hand-written</th>
         <th className="p-3 font-medium">JHipster / scaffolds</th>
         <th className="p-3 font-medium">PostgREST / Hasura</th>
+        <th className="p-3 font-medium">AI agent</th>
       </tr>
     </thead>
     <tbody className="text-xs">
@@ -256,6 +257,7 @@ admits, the generated handlers leave every invariant intact.
         <td className="p-3 text-fd-muted-foreground">in tests</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
+        <td className="p-3 text-fd-muted-foreground">prompt only</td>
       </tr>
       <tr className="border-b">
         <td className="p-3">First-order invariant verification</td>
@@ -263,10 +265,12 @@ admits, the generated handlers leave every invariant intact.
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3 text-fd-muted-foreground">DB constraints only</td>
+        <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
         <td className="p-3">Bounded temporal &amp; powerset checks</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> Alloy</td>
+        <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
@@ -277,11 +281,13 @@ admits, the generated handlers leave every invariant intact.
         <td className="p-3"><Minus className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><Minus className="inline h-4 w-4 text-fd-muted-foreground" /></td>
+        <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
       <tr className="border-b">
         <td className="p-3">Counterexample narration</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">stack trace</td>
+        <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
       </tr>
@@ -291,10 +297,12 @@ admits, the generated handlers leave every invariant intact.
         <td className="p-3 text-fd-muted-foreground">manual</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
+        <td className="p-3 text-fd-muted-foreground">ad hoc</td>
       </tr>
       <tr className="border-b">
         <td className="p-3">Mechanically verified translator (Isabelle/HOL)</td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> universal soundness theorem</td>
+        <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
@@ -305,6 +313,7 @@ admits, the generated handlers leave every invariant intact.
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
         <td className="p-3 text-fd-muted-foreground">Postgres-locked</td>
+        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /></td>
       </tr>
     </tbody>
   </table>

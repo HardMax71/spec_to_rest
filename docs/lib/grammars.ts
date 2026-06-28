@@ -51,7 +51,7 @@ export const specGrammar: LanguageRegistration = {
     {
       name: "keyword.control.spec",
       match:
-        "\\b(service|entity|enum|type|operation|invariant|state|input|output|transition|temporal|when|where|extends|via|conventions|fact|field|function|predicate|requires|ensures|implies|iff|if|then|else|let|with|the|pre|matches|always|eventually|fairness|before|after|until|since|import|return)\\b",
+        "\\b(service|entity|enum|type|operation|invariant|state|input|output|transition|temporal|when|where|extends|via|conventions|security|fact|field|function|predicate|requires_auth|requires|ensures|implies|iff|if|then|else|let|with|the|pre|matches|always|eventually|fairness|before|after|until|since|import|return)\\b",
     },
     {
       name: "keyword.operator.word.spec",
@@ -72,6 +72,26 @@ export const specGrammar: LanguageRegistration = {
     { name: "punctuation.terminator.spec", match: ";|," },
     { name: "punctuation.section.spec", match: "[(){}\\[\\]]" },
     { name: "variable.other.spec", match: "\\b[a-z_][A-Za-z0-9_]*\\b" },
+  ],
+  repository: {},
+};
+
+export const ebnfGrammar: LanguageRegistration = {
+  name: "ebnf",
+  scopeName: "source.ebnf",
+  aliases: [],
+  patterns: [
+    { name: "comment.block.ebnf", begin: "\\(\\*", end: "\\*\\)" },
+    {
+      name: "string.quoted.single.ebnf",
+      begin: "'",
+      end: "'",
+      patterns: [{ match: "\\\\.", name: "constant.character.escape.ebnf" }],
+    },
+    { name: "support.type.ebnf", match: "\\b[A-Z][A-Z0-9_]*\\b" },
+    { name: "entity.name.function.ebnf", match: "\\b[a-z][A-Za-z0-9_]*\\b" },
+    { name: "keyword.operator.ebnf", match: "::=|=|\\||\\.\\.|[+*?]" },
+    { name: "punctuation.section.ebnf", match: "[(){}\\[\\];]" },
   ],
   repository: {},
 };
