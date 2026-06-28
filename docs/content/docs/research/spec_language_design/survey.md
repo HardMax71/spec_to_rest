@@ -3,28 +3,25 @@ title: "Survey of specification languages"
 description: "How Alloy, TLA+, Quint, VDM, Dafny, Event-B, Z, TypeSpec, Smithy, and P express the same concepts"
 ---
 
-We survey nine specification languages across four categories: relational modeling (Alloy),
-state-transition systems (TLA+, Quint, Event-B, P language), operation modeling with contracts
-(VDM-SL, Dafny), formal schemas (Z notation), and API description languages (TypeSpec, Smithy). For
-each language we show how it expresses the same four concepts:
+Ten specification languages, grouped four ways: relational modeling (Alloy), state-transition
+systems (TLA+, Quint, Event-B, and P), operation modeling with contracts (VDM-SL and Dafny), formal
+schemas (Z), and API description languages (TypeSpec and Smithy). To compare them on the same
+footing, each one below expresses the same four things:
 
-- A "store" mapping short codes to URLs
-- A "shorten" operation that adds a new mapping
-- A "resolve" operation that looks up by code
-- An invariant that all stored URLs are valid
+- a store mapping short codes to URLs,
+- a shorten operation that adds a mapping,
+- a resolve operation that looks one up by code,
+- an invariant that every stored URL is valid.
 
-### 1.1 Alloy 6
+## Alloy 6
 
-**Category.** Relational modeling and bounded analysis.
-
-**Core concepts.** Signatures (sigs) define sets of atoms. Fields define relations between sigs.
-Facts constrain the model globally. Predicates define named reusable constraints. Assertions state
-properties to check. Alloy 6 adds temporal operators (`always`, `eventually`, `after`, primed
-variables) for state over time.
-
-**Syntax style.** Declarative, relational. Uses mathematical operators (`+` for union, `&` for
-intersection, `.` for relational join, `~` for transpose, `^` for transitive closure).
-Multiplicities (`one`, `lone`, `some`, `set`) constrain field arities.
+Alloy models a system as sets of atoms, called signatures, and the relations between them, called
+fields, with global facts and reusable predicates for constraints and assertions naming the
+properties to check. Version 6 added temporal operators, `always`, `eventually`, `after`, and primed
+variables, so a model can reason about state over time. The notation is relational and reads like
+mathematics: `+` is union, `&` intersection, `.` relational join, `~` transpose, `^` transitive
+closure, and the multiplicity keywords `one`, `lone`, `some`, and `set` fix how many things a field
+relates.
 
 ```text
 open util/ordering[Time]
@@ -94,23 +91,19 @@ pred shorten_temporal[url: LongURL, code: ShortCode] {
 }
 ```
 
-**Strengths.** Powerful relational reasoning, transitive closure, bounded model checking finds
-counterexamples automatically. Alloy 6 temporal operators enable stateful reasoning.
+Bounded model checking is the real draw. Alloy searches a finite scope and surfaces counterexamples
+on its own, and its relational core handles transitive closure in a way few spec languages manage.
+For this project it misses on the things that matter: no notion of HTTP or services, no path to
+generated code, thin string handling, and a bounded analysis that proves nothing beyond the chosen
+scope. The `sig`, `fact`, and `pred` vocabulary is unfamiliar to most developers, too.
 
-**Weaknesses for our use.** No concept of HTTP or services. Bounded semantics means it cannot prove
-properties for all sizes. String handling is weak. No code generation path. The `sig`/`fact`/`pred`
-vocabulary is unfamiliar to most developers.
+## TLA+ (Temporal Logic of Actions)
 
-### 1.2 TLA+ (Temporal Logic of Actions)
-
-**Category.** State-transition systems with temporal logic.
-
-**Core concepts.** Variables hold the full system state. Actions are predicates over current state
-and next state (primed variables). Temporal formulas (`[]` = always, `<>` = eventually, `~>` =
-leads-to) specify liveness and safety. The `UNCHANGED` keyword frames unchanged variables.
-
-**Syntax style.** Mathematical, uses LaTeX-like operators in the pretty-printed form. ASCII form
-uses `/\`, `\/`, `=>`, `[]`, `<>`, `EXCEPT`.
+TLA+ holds the entire system state in a set of variables and describes change with actions, which
+are predicates relating the current state to the next one through primed variables. Temporal
+formulas state safety and liveness: `[]` for always, `<>` for eventually, `~>` for leads-to, with
+`UNCHANGED` framing the variables an action leaves alone. The pretty-printed form looks like
+mathematics; the ASCII form spells the operators out as `/\`, `\/`, `=>`, and `EXCEPT`.
 
 ```text
 ------------------------------ MODULE UrlShortener ------------------------------
@@ -160,22 +153,18 @@ Safety == []AllStoredURLsValid
 ================================================================================
 ```
 
-**Strengths.** Temporal reasoning, proven at scale at Amazon (S3, DynamoDB, EBS). TLC model checker
-is industrial strength. Can express liveness and fairness.
+Amazon has run TLA+ at scale on S3, DynamoDB, and EBS, its TLC model checker is genuinely
+industrial, and liveness and fairness are both in reach. The cost for our purposes is everything
+else: the syntax is verbose and heavily mathematical, there is no data modeling past functions and
+sets, operations have no input or output distinct from action parameters, and nothing generates
+code. Modeling state as global variables updated through `EXCEPT` reads as unintuitive to most
+developers.
 
-**Weaknesses for our use.** Verbose, mathematical syntax. No data modeling beyond functions and
-sets. No concept of input/output for operations. No code generation. State is modeled as global
-variables with `EXCEPT` updates, which is unintuitive for developers.
+## Quint
 
-### 1.3 Quint
-
-**Category.** State-transition systems with TypeScript-like syntax.
-
-**Core concepts.** Same semantic model as TLA+ (variables, actions, temporal properties), but with a
-modern syntax designed for developers. Uses `var` for state variables, `action` for state
-transitions, `val` for definitions, `temporal` for properties.
-
-**Syntax style.** TypeScript-like with explicit primed state (`variable' = ...`).
+Quint keeps TLA+'s semantic model, the variables, actions, and temporal properties, but wraps it in
+a syntax aimed at developers: `var` for state, `action` for a transition, `val` for a definition,
+`temporal` for a property, and primed state written `variable' = ...`. It reads close to TypeScript.
 
 ```typescript
 module UrlShortener {
@@ -232,22 +221,18 @@ module UrlShortener {
 }
 ```
 
-**Strengths.** Familiar syntax for developers. Same verification power as TLA+ (compiles to TLA+ for
-checking). Has a REPL for interactive exploration. Active development by Informal Systems.
+The syntax is the appeal, and the verification power is unchanged, since Quint compiles to TLA+ for
+checking and ships a REPL for poking at a spec interactively; Informal Systems develops it actively.
+What it lacks for us is the data side. There is no way to model entities, fields, or
+multiplicities, no pre/postcondition form (an action is a conjunction of booleans), and no operation
+input or output separate from the action's parameters.
 
-**Weaknesses for our use.** No data modeling (entities, fields, multiplicities). No
-pre/postcondition syntax (uses conjunction of boolean expressions). No concept of operation
-input/output as separate from action parameters.
+## VDM-SL (Vienna Development Method, Specification Language)
 
-### 1.4 VDM-SL (Vienna Development Method, Specification Language)
-
-**Category.** Operation modeling with pre/postconditions.
-
-**Core concepts.** Types define data. State defines the mutable system state. Operations have
-explicit `pre` and `post` conditions referencing old state (`~`) and new state. Functions are pure.
-Invariants are attached to types and state.
-
-**Syntax style.** Keyword-heavy, reads like pseudocode. Uses `inv`, `pre`, `post`, `ext`.
+VDM-SL separates types, state, functions, and operations. An operation carries explicit `pre` and
+`post` conditions, with `~` marking the old state inside a postcondition; functions stay pure; and
+invariants attach to both types and state through `inv`. It is keyword-heavy and reads like
+pseudocode.
 
 ```text
 types
@@ -292,24 +277,19 @@ operations
        store = store~;
 ```
 
-**Strengths.** Cleanest pre/postcondition syntax of any specification language. The `ext rd/wr`
-clause explicitly declares which state components an operation reads or writes. Type invariants are
-declared inline. The `~` suffix for "old state" is elegant.
+Its pre/postcondition syntax is the cleanest of any language here. The `ext rd`/`ext wr` clause says
+exactly which state an operation may read or write, type invariants sit inline, and the `~` for old
+state is hard to improve on. The drawbacks are age and reach: the syntax dates to the 1970s, there
+is no temporal reasoning, relational modeling stops at maps and sets with no multiplicities, and
+tool support is limited to the Overture IDE.
 
-**Weaknesses for our use.** Dated syntax (1970s origins). No temporal reasoning. No relational
-modeling beyond maps and sets. Limited tool support (Overture IDE). No concept of relations with
-multiplicities.
+## Dafny
 
-### 1.5 Dafny
-
-**Category.** Verified programming with contracts.
-
-**Core concepts.** Classes and datatypes define data. Methods have `requires` and `ensures` clauses.
-Loop invariants and `decreases` clauses enable automated verification. Ghost variables and functions
-exist only for specification. The verifier (Boogie/Z3) checks all contracts at compile time.
-
-**Syntax style.** C-like with specification keywords. Verification is auto-active (the programmer
-writes specs, the verifier fills in proofs).
+Dafny is a programming language built around verification. Classes and datatypes hold the data,
+methods carry `requires` and `ensures` clauses, and loop invariants with `decreases` clauses let the
+verifier discharge proofs on its own; ghost variables and functions exist only for specification.
+Boogie and Z3 check every contract at compile time. The style is C-like with specification keywords,
+and verification is auto-active: you write the spec, the verifier fills in the proof.
 
 ```csharp
 class ShortCode {
@@ -372,24 +352,20 @@ class UrlShortener {
 }
 ```
 
-**Strengths.** Specifications are machine-verified at compile time. `old()` for referring to
-pre-state is clean. `modifies` clause controls framing. Compiles to C#, Java, Go, JavaScript,
-Python. Most mature verification-aware language.
+The contracts are machine-checked at compile time, `old()` names the pre-state cleanly, the
+`modifies` clause controls framing, and verified code compiles to C#, Java, Go, JavaScript, and
+Python. It is the most mature verification-aware language in the list. For specifying a service it
+sits too low, though: relations carry no multiplicity constraints, nothing maps a contract to HTTP,
+the programmer has to write the method body rather than just the contract, and verification of
+string operations is weak.
 
-**Weaknesses for our use.** Too low-level for service specification. No multiplicity constraints on
-relations. No convention engine for HTTP mapping. The programmer must write the implementation body,
-not just the contract. Verification of string operations is weak.
+## Event-B
 
-### 1.6 Event-B
-
-**Category.** Refinement-based formal modeling.
-
-**Core concepts.** Contexts define sets, constants, and axioms (the static part). Machines define
-variables, invariants, and events (the dynamic part). Events have guards (preconditions) and actions
-(state updates). Refinement allows progressive detail addition. The Rodin platform discharges proof
-obligations.
-
-**Syntax style.** Set-theoretic, keyword-heavy. Uses mathematical operators but in ASCII form.
+Event-B splits a model in two. Contexts hold the static part, the sets, constants, and axioms;
+machines hold the dynamic part, the variables, invariants, and events. An event has guards, which
+act as preconditions, and actions, which update state. Refinement lets a model gain detail in
+stages, and the Rodin platform generates and discharges the proof obligations. The notation is
+set-theoretic and keyword-heavy, with the mathematical operators written in ASCII.
 
 ```text
 MACHINE UrlShortener
@@ -439,24 +415,19 @@ EVENTS
 END
 ```
 
-**Strengths.** Proof obligations are automatically generated and discharged. Refinement enables
-top-down design. Guards map naturally to HTTP preconditions. Has code generation plugins for Java,
-C, Ada. Set-theoretic foundation is expressive.
+Rodin generates the proof obligations and discharges most of them without help, refinement supports
+top-down design, and the guards line up neatly with HTTP preconditions; plugins even generate Java,
+C, and Ada. For a REST service the machinery is too heavy. The syntax is verbose and unfamiliar,
+events are atomic so there is no temporal reasoning, refinement is more apparatus than a CRUD service
+needs, the Rodin tooling is Eclipse-based and aging, and relations have no multiplicity syntax.
 
-**Weaknesses for our use.** Verbose, unfamiliar syntax. No temporal reasoning (events are atomic).
-Refinement is powerful but heavyweight for REST services. Tooling (Rodin) is Eclipse-based and
-aging. No multiplicity syntax for relations.
+## Z notation
 
-### 1.7 Z Notation
-
-**Category.** Formal schema-based specification.
-
-**Core concepts.** Schemas define state and operations as collections of declarations and
-predicates. State schemas declare variables and their types. Operation schemas reference a state
-schema and use `?` suffix for inputs, `!` suffix for outputs, and primed variables for after-state.
-The Delta convention (`Delta State`) imports both before and after state.
-
-**Syntax style.** Mathematical, uses box notation. We show the ASCII/LaTeX-like form.
+Z builds everything out of schemas, each a bundle of declarations and predicates. A state schema
+declares the variables and their types; an operation schema references a state schema and marks
+inputs with `?`, outputs with `!`, and the after-state with a prime. The `Delta` convention pulls in
+both before and after state, and `Xi` pulls in a state that stays fixed. The real notation uses box
+diagrams; the listing below is the ASCII rendering.
 
 ```text
 -- Basic type declarations
@@ -507,23 +478,18 @@ LongURL == { s: STRING | IsValidURI(s) }
 |--------------------------------------------------------------
 ```
 
-**Strengths.** Extremely precise. The schema calculus allows composition (conjunction, disjunction,
-piping of schemas). The `?`/`!`/`'` conventions are elegant and unambiguous. Delta/Xi conventions
-for state-changing/non-state-changing operations.
+Z is precise to a fault, its schema calculus composes operations by conjunction, disjunction, and
+piping, and the `?`, `!`, and prime conventions leave no ambiguity about what is input, output, or
+after-state. Against our needs the notation itself is the problem: it is heavily mathematical, the
+schema boxes do not survive plain text, the tooling type-checks but does not execute (CZT, fuzz),
+there is no temporal reasoning and no code generation, and the user community is small today.
 
-**Weaknesses for our use.** Heavy mathematical notation. Schema boxes do not render well in plain
-text. No tool support for executable checking (only type-checking via CZT/fuzz). No temporal
-reasoning. No code generation. Very small user community today.
+## TypeSpec
 
-### 1.8 TypeSpec
-
-**Category.** API description language.
-
-**Core concepts.** Models define data shapes. Interfaces define operations grouped by resource.
-Decorators (`@route`, `@get`, `@post`, `@query`, `@path`, `@body`) annotate HTTP semantics. Emits
-OpenAPI, JSON Schema, Protobuf. Built by Microsoft as successor to Cadl.
-
-**Syntax style.** TypeScript-like with decorator annotations.
+TypeSpec describes an API's shapes with models and groups its operations into interfaces, then
+annotates the HTTP details with decorators (`@route`, `@get`, `@post`, `@query`, `@path`, `@body`).
+It compiles to OpenAPI, JSON Schema, and Protobuf. Microsoft built it as the successor to Cadl, and
+the syntax is TypeScript with decorators.
 
 ```typespec
 import "@typespec/http";
@@ -587,23 +553,19 @@ namespace UrlShortener {
 // - the relationship between shorten and resolve
 ```
 
-**Strengths.** Clean, modern syntax. Excellent tooling (VS Code extension, compiler, playground).
-Emits multiple formats. Decorator system is extensible. Active development.
+The syntax is clean and modern, the tooling is good (a VS Code extension, a compiler, a playground),
+the decorator system extends cleanly, and it emits several formats. It is also purely structural. It
+cannot express behavior, state, invariants, or pre/postconditions, and the `op` keyword names the
+HTTP interface without saying what the operation does. There is no meaning beyond the shape of the
+request and the response.
 
-**Weaknesses for our use.** Purely structural. Cannot express behavior, state, invariants,
-pre/postconditions, or any semantic constraint. The `op` keyword describes the HTTP interface, not
-what the operation does. There is no formal meaning beyond "this is the shape of the request and
-response."
+## Smithy
 
-### 1.9 Smithy
-
-**Category.** API description language with resource modeling.
-
-**Core concepts.** Resources group operations around a lifecycle (create, read, update, delete,
-list). Operations have input/output shapes. Traits annotate everything (like decorators). The
-resource concept connects operations to a data model. Used by AWS for all SDK generation.
-
-**Syntax style.** IDL with `@trait` annotations and C-like structure definitions.
+Smithy adds a resource to the API-description idea: operations cluster around a lifecycle (create,
+read, update, delete, list), and that resource ties them to a data model. Operations have input and
+output shapes, and traits annotate everything, much like TypeSpec's decorators. AWS generates all of
+its SDKs from Smithy. The syntax is an IDL with `@trait` annotations over C-like structure
+definitions.
 
 ```text
 $version: "2"
@@ -672,21 +634,18 @@ operation Remove {
 // - the semantic meaning of operations
 ```
 
-**Strengths.** Resource-centric modeling maps well to REST. Trait system is extremely extensible.
-Battle-tested at AWS scale. Code generation for 7+ languages via smithy-codegen. The `@readonly`,
-`@idempotent` traits communicate intent.
+Resources map well to REST, the trait system extends freely, it generates code for seven or more
+languages through smithy-codegen, and traits like `@readonly` and `@idempotent` carry intent. It is
+proven at AWS scale. Like TypeSpec, though, it stays structural: traits cannot state behavioral
+constraints, there is no system state or transition, and a resource's lifecycle is implied rather
+than defined.
 
-**Weaknesses for our use.** Like TypeSpec, purely structural. Traits cannot express behavioral
-constraints. There is no concept of system state or state transitions. Resource lifecycles are
-implicit rather than formally defined.
+## P language
 
-### 1.10 P Language
-
-**Category.** Communicating state machines for protocol verification.
-
-**Core concepts.** Machines are state machines with event handlers. Events carry payloads. State
-transitions are triggered by events. Specifications are monitor machines that observe events and
-flag violations. Used at AWS for S3, DynamoDB, Aurora, EC2.
+P models a system as communicating state machines. A machine has states and event handlers, events
+carry payloads, and an incoming event drives a transition. Correctness properties live in separate
+monitor machines that watch the event stream and flag a violation. AWS uses P on S3, DynamoDB,
+Aurora, and EC2.
 
 ```text
 // P language version
@@ -741,15 +700,13 @@ spec machine AllURLsValid observes eShortenReq, eShortenResp {
 }
 ```
 
-**Strengths.** State machine model maps naturally to service lifecycles. Monitor machines are
-elegant for invariant checking. Used in production at AWS for critical services. Event-driven
-architecture matches REST request handling.
+The state-machine model fits service lifecycles, monitor machines are a tidy way to check
+invariants, and the event-driven shape matches how REST handles requests; AWS runs it on critical
+services. For us the gaps are familiar by now: no relational data modeling, no multiplicities, no
+pre/postcondition form (it uses an imperative `assert`), verification by systematic test exploration
+rather than proof, and no path to a service implementation.
 
-**Weaknesses for our use.** No relational data modeling. No multiplicity constraints. No
-pre/postcondition syntax (uses imperative assert). Verification is testing-based via systematic
-exploration rather than proof-based. No code generation to service implementations.
-
-### 1.11 Comparative summary
+## Comparative summary
 
 | Feature                   | Alloy   | TLA+    | Quint    | VDM-SL  | Dafny    | Event-B | Z       | TypeSpec | Smithy   | P        |
 | ------------------------- | ------- | ------- | -------- | ------- | -------- | ------- | ------- | -------- | -------- | -------- |
@@ -764,6 +721,6 @@ exploration rather than proof-based. No code generation to service implementatio
 | State transitions         | Alloy6  | **Yes** | **Yes**  | Partial | Partial  | **Yes** | Delta   | No       | No       | **Yes**  |
 | Bounded checking          | **Yes** | **Yes** | **Yes**  | No      | No       | Proof   | No      | No       | No       | **Yes**  |
 
-Our DSL must combine Alloy's relational modeling and multiplicities, VDM/Dafny's
-pre/postcondition syntax, Quint's developer-friendly syntax, and TypeSpec/Smithy's optional HTTP
-override capability. No existing language provides all of these.
+No single language here has everything this project needs. The DSL has to borrow Alloy's relational
+modeling and multiplicities, the pre/postcondition syntax of VDM and Dafny, Quint's developer-facing
+syntax, and the optional HTTP override that TypeSpec and Smithy offer.
