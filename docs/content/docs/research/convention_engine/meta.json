@@ -3,7 +3,7 @@
   "pages": [
     "ruleset",
     "overrides",
-    "worked-examples",
+    "output-examples",
     "edge-cases",
     "comparison"
   ]

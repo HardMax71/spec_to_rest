@@ -73,4 +73,4 @@ messages are not readable.
 
 Responses use a consistent envelope, `{ "data": ..., "meta": { request_id, timestamp } }`, and an
 error carries a `code`, a `message`, and per-field `details`. Worked output for real specs is on the
-[worked examples](/research/convention_engine/worked-examples) page.
+[output examples](/research/convention_engine/output-examples) page.
