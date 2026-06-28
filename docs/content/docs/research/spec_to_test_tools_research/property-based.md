@@ -3,76 +3,48 @@ title: "Property-based testing"
 description: "Schemathesis, Hypothesis, QuickCheck, and property-based testing from specs"
 ---
 
-## 1. Schemathesis
+## Schemathesis
 
-**What it is.** Open-source Python tool that performs automated property-based testing of REST
-(OpenAPI) and GraphQL APIs. Built on top of the Hypothesis library.
+[Schemathesis](https://schemathesis.io/) is an open-source Python tool
+([repo](https://github.com/schemathesis/schemathesis)) that runs property-based testing against REST
+(OpenAPI) and GraphQL APIs, built on Hypothesis. It parses the schema, derives a generator for every
+endpoint, parameter, body, and header, throws thousands of schema-valid and deliberately invalid
+requests at the service, and validates each response against the schema (status codes, shapes,
+content types), surfacing 500s, schema violations, validation bypasses, and integration failures. It
+runs in four modes:
 
-### How it works
+| Mode                | Description                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Stateless           | individual API calls validated against the schema                                     |
+| Stateful / workflow | multi-step sequences (create, read, update, delete) via OpenAPI Links or inferred links |
+| Fuzzing             | random valid and invalid inputs to explore edge cases                                 |
+| Coverage            | measures which endpoints and schema components were exercised                         |
 
-- Parses an OpenAPI/GraphQL schema and derives generators for every endpoint, parameter type,
-  request body, header, etc.
-- Generates thousands of random-but-schema-valid (and deliberately invalid) requests.
-- Validates responses against the schema (status codes, response shapes, content types).
-- Detects: 500 errors, schema violations, validation bypasses, integration failures.
+Its [stateful phase](https://schemathesis.readthedocs.io/en/stable/explanations/stateful/) builds a
+state machine from the operations, discovering connections from OpenAPI Links or by matching parameter
+names against response fields, and learning more at runtime from `Location` headers;
+`schema.as_state_machine()` produces a pytest class and `schemathesis run` exercises it automatically.
+The point is that the OpenAPI spec is the test specification: every schema constraint becomes a checked
+property, with no separate test-writing. It is mature, around 3,200 stars and 437-plus releases
+(v4.15.0, April 2026), MIT-licensed, used by Spotify, WordPress, JetBrains, and Red Hat, with 789
+dependents on PyPI.
 
-### Testing modes
+## Hypothesis
 
-| Mode                | Description                                                                                                               |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Stateless           | Individual API calls validated against schema                                                                             |
-| Stateful / Workflow | Multi-step sequences (create -> read -> update -> delete) using OpenAPI Links or inferred response-to-request connections |
-| Fuzzing             | Random valid + invalid inputs to explore edge cases                                                                       |
-| Coverage            | Measures which endpoints / schema components were exercised                                                               |
+[Hypothesis](https://hypothesis.readthedocs.io/en/latest/stateful.html) is the most widely used
+property-based testing library in Python, and its `stateful` module does rule-based state-machine
+testing. You subclass `RuleBasedStateMachine` and declare:
 
-### Stateful testing detail
+| Component       | Purpose                                                                          |
+| --------------- | -------------------------------------------------------------------------------- |
+| `@initialize`   | set up initial state; runs once at the start of each test case                   |
+| `@rule`         | define an operation; takes strategies as arguments; can push results to Bundles  |
+| `@invariant`    | a check that must hold after every rule execution                                |
+| `@precondition` | a guard that restricts when a rule can fire                                      |
+| `Bundle`        | a named collection of values produced by rules and consumed by later rules       |
 
-- Schemathesis builds a state machine from API operations.
-- It discovers connections by analyzing the OpenAPI schema (Open API Links or parameter name
-  matching against response fields).
-- At runtime it can also learn connections dynamically from `Location` headers.
-- Python API: `schema.as_state_machine()` creates a test class for pytest.
-- CLI: stateful phase runs automatically with `schemathesis run`.
-
-**How specs connect to tests.** The OpenAPI spec _is_ the test specification. Every schema
-constraint becomes a property that the tool checks. No separate test writing needed, the spec is
-the single source of truth.
-
-### Maturity
-
-- ~3,200 GitHub stars, 437+ releases (v4.15.0 as of April 2026)
-- Adopted by Spotify, WordPress, JetBrains, Red Hat
-- MIT licensed, actively maintained
-- 789 dependent projects on PyPI
-
-### Key sources
-
-- https://github.com/schemathesis/schemathesis
-- https://schemathesis.readthedocs.io/en/stable/explanations/stateful/
-- https://schemathesis.io/
-
-## 2. Hypothesis
-
-**What it is.** Python property-based testing library (the most widely used PBT library in the
-Python ecosystem). Its `stateful` module provides rule-based state machine testing.
-
-### How stateful testing works
-
-Users subclass `RuleBasedStateMachine` and define:
-
-| Component       | Purpose                                                                         |
-| --------------- | ------------------------------------------------------------------------------- |
-| `@initialize`   | Set up initial state; runs once at the start of each test case                  |
-| `@rule`         | Define an operation; takes strategies as arguments; can push results to Bundles |
-| `@invariant`    | A check that must hold after every rule execution                               |
-| `@precondition` | Guard that restricts when a rule can fire                                       |
-| `Bundle`        | Named collection of values produced by rules, consumed by later rules           |
-
-**Key mechanism, Bundles.** Bundles allow data flow between rules. A rule can `target=some_bundle`
-to push a return value, and another rule can draw from `some_bundle` as an argument. This creates
-producer-consumer chains automatically.
-
-### Example pattern
+The mechanism that makes it work is Bundles: a rule can `target` a bundle to push a return value, and
+another rule draws from that bundle as an argument, so producer-consumer chains form on their own.
 
 ```python
 class DatabaseMachine(RuleBasedStateMachine):
@@ -93,125 +65,61 @@ class DatabaseMachine(RuleBasedStateMachine):
         assert db.size() >= 0
 ```
 
-**How specs connect to tests.** The state machine _is_ the executable specification. Rules define
-the allowed operations, preconditions constrain when they can fire, invariants encode properties
-that must always hold. Hypothesis generates random sequences of rule applications and shrinks
-failures to minimal counterexamples.
+The state machine is the executable specification: rules are the allowed operations, preconditions
+constrain when they fire, invariants encode what must always hold, and Hypothesis generates random
+rule sequences and shrinks any failure to a minimal counterexample. This is
+[model-based testing in all but name](https://hypothesis.works/articles/rule-based-stateful-testing/),
+with the state machine as the model, and it was inspired by Erlang QuickCheck's `eqc_statem`. The core
+library has 7,800-plus stars and is part of the standard Python testing toolchain.
 
-**Connection to model-based testing.** Hypothesis's stateful testing is essentially model-based
-testing (the docs acknowledge this). The "model" is the state machine; the "system under test" is
-whatever the rules operate on. The framework was inspired by Erlang QuickCheck's `eqc_statem`.
+## QuickCheck state machines
 
-### Maturity
+Property-based testing with explicit state-machine models began in Erlang's commercial
+[QuickCheck (Quviq)](https://www.quviq.com/documentation/eqc/overview-summary.html) and spread from
+there. The Erlang `eqc_statem` model is five callbacks:
 
-- Core Hypothesis library: 7,800+ GitHub stars, extremely widely adopted
-- Stateful module: stable, well-documented, used in production at many companies
-- Part of standard Python testing toolchain
+| Callback          | Purpose                                              |
+| ----------------- | ---------------------------------------------------- |
+| `command/1`       | generate a random command given the current state   |
+| `initial_state/0` | return the initial abstract model state              |
+| `next_state/3`    | compute the new model state after a command          |
+| `precondition/2`  | guard: is this command valid in the current state?   |
+| `postcondition/3` | oracle: does the real result match expectations?     |
 
-### Key sources
+QuickCheck generates random command sequences, runs them against the real system, checks every
+postcondition, and shrinks to a minimal counterexample on failure. Its parallel property is the
+notable trick: run the sequence concurrently and check whether the results can be explained by some
+sequential interleaving, and if not, report a race, all for free from the model. Open-source PropEr
+mirrors it with `proper_statem`, and
+[Makina](https://icfp21.sigplan.org/details/erlang-2021-papers/4/Makina-A-New-QuickCheck-State-Machine-Library)
+(Elixir) compiles a friendlier, typed DSL down to QuickCheck state machines. The Haskell
+[quickcheck-state-machine](https://github.com/stevana/quickcheck-state-machine) adapts the same model,
+with the same sequential-prefix-plus-concurrent-suffix race testing, used by IOHK (Cardano), Wire, and
+others on consensus and distributed systems. In each, the model is the specification, defining the
+valid operations, how state evolves, and the expected results. Quviq's version is very mature
+(Ericsson, Volvo), PropEr and the Haskell library are production-grade, and Makina is newer (2021).
 
-- https://hypothesis.readthedocs.io/en/latest/stateful.html
-- https://hypothesis.works/articles/rule-based-stateful-testing/
+## From a formal specification
 
-## 4. QuickCheck state machine testing
+The idea behind all of these: rather than write individual cases, state behavior as
+universally-quantified properties and let a framework generate inputs and check them. Different
+specification elements map to different property shapes:
 
-**What it is.** Property-based testing with explicit state machine models. Originated in Erlang's
-commercial QuickCheck (Quviq), now available in multiple ecosystems.
-
-### 4a. erlang QuickCheck (eqc_statem)
-
-**How it works.** Users define a state machine model with:
-
-| Callback          | Purpose                                             |
-| ----------------- | --------------------------------------------------- |
-| `command/1`       | Generate a random command given current model state |
-| `initial_state/0` | Return the initial abstract model state             |
-| `next_state/3`    | Compute new model state after a command             |
-| `precondition/2`  | Guard: is this command valid in current state?      |
-| `postcondition/3` | Oracle: does the real result match expectations?    |
-
-QuickCheck generates random sequences of commands, executes them against the real system, and checks
-all postconditions. On failure, it shrinks to a minimal counterexample.
-
-**Race condition testing.** The parallel property runs command sequences concurrently and checks if
-results can be explained by _some_ sequential interleaving. If not, a race condition is reported.
-This comes "for free" from the state machine model.
-
-#### Related tools
-
-- PropEr (open-source Erlang): eqc-inspired, has `proper_statem`
-- Makina (Elixir): DSL that compiles to QuickCheck state machines via macros; improves
-  maintainability and reuse; encourages typed specifications
-
-### 4b. quickcheck-state-machine (haskell)
-
-**How it works.** Same conceptual model as Erlang's eqc_statem, adapted for Haskell:
-
-1. Define a datatype of possible actions
-2. Provide a model (abstract state), pre/postconditions, state transitions
-3. Framework generates, executes, and shrinks action sequences
-
-**Parallel testing.** Generates a sequential prefix + concurrent suffixes. If no valid sequential
-interleaving explains the parallel results, reports a race condition.
-
-**Adoption.** Used by IOHK (Cardano blockchain), Wire (messaging), and others testing consensus
-algorithms and distributed systems.
-
-**How specs connect to tests.** The state machine model _is_ the specification. It defines what
-operations are valid, how state evolves, and what results are expected. The framework generates
-tests by exploring this model.
-
-#### Maturity
-
-- Erlang QuickCheck (Quviq): commercial, very mature, used at Ericsson, Volvo, etc.
-- PropEr: open-source, mature, actively maintained
-- quickcheck-state-machine (Haskell): mature, used in production
-- Makina (Elixir): newer (2021), research + practice
-
-#### Key sources
-
-- https://www.quviq.com/documentation/eqc/overview-summary.html
-- https://icfp21.sigplan.org/details/erlang-2021-papers/4/Makina-A-New-QuickCheck-State-Machine-Library
-- https://github.com/stevana/quickcheck-state-machine
-
-## 8. Property-based testing from formal specifications
-
-**Core idea.** Instead of writing individual test cases, express system behavior as formal
-properties (universally quantified statements). A PBT framework generates random inputs and verifies
-the properties hold.
-
-### How properties derive from specifications
-
-| Specification Element      | Property Type        | Example                                |
+| Specification element      | Property type        | Example                                |
 | -------------------------- | -------------------- | -------------------------------------- |
-| Type constraint            | Type-level property  | "output is always a positive integer"  |
-| Invariant                  | State invariant      | "balance never goes negative"          |
+| Type constraint            | type-level property  | "output is always a positive integer"  |
+| Invariant                  | state invariant      | "balance never goes negative"          |
 | Precondition/postcondition | Hoare-style property | "if input sorted, output sorted"       |
-| Algebraic law              | Round-trip property  | "decode(encode(x)) == x"               |
-| State machine              | Behavioral property  | "after create, get returns the item"   |
-| Protocol rule              | Sequence property    | "handshake must precede data transfer" |
+| Algebraic law              | round-trip property  | "decode(encode(x)) == x"               |
+| State machine              | behavioral property  | "after create, get returns the item"   |
+| Protocol rule              | sequence property    | "handshake must precede data transfer" |
 
-### The spec-to-test pipeline (as described by kiro/AWS)
-
-1. Write acceptance criteria / requirements in natural language.
-2. Extract universally quantified properties ("for any valid input X, property P holds").
-3. Implement properties as PBT tests using Hypothesis (Python), QuickCheck (Haskell/Erlang),
-   fast-check (JS/TS), etc.
-4. Framework generates random inputs, checks properties, shrinks counterexamples.
-
-**Key insight.** The properties _are_ "another representation of (parts of) your specification",
-maintaining traceability between what stakeholders need and what tests validate.
-
-### Industrial adoption
-
-- Amazon (formal specs + PBT for S3, DynamoDB invariants)
-- Volvo (QuickCheck for automotive protocols)
-- Stripe (property-based testing of financial logic)
-- Ericsson (QuickCheck for telecom protocols)
-
-### Key sources
-
-- https://kiro.dev/blog/property-based-testing/
-- https://link.springer.com/chapter/10.1007/978-3-642-17071-3_13
-- https://link.springer.com/article/10.1007/s10270-017-0647-0
-- https://dl.acm.org/doi/pdf/10.1145/263244.263267
+The [pipeline AWS describes](https://kiro.dev/blog/property-based-testing/) is to write acceptance
+criteria in natural language, extract universally-quantified properties ("for any valid X, P holds"),
+implement them as PBT tests in Hypothesis, QuickCheck, or fast-check, and let the framework generate,
+check, and shrink. The insight, that the properties are
+[another representation of the specification](https://link.springer.com/article/10.1007/s10270-017-0647-0),
+keeps traceability between what stakeholders need and what tests check, and the underlying technique
+goes back to the [original QuickCheck](https://dl.acm.org/doi/pdf/10.1145/263244.263267). In practice
+this is how Amazon tests S3 and DynamoDB invariants, Volvo automotive protocols, Stripe financial
+logic, and Ericsson telecom protocols.
