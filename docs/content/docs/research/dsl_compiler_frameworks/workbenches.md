@@ -5,45 +5,34 @@ description: "Langium, Xtext, Spoofax, and JetBrains MPS"
 
 ## Context
 
-We are building a compiler for a formal specification DSL for REST services. The DSL requires:
-entities, state declarations, operations with pre/postconditions, invariants, and a type system. The
-compiler needs: a parser, type checker, IDE support (LSP), error reporting, and code generation (to
-OpenAPI, test harnesses, Z3 constraints, etc.).
+This evaluates language engineering frameworks for building the compiler. The DSL needs entities,
+state declarations, operations with pre- and postconditions, invariants, and a type system; the
+compiler needs a parser, a type checker, IDE support over LSP, error reporting, and code generation
+(to OpenAPI, test harnesses, Z3 constraints, and so on). Four of the seven candidates are full
+language workbenches, integrated parser-plus-AST-plus-IDE frameworks, covered here; the lighter
+parser tools are on the [next page](/research/dsl_compiler_frameworks/parsers).
 
-This document evaluates seven language engineering frameworks for building this compiler.
+## Langium
 
-## 1. Langium (TypeScript-based)
+Langium is an open-source language engineering framework written entirely in TypeScript by TypeFox,
+the creators of Xtext, and is the spiritual successor to it, designed from the ground up for the web
+and Node.js. It was at version 4.0 by mid-2025, with about 985 GitHub stars and roughly 254K weekly
+npm downloads across 82-plus dependent packages.
 
-**What it is**: An open-source language engineering framework built entirely in TypeScript by
-TypeFox (the creators of Xtext). It is the spiritual successor to Xtext, designed from the ground up
-for the web and Node.js ecosystem. Currently at version 4.0, released mid-2025.
+Its grammar language (`.langium` files) defines three things at once: the concrete syntax the user
+types, the abstract syntax tree (TypeScript interfaces, generated automatically), and the
+cross-references for name resolution. The grammar surface is rich:
 
-**GitHub**: 985 stars, 92 forks, actively maintained (last update April 2026) **npm**: ~254K weekly
-downloads; 82+ dependent packages
+- parser rules: `Person: 'person' name=ID;`
+- assignments: `=` (single), `+=` (array), `?=` (boolean flag)
+- cross-references resolved by name: `person=[Person:ID]`
+- cardinalities: `?` (optional), `*` (zero-or-more), `+` (one-or-more)
+- alternatives with `|`, and unordered groups with `&`
+- tree-rewriting actions for left-recursive expression patterns
+- declarative infix operators (4.0) for precedence and associativity, parsing about 50% faster
+- guard conditions (parameterized rules), data type rules, and reusable rule fragments
 
-### Grammar definition
-
-Langium uses an EBNF-like grammar language (`.langium` files) that simultaneously defines:
-
-- The **concrete syntax** (what the user types)
-- The **abstract syntax tree** (TypeScript interfaces generated automatically)
-- Cross-references (name resolution linkage)
-
-Key grammar features:
-
-- Parser rules: `Person: 'person' name=ID;`
-- Assignments: `=` (single), `+=` (array), `?=` (boolean flag)
-- Cross-references: `person=[Person:ID]`, resolves references by name
-- Cardinalities: `?` (optional), `*` (zero-or-more), `+` (one-or-more)
-- Alternatives: `|` for choice
-- Unordered groups: `&` operator for properties in any order
-- Tree-rewriting actions: For left-recursive expression patterns
-- Infix operators (4.0): Declarative precedence/associativity definitions that parse ~50% faster
-- Guard conditions: Parameterized rules with conditional sections
-- Data type rules: `QualifiedName returns string: ID ('.' ID)*;`
-- Rule fragments: Reusable grammar patterns
-
-Example grammar sketch for a service DSL:
+A grammar sketch for a service DSL:
 
 ```text
 grammar ServiceSpec
@@ -75,9 +64,6 @@ Service:
         (operations+=Operation)*
     '}';
 
-StateDecl:
-    name=ID ':' type=TypeRef ('=' init=Expression)?;
-
 Operation:
     'operation' name=ID '(' (params+=Parameter (',' params+=Parameter)*)? ')'
     (':' returnType=TypeRef)?
@@ -86,17 +72,10 @@ Operation:
         ('ensures' '{' postconditions+=Condition* '}')?
     '}';
 
-Parameter:
-    name=ID ':' type=TypeRef;
-
-Condition:
-    expression=Expression ';';
-
 Invariant:
     'invariant' name=ID 'on' target=[Entity:QualifiedName]
     '{' expression=Expression '}';
 
-// Expressions would use infix operators in Langium 4.0
 infix BinaryExpr on PrimaryExpr:
     '&&' | '||'
     > '==' | '!=' | '<' | '>' | '<=' | '>='
@@ -104,133 +83,75 @@ infix BinaryExpr on PrimaryExpr:
     > '*' | '/';
 ```
 
-### What you get for free
+What the grammar buys you, generated, is most of a language front end:
 
-| Capability                    | Quality   | Notes                                                                                       |
-| ----------------------------- | --------- | ------------------------------------------------------------------------------------------- |
-| **Parser**                    | Excellent | Chevrotain-based, outperforms ANTLR in JS benchmarks                                        |
-| **Type-safe AST**             | Excellent | TypeScript interfaces generated from grammar rules                                          |
-| **Linking & scoping**         | Good      | Cross-reference resolution with customizable scoping                                        |
-| **LSP server**                | Excellent | Deeply integrated; code completion, diagnostics, find references, hover, rename, formatting |
-| **VS Code extension**         | Scaffold  | Yeoman generator creates complete extension project                                         |
-| **CLI**                       | Scaffold  | Generated alongside the language server                                                     |
-| **Web worker**                | Scaffold  | For browser-based editors                                                                   |
-| **Workspace management**      | Good      | Multi-file projects, incremental updates                                                    |
-| **Validation framework**      | Good      | Register custom checks per AST node type                                                    |
-| **Code generation utilities** | Basic     | Text generation helpers with source-map support                                             |
+| Capability               | Quality   | Notes                                                                                       |
+| ------------------------ | --------- | ------------------------------------------------------------------------------------------- |
+| Parser                   | excellent | Chevrotain-based, outperforms ANTLR in JS benchmarks                                        |
+| Type-safe AST            | excellent | TypeScript interfaces generated from grammar rules                                          |
+| Linking and scoping      | good      | cross-reference resolution with customizable scoping                                        |
+| LSP server               | excellent | deeply integrated: completion, diagnostics, find references, hover, rename, formatting      |
+| VS Code extension, CLI, web worker | scaffold | a Yeoman generator scaffolds the extension, CLI, and browser-editor projects        |
+| Workspace management     | good      | multi-file projects, incremental updates                                                    |
+| Validation framework     | good      | register custom checks per AST node type                                                    |
+| Code generation          | basic     | text-generation helpers with source-map support                                             |
 
-### What you must build yourself
+What it does not hand you is the type system. Langium ships no type-checking engine; the companion
+library Typir (`typir-langium`, also TypeFox) provides type inference, assignability checking, and
+validation hooks, but it is still maturing. Code generators are TypeScript functions you write to
+walk the AST, with traceability utilities provided, and Z3 has no built-in support but the official
+`z3-solver` WASM bindings drop into the same TypeScript project naturally. The project is an Eclipse
+Foundation project, used in production across several companies, and its Langium AI toolbox (2025)
+grounds LLMs on DSL knowledge with evaluation pipelines, boundary-respecting document splitting, and
+BNF-derived constrained decoding, directly relevant to the synthesis work. The learning curve is
+moderate: a TypeScript developer is productive within a week or two, and the grammar is intuitive for
+anyone who knows EBNF.
 
-- Type checker: Langium does not include a built-in type system engine. However, **Typir** (also
-  by TypeFox) is a companion library (`typir-langium` on npm) providing type inference,
-  assignability checking, and validation hooks that integrate into Langium's lifecycle. It is usable
-  but still maturing.
-- Code generators: You write TypeScript functions that traverse the AST. Langium provides
-  utilities for text generation with traceability.
-- Solver integration: No built-in support, but `z3-solver` npm package (official Microsoft Z3
-  WASM bindings) integrates naturally into the same TypeScript project.
+## Xtext
 
-### Maturity assessment
+Xtext is the mature predecessor, built on Java, Eclipse, and EMF, and the industry standard for DSL
+engineering since around 2010 (823 stars, Java 17+ and Eclipse 2024-03+). It and Langium line up
+closely:
 
-- Version 1.0 released 2023; version 4.0 released mid-2025 with significant features
-- Built by TypeFox, the same company behind Xtext, Theia, and Eclipse Sprotty
-- Eclipse Foundation project since 2023
-- Used in production across multiple companies (specific names not publicly listed)
-- Langium AI (announced April 2025, updated June 2025): A toolbox for grounding LLMs on DSL
-  knowledge, provides evaluation pipelines, document splitting respecting syntactic boundaries,
-  and BNF-derived constrained decoding for LLM token output. Directly relevant to our LLM
-  integration needs.
+| Aspect              | Xtext                                        | Langium                                |
+| ------------------- | -------------------------------------------- | -------------------------------------- |
+| Maturity            | 15+ years, battle-tested                     | 5 years, rapidly maturing              |
+| Feature completeness| more complete (formatting, serialization)    | catching up; most features present     |
+| Grammar language    | EBNF-like                                    | nearly identical, evolved from Xtext's |
+| AST                 | EMF-based EObjects                           | plain TypeScript objects               |
+| Type system         | Xbase integration for Java-like type systems | Typir (newer, less mature)             |
+| Code generation     | Xtend templates (powerful)                   | TypeScript functions                   |
+| LSP support         | added later, some architectural friction     | native, deeply integrated              |
+| Startup time        | about 4 seconds (JVM cold start)             | about 1 second                         |
+| Web deployment      | possible but complex                         | first-class (web workers)              |
 
-### Learning curve
+For language development Eclipse is practically required: the grammar editor and generator run inside
+it, and although you can ship standalone language servers and CLIs, attempts to fully decouple from
+Equinox have stalled (the `xtext.ide` bundle still depends on `org.eclipse.core.runtime`). LSP is
+functional but retrofitted, LSP4J carries IDE-specific entanglements. The sharp weakness is large
+files: the CST consumes around 80% of memory, full workspace builds load every resource, EMF objects
+are not thread-safe (limiting parallelism), and files over 1MB can push response times past 1000ms.
+The recommendation is plain, do not pick Xtext for a new project in 2026: TypeFox themselves point new
+work at Langium, Xtext is in maintenance mode, and the only real draw, Xbase for a Java-like type
+system, is what Typir is filling in for Langium.
 
-Moderate. Any developer fluent in TypeScript can be productive within 1-2 weeks. The grammar
-language is intuitive for anyone familiar with BNF/EBNF. The Yeoman generator scaffolds a complete
-project in minutes.
+## Spoofax
 
-## 2. Xtext (eclipse/JVM-based)
+Spoofax is an academic language workbench from the Programming Languages group at TU Delft (163 stars
+on Spoofax 2, 14 on Spoofax 3), unusual in offering a declarative meta-language for every aspect of a
+language. There are three. SDF3 (Syntax Definition Formalism 3) is declarative syntax with
+disambiguation, layout sensitivity, error recovery, and scannerless parsing, which lets it compose
+languages without ambiguity. Statix, the most distinctive piece, is a constraint-based meta-language
+for static semantics built on scope graphs: you declare type rules as constraints over terms, name
+binding is modeled as a graph whose edges are containment, import, and inheritance, and name
+resolution and type checking happen in the same solver. It supports generics (shown with
+Featherweight Generic Java), structural records, and parametric polymorphism, and the specification
+is itself statically checked. Stratego, the third, is a term-rewriting language for transformation
+and code generation.
 
-**What it is**: The mature predecessor to Langium, built on Java/Eclipse/EMF. Has been the industry
-standard for DSL engineering since ~2010. Still maintained (requires Java 17+, Eclipse 2024-03+).
-
-**GitHub**: 823 stars, 330 forks
-
-### What xtext gives you vs Langium
-
-| Aspect                   | Xtext                                        | Langium                                |
-| ------------------------ | -------------------------------------------- | -------------------------------------- |
-| **Maturity**             | 15+ years, battle-tested                     | 5 years, rapidly maturing              |
-| **Feature completeness** | More complete (formatting, serialization)    | Catching up; most features present     |
-| **Grammar language**     | Very similar EBNF-like syntax                | Nearly identical, evolved from Xtext's |
-| **AST**                  | EMF-based EObjects                           | Plain TypeScript objects               |
-| **Type system**          | Xbase integration for Java-like type systems | Typir library (newer, less mature)     |
-| **Code generation**      | Xtend templates (powerful)                   | TypeScript functions                   |
-| **LSP support**          | Added later, some architectural friction     | Native, deeply integrated              |
-| **Startup time**         | ~4 seconds (JVM cold start)                  | ~1 second                              |
-| **IDE**                  | Eclipse-native + LSP for others              | VS Code native + LSP for others        |
-| **Web deployment**       | Possible but complex                         | First-class (web workers)              |
-
-### Is eclipse still required?
-
-For language development: practically yes. The Xtext tooling (grammar editor, generator) runs inside
-Eclipse. You can build standalone language servers and CLIs that don't require Eclipse at runtime,
-but the development workflow is Eclipse-centric. Attempts to decouple fully from Equinox have faced
-architectural challenges (the `xtext.ide` bundle still depends on `org.eclipse.core.runtime`).
-
-### LSP support quality
-
-Functional but not native. Xtext's architecture was designed for Eclipse's own editor framework; LSP
-was retrofitted. LSP4J is used but has dependency entanglements with IDE-specific code. Works for
-common operations but can have gaps compared to the native Eclipse experience.
-
-### Performance for large files
-
-This is a critical weakness. Xtext's CST consumes ~80% of memory. Full workspace builds require
-loading every resource. EMF objects lack thread-safe guarantees, limiting parallelization. For files
-exceeding 1MB, response times can exceed 1000ms.
-
-### Recommendation for xtext
-
-**Do not choose Xtext for a new project in 2026.** TypeFox (who created both) explicitly recommends
-Langium for new projects. Xtext is in maintenance mode. The technology stack (Java, EMF, Eclipse)
-adds overhead without proportional benefits for our use case. The only reason to choose Xtext would
-be if you needed Xbase (Java-like type system integration), but Typir is filling that gap for
-Langium.
-
-## 3. Spoofax (TU delft)
-
-**What it is**: An academic language workbench from the Programming Languages group at TU Delft.
-Unique in offering declarative meta-languages for every aspect of language definition.
-
-**GitHub**: 163 stars (Spoofax 2), 14 stars (Spoofax 3/PIE); last Spoofax 2 release: v2.5.23
-(April 2025)
-
-### Architecture: Three declarative meta-languages
-
-1. **SDF3** (Syntax Definition Formalism 3): Declarative syntax specification with disambiguation,
-   layout sensitivity, and error recovery. More powerful than BNF-based approaches, supports
-   scannerless parsing (no separate lexer), which means it can handle language composition without
-   ambiguity.
-
-2. **Statix**: The most unique component. A constraint-based meta-language for static semantics
-   using **scope graphs**.
-   - You declare type-checking rules as constraints over terms
-   - Name binding is modeled via scope graphs, a formalism where scopes are nodes and edges
-     represent containment, import, and inheritance relationships
-   - Type-checking and name resolution are unified: resolving a name and checking its type happen in
-     the same constraint-solving framework
-   - Supports generics (demonstrated with Featherweight Generic Java), structural records,
-     parametric polymorphism
-   - The specification is itself statically checked
-
-3. **Stratego**: A term-rewriting language for transformations. Used for code generation and
-   interpretation through pattern-matching rewrite rules with strategy combinators.
-
-### What makes it unique
-
-Statix/scope graphs is genuinely novel. Instead of hand-coding a type checker, you declaratively
-specify what your type system _is_, and the solver handles the checking. For a DSL with entities,
-operations, pre/postconditions, and invariants, Statix would let you express the type rules very
-naturally:
+Statix is genuinely novel: rather than hand-code a type checker, you declare what the type system is
+and the solver does the checking, which for a DSL of entities, operations, contracts, and invariants
+reads very naturally.
 
 ```text
 typeOfExpr(s, FieldAccess(e, f)) = T :-
@@ -238,91 +159,56 @@ typeOfExpr(s, FieldAccess(e, f)) = T :-
     resolveField(entityScope, f) == T.
 ```
 
-This is intellectually elegant and would produce very high-quality error messages since the
-constraint solver knows exactly which constraint failed.
+Because the solver knows exactly which constraint failed, the error messages are excellent. The
+practical tradeoffs, though, are severe:
 
-### Practical concerns
+| Aspect            | Assessment                                                       |
+| ----------------- | ---------------------------------------------------------------- |
+| IDE support       | Eclipse plugins only (generated from specs)                      |
+| LSP               | no standalone LSP server                                         |
+| Distribution      | Eclipse plugin or standalone JVM application                     |
+| Learning curve    | steep: SDF3, Statix, and Stratego are three separate meta-languages |
+| Community         | small, primarily academic (around 20 to 30 active contributors)  |
+| Documentation     | improving but patchy; Spoofax 3 docs are incomplete              |
+| Spoofax 3 status  | experimental, work-in-progress, not recommended for production   |
+| Z3 integration    | difficult; JVM-based, would need JNI bindings                    |
+| LLM integration   | no ecosystem support                                             |
+| Web deployment    | not supported                                                    |
 
-| Aspect               | Assessment                                                          |
-| -------------------- | ------------------------------------------------------------------- |
-| **IDE support**      | Eclipse plugins only (generated from specs)                         |
-| **LSP**              | No standalone LSP server                                            |
-| **Distribution**     | Eclipse plugin or standalone JVM application                        |
-| **Learning curve**   | Steep, SDF3 + Statix + Stratego are three separate meta-languages |
-| **Community**        | Small, primarily academic (~20-30 active contributors)              |
-| **Documentation**    | Improving but still patchy; Spoofax 3 docs are incomplete           |
-| **Spoofax 3 status** | "Experimental, work-in-progress, rather than recommended for production"    |
-| **Z3 integration**   | Difficult, JVM-based, would need JNI bindings                     |
-| **LLM integration**  | No ecosystem support                                                |
-| **Web deployment**   | Not supported                                                       |
+One notable industrial case study, OIL (Open Interaction Language) for control software, found
+Spoofax more productive than Python, especially for editor services, but that remains exceptional.
+The verdict: study Statix's scope-graph approach as intellectual inspiration for the type checker,
+but do not adopt Spoofax, the Eclipse-only IDE, missing LSP, tiny community, three-meta-language
+learning curve, and not-production-ready Spoofax 3 outweigh the elegance.
 
-### Industrial use
+## JetBrains MPS
 
-One notable case study: **OIL (Open Interaction Language)**, an industrial DSL for control software.
-Research found Spoofax more productive than Python for implementing this DSL, especially for editor
-services. However, this remains exceptional.
+MPS is a projectional editing environment (1,644 stars): instead of typing text that a parser turns
+into an AST, you edit the AST directly and MPS projects it as text, tables, diagrams, or mixed
+notations. The consequences are real, no parsing is required (the AST is the source of truth),
+languages compose without grammar conflicts, notations can include tables and math and widgets, and
+the editor permits only structurally valid edits so there are no syntax errors.
 
-### Verdict on spoofax
+The catch is version control. Models are stored as XML, not human-readable text, so standard
+`git diff` and `git merge` are nearly useless on them; MPS ships custom UUID-based diff and merge
+tools, conflicts must be resolved inside MPS rather than any text editor or the GitHub UI, and code
+review on GitHub or GitLab is impractical because the XML diffs are unreadable. On scale, single-root
+elements handle up to about 4,000 lines comfortably and the tool has been tested on roughly 100,000
+lines of C, with most users acclimating in a few days.
 
-The Statix type system specification approach is the most powerful and theoretically sound of any
-framework evaluated here. However, the practical tradeoffs are severe: Eclipse-only IDE, no LSP,
-tiny community, steep learning curve across three meta-languages, no web or VS Code story, and
-Spoofax 3 is not production-ready. We should **study Statix's scope graph approach as intellectual
-inspiration** for our type checker design but **not adopt Spoofax as our framework**.
+| Factor          | Assessment                                                     |
+| --------------- | -------------------------------------------------------------- |
+| User experience | users must install MPS or a standalone MPS-based IDE (500MB+)  |
+| Distribution    | standalone IDE or MPS plugin (heavyweight)                     |
+| Learning curve  | steep for language designers, moderate for end users           |
+| Git workflow    | severely impacted, no standard code review                     |
+| Web deployment  | not supported natively                                         |
+| LSP             | not applicable (no text-based editing)                         |
+| Z3 integration  | possible via Java or Kotlin, but unconventional                |
+| LLM integration | difficult: LLMs generate text, not AST operations              |
+| Community       | moderate but niche, heavily JetBrains-dependent                |
 
-## 4. Jetbrains MPS
-
-**What it is**: A projectional editing environment for DSLs. Instead of text-based editing with
-parsing, users directly edit the AST, which is _projected_ as text, tables, diagrams, or mixed
-notations.
-
-**GitHub**: 1,644 stars, 311 forks
-
-### How projectional editing differs
-
-In traditional DSL tools: User types text -> parser converts to AST -> tools operate on AST. In MPS:
-User edits AST directly -> MPS projects it as whatever notation you choose.
-
-Key consequences:
-
-- No parsing required: The AST is the source of truth
-- No ambiguity: Multiple languages can be freely composed without grammar conflicts
-- Rich notations: Tables, images, math notation, GUI widgets can be part of the syntax
-- No syntax errors: The editor only allows structurally valid edits
-
-### Git integration
-
-This is the major practical problem. Since code is stored as XML (not human-readable text):
-
-- Standard `git diff` and `git merge` are nearly useless on MPS model files
-- MPS provides custom diff/merge tools that work on the AST level using UUIDs
-- Merge conflicts must be resolved inside MPS, rather than in any text editor or GitHub UI
-- Code review on GitHub/GitLab is impractical, you cannot read the XML diffs
-- Teams must use MPS's built-in VCS integration for effective collaboration
-
-### Scalability
-
-- Single-root elements handle up to ~4,000 lines without issues
-- Tested with ~100,000 lines of C code
-- Adoption curve: "a few days for most users to become accustomed"
-
-### Practical assessment for our use case
-
-| Factor              | Assessment                                                     |
-| ------------------- | -------------------------------------------------------------- |
-| **User experience** | Users must install MPS or a standalone MPS-based IDE (~500MB+) |
-| **Distribution**    | Standalone IDE or MPS plugin (heavyweight)                     |
-| **Learning curve**  | Steep for language designers; moderate for end users           |
-| **Git workflow**    | Severely impacted, no standard code review                   |
-| **Web deployment**  | Not supported natively                                         |
-| **LSP**             | Not applicable (no text-based editing)                         |
-| **Z3 integration**  | Possible via Java/Kotlin, but unconventional                   |
-| **LLM integration** | Difficult, LLMs generate text, not AST operations            |
-| **Community**       | Moderate but niche; heavily JetBrains-dependent                |
-
-### Verdict on MPS
-
-**Not suitable for our use case.** Our DSL will be text-based (to integrate with standard developer
-workflows, version control, code review, CI/CD, LLM generation). The Git story alone is
-disqualifying. MPS excels for DSLs used by non-programmers (business analysts, domain experts) who
-benefit from rich visual notations, but that is not our target audience.
+MPS is not suitable here. The DSL is text-based on purpose, to fit standard developer workflows,
+version control, code review, CI, and LLM generation, and the Git story alone is disqualifying. MPS
+shines for DSLs aimed at non-programmers who benefit from rich visual notations, which is not the
+audience here.
