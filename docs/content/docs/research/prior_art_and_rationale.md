@@ -158,7 +158,7 @@ a convention engine that maps structure to HTTP routes, a database schema, and O
 spec itself, synthesize the business logic through an LLM-plus-verifier loop, and generate conformance
 tests. The stage-by-stage detail is in [Architecture](/design/architecture), the convention mapping in
 [the convention engine](/design/convention-engine), and the implementation rationale in
-[07_implementation_architecture](/research/implementation_architecture).
+[Implementation Architecture](/research/implementation_architecture).
 
 Each stage exists partly to clear a risk the research had already exposed. The widest was the
 abstraction gap: a spec says the store gains an entry, but real code has to settle transactions,
@@ -178,7 +178,7 @@ rather than mathematical symbols, keeps structure and behavior in one file, trea
 overridable defaults, explains specs in plain-English errors, and can even take natural-language
 requirements the way the Eudoxus work does. Its syntax and a worked `url_shortener` example are in
 [the spec language reference](/spec-language); the rationale is in
-[01_spec_language_design](/research/spec_language_design). One risk stays open by nature, since
+the [spec language foundations](/research/spec_language_design/survey). One risk stays open by nature, since
 verifying the spec is bounded and never total. For REST services the state spaces are usually small
 enough that this matters less than for distributed protocols, so Alloy-style bounded checking covers
 the data model and Quint or TLA+ covers temporal properties, with Amazon's experience as the
