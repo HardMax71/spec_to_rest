@@ -14,7 +14,7 @@ parser tools are on the [next page](/research/dsl_compiler_frameworks/parsers).
 
 ## Langium
 
-Langium is an open-source language engineering framework written entirely in TypeScript by TypeFox,
+[Langium](https://langium.org) is an open-source language engineering framework written entirely in TypeScript by TypeFox,
 the creators of Xtext, and is the spiritual successor to it, designed from the ground up for the web
 and Node.js. It was at version 4.0 by mid-2025, with about 985 GitHub stars and roughly 254K weekly
 npm downloads across 82-plus dependent packages.
@@ -109,7 +109,7 @@ anyone who knows EBNF.
 
 ## Xtext
 
-Xtext is the mature predecessor, built on Java, Eclipse, and EMF, and the industry standard for DSL
+[Xtext](https://eclipse.dev/Xtext/) is the mature predecessor, built on Java, Eclipse, and EMF, and the industry standard for DSL
 engineering since around 2010 (823 stars, Java 17+ and Eclipse 2024-03+). It and Langium line up
 closely:
 
@@ -137,7 +137,7 @@ system, is what Typir is filling in for Langium.
 
 ## Spoofax
 
-Spoofax is an academic language workbench from the Programming Languages group at TU Delft (163 stars
+[Spoofax](https://spoofax.dev) is an academic language workbench from the Programming Languages group at TU Delft (163 stars
 on Spoofax 2, 14 on Spoofax 3), unusual in offering a declarative meta-language for every aspect of a
 language. There are three. SDF3 (Syntax Definition Formalism 3) is declarative syntax with
 disambiguation, layout sensitivity, error recovery, and scannerless parsing, which lets it compose
@@ -183,7 +183,7 @@ learning curve, and not-production-ready Spoofax 3 outweigh the elegance.
 
 ## JetBrains MPS
 
-MPS is a projectional editing environment (1,644 stars): instead of typing text that a parser turns
+[MPS](https://www.jetbrains.com/mps/) is a projectional editing environment (1,644 stars): instead of typing text that a parser turns
 into an AST, you edit the AST directly and MPS projects it as text, tables, diagrams, or mixed
 notations. The consequences are real, no parsing is required (the AST is the source of truth),
 languages compose without grammar conflicts, notations can include tables and math and widgets, and
