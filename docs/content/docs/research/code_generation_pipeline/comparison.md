@@ -11,9 +11,10 @@ solve pieces of the problem, and the design borrows from each.
 OpenAPI Generator covers more than forty targets from an OpenAPI document, with a deep community and
 solid schema-to-model generation. Its limits are the ones this project set out to avoid. Its server
 output is genuinely stubs, empty bodies with TODO comments, because OpenAPI is structural: there is
-no way to say an operation requires X and ensures Y. Quality varies by target, a 2023 study found
-roughly a third of generated Go clients did not compile, since each target has a different maintainer
-and no shared standard. What carries over is the template-per-target architecture and the mustache
+no way to say an operation requires X and ensures Y. Quality varies by target: the generator's own
+tracker carries a long tail of Go cases where `oneOf` and `anyOf` union types
+[emit code that does not compile](https://github.com/OpenAPITools/openapi-generator/issues/11851),
+since each target has a different maintainer and no shared standard. What carries over is the template-per-target architecture and the mustache
 engine; what does not is the breadth-over-depth bet. This project keeps three targets compiling,
 tested, and idiomatic rather than forty that might not.
 
