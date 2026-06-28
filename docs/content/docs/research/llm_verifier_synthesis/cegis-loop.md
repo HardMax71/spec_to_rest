@@ -24,14 +24,17 @@ and the verifier is Dafny, with Boogie and Z3 underneath.
 
 ```mermaid
 flowchart TD
-  Controller["CEGIS controller\nspec, context, target, budget\nstate: iteration, candidates, errors"]
-  Controller -->|"1: Dafny signature"| SigGen["Signature generator\nspec IR to method sig,\nrequires, ensures, modifies"]
-  SigGen -->|"2: build prompt"| Prompt["Prompt constructor\nsignature + context +\nfew-shot + prior errors"]
-  Prompt -->|"3: LLM call"| LLM["LLM\nto candidate body"]
-  LLM -->|"4: verify"| Verifier["Dafny verifier\ncandidate + signature\nto pass/fail + errors"]
-  Verifier -->|on fail| ErrorParser["Error parser\nto category, location,\ncounterexample, hint"]
-  ErrorParser -->|feedback| Prompt
-  Verifier -->|on success| Compiler["Dafny compiler\nverified body to target language"]
+  Controller["CEGIS controller<br/>spec, context, target, budget"]
+  Controller -->|"1: Dafny signature"| SigGen["Signature generator<br/>spec IR to method sig +<br/>requires, ensures, modifies"]
+  SigGen -->|"2: build prompt"| Prompt["Prompt constructor<br/>signature + context +<br/>few-shot + prior errors"]
+  Prompt -->|"3: LLM call"| LLM["LLM<br/>candidate body"]
+  LLM -->|"4: verify"| Verifier["Dafny verifier<br/>pass / fail + errors"]
+  Verifier -->|"on fail"| ErrorParser["Error parser<br/>category, counterexample, hint"]
+  ErrorParser -->|"feedback"| Prompt
+  Verifier -->|"on success"| Compiler["Dafny compiler<br/>verified body to target"]
+  classDef cegis stroke:#dc2626,stroke-width:2px;
+  class Controller,SigGen,Prompt,LLM,Verifier,ErrorParser,Compiler cegis;
+  linkStyle default stroke:#dc2626;
 ```
 
 ## From spec to a Dafny skeleton
@@ -40,13 +43,13 @@ The first step turns the operation's IR into a complete Dafny file: an `Option` 
 datatypes for enums and entities, a `ServiceState` class mirroring the `state` block, and one
 `method` per operation carrying the translated clauses. A handful of the mappings:
 
-| Spec                         | Dafny                                          |
-| ---------------------------- | ---------------------------------------------- |
-| `state { store: K -> V }`    | `class ServiceState { var store: map<K, V> }`  |
-| `pre(store)`                 | `old(st.store)`                                |
-| `x not in store`             | `x !in st.store`                               |
-| `#store`                     | `\|st.store\|`                                 |
-| `requires P` / `ensures Q`   | the same clauses on the method                 |
+| Spec                       | Dafny                                         |
+| -------------------------- | --------------------------------------------- |
+| `state { store: K -> V }`  | `class ServiceState { var store: map<K, V> }` |
+| `pre(store)`               | `old(st.store)`                               |
+| `x not in store`           | `x !in st.store`                              |
+| `#store`                   | `\|st.store\|`                                |
+| `requires P` / `ensures Q` | the same clauses on the method                |
 
 The spec-derived parts are fixed; the LLM fills only the body, marked `// YOUR CODE HERE`. This
 skeleton is the `inspect --format dafny` path described in
@@ -104,54 +107,64 @@ diff-check rejection, or a Dafny backend crash. On any exit short of success, th
 
 ```mermaid
 flowchart TD
-  Input["Input: a .spec file\nOutput: REST service + tests + OpenAPI + migrations"]
+  Input["Input: a .spec file"]
   Input --> Parse
 
   subgraph Stage1["1: parsing"]
-    Parse["spec to IR\nentities, state, operations,\ninvariants, convention overrides"]
+    Parse["spec to IR<br/>entities, state, operations, invariants"]
   end
   Parse --> Classify
 
   subgraph Stage2["2: classification"]
     Classify["classify each operation"]
-    Classify --> Direct["DirectEmit\nCRUD, simple lookups"]
-    Classify --> NeedLLM["LlmSynthesis\nalgorithms, computation,\ncomplex state"]
+    Classify --> Direct["DirectEmit<br/>CRUD, simple lookups"]
+    Classify --> NeedLLM["LlmSynthesis<br/>algorithms, computation, state"]
   end
   Direct --> Assembler
   NeedLLM --> S3a
 
-  subgraph Stage3["3: synthesis"]
+  subgraph Stage3["3: synthesis (the CEGIS loop)"]
     S3a["Dafny signature generation"]
-    S3b["Clover triangulation\nspec to docstring checks"]
-    S3c_prompt["Prompt: skeleton + context + few-shot + hints"]
+    S3b["Clover triangulation<br/>spec to docstring checks"]
+    S3c_prompt["Prompt<br/>skeleton + context + few-shot + hints"]
     S3c_llm["LLM call to candidate body"]
     S3c_diff["Diff-check: clauses unchanged?"]
     S3c_verify["Dafny verifier"]
     S3c_error["Error parser + feedback"]
-    S3c_fallback["Fallback: retry, decompose, escalate, skeleton, report"]
+    S3c_fallback["Fallback<br/>retry, decompose, escalate, skeleton, report"]
     S3d["Clover post-checks"]
-    S3e["Dafny compilation to target language"]
+    S3e["Dafny compilation to target"]
 
     S3a --> S3b --> S3c_prompt --> S3c_llm --> S3c_diff
-    S3c_diff -->|yes| S3c_verify
-    S3c_diff -->|no, reject| S3c_prompt
-    S3c_verify -->|pass| S3d
-    S3c_verify -->|fail| S3c_error
-    S3c_error -->|budget ok| S3c_prompt
-    S3c_error -->|budget out| S3c_fallback
+    S3c_diff -->|"yes"| S3c_verify
+    S3c_diff -->|"no, reject"| S3c_prompt
+    S3c_verify -->|"pass"| S3d
+    S3c_verify -->|"fail"| S3c_error
+    S3c_error -->|"budget ok"| S3c_prompt
+    S3c_error -->|"budget out"| S3c_fallback
     S3c_fallback --> S3c_prompt
     S3d --> S3e
   end
   S3e --> Assembler
 
   subgraph Stage4["4: assembly"]
-    Conv["Convention outputs\nroutes, validation, schema, OpenAPI, ORM"]
-    Assembler["Assembler\ninto a complete project"]
+    Conv["Convention outputs<br/>routes, validation, schema, OpenAPI, ORM"]
+    Assembler["Assembler into a complete project"]
     Conv --> Assembler
   end
   Assembler --> Tests
 
   subgraph Stage5["5: test generation"]
-    Tests["Schemathesis, stateful, property, and conformance tests"]
+    Tests["Schemathesis, stateful, property, conformance"]
   end
+
+  classDef cegis stroke:#dc2626,stroke-width:2px;
+  class S3a,S3b,S3c_prompt,S3c_llm,S3c_diff,S3c_verify,S3c_error,S3c_fallback,S3d,S3e cegis;
 ```
+
+The diagram traces a spec from file to finished service. Parsing and classification are shared, and
+an operation tagged `DirectEmit` skips straight to assembly. A `LlmSynthesis` operation instead
+enters the synthesis stage in red, the CEGIS loop this subsection covers, where the prompt, verify,
+and feedback steps cycle until a body verifies or the budget gives out. Its verified body then
+rejoins the convention-engine output, the infrastructure templates, and the generated tests in the
+final project.
