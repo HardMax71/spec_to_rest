@@ -3,128 +3,56 @@ title: "Contract testing and fuzzing"
 description: "Pact, Dredd, and RESTler"
 ---
 
-## 6. Pact, consumer-driven contract testing
+## Pact
 
-**What it is.** Code-first consumer-driven contract testing framework. The most widely adopted
-contract testing tool in microservices architectures.
+[Pact](https://docs.pact.io/getting_started/how_pact_works) is the most widely adopted
+consumer-driven contract testing tool in microservices, and it is code-first: the contract emerges
+from a test rather than being authored separately. In the consumer phase a developer writes a test
+stating the request and response interactions it expects, Pact stands up a mock provider that records
+them and checks the consumer's requests match, and the result is a pact file, a JSON contract of all
+the interactions. In the provider phase each request from the pact file is replayed against the real
+provider, and its response passes if it contains at least the expected data. Interactions can name
+provider states ("user 123 exists") that the provider sets up before replay.
 
-### How it works
+A [Pact Broker](https://pactflow.io/how-pact-works/) (PactFlow is SmartBear's hosted version) stores
+the pact files, tracks which versions are compatible, and offers a `can-i-deploy` check that gates a
+release on compatibility, with webhook and CI hooks. Bi-directional contract testing lets a provider
+publish its own contract, an OpenAPI spec for instance, so Pact can compare consumer expectations
+against it without running the provider.
 
-### Phase 1: Consumer test
+The connection to tests runs opposite to a tool like Schemathesis: the consumer test creates the spec
+(the pact file) and provider verification validates against it, so the spec comes out of code rather
+than being written first. Pact is over a decade old and very mature, with
+[implementations in more than ten languages](https://github.com/pact-foundation/pact-net) (JS, Java,
+.NET, Python, Go, Ruby), the de facto standard for consumer-driven contracts, used at ING, Atlassian,
+AWS, and gov.uk.
 
-1. Developer writes a test specifying expected request/response interactions.
-2. Pact provides a mock provider that records these expectations.
-3. Consumer code talks to the mock; Pact verifies the request matches expectations.
-4. A **pact file** (JSON contract) is generated containing all interactions.
+## Dredd
 
-### Phase 2: Provider verification
+[Dredd](https://dredd.org/en/latest/how-it-works.html) is a command-line tool that validates a live
+API against its OpenAPI (or API Blueprint) description: it reads the description, generates one HTTP
+request per documented endpoint, sends it to the running API, compares the actual response against the
+documented one (status, headers, body structure, data types), and reports mismatches as failures. A
+hooks system in seven languages (Go, Node.js, Perl, PHP, Python, Ruby, Rust) handles setup and
+teardown like authentication or database seeding. Like Schemathesis it treats the API description as
+the test spec, but where Schemathesis generates thousands of random variations, Dredd checks the
+documented happy-path examples, one per endpoint-and-response pair.
 
-1. Each request from the pact file is replayed against the real provider.
-2. The provider's actual response is compared with the minimal expected response.
-3. Verification passes if the actual response contains _at least_ the expected data.
+It is [archived](https://github.com/apiaryio/dredd) as of November 2024, read-only, around 4,200 stars
+but no active development, last released as v14.1.0 in November 2021, with OpenAPI 3 support left
+experimental and unfinished. The maintainers point successors at Schemathesis, at Prism or Spectral
+for linting, and at Postman or Newman for execution.
 
-### Provider states
+## RESTler
 
-Interactions can specify preconditions ("provider states") like "user 123 exists." The provider sets
-up these states before each interaction is replayed.
-
-### Pact broker / pactflow
-
-- Central repository for pact files
-- Tracks which versions are compatible
-- `can-i-deploy` tool: checks if a version is safe to deploy to an environment
-- Supports webhooks, CI/CD integration
-
-### Bi-directional contract testing
-
-Provider publishes its own contract (e.g., OpenAPI spec); Pact compares consumer expectations
-against the provider's published contract without running the provider.
-
-**How specs connect to tests.** The consumer test _creates_ the spec (the pact file). The provider
-verification _validates against_ the spec. The spec emerges from code rather than being authored
-separately. This is the inverse of tools like Schemathesis where the spec is written first.
-
-#### Maturity
-
-- 10+ years old, very mature
-- Implementations in 10+ languages (JS, Java, .NET, Python, Go, Ruby, etc.)
-- PactFlow: commercial hosted broker by SmartBear
-- De facto standard for consumer-driven contract testing
-- Used at ING, Atlassian, AWS, gov.uk, many others
-
-#### Key sources
-
-- https://docs.pact.io/getting_started/how_pact_works
-- https://pactflow.io/how-pact-works/
-- https://github.com/pact-foundation/pact-net
-
-## 7. Dredd, API description validation
-
-**What it is.** Command-line tool that validates a live API against its OpenAPI (or API Blueprint)
-description document.
-
-### How it works
-
-1. Reads your API description (OpenAPI 2, OpenAPI 3 experimental, API Blueprint).
-2. For each documented endpoint, generates an HTTP request.
-3. Sends the request to the running API.
-4. Compares the actual response against the documented response (status code, headers, body
-   structure, data types).
-5. Reports mismatches as test failures.
-
-**Hooks system.** Supports setup/teardown code in 7 languages (Go, Node.js, Perl, PHP, Python, Ruby,
-Rust) for authentication, database seeding, etc.
-
-**How specs connect to tests.** Like Schemathesis, the API description _is_ the test spec. Dredd
-generates one test per documented endpoint/response combination. The difference: Dredd tests the
-"happy path" documented examples, while Schemathesis generates thousands of random variations.
-
-### Maturity
-
-- ARCHIVED (November 2024, read-only repository)
-- 4,200+ GitHub stars, but no active development
-- Last release: v14.1.0 (November 2021)
-- OpenAPI 3 support was experimental and never completed
-- Successor recommendation. Schemathesis, Prism (Stoplight), or Spectral for linting +
-  Postman/Newman for execution
-
-### Key sources
-
-- https://github.com/apiaryio/dredd
-- https://dredd.org/en/latest/how-it-works.html
-
-## Appendix A: RESTler (Microsoft Research)
-
-**What it is.** The first stateful REST API fuzzing tool. Automatically tests cloud services through
-their REST APIs.
-
-### How it works
-
-1. **Compile.** Parses OpenAPI spec, infers producer-consumer dependencies between endpoints (e.g.,
-   POST /users returns an ID consumed by GET /users/{id}).
-2. **Test/Smoketest.** Quickly hits all endpoints to validate setup.
-3. **Fuzz-lean.** One pass per endpoint with default bug checkers.
-4. **Fuzz.** Aggressive breadth-first exploration of the API state space.
-
-**Dependency inference.** RESTler analyzes the OpenAPI schema to find which response fields map to
-which request parameters. It builds a dependency graph and generates request sequences that create
-resources before consuming them.
-
-### Bug detection
-
-- HTTP 500 errors
-- Resource leaks
-- Hierarchy violations
-- Use-after-free patterns in API resources
-
-### Maturity
-
-- 2,900+ GitHub stars, Microsoft Research backed
-- Published at ICSE, ICST, ISSTA, FSE
-- Open source (Python + F#)
-- Actively maintained
-
-### Key sources
-
-- https://github.com/microsoft/restler-fuzzer
-- https://www.microsoft.com/en-us/research/publication/restler-stateful-rest-api-fuzzing/
+[RESTler](https://github.com/microsoft/restler-fuzzer) is the first stateful REST API fuzzer, from
+Microsoft Research, [published](https://www.microsoft.com/en-us/research/publication/restler-stateful-rest-api-fuzzing/)
+across ICSE, ICST, ISSTA, and FSE. It runs in passes of increasing aggression: a compile step parses
+the OpenAPI spec and infers producer-consumer dependencies between endpoints (a `POST /users` returns
+an ID that `GET /users/{id}` consumes), a smoke test hits every endpoint to validate setup, a
+fuzz-lean pass does one run per endpoint with the default bug checkers, and a full fuzz does an
+aggressive breadth-first exploration of the API's state space. The dependency inference is the core:
+RESTler reads the schema to find which response fields feed which request parameters, builds a
+dependency graph, and generates request sequences that create resources before consuming them, which
+is what lets it catch 500s, resource leaks, hierarchy violations, and use-after-free patterns in API
+resources. It has around 2,900 stars, is open source (Python and F#), and is actively maintained.
