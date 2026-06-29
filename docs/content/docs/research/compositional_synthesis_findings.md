@@ -10,7 +10,7 @@ When M6.6 shipped the graduated-fallback orchestrator (L1 prompt strategies, the
 - LLMs hit a 3.69% Pass@1 and 7% Pass@8 ceiling on multi-function Dafny programs (DafnyComp, 13 frontier models).
 - Sampling more candidates does not rescue it: Pass@4 to Pass@8 yields +0.8% on average. The plateau is architectural, not search-budget bound.
 - The state of the art for compositional Dafny is 14.0% Pass@1 with RL-trained 14B models (Re:Form), still far below useful production thresholds and not an inference-time technique.
-- Over the same period the leading monolithic technique, DafnyPro hint-augmentation, gave +16pp on DafnyBench with Claude Sonnet 3.5, a proven, inference-time intervention orthogonal to model choice.
+- Over the same period the leading monolithic technique, DafnyPro, gave +16pp on DafnyBench with Claude Sonnet 3.5, of which the paper's ablation credits about +10pp to hint-augmentation alone, a proven inference-time intervention orthogonal to model choice.
 
 So [#227](https://github.com/HardMax71/spec_to_rest/issues/227) closed without operation decomposition, and M6.7 effort went to hint-augmentation, which raises the success rate on the case already handled (monolithic synthesis through CEGIS) rather than chasing a 7% ceiling on cases not handled.
 
@@ -38,7 +38,7 @@ Direct, decisive evidence on the planned pipeline shape. The benchmark synthesiz
 | Metric | DafnyBench (single-function) | DafnyComp (2-5 functions) | delta |
 |---|---|---|---|
 | Syntax correctness | ~99% | 95.67% | -3.3pp |
-| Verification success (Pass@1) | 58% | 3.69% | -54pp |
+| Verification success (Pass@1) | ~53% | 3.69% | -49pp |
 | Best-model Pass@8 |   | 7% (Claude 3.5) |   |
 | Pass@4 to Pass@8 marginal |   | +0.8% avg | plateau |
 
@@ -75,14 +75,14 @@ The most relevant technique for this use case, applicable today with no training
 | Diff-checker | Structural comparison flags which assertions failed, targeting repair feedback rather than blind resampling. |
 | Pruner | Filter syntactically or typically malformed candidates before SMT verification. |
 
-The result, Claude Sonnet 3.5 plus DafnyPro at 86% on DafnyBench, is a +16pp improvement over the base model and the largest single-paper jump on the single-function benchmark. DafnyPro is single-function only and does not address the compositional case. But the diff-checker already shipped in M6.4 (`DiffChecker.scala`), and the pruner is implicit in `ResponseParser`'s rejection of unparseable bodies. The missing ingredient was hint-augmentation, and that is where the +16pp delta lives.
+The result, Claude Sonnet 3.5 plus DafnyPro at 86% on DafnyBench, is a +16pp improvement over the bare model at about 70% and the largest single-paper jump on the single-function benchmark. DafnyPro is single-function only and does not address the compositional case. But the diff-checker already shipped in M6.4 (`DiffChecker.scala`), and the pruner is implicit in `ResponseParser`'s rejection of unparseable bodies. The missing ingredient was hint-augmentation, which the paper's ablation credits with about +10pp of the +16pp; pruning and dataset fixes account for the rest. So roughly +10pp, not the full +16pp, is the slice M6.7 could hope to capture.
 
 ### Other 2025-2026 work checked
 
 - VERINA ([arXiv:2505.23135](https://arxiv.org/pdf/2505.23135), May 2025), a Dafny and Lean benchmark; confirms the compositional gap, no inference-time technique advances the state of the art.
 - VeriCoding ([arXiv:2509.22908](https://arxiv.org/pdf/2509.22908), Sept 2025), a multi-method verified-synthesis benchmark; the same pattern.
 - Clover (SAIV 2024, [Stanford](https://theory.stanford.edu/~barrett/pubs/SSP+24.pdf)), closed-loop monolithic synthesis with feedback, the original CEGIS-with-Dafny paradigm; 87% acceptance and 100% rejection on ground-truth single-function programs, not compositional.
-- DafnyBench ([Loughridge et al.](https://namin.seas.harvard.edu/pubs/dafnybench.pdf), Harvard 2024), the single-function benchmark with the ~58% baseline DafnyPro measured its +16pp against.
+- DafnyBench ([Loughridge et al.](https://namin.seas.harvard.edu/pubs/dafnybench.pdf), Harvard 2024), the single-function benchmark DafnyPro runs on; its 86% is +16pp over the bare Claude Sonnet 3.5 rate of roughly 70% on it.
 - "LLM-Based Code Translation Needs Formal Compositional Reasoning" ([Anshumaan et al.](https://openreview.net/forum?id=wGj8LU2EOf), 2025), which treats compositional reasoning as a known gap to fill.
 - The autoformalization survey ([Weng et al., arXiv:2505.23486](https://arxiv.org/abs/2505.23486)), which notes "systems that can generalize compositionally" remains open.
 
@@ -90,7 +90,7 @@ No 2024-2026 source shows an inference-time decomposition strategy beating monol
 
 ## What this meant for the pipeline
 
-Mapping the data onto the M6.6 pipeline as shipped: M6.4 is the CEGIS loop with verifier feedback, analogous to Clover, at a 58% single-function baseline; M6.6's L1 and L3 give small marginal gains, not transformative ones, per the Pass@k plateau; L4 is the always-ships-something guarantee. The unimplemented L2 would inherit the 7% compositional ceiling. For the three-operation `url_shortener.spec`, that is 0.07 x 3 = 0.21 operations verified through L2 in the best case (Claude 3.5 Pass@8), or 0.11 under Pass@1, statistically less than one op per spec, even generously read. Most users would not see L2 fire successfully on any of their specs. The cost to ship that was about 1000 lines and a week of engineering, plus diluting the production-shaped tool with research-grade code.
+Mapping the data onto the M6.6 pipeline as shipped: M6.4 is the CEGIS loop with verifier feedback, analogous to Clover, at a single-function baseline around 53%; M6.6's L1 and L3 give small marginal gains, not transformative ones, per the Pass@k plateau; L4 is the always-ships-something guarantee. The unimplemented L2 would inherit the 7% compositional ceiling. For the three-operation `url_shortener.spec`, that is 0.07 x 3 = 0.21 operations verified through L2 in the best case (Claude 3.5 Pass@8), or 0.11 under Pass@1, statistically less than one op per spec, even generously read. Most users would not see L2 fire successfully on any of their specs. The cost to ship that was about 1000 lines and a week of engineering, plus diluting the production-shaped tool with research-grade code.
 
 ## Decision: hint-augmentation, executed in M6.7
 
@@ -98,10 +98,10 @@ M6.7 shipped a hint-augmentation module modelled on DafnyPro instead of L2: a `H
 
 | Pipeline stage | Without hints | With hints (target) |
 |---|---|---|
-| Single-op CEGIS verification rate | CEGIS baseline | up to +16pp on the same ops |
+| Single-op CEGIS verification rate | CEGIS baseline | up to +10pp on the same ops (DafnyPro's hint-augmentation slice) |
 | L4 skeleton-fallback rate | unchanged | strictly less (more ops verify first) |
 
-The +16pp was not claimed to reproduce on these spec shapes, DafnyPro's number is on a different distribution. The claim was that the mechanism is proven and the cost modest (~750 lines), so it was the right next bet. No pass-rate gate ships either: there is no real-LLM A/B test in CI (cost and flakiness), only deterministic mock-driven tests proving the plumbing (hint retrieved, hint injected, prompt contains the snippet), with empirical uplift left as a real-budget follow-up.
+The +10pp was not claimed to reproduce on these spec shapes; DafnyPro's numbers are on a different distribution. The claim was that the mechanism is proven and the cost modest (~750 lines), so it was the right next bet. No pass-rate gate ships either: there is no real-LLM A/B test in CI (cost and flakiness), only deterministic mock-driven tests proving the plumbing (hint retrieved, hint injected, prompt contains the snippet), with empirical uplift left as a real-budget follow-up.
 
 ## What stayed deferred
 

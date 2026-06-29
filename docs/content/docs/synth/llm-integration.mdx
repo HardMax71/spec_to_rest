@@ -554,11 +554,14 @@ reason: enough to point a developer at what to fix.
 ## Hint-Augmentation (M6.7)
 
 DafnyPro (POPL 2026) reports +16pp on the single-function DafnyBench
-when Claude Sonnet 3.5 is augmented with a curated repository of
-verified Dafny proof patterns retrieved by error category and injected
-into the repair prompt. M6.7 ships that mechanism as the chosen
-direction after the L2 / decomposition path was closed under the
-2025-2026 evidence summarised in
+with Claude Sonnet 3.5, and that figure is for the full three-part
+system (diff-checker, pruner, and hint-augmentation). The paper's
+ablation credits about +10pp of it to hint-augmentation alone: a
+curated repository of verified Dafny proof patterns retrieved by error
+category and injected into the repair prompt. M6.7 ships that
+hint-augmentation slice, since the project already had the diff-checker
+(M6.4) and the pruner, as the chosen direction after the L2 /
+decomposition path was closed under the 2025-2026 evidence summarised in
 [research/12](/research/compositional_synthesis_findings).
 
 ### `HintLibrary`
@@ -605,8 +608,9 @@ When neither flag is set the default is **inferred**: ON when `--fallback` is se
 
 ### What this is NOT
 
-We do **not** claim DafnyPro's +16pp will reproduce on our specific
-spec/op shapes. The CI tests are mock-driven and prove only the
+We do **not** claim DafnyPro's uplift will reproduce on our specific
+spec/op shapes, neither the full-system +16pp nor the roughly +10pp its
+ablation attributes to hint-augmentation alone. The CI tests are mock-driven and prove only the
 plumbing (hint retrieved by category, snippet injected verbatim,
 section gracefully omitted when no match). Real-LLM A/B is left as a
 follow-up that requires non-trivial test budget and a stable spec
