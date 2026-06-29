@@ -124,6 +124,8 @@ cutover. See [research/10](/research/translator_soundness/theorem) for the trust
 Per-feature ledger for the verifier. For the prose explanation of each entry, see
 [Verification Engine](/pipelines/verification).
 
+<Collapsible title="Capability ledger">
+
 | Capability                                                          | Status |
 | ------------------------------------------------------------------- | ------ |
 | IR-to-SMT translator (entities, enums, state relations, invariants) | shipped |
@@ -172,6 +174,8 @@ Per-feature ledger for the verifier. For the prose explanation of each entry, se
 | Mechanically verified translator soundness in Isabelle/HOL: universal `soundness` theorem in `proofs/isabelle/SpecRest/Soundness.thy` closes with zero `sorry` over the verified subset; `Code_Target_Scala` extracts `translate`/`eval`/`smt_eval` plus the canonical IR ADT to `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` | shipped via the Isabelle pivot ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)); IR canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202); CI runs `isabelle build SpecRest` per PR via `.github/workflows/isabelle-build.yml`. Per-run cert emission deleted post-pivot, universal soundness made it vestigial. |
 | Per-check Trust dimension, each `CheckResult` carries `trust: "sound" \| "best-effort"` driven by the extracted Isabelle `lower` projection; best-effort checks short-circuit to `Skipped` (`category=soundness_limitation`) before backend dispatch; new exit code 4 (`ExitStatus.Trust`, unified from the former `ExitCodes` facade by [#421](https://github.com/HardMax71/spec_to_rest/issues/421)) | shipped ([#205](https://github.com/HardMax71/spec_to_rest/issues/205)), JSON `schemaVersion` 1->2 |
 | Production verify path routes in-subset checks via the extracted (Isabelle-verified) translator: `translateCheckedExpr` uses `SpecRestGenerated.translate >>> SmtTermBridge` and fails instead of falling back on `None`; `translateDeclarationExpr` is the separate fallback path for declaration-level refinements. Best-effort checks at the verify level always skip with `soundness_limitation` (no flag) | shipped ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)) |
+
+</Collapsible>
 
 ## Synthesis follow-ups
 
