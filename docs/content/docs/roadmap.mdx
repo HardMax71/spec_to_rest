@@ -89,6 +89,7 @@ cutover. See [the translator soundness writeup](/research/translator_soundness/t
 | M5.9 | Transition tests (`from`/`to`/`when` transition rules) | shipped |
 | M5.10 | Built-in predicates (`isValidURI`, regex `matches`, `len()`) | shipped |
 | M5.11 ([#278](https://github.com/HardMax71/spec_to_rest/issues/278) / [#279](https://github.com/HardMax71/spec_to_rest/issues/279) / [#280](https://github.com/HardMax71/spec_to_rest/issues/280)) | Native multi-target conformance: `Backend.scala` seam (ExprBackend/StrategyBackend/HarnessTemplates); ts-express Vitest+fast-check, go-chi `go test`+rapid, structural-lite for both; Python byte-identical oracle (closes [#265](https://github.com/HardMax71/spec_to_rest/issues/265)) | shipped |
+| M5.12 ([#140](https://github.com/HardMax71/spec_to_rest/issues/140)) | Test emission on by default for every supported target; the `--with-tests` flag dropped, `--no-tests` is the opt-out | shipped |
 | Temporal predicates ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)) | Runtime artifacts for `always(P)` / `eventually(P)` | shipped |
 | Guarded positive transitions ([#152](https://github.com/HardMax71/spec_to_rest/issues/152)) | `GuardSatisfier` for predicate-conditional transitions | shipped |
 | Per-status bundles for transition-driven entities ([#153](https://github.com/HardMax71/spec_to_rest/issues/153)) | Schemathesis bundle routing by status | shipped |
@@ -200,8 +201,6 @@ For the prose context, see [Test Generation](/pipelines/test-generation).
 | ----- | ------------- |
 | State-dependent preconditions on **non-transition** ops still skip ensures tests | residual tail of M5.9; not currently scoped |
 | Guards outside `>` / `>=` / `<` / `<=` / `=` literal / `!= none` / their conjunctions | extend `GuardSatisfier` in `Behavioral.scala` to cover further patterns case-by-case |
-| Multi-target test gen (ts-express Vitest+fast-check, go-chi `go test`+rapid) | **shipped**: [M5.11 (#139)](https://github.com/HardMax71/spec_to_rest/issues/139) via [#278](https://github.com/HardMax71/spec_to_rest/issues/278)/[#279](https://github.com/HardMax71/spec_to_rest/issues/279)/[#280](https://github.com/HardMax71/spec_to_rest/issues/280), closing [#265](https://github.com/HardMax71/spec_to_rest/issues/265) |
-| Default `--with-tests` after M5.4 | **shipped**: [M5.12 (#140)](https://github.com/HardMax71/spec_to_rest/issues/140); test emission is on by default for every supported target. The `--with-tests` flag was dropped (opting in to a default is meaningless); `--no-tests` is the opt-out. |
 
 ## Convention engine follow-ups
 
