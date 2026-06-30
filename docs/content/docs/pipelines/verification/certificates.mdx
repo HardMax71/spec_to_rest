@@ -1,0 +1,156 @@
+---
+title: Certificates and trust
+description: Per-check VC dumps, unsat-core extraction, the mechanically verified translator, and how to extend the verified subset.
+---
+
+The verifier can write per-check VC artifacts for replay and audit, and can extract
+unsat cores for diagnosing failure causes.
+
+## Per-check VC dump (`--dump-vc`)
+
+`spec-to-rest verify --dump-vc out/ <spec>` writes one file per check into `out/`, plus
+`out/verdicts.json`:
+
+```tree
+out/
+├── global.smt2                                  # combined satisfiability of all invariants
+├── Shorten.requires.smt2                        # precondition feasibility for operation Shorten
+├── Shorten.preserves.clickCountNonNegative.smt2 # preservation VC: op x invariant
+├── Delete.requires.smt2                         # precondition feasibility for operation Delete
+├── temporal.alwaysSafe.als                      # Alloy-routed temporal check
+└── verdicts.json                                # { id, tool, outcome, rawStatus, durationMs, file } per check
+```
+
+Z3-routed checks emit SMT-LIB; Alloy-routed checks emit `.als`. Each file is the exact
+input that was passed to the live backend, replayable with a fresh `z3 -in` or the Alloy
+CLI to re-derive the verdict against an independent solver / version. The `verdicts.json`
+index records the verdict, duration, and tool for each check.
+
+The optional `z3-cross-check` CI job iterates `fixtures/golden/vc/*/verdicts.json`,
+replays each `.smt2` file listed under an entry with `tool == "z3"` through native Z3,
+and asserts agreement with the entry's `rawStatus`. The symmetric `alloy-cross-check`
+job iterates the same `verdicts.json` files, selects entries with `tool == "alloy"`,
+replays each entry's `.file` through the native Alloy 6.2.0 CLI (`java -jar
+org.alloytools.alloy.dist.jar exec`), parses `receipt.json` (presence of a `solution`
+key on the single `run` command = `sat`, absence = `unsat`), and asserts the same
+agreement. The third sibling job, `cvc5-cross-check`, replays the same Z3-tool
+`.smt2` files through native cvc5 (`cvc5 --finite-model-find --tlimit-per=30000`)
+to catch divergence between two independent SMT engines (defense in depth against
+solver-specific soundness bugs, since neither solver has had a CVE the other shared).
+A cvc5 `unknown` is treated as a skip (not all checks decide in 30s on cvc5's default
+strategy); a definite verdict that disagrees with the recorded `rawStatus` fails the
+job and uploads the offending `.smt2` artifact. Regenerate the goldens by running
+`sbt "cli/run verify <spec> --dump-vc fixtures/golden/vc/<name>"`.
+
+`rawStatus` records what the solver actually returned for the SMT-LIB (sat / unsat /
+unknown). `outcome` records the user-facing verdict after preservation-style inversion (a
+preservation check is "preserved = sat outcome" when the solver returned unsat = no
+counterexample). The cross-check uses `rawStatus`; the CLI report uses `outcome`.
+
+## Unsat-core extraction (`--explain`)
+
+`spec-to-rest verify --explain <spec>` re-runs the engine in core-extracting mode. For each
+check whose outcome is `unsat`, the diagnostic grows an `unsat core (contributing
+assertions):` section listing the spec source positions of the assertions that participated
+in the contradiction:
+
+```text
+spec.spec:42:3: error: invariants are jointly unsatisfiable, no valid state exists
+
+  unsat core (contributing assertions):
+    spec.spec:14:3  contributing invariant
+    spec.spec:30:3  contributing invariant
+```
+
+Mechanism per backend:
+
+- Z3 uses `Solver.assertAndTrack` with one tracker constant per assertion; after `unsat`,
+  `getUnsatCore()` returns the tracker names whose originating assertions form the core.
+- Alloy switches `SATFactory` to `minisat.prover` (the only proof-emitting solver bundled
+  in Pardinus 6.2.0), enables `coreGranularity = 1` + `coreMinimization = 1`, and reads
+  `A4Solution.highLevelCore` after `unsat`. Each returned `Pos` is mapped back to a spec span
+  via the line-map produced during `.als` rendering.
+
+`--explain` adds modest overhead (Z3 switches to assert-and-track; Alloy switches to a
+core-capable SAT backend and minimizes). Use it when investigating failures, not on every run.
+
+Known limitation: Alloy's `highLevelCore` is empty for contradictions that depend on
+arithmetic encoding (e.g. cardinality constraints `#s = N`). Those still produce a correct
+`unsat` verdict; only the per-fact attribution is unavailable. Relational / quantifier-driven
+contradictions return populated cores.
+
+## Mechanically verified translator (Isabelle/HOL)
+
+The translator's correctness is mechanically validated in Isabelle/HOL. Two theorems carry it,
+both closing with **zero `sorry`** over the verified subset: `translate_soundness_standalone` in
+`proofs/isabelle/SpecRest/soundness/DirectSound.thy` (the translation preserves meaning) and
+`cat_h_progress_and_preservation_direct` in `soundness/DirectPreservation.thy` (progress and
+preservation). The subset covers atoms; logical/arithmetic/comparison operators; state-relation
+membership/cardinality (pre- and post-state, e.g. `c in rel'`, `#rel'`, `#pre(rel)`)/lookup/subset;
+relation literal-insert (`rel' = pre(rel) + {k -> v}`, recognised and desugared to the in-subset
+indexed assignment `rel'[k] = v`, with the unverified encoder synthesising the surrounding
+domain/frame axioms); set literals and set-valued operations; FieldAccess on
+entity-typed values; single-state `Prime`/`Pre` collapse; quantifiers over enums and
+state-relations; record-update via Skolem encoding.
+
+When `verify` returns UNSAT for an in-subset obligation, that verdict reflects a property of
+the spec, not a coincidence between the translator and Z3.
+
+Isabelle's `Code_Target_Scala` extracts the verified `translate`, `eval`, and `smt_eval`
+functions plus the canonical IR ADT to roughly 17.9 kLoC of idiomatic Scala 3 (BigInt-mapped) at
+`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The Scala
+layer's `translate` is no longer hand-written; it is the extracted Isabelle definition.
+Since #202, the IR ADT consumed by every module is also extracted.
+
+CI builds the proof sessions (`SpecRest_Soundness SpecRest_Codegen`) on every PR via
+`.github/workflows/isabelle-build.yml`, which also greps for `sorry` / `oops` and re-extracts the
+Scala to diff it against the committed file. A theory edit that forgets the regen step fails CI.
+
+Trust closure: Isabelle/HOL kernel + Z3 driver + the extracted-Scala output. The previously
+emitted per-run `--emit-cert` Lake bundles were deleted post-pivot; universal soundness
+covers what they validated, structurally.
+
+Delivered through [#88](https://github.com/HardMax71/spec_to_rest/issues/88) (closed
+2026-04-26 after decomposition into M_L.0-M_L.4 + the
+[#170](https://github.com/HardMax71/spec_to_rest/issues/170) global-proof umbrella) and
+the Isabelle/HOL pivot [#193](https://github.com/HardMax71/spec_to_rest/issues/193).
+
+### What's intentionally not exported
+
+Full Z3 proof terms (Alethe format, machine-checkable by `carcara` / `veriT`) are not
+exported. `Solver.getProof()` is reachable through the JNI binding, but Z3 emits no Alethe,
+and a re-test of the producing alternative (cvc5) over the project's own VCs rendered a
+checkable Alethe certificate for only a small fraction of the proved checks, blocked on Alethe
+lacking the sequence and set theories the encoding relies on. Closed not-planned in
+[#90](https://github.com/HardMax71/spec_to_rest/issues/90).
+
+## Extending the translator
+
+Adding a new verified expression shape is a proof-first change:
+
+1. Extend `proofs/isabelle/SpecRest/semantics/Translate.thy` and regenerate
+   `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`.
+2. `modules/verify/src/main/scala/specrest/verify/z3/SmtTermBridge.scala`, add the
+   `smt_term -> Z3Expr` bridge case and declare any helper uninterpreted functions lazily via
+   `ctx.declareFunc`.
+3. If the shape is allowed only for declaration-level refinements, add the fallback case in
+   `modules/verify/src/main/scala/specrest/verify/z3/ExpressionEncoder.scala`; check bodies must
+   continue through `translateCheckedExpr` without fallback.
+4. `modules/verify/src/main/scala/specrest/verify/z3/SmtLib.scala`, add a case to `renderExpr` that produces valid SMT-LIB text.
+5. `modules/verify/src/main/scala/specrest/verify/z3/Backend.scala`, add a case to `renderExpr` that produces a `com.microsoft.z3.BoolExpr` /
+   `Arith` / `Expr` as appropriate.
+
+Unit-test bridge-only behaviour in `modules/verify/src/test/scala/specrest/verify/z3/SmtTermBridgeTest.scala`,
+golden script output in `modules/verify/src/test/scala/specrest/verify/z3/SmtLibGoldenTest.scala`,
+and add a scenario to
+`modules/verify/src/test/scala/specrest/verify/z3/BackendTest.scala` if the case requires solver
+round-tripping. End-to-end behaviour goes in `modules/verify/src/test/scala/specrest/verify/ConsistencyTest.scala`
+or `modules/verify/src/test/scala/specrest/verify/z3/CounterExampleTest.scala`. Update `fixtures/golden/smt/url_shortener.smt2` by dumping the new SMT
+via `sbt "cli/run verify --dump-smt-out fixtures/golden/smt/url_shortener.smt2 fixtures/spec/url_shortener.spec"`
+when the snapshot legitimately changes.
+
+Adding a new **sort** (e.g. a future fixed-point or bit-vector type) is wider: add the case to
+`Z3Sort` in `Types.scala`, then let the compiler's exhaustiveness errors walk you through
+`resolveSort` (Backend), `renderSort` (SmtLib), `sortToTy` (CounterExample), `IrValueDecoder`,
+and `primitiveSortOf` (Translator). Keep ordering/arithmetic gated on `Z3Sort.isNumeric` so a
+non-numeric sort is skipped rather than handed to the solver ill-sorted.
