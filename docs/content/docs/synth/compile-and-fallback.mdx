@@ -97,7 +97,7 @@ ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
       default: 'off',
     },
     '--escalate-to MODEL': {
-      description: 'Repeat for a multi-step ladder (e.g. `--escalate-to opus --escalate-to gpt-5`).',
+      description: 'Repeat for a multi-step ladder (e.g. `--escalate-to claude-opus-4-7 --escalate-to claude-opus-4-8`). The provider is fixed by the initial model, so every ladder entry must be the same family.',
       type: 'string',
       default: '_empty_',
     },
@@ -235,6 +235,5 @@ fixture.
 
 ## What's still deferred
 
-For the live synthesis follow-up backlog (ORM reconciliation, counterexample formatting,
-and cross-family escalation), see
-[Roadmap, Synthesis follow-ups](/roadmap#synthesis-follow-ups).
+For the live synthesis follow-up backlog (ORM reconciliation and cross-family
+escalation), see [Roadmap, Synthesis follow-ups](/roadmap#synthesis-follow-ups).
