@@ -3,7 +3,6 @@ title: Introduction
 description: A compiler that proves your REST service satisfies its specification before emitting code.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout';
 import { Check, Minus, CircleX } from 'lucide-react';
 
 <div className="not-prose mb-12 mt-2">
@@ -227,14 +226,13 @@ write nothing, not even an empty output directory. See
 
 ## What is a verifying compiler?
 
-Most code generators are scaffolds: they write boilerplate from a schema, then
-trust you to keep the runtime correct. A verifying compiler treats the
-specification as a logical theory. Each operation produces a verification
-condition (VC), a first-order formula that must be unsatisfiable for the
-operation to preserve every invariant. The compiler discharges those VCs
-against an SMT solver, and only emits code once every check has been
-mechanically discharged. The guarantee: on every input the specification
-admits, the generated handlers leave every invariant intact.
+Most code generators are scaffolds. They turn a schema into boilerplate and
+trust you to keep the runtime correct by hand. A verifying compiler treats the
+specification as a logical theory instead. Each operation becomes a verification
+condition, a first-order formula that has to be unsatisfiable for the operation
+to preserve every invariant, and Z3 must settle all of them before a single file
+is written. That holds for every input the spec admits, not just the cases a
+test happens to hit: the emitted handlers cannot leave an invariant broken.
 
 ## How spec_to_rest compares
 
@@ -301,7 +299,7 @@ admits, the generated handlers leave every invariant intact.
       </tr>
       <tr className="border-b">
         <td className="p-3">Mechanically verified translator (Isabelle/HOL)</td>
-        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> universal soundness theorem</td>
+        <td className="p-3"><Check className="inline h-4 w-4 text-emerald-500" /> Isabelle/HOL, zero sorry</td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
         <td className="p-3"><CircleX className="inline h-4 w-4 text-fd-muted-foreground" /></td>
@@ -329,7 +327,9 @@ failures land in `Either[VerifyError, _]`.
 
 A static classifier routes each proof obligation to the solver that fits.
 Z3 owns first-order invariants and preservation; Alloy owns powerset (`^`)
-and `always`/`eventually`. The two coverage areas do not overlap.
+and `always`/`eventually`. The two coverage areas do not overlap, and a
+construct that falls outside both surfaces as a `translator_limitation`
+diagnostic rather than slipping through as a silent pass.
 
 Per-check timeouts run inside the solver. SIGINT propagates through fiber
 cancel to `Z3 Context.interrupt()`. `--parallel n` dispatches via
@@ -345,13 +345,7 @@ from the solver model.
 
 `--dump-vc <dir>` writes per-check `.smt2` and `.als` files alongside
 `verdicts.json`. `--explain` extracts the Z3 unsat core and surfaces the
-contributing spec spans. The translator's correctness is mechanically
-validated by a universal soundness theorem in
-`proofs/isabelle/SpecRest/Soundness.thy`.
-
-<Callout type="info">
-  The verifier is opinionated about scope. Plain first-order Z3 handles the bulk of operation
-  contracts; powerset and bounded temporal logic route to Alloy with a default scope of 5.
-  Constructs that fall outside both surface as <code>translator_limitation</code> diagnostics
-  rather than silent passes.
-</Callout>
+contributing spec spans. The translator itself is proved correct in Isabelle/HOL,
+by `translate_soundness_standalone` (`DirectSound.thy`) and
+`cat_h_progress_and_preservation_direct` (`DirectPreservation.thy`), both closing
+with zero `sorry`.
