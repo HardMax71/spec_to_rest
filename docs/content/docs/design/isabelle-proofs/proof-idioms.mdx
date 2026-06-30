@@ -1,0 +1,201 @@
+---
+title: Proof idioms
+description: Nine measured do's and don'ts for writing SpecRest proofs that build fast and extract to clean Scala.
+---
+
+These rules come from the performance journal,
+[`proofs/isabelle/SPEEDUP.md`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SPEEDUP.md).
+Each has a measured cost behind it, mostly from PRs
+[#241](https://github.com/HardMax71/spec_to_rest/pull/241),
+[#299](https://github.com/HardMax71/spec_to_rest/pull/299), and
+[#301](https://github.com/HardMax71/spec_to_rest/pull/301).
+
+## 1. Use `string_in_list X xs`, not `list_ex (λn. n = X) xs`
+
+`list_ex` is polymorphic. When you embed a polymorphic higher-order function with a lambda inside a
+`fun`, Isabelle's pattern-overlap analysis blows up. In #299, four eight-line `fun`s with this pattern
+cost about 106 s of elaboration each. Switching to the monomorphic `string_in_list` primrec (in
+`Names.thy`) dropped each one to under a second.
+
+```text
+(* DON'T *)
+fun preservedRelationOf :: "String.literal list ⇒ expr ⇒ String.literal list" where
+  "preservedRelationOf stateFields (BinaryOpF BEq _ _ _) =
+     (if list_ex (λn. n = name) stateFields then [name] else [])"
+| ...
+
+(* DO *)
+fun preservedRelationOf :: "String.literal list ⇒ expr ⇒ String.literal list" where
+  "preservedRelationOf stateFields (BinaryOpF BEq _ _ _) =
+     (if string_in_list name stateFields then [name] else [])"
+| ...
+```
+
+If you need membership on a list of something other than `String.literal`, write a monomorphic
+primrec for that element type. The cost of the extra function is dwarfed by the cost of a
+polymorphic-HOF call inside a `fun`.
+
+## 2. `fun` for recursion, `definition + case` for shape recognition
+
+`fun` generates an exhaustiveness proof, a termination proof, a `.simps` collection, an induction
+principle, and case / elim rules. For a recursive function over `expr` (27 constructors), that is
+appropriate and the generated rules earn their keep.
+
+For a non-recursive shape recognizer (`decomposeAtom`, `createPatternOf`, the recognizers now in
+`IR_Recognizers.thy`), none of those auto-generated artifacts gets used in any proof, and
+`definition + case` skips all of it.
+
+```text
+(* DON'T (115 s elaboration in #299) *)
+fun createPatternOf :: "String.literal list ⇒ expr ⇒ String.literal list" where
+  "createPatternOf stateFields
+     (BinaryOpF BEq (PrimeF (IdentifierF name _) _)
+                    (BinaryOpF BAdd l r sp) _) =
+        (if string_in_list name stateFields
+            ∧ containsPreInPlusChain (BinaryOpF BAdd l r sp) name
+         then [name] else [])"
+| "createPatternOf _ _ = []"
+
+(* DO (sub-second) *)
+definition createPatternOf :: "String.literal list ⇒ expr ⇒ String.literal list" where
+  "createPatternOf stateFields e ≡
+     (case e of
+        BinaryOpF BEq (PrimeF (IdentifierF name _) _) rhs _ ⇒
+          (case rhs of
+             BinaryOpF BAdd _ _ _ ⇒
+               (if string_in_list name stateFields
+                   ∧ containsPreInPlusChain rhs name
+                then [name] else [])
+           | _ ⇒ [])
+      | _ ⇒ [])"
+```
+
+The rule of thumb: if a `fun` body never appears as `using foo.simps`,
+`by (induction rule: foo.induct)`, or `by (cases x rule: foo.cases)` in any proof, it is a
+`definition`.
+
+## 3. `primrec` for structural recursion on a single ADT
+
+When the function is recursive but the recursion is purely structural on one argument and one ADT,
+prefer `primrec` over `fun`. It skips the `lexicographic_order` termination search, which is
+NP-complete and exponential in the number of mutual functions (see
+[Bulwahn, Krauss, Nipkow, FroCoS 2007](https://www21.in.tum.de/~krauss/papers/lexicographic-orders.pdf)).
+
+```text
+(* DO *)
+primrec string_in_list :: "String.literal ⇒ String.literal list ⇒ bool" where
+  "string_in_list y [] = False"
+| "string_in_list y (x # xs) = (x = y ∨ string_in_list y xs)"
+```
+
+## 4. Pick the proof method that knows the shape of your goal
+
+`blast` is a generic intuitionistic prover for first-order goals. It is powerful, but it searches a
+huge inference space when it does not know what is relevant. In #299, a `by blast` on the final
+soundness theorem ran for 410 s because the relevant lemma returns `lower e ≠ None` while the goal was
+`∃e'. lower e = Some e'`: the not-equal-None to exists-equals-Some conversion sent `blast` into the
+weeds.
+
+| Goal shape | Preferred method |
+| ---------- | ---------------- |
+| `x ≠ None ⇒ ∃y. x = Some y` style | `by (auto simp: not_None_eq)` |
+| apply a specific lemma after some rewriting | `by (metis lemma1 lemma2)`, two to five explicit facts |
+| pure equational reasoning | `by simp` / `by (simp add: foo_def)` |
+| case split on one ADT then per-case `auto` | `by (cases x) auto` |
+| first-order with a known set of intro/dest rules | `by (auto intro: ..., dest!: ...)` |
+| nothing else works and you have time to wait | `by blast` |
+
+Always pass `blast` the smallest set of facts you can. `using` followed by `by blast` is fine when
+blast knows where to look; `by blast` alone is the red flag.
+
+## 5. Datatype derivation pruning
+
+Top of every datatype:
+
+```text
+datatype (plugins only: code size) expr = ...
+```
+
+This skips the quickcheck, nitpick, transfer, and lifting derivations (the BNF plugins documented in
+the Isabelle [`datatypes`](https://isabelle.in.tum.de/dist/Isabelle2025-2/doc/datatypes.pdf) manual),
+none of which the proofs use.
+PR #241 measured 22 s saved by adding the attribute to the 14 datatypes it touched; every datatype in
+the tree now carries it.
+
+## 6. Don't let dead theory code rot in the session
+
+An `enc_*` / `dec_*` family plus a `json` datatype lived in `IR.thy` for about three months as
+scaffolding for a never-shipped extraction PR. They were not exported, not referenced in any proof,
+and not used by any Scala consumer, and they added roughly 30 s to the build. PR #299 deleted them.
+
+Audit periodically. Anything in the `core/` theories should be either exported in `Codegen.thy` or
+referenced (directly or transitively) by a soundness lemma. If neither, delete it.
+
+## 7. `threads = 0` in `ROOT`, never a fixed integer
+
+```text
+session SpecRest_IR in core = HOL +
+  options [document = false, threads = 0]
+```
+
+`threads = 0` auto-picks based on `nproc`. Hand-pinning to `4` left twelve cores idle on a typical dev
+machine. PR #299 went from parallelism factor 1.63 to 3.12 on this change alone.
+
+## 8. When you move a definition between theories, fix the import lists
+
+If you move a definition from one theory file into another, the importer's simp set no longer carries
+its `.simps`, and downstream `by simp` calls that relied on them fail. The shape recognizers, for
+instance, live in `IR_Recognizers.thy`, not in the base `IR.thy`; a proof that unfolds
+`createPatternOf.simps` has to import `IR_Recognizers` directly or pull the `IR_Analysis` umbrella
+that re-exports it.
+
+```text
+theory MyProof
+  imports IR_Analysis
+begin
+```
+
+Before committing a move, grep for `<name>.simps` / `<name>.induct` / `<name>_def` across the
+soundness and semantics theories so you catch every site that needs the new import.
+
+## 9. Beware deep nested patterns: they extract to cross-product Scala
+
+`Code_Target_Scala` compiles each `case` arm into an exhaustive `match` over the matched type's
+constructors. A pattern that nests three or four constructor levels expands as the cross product of
+those constructors. For `expr` (27 constructors), one nested pattern quickly becomes 100 to 200
+generated arms even when the Isabelle source is two lines.
+
+PR #301 review caught two cases:
+
+- `BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _`: the naive formulation extracted to a 200-plus-arm
+  cross product (op times left-shape times right-shape).
+- a recursive identity fallback such as `fun stripAddSubIntLit e = e`: unfolds to per-constructor
+  identity reconstruction (about 80 arms, each rebuilding the same shape it matched).
+
+For the `BIn` shape, switch to a shallow split-case plus `∧`, where each inner `case` is one
+constructor level deep and short-circuits on the first miss:
+
+```text
+(* DON'T: cross product *)
+case c of
+  BinaryOpF BIn (IdentifierF i _) (IdentifierF s _) _ ⇒
+    i = inputName ∧ s = stateName
+| _ ⇒ False
+
+(* DO: shallow split-case *)
+case c of
+  BinaryOpF op l r _ ⇒
+    (case op of BIn ⇒ True | _ ⇒ False) ∧
+    (case l of IdentifierF i _ ⇒ i = inputName | _ ⇒ False) ∧
+    (case r of IdentifierF s _ ⇒ s = stateName | _ ⇒ False)
+| _ ⇒ False
+```
+
+For the recursive identity fallback there is no compact extraction unless you avoid the recursion
+entirely. If the function has a single Scala consumer, don't lift it: the extracted bloat dominates
+the lift's value.
+
+As a rule of thumb, before committing a lift, run the regeneration pipeline and `wc -l` the new
+`def`. If it is over 80 lines for a function that was under 10 in hand-written Scala, the lift is
+paying for itself in maintainability but not in line count; reconsider whether single source of truth
+is worth the generated bloat at that site.
