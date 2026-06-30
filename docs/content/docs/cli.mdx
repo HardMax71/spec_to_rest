@@ -70,7 +70,7 @@ The resolver never warns-and-falls-back to a default target.
   `--no-tests`. See [Test Generation](/pipelines/test-generation).
 - `--with-synthesis`: splice verified Dafny bodies (translated to the target
   language) into the emitted project. Requires `synth verify` to have populated
-  the cache. See [LLM Integration](/synth/llm-integration).
+  the cache. See [Synthesis Pipeline](/synth).
 - `--allow-skeletons`: fall back to unverified skeleton bodies (from
   `synth verify --fallback`) when the verified cache misses. Generated handlers
   halt at runtime with a Dafny `HaltException` when invoked.
