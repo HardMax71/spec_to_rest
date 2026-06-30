@@ -34,7 +34,7 @@ ANTHROPIC_API_KEY=sk-ant-... \
       required: true,
     },
     '--model M': {
-      description: '`gpt-*` routes to OpenAI; otherwise Anthropic.',
+      description: '`gpt-*` routes to OpenAI, `claude-*` to Anthropic; any other name is rejected.',
       type: 'string',
       default: 'claude-sonnet-4-6',
     },

@@ -5,6 +5,8 @@ enum ModelFamily derives CanEqual:
   case OpenAI
 
 object ModelFamily:
-  def of(model: String): ModelFamily =
-    if model.toLowerCase.startsWith("gpt") then ModelFamily.OpenAI
-    else ModelFamily.Anthropic
+  def of(model: String): Option[ModelFamily] =
+    val m = model.toLowerCase
+    if m.startsWith("gpt") then Some(ModelFamily.OpenAI)
+    else if m.startsWith("claude") then Some(ModelFamily.Anthropic)
+    else None

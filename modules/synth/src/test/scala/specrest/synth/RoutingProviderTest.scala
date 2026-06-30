@@ -36,3 +36,25 @@ class RoutingProviderTest extends CatsEffectSuite:
     yield result match
       case Left(err) => assert(err.message.contains("gpt-5"), s"message: ${err.message}")
       case Right(r)  => fail(s"expected ProviderError for the unconfigured family, got $r")
+
+  test("a model that matches no known family fails closed with a ProviderError"):
+    for
+      anthropic <- MockProvider.succeeding("anthropic-body", model = "claude-sonnet-4-6")
+      openai    <- MockProvider.succeeding("openai-body", model = "gpt-5")
+      router = new RoutingProvider(
+                 Map(
+                   ModelFamily.Anthropic -> anthropic,
+                   ModelFamily.OpenAI    -> openai
+                 )
+               )
+      result <- router.complete(req("gemini-pro"))
+    yield result match
+      case Left(err) => assert(err.message.contains("gemini-pro"), s"message: ${err.message}")
+      case Right(r)  => fail(s"expected ProviderError for an unknown family, got $r")
+
+  test("ModelFamily.of classifies by prefix and returns None for the rest"):
+    assertEquals(ModelFamily.of("gpt-5"), Some(ModelFamily.OpenAI))
+    assertEquals(ModelFamily.of("gpt-4o-mini"), Some(ModelFamily.OpenAI))
+    assertEquals(ModelFamily.of("claude-opus-4-8"), Some(ModelFamily.Anthropic))
+    assertEquals(ModelFamily.of("o3"), None)
+    assertEquals(ModelFamily.of("gemini-pro"), None)

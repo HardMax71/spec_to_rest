@@ -180,7 +180,7 @@ object Synth:
 
   private def routerResource(models: List[String]): Resource[IO, LlmProvider] =
     models
-      .map(ModelFamily.of)
+      .flatMap(model => ModelFamily.of(model).toList)
       .distinct
       .traverse(family => providerForFamily(family).map(family -> _))
       .map(pairs => new RoutingProvider(pairs.toMap))

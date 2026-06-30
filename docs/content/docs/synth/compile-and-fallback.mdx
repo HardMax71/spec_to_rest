@@ -59,8 +59,9 @@ escalates along two axes before giving up: prompt strategy (`ZeroShot` $\to$
 `ChainOfThought` $\to$ `PlanThenImplement`) and model (configured model $\to$
 each `--escalate-to MODEL`, in order). The model axis may cross provider
 families: each ladder entry is routed to its own client by name (`gpt-*` to
-OpenAI, otherwise Anthropic), so a run can start on Claude and escalate to
-GPT within one `--fallback` pass, given both API keys. All attempts share one
+OpenAI, `claude-*` to Anthropic; any other name is rejected), so a run can
+start on Claude and escalate to GPT within one `--fallback` pass, given both
+API keys. All attempts share one
 budget envelope (`sharedCostCapUsd`, default \$1.00). When every attempt fails,
 the orchestrator emits a labelled fallback skeleton: a Dafny body with
 `expect false, "FALLBACK SKELETON [op=...]: not verified..."` plus
