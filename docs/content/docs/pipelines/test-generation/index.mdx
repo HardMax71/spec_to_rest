@@ -1,0 +1,141 @@
+---
+title: Intro
+description: compile emits a native behavioral/stateful/structural conformance suite (per target language) + a bearer-token-guarded admin router from spec ensures/requires/invariants
+---
+
+`spec-to-rest compile` produces a property-test conformance suite alongside the
+generated service (**emitted by default**; pass `--no-tests` to opt out),
+rendered in the target's own language: pytest + Hypothesis +
+Schemathesis for `python-fastapi-*`, Vitest + fast-check for `ts-express-*`, `go test` +
+rapid for `go-chi-*` (all nine targets: each language by postgres / sqlite / mysql). Each
+`ensures` clause becomes a positive property test; each `<input> in <state>` requires clause
+becomes a negative test (asserting 4xx); each global invariant becomes a post-operation
+check. The examples on this page show the Python (fastapi) rendering; see
+[Native multi-language emission](#native-multi-language-emission) for how the same
+spec-derived logic renders into TypeScript and Go.
+
+Looking for the design rationale and the full vision (structural + behavioral + stateful
+layers, conformance runner, mutation testing)? See
+[Test Generation Pipeline](/research/test_generation/strategy). This page documents what test
+emission actually delivers today; the nightly mutation-testing CI gate that
+keeps the suite honest is documented separately on the
+[Mutation Testing](/pipelines/mutation-testing) page.
+
+## Quick start
+
+```bash
+sbt "cli/run compile --out /tmp/my-service fixtures/spec/url_shortener.spec"
+cd /tmp/my-service
+cp .env.example .env
+
+# Full docker-compose pipeline (boot, run all 3 layers, tear down):
+make test-conformance-docker PROFILE=smoke
+
+# Or against an already-running service:
+export ADMIN_TOKEN=$(openssl rand -hex 32)
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+make test-conformance PROFILE=smoke
+```
+
+The generated `docker-compose.yml` already forwards `ADMIN_TOKEN` from the host
+environment to the app container, and `make test-conformance-docker` generates a
+per-run token automatically, so the dockerized path needs no manual setup.
+
+The `ADMIN_TOKEN` env var is required when running by hand: tests use the generated
+admin router (`/admin/reset` and `/admin/state`) to control state and read it back,
+and the conformance client attaches the `Authorization: Bearer $ADMIN_TOKEN` header
+automatically from the environment. The service reads the token through its typed
+config (pydantic `Settings` field `admin_token`). Production deployments leave it
+unset, which is the default: with no token configured, every `/admin` route answers
+404 and the surface is invisible.
+
+## Native multi-language emission
+
+The conformance *logic* (which clauses become tests, the skip algebra, the
+state/output scoping, the strategy derivation from IR types) is single-sourced and
+language-agnostic. Only the leaf rendering varies, behind the `Backend.scala` seam in
+`modules/testgen`:
+
+- `ExprBackend`: translates an IR expression to the target language
+  (`ExprToPython` / `TsExprBackend` / `GoExprBackend`). Each backend returns
+  the shared `Translated.Emit(text) | Translated.Skip(reason, span)` ADT, a
+  language-agnostic result, despite the historical `ExprPy` name (renamed in #308).
+- `Builtins` (in `modules/ir`): the single registry of spec-language
+  builtin functions (`len`, `dom`, `now`, `hash`, `minutes`/`hours`/`seconds`,
+  `abs`, `sum`, ...). Each entry carries per-backend emit lambdas plus import
+  metadata. Adding a new builtin is one struct entry, automatically picked up by
+  all three backends and the lint allowlist via `Builtins.names`.
+- `StrategyBackend`: renders a spec type into a generator
+  (`PythonHypothesisStrategy` `st.*` / `TsFastCheckStrategy` `fc.*` /
+  `GoRapidStrategy` `rapid`).
+- `HarnessTemplates`: the language-native scaffold (pytest+conftest /
+  Vitest+`_client.ts` / `go test`+`conf_*.go`), selected by `TestBackend`.
+
+The `Behavioral` / `Stateful` / `Structural` decision predicates are shared by all
+three; the parallel `Ts*` / `Go*` emitters reuse them and only swap the rendered
+tokens. The **Python (fastapi) path is held byte-identical** through every slice, so it
+serves as the differential oracle: CI runs the Python suite and the native suite against
+the same contract, and any behavioral disagreement is a mechanically-caught translator
+bug.
+
+| Target | Behavioral / stateful | Structural | Run |
+|---|---|---|---|
+| `python-fastapi-*` | pytest + Hypothesis | Schemathesis (full OpenAPI fuzzing + spec-derived checks) | `python tests/run_conformance.py <profile>` / `make test-conformance` |
+| `ts-express-*` | Vitest + fast-check | structural-lite (reuse the Strategies seam: type-valid input per non-stub op, assert no 5xx) | `node tests/run_conformance.mjs <profile>` / `npm test` |
+| `go-chi-*` | `go test` + rapid | structural-lite (same) | `bash tests/run_conformance.sh <profile>` / `go test -tags conformance ./tests/...` |
+
+Structural-lite (ts/go): schemathesis has no TS/Go peer, so rather than reimplement
+an OpenAPI/JSON-Schema fuzzer the structural phase reuses the IR `Strategies` seam: for
+every non-stub operation it generates type-valid inputs, calls with a per-case
+`/admin/reset`, and asserts the server did not 5xx (schemathesis's core
+"documented, no server error" check, minus full schema validation). Fail-loud stubs are
+honest-skipped exactly as the Python schemathesis renderer `schema.exclude(...)`s them.
+
+The `/admin/*` reset/state/seed contract is identical across targets; only its
+*implementation* is stack-specific (`AdminRouter.scala` to FastAPI
+`app/routers/admin.py`, `AdminRouterTs.scala` to Express, `AdminRouterGo.scala` to Go).
+The router is emitted by codegen as a credentialed ops surface of the generated
+service (state export, data import, re-initialize), so it is present in every build,
+including `--no-tests`, and is documented in the emitted OpenAPI under an
+`AdminBearer` security scheme. There is no build-time gate: every `/admin` route
+requires `Authorization: Bearer $ADMIN_TOKEN`; wrong or missing credentials get 401,
+and with no token configured the routes answer 404 (fail-closed).
+
+Each backend's per-target page documents the exact file layout and run commands:
+[python-fastapi](/targets/python/fastapi/postgres) ·
+[ts-express](/targets/ts/express/postgres) · [go-chi](/targets/go/chi/postgres).
+
+## What gets generated
+
+The table below is the `python-fastapi-*` layout; the Vitest and `go test`
+backends emit the analogous set in their own conventions (see the per-target pages and
+[Native multi-language emission](#native-multi-language-emission) above).
+
+<Collapsible title="Generated files, full table (python-fastapi)">
+
+| File | Source | What it is |
+|---|---|---|
+| `app/routers/admin.py` | `AdminRouter.scala` | `/admin/reset` truncates entity tables; `/admin/state` returns spec state as JSON; `/admin/seed/<entity>` (per entity that participates in a `TransitionDecl`) inserts a row directly so transition tests can drive entities into a chosen status. All endpoints require `Authorization: Bearer $ADMIN_TOKEN`; with no token configured they answer 404. |
+| `tests/__init__.py` | empty | makes `tests` a Python package |
+| `tests/conftest.py` | static template | `httpx` client + session-scoped fixture that **skips the whole suite** with a clear message if the service is unreachable, the admin surface is unconfigured (404), or the token is missing/mismatched (401) |
+| `tests/predicates.py` | rendered from `ir.predicates` | `_powerset` plus one Python helper per spec/preamble predicate (auto-derived from the body) |
+| `tests/strategies.py` | `Strategies.scala` | one `def strategy_<type>(): return ...` per `TypeAliasDecl` and `EnumDecl`, plus one `def strategy_<entity>()` (returning `st.fixed_dictionaries`) per entity that participates in a `TransitionDecl` |
+| `tests/strategies_user.py` | static template | empty stub for user-supplied strategy functions referenced from `<Type>.strategy = "module:symbol"` convention rules. Preserved across re-compile. |
+| `tests/redaction.py` | static template | `redact(strategy)` wrapper + `_RedactedStr` mask class for sensitive Hypothesis values (M5.8) |
+| `tests/test_behavioral_<service>.py` | `Behavioral.scala` | the property tests themselves |
+| `tests/test_stateful_<service>.py` | `Stateful.scala` | a Hypothesis `RuleBasedStateMachine` exercising multi-step operation sequences |
+| `tests/test_structural_<service>.py` | `Structural.scala` | Schemathesis-driven structural tests: schema fuzzing + spec-derived custom checks + OpenAPI-Links state machine |
+| `tests/run_conformance.py` | static template | three-phase orchestrator (structural $\to$ behavioral $\to$ stateful) with JUnit XML output and a unified exit code |
+| `tests/_testgen_skips.json` | testgen | machine-readable list of clauses that were not turned into tests, with reasons |
+| `pytest.ini` | static template | disables `pytest-xdist` parallelism (admin-router state is global) |
+
+</Collapsible>
+
+The rest of this section follows the suite layer by layer.
+[Behavioral and transition tests](/pipelines/test-generation/behavioral) are the per-operation
+property tests and the M5.9 state-machine transitions.
+[Stateful and structural tests](/pipelines/test-generation/stateful-and-structural) cover the
+Hypothesis state machine, the Schemathesis layer, and the conformance runner.
+[Strategies and sensitive fields](/pipelines/test-generation/strategies) are input generation,
+built-in predicates, and redaction. [Coverage and limits](/pipelines/test-generation/coverage-and-limits)
+holds the fixture coverage table, the skips file, runtime requirements, and what testgen does not do.

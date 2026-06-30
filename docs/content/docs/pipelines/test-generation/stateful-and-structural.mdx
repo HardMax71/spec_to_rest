@@ -1,0 +1,322 @@
+---
+title: Stateful and structural tests
+description: The Hypothesis state machine (M5.2), the Schemathesis structural layer (M5.3), and the conformance runner (M5.4).
+---
+
+## Stateful tests (M5.2)
+
+Alongside the per-clause behavioral tests, testgen emits one
+`tests/test_stateful_<service>.py` containing a Hypothesis
+[`RuleBasedStateMachine`](https://hypothesis.readthedocs.io/en/latest/stateful.html)
+that exercises multi-step operation sequences against the live SUT. Each spec operation
+becomes an `@rule` performing the real HTTP call. Entity ids returned from `Create`-classified
+operations flow into other rules through `Bundle`s, so a `Resolve` rule receives a code that
+was just produced by a `Shorten` rule, and a `Delete` rule consumes the code from the bundle.
+Global invariants run after every step against `/admin/state`.
+
+```python
+class UrlShortenerStateMachine(RuleBasedStateMachine):
+    url_mapping_ids = Bundle("url_mapping_ids")
+
+    @initialize()
+    def _reset(self):
+        client.post("/admin/reset")
+
+    @rule(target=url_mapping_ids, url=strategy_long_url())
+    def shorten(self, url):
+        response = client.post("/shorten", json={"url": url})
+        assert response.status_code == 201, response.text
+        return response.json()["code"]
+
+    @rule(code=url_mapping_ids)
+    def resolve(self, code):
+        response = client.get(f"/{code}")
+        assert response.status_code == 302, response.text
+
+    @rule(code=consumes(url_mapping_ids))
+    def delete(self, code):
+        response = client.delete(f"/{code}")
+        assert response.status_code == 204, response.text
+
+    @invariant()
+    def invariant_all_ur_ls_valid(self):
+        post_state = client.get("/admin/state").json()
+        assert all(is_valid_uri(post_state["store"][c]) for c in post_state["store"])
+
+TestStatefulUrlShortener = UrlShortenerStateMachine.TestCase
+```
+
+### Bundle inference
+
+| Operation kind (convention layer) | Role in the state machine |
+|---|---|
+| `Create` / `CreateChild` (returns an entity) | `@rule(target=<entity>_ids, ...)`, pushes the response id into the bundle |
+| `Delete` (id-typed input) | parameter via `consumes(<entity>_ids)`, pops the id |
+| Read / Update / Replace / Transition / SideEffect (id-typed input) | parameter via `<entity>_ids` (non-consuming draw) |
+| any operation with no entity-id input or output | parameter-less rule that just exercises the endpoint |
+
+The `<entity>_ids` bundle name follows the entity's snake-cased name (e.g., `url_mapping_ids`,
+`todo_ids`). The id projection from the response uses the entity's primary-key field
+(`id` if present, otherwise the first declared field, for `url_shortener` this is `code`).
+
+### Per-status bundles for `transition`-driven entities (#153)
+
+When an entity has a `TransitionDecl` over an enum field AND every `Create` operation
+deterministically sets the initial status (e.g., `todo.status = TODO` in the ensures),
+testgen splits the single `<entity>_ids` bundle into one bundle per enum value:
+
+| Entity | Status enum value | Bundle name |
+|---|---|---|
+| `Todo` | `TODO` | `todo_todo_ids` |
+| `Todo` | `IN_PROGRESS` | `todo_in_progress_ids` |
+| `Todo` | `DONE` | `todo_done_ids` |
+| `Todo` | `ARCHIVED` | `todo_archived_ids` |
+
+Rules then route ids through bundles by status:
+
+- Create: `@rule(target=<initial-status-bundle>, ...)`, pushes the new id into the
+  bundle for the status the ensures sets.
+- Unguarded transition (no `when` clause): one Python rule per `TransitionRule`,
+  named `<via>_from_<from>_to_<to>`. Decorator is
+  `@rule(target=<to>_bundle, <id>=consumes(<from>_bundle))`. The body asserts strict
+  success and `return`s the id, Hypothesis transfers it from `<from>` into `<to>`.
+  Including `_to_<to>` in the function name keeps each rule unique even when several
+  rules share the same via and `from` but differ in `to`. An operation that fires from
+  multiple `from`-states (e.g., `Archive` from both `TODO` and `DONE`) emits one rule
+  per source bundle (`archive_from_todo_to_archived`, `archive_from_done_to_archived`).
+- Guarded transition (has a `when` clause that bundle membership cannot guarantee):
+  same `consumes`+`target` shape, but the body branches:
+  ```python
+  if response.status_code == <success>:
+      return id              # SUT accepted -> id moves from -> to
+  elif 400 <= response.status_code < 500:
+      return multiple()      # guard failed -> id is consumed and dropped (no move)
+  else:
+      assert False, ...
+  ```
+  `multiple()` with no arguments tells Hypothesis "no result"; the id leaves the source
+  bundle without being added to the target, so bundle/SUT bookkeeping stays consistent.
+- Read / Update / Replace / SideEffect with an id parameter:
+  - If `requires` is just `<id> in <state>` (membership only), the rule draws from
+    `st.one_of(<all-status-bundles>)` and asserts strict success, bundle membership
+    fully covers the precondition by construction.
+  - If `requires` includes `<id> in <state> and <state>[id].<transition-field> (= X | in {X, Y, ...})`,
+    the rule draws from `st.one_of(<bundle X>, <bundle Y>, ...)` and is strict.
+    Repeated conjunctive restrictions on the same field are intersected (AND semantics).
+  - If `requires` includes any unrecognized non-key conjunct (or a `state[id].field` access
+    on a field that isn't the entity's transition field), the rule draws from
+    `st.one_of(<all-status-bundles>)` non-consuming and falls back to **loose** assertion.
+- Delete:
+  - With a recognized status restriction that narrows to a single bundle, `consumes(<bundle>)`, strict.
+  - With just `<id> in <state>` membership, a multi-bundle restriction, or any unrecognized
+    requires conjunct, non-consuming `st.one_of(...)` + loose. (`consumes(st.one_of(...))` is
+    not supported by Hypothesis, and consuming an id that the SUT may reject would leak
+    bundle/SUT state.)
+
+Entities without a `TransitionDecl` over an enum field, or whose Create operation
+doesn't deterministically set an initial status, fall back to the legacy single-bundle
+shape. `url_shortener` and `safe_counter` outputs stay byte-identical.
+
+### Strict vs loose status assertions
+
+For each rule, testgen decides whether to assert the success status strictly or to also
+accept any 4xx (the SUT rejecting because its own preconditions failed):
+
+- Strict (`assert response.status_code == <success>`): used for `Create` rules,
+  unguarded transition rules (bundle membership guarantees the precondition by
+  construction), and rules whose every `requires` clause is either trivially `true` or
+  a `<input> in <state>` pattern that is satisfied by construction via bundle membership.
+- Loose (`if-elif`-`else`, accepting `<success>` or `400..499`): used for rules with
+  any other state-dependent precondition (e.g., transition guards like
+  `todos[id].status = TODO` that aren't recognised by the per-status splitter, or
+  `when`-clause time guards like `updated_at > completed_at`). A 4xx response there is
+  the SUT correctly rejecting an unsatisfied precondition, not a bug.
+
+### Settings
+
+Settings are attached to the state machine's `TestCase` (which the `TestStateful<Service>`
+alias refers to):
+
+```python
+<Service>StateMachine.TestCase.settings = settings(
+    max_examples=25,
+    stateful_step_count=20,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+)
+TestStateful<Service> = <Service>StateMachine.TestCase
+```
+
+`deadline=None` is required because every step performs an HTTP round-trip; a per-step
+deadline trips on slow CI machines.
+
+### What stateful does not do (in M5.2)
+
+- It does **not** maintain a Python-side ghost model of state. The SUT, accessed via
+  `/admin/state`, is the model. This trades shrink-output detail for emitter
+  simplicity and avoids re-translating every `ensures` clause as a model update.
+- Per-rule ensures-asserts are handled by the behavioral tests, not duplicated here.
+  Stateful surfaces multi-step bugs via the `@invariant()` checks that run after every step.
+
+## Structural tests (M5.3)
+
+Alongside the per-clause behavioral tests and the hand-rolled stateful state machine,
+testgen emits a `tests/test_structural_<service>.py` that wires
+[Schemathesis](https://schemathesis.readthedocs.io/) to the project's `openapi.yaml`.
+Schemathesis fuzzes every `(method, path)` declared in the schema and validates
+responses against the OpenAPI shape. It catches wrong status codes, missing endpoints,
+content-type drift, and 5xx unhandled exceptions. The structural file is orthogonal
+to M5.2: the M5.2 stateful tests verify the spec contract; the M5.3 structural
+tests verify the schema contract.
+
+The generated file is self-contained: it reads `SPEC_TEST_BASE_URL` and `SPEC_TEST_PROFILE`
+from the environment, declares the three profiles inline (see [Profiles](#profiles)
+below), and validates `SPEC_TEST_PROFILE` against the allowed set with an explicit
+`ValueError` (no opaque `KeyError`):
+
+```python
+import os
+import schemathesis
+from hypothesis import HealthCheck, settings
+from tests.conftest import client
+
+BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
+PROFILE = os.environ.get("SPEC_TEST_PROFILE", "thorough")
+PROFILES = {
+    "smoke":      {"max_examples": 10,   "stateful_step_count": 3},
+    "thorough":   {"max_examples": 100,  "stateful_step_count": 10},
+    "exhaustive": {"max_examples": 1000, "stateful_step_count": 25},
+}
+if PROFILE not in PROFILES:
+    raise ValueError(f"Invalid SPEC_TEST_PROFILE={PROFILE!r}. Expected one of: {', '.join(sorted(PROFILES))}")
+_PROFILE = PROFILES[PROFILE]
+
+schema = schemathesis.openapi.from_path("openapi.yaml")
+
+def _check_invariant_metadata_consistent(response, case):
+    """invariant metadataConsistent: dom(store) = dom(metadata)"""
+    if response.status_code >= 500:
+        return
+    post_state = client.get("/admin/state").json()
+    assert set(post_state["store"].keys()) == set(post_state["metadata"].keys()), \
+        "invariant violated: metadataConsistent"
+
+_ALL_CHECKS = (_check_invariant_all_ur_ls_valid,
+               _check_invariant_metadata_consistent,
+               _check_invariant_click_count_non_negative)
+
+@schema.parametrize()
+@settings(max_examples=_PROFILE["max_examples"], deadline=None,
+          suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture])
+def test_api_structural(case):
+    client.post("/admin/reset")
+    response = case.call(base_url=BASE_URL)
+    if _ALL_CHECKS:
+        case.validate_response(response, checks=_ALL_CHECKS)
+    else:
+        case.validate_response(response)
+
+UrlShortenerLinksStateMachine = schema.as_state_machine()
+TestStructuralLinksUrlShortener = UrlShortenerLinksStateMachine.TestCase
+```
+
+### Profiles
+
+A single env-var, `SPEC_TEST_PROFILE`, picks the depth tier:
+
+| Profile | `max_examples` | `stateful_step_count` | Use case |
+|---|---|---|---|
+| `smoke` | 10 | 3 | pre-commit hook, fast feedback |
+| `thorough` (default) | 100 | 10 | CI on PRs |
+| `exhaustive` | 1000 | 25 | nightly / release gate |
+
+```bash
+SPEC_TEST_PROFILE=smoke pytest tests/test_structural_*.py -v
+```
+
+### Spec-derived custom checks
+
+For each global `invariant` that `ExprToPython` can translate, testgen emits one
+`def _check_invariant_<name>(response, case)` function. The check fetches
+`/admin/state` and asserts the translated predicate. Checks gate on
+`response.status_code < 500` so 5xx unhandled exceptions surface via Schemathesis's
+own `not_a_server_error` check rather than a stale state read.
+
+For `Create` operations whose `ensures` clauses reference only inputs and outputs
+(no `pre()`, no `state`, no `'`), testgen emits per-operation checks gated by
+`(case.path, case.method, response.status_code)`, these run only when Schemathesis
+hits the matching endpoint with a successful status code. Clauses that don't fit
+this shape are recorded under the new `structural_skipped` array of
+`tests/_testgen_skips.json`.
+
+### Reset between cases
+
+Before every parametrized case, `client.post("/admin/reset")` runs so global
+invariant checks stay meaningful across hundreds of fuzzed cases. The cost is one
+extra round-trip per case (~1 ms locally). The Links state machine, in contrast,
+fires Hypothesis's per-scenario `__init__` on its own, no manual reset hook needed.
+
+### Two state machines, by design
+
+The Schemathesis-built `as_state_machine()` infers links from response shapes and
+parameter-name matches against the OpenAPI document. The M5.2 hand-rolled
+`<Service>StateMachine` infers them from the spec's classified operations
+(`Create` $\to$ `Bundle.target`, `Delete` $\to$ `consumes`, etc.). Both run; Schemathesis
+fuzzes shapes the spec layer doesn't (e.g., body fields just outside the
+`where` constraint).
+
+### What structural does not do (in M5.3)
+
+- It does **not** emit explicit OpenAPI `links:` blocks; Schemathesis discovers
+  links via `Location` headers and parameter-name heuristics. Explicit Links
+  emission is tracked separately.
+- Entity-field `where` invariants (e.g., `len(value) >= 6`) are **not** translated to
+  custom checks; Schemathesis already validates them as part of OpenAPI schema
+  conformance at request and response time.
+- The structural skip rate on rich specs is high (~70-80% of `ensures` clauses
+  reference state or `pre()`/primes); that is by design, behavioral and stateful
+  layers cover those.
+
+## Conformance runner (M5.4)
+
+`tests/run_conformance.py` is a static Python orchestrator that runs the three layers
+sequentially against an already-running service, emits JUnit XML per phase, and
+aggregates a single exit code. The Makefile wraps it with two targets:
+
+```bash
+# Service must already be reachable at SPEC_TEST_BASE_URL
+make test-conformance PROFILE=smoke
+
+# Brings up docker compose, waits for /health, runs, tears down
+make test-conformance-docker PROFILE=thorough
+```
+
+Phase order is structural $\to$ behavioral $\to$ stateful. Each phase begins with
+`POST /admin/reset` (on top of the per-case resets in the test files
+themselves) so a wedged state from one phase cannot poison the next. The phase
+glob is expanded inside the runner; pytest receives concrete paths, so `pytest`'s
+own collection-error path doesn't trigger when a phase has no matching files (a
+service with no entities legitimately has no stateful tests).
+
+| Profile | `max_examples` | Use case |
+|---|---|---|
+| `smoke` | 10 | pre-commit / fast feedback |
+| `thorough` (default) | 100 | CI on PRs |
+| `exhaustive` | 1000 | nightly cron |
+
+JUnit XML lands under `results/<phase>-<profile>.xml`. The generated GitHub Actions
+workflow (`.github/workflows/ci.yml`) calls `make test-conformance` after starting the
+service, picks the profile from the event type
+(`exhaustive` on `schedule`, `thorough` otherwise), and uploads `results/` as an
+artifact. Cron is wired at `0 2 * * *` for the nightly exhaustive run.
+
+Exit codes:
+
+- `0`, all three phases passed
+- `1`, at least one phase failed
+- `2`, service unreachable, admin token missing or rejected, or invalid `PROFILE`
+
+The generated `docker-compose.yml` forwards `ADMIN_TOKEN` from the host environment
+to the app container, and `make test-conformance-docker` mints a per-run token before
+bringing the stack up, so no manual edit is required (the by-hand `export ADMIN_TOKEN`
+in the quick-start is only needed against a service you started yourself).
