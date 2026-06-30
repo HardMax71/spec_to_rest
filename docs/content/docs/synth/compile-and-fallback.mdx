@@ -57,8 +57,11 @@ on a `commit` boundary is tracked as a follow-up issue.
 When CEGIS aborts on its first attempt, M6.6's `FallbackOrchestrator`
 escalates along two axes before giving up: prompt strategy (`ZeroShot` $\to$
 `ChainOfThought` $\to$ `PlanThenImplement`) and model (configured model $\to$
-each `--escalate-to MODEL`, in order). All attempts share one budget
-envelope (`sharedCostCapUsd`, default \$1.00). When every attempt fails,
+each `--escalate-to MODEL`, in order). The model axis may cross provider
+families: each ladder entry is routed to its own client by name (`gpt-*` to
+OpenAI, otherwise Anthropic), so a run can start on Claude and escalate to
+GPT within one `--fallback` pass, given both API keys. All attempts share one
+budget envelope (`sharedCostCapUsd`, default \$1.00). When every attempt fails,
 the orchestrator emits a labelled fallback skeleton: a Dafny body with
 `expect false, "FALLBACK SKELETON [op=...]: not verified..."` plus
 havoc-assigned (`out := *;`) return params. The skeleton translates cleanly
@@ -97,7 +100,7 @@ ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
       default: 'off',
     },
     '--escalate-to MODEL': {
-      description: 'Repeat for a multi-step ladder (e.g. `--escalate-to claude-opus-4-7 --escalate-to claude-opus-4-8`). The provider is fixed by the initial model, so every ladder entry must be the same family.',
+      description: 'Repeat for a multi-step ladder, which may cross provider families (e.g. `--escalate-to claude-opus-4-7 --escalate-to gpt-5`). Each entry routes to its own client by name, so a mixed ladder needs both API keys set.',
       type: 'string',
       default: '_empty_',
     },
@@ -235,5 +238,6 @@ fixture.
 
 ## What's still deferred
 
-For the live synthesis follow-up backlog (ORM reconciliation and cross-family
-escalation), see [Roadmap, Synthesis follow-ups](/roadmap#synthesis-follow-ups).
+For the live synthesis follow-up backlog (`ServiceState` ORM reconciliation,
+automatic hint discovery, pass@128 sampling, and Laurel-style assertion
+localization), see [Roadmap, Synthesis follow-ups](/roadmap#synthesis-follow-ups).
