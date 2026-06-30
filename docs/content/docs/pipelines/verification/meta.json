@@ -1,0 +1,10 @@
+{
+  "title": "Verification Engine",
+  "pages": [
+    "index",
+    "encoding",
+    "diagnostics",
+    "certificates",
+    "compile-gate"
+  ]
+}

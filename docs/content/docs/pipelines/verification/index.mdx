@@ -1,0 +1,80 @@
+---
+title: Intro
+description: Z3 and Alloy 6 verification of .spec files before code generation, the preservation VC, and how each check is routed to exactly one solver.
+---
+
+The verification engine model-checks a `.spec` file against its own invariants before any code is
+generated.
+
+## Solver routing
+
+Two solvers are wired in, each owning a disjoint class of checks:
+
+- [Z3 SMT solver](https://github.com/Z3Prover/z3) (via
+  [`tools.aqua:z3-turnkey`](https://github.com/tudo-aqua/z3-turnkey)) handles every
+  first-order-expressible check: invariant satisfiability, consistency, preservation, dead-op
+  detection. Unbounded proof, fast.
+- [Alloy 6](https://alloytools.org/) (in-process via `org.alloytools:org.alloytools.alloy.core`)
+  handles checks whose expression uses supported second-order constructs (currently powerset
+  `^s`) or temporal declarations. Bounded-scope search only, scope 5 by default, tunable with
+  `--alloy-scope`.
+
+A small `Classifier` decides the owner by structural inspection of the expression, so every check
+routes to exactly one backend with no overlap and no "try Z3 then Alloy" fall-through:
+
+```scala
+def classifyInvariant(inv: InvariantDecl): VerifierTool =
+  if inv.expr contains powerset (^s)
+  then VerifierTool.Alloy
+  else VerifierTool.Z3
+```
+
+Each `CheckResult` carries a `tool` field that surfaces in CLI output as `[z3]` or `[alloy]`, so the
+attribution is visible per line, and specs whose invariants are pure first-order (the vast majority)
+never invoke Alloy. The full per-feature inventory of the verifier, covering temporal, powerset, set
+algebra, JSON output, narration, cross-solver checking, and the trust dimension, lives in
+[Roadmap, Verification capabilities](/roadmap#verification-capabilities).
+
+## Preservation VC shape
+
+For every (operation, invariant) pair the engine asks Z3 whether the negated post-invariant
+is satisfiable under the pre-invariant, the operation's contract, and a synthesised frame:
+
+$$
+\textit{VC} \;=\; I(s) \;\land\; \textit{req}(\textbf{x}, s) \;\land\; \textit{ens}(\textbf{x}, s, s', \textbf{y}) \;\land\; \textit{frame}(s, s') \;\land\; \lnot\, I(s')
+$$
+
+`unsat` $\Rightarrow$ the invariant is preserved; `sat` $\Rightarrow$ a counterexample exists and the reporter decodes
+it; `unknown` $\Rightarrow$ the solver gave up (treated as a failure).
+
+Total checks per spec, with $N$ operations, $M$ invariants, $T$ temporal declarations:
+
+$$
+\textit{checks} \;=\; \underbrace{1}_{\text{global}} \;+\; \underbrace{2N}_{\textit{requires}\,/\,\textit{enabled}} \;+\; \underbrace{N \times M}_{\text{preservation}} \;+\; \underbrace{T}_{\text{temporal (Alloy)}}
+$$
+
+## Bounded Alloy scope
+
+Alloy's decision procedure explores instances within a scope, an upper bound on the number of atoms
+per signature. The default is 5; tune it with `--alloy-scope N`. Finding a counterexample within
+scope means a real bug; finding none means no bug up to scope N, which is not an unbounded proof. The
+CLI line reads, for example:
+
+```text
+  OK [alloy] global              sat      23ms
+```
+
+The `sat` there means "a model was found within scope 5"; a larger `--alloy-scope` searches deeper
+but costs more. `--dump-alloy` (mirroring `--dump-smt`) writes the generated Alloy `.als` source to
+stdout or a file, which is useful for debugging translator output or feeding a standalone Alloy
+Analyzer.
+
+The rest of this section follows the pipeline: [encoding](/pipelines/verification/encoding) lowers
+temporal blocks, frame and cardinality synthesis, scalar types, and sets to SMT and Alloy;
+[diagnostics and CLI](/pipelines/verification/diagnostics) covers reading a failure, the options and
+exit codes, and JSON output; [certificates and trust](/pipelines/verification/certificates) is VC
+dumps, unsat cores, and the mechanically verified translator; and
+[verify-as-gate](/pipelines/verification/compile-gate) runs the engine as a pre-codegen gate in
+`compile`. For where this sits in the wider compiler see [Architecture](/design/architecture), the
+[Convention Engine](/design/convention-engine) is the other half of the M1-M10 pipeline, and the
+research note on [Spec Verification](/research/spec_verification/techniques) records the full design.

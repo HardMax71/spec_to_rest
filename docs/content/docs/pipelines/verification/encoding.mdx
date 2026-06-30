@@ -1,0 +1,133 @@
+---
+title: Encoding
+description: How temporal blocks, smart frame synthesis, cardinality deltas, scalar types, and set theory lower to Z3 and Alloy.
+---
+
+## Temporal block (pragmatic v1)
+
+Services may declare temporal properties next to invariants:
+
+```text
+temporal everyUserReachable:
+  eventually(some u in users | u.active)
+
+temporal alwaysOK:
+  always(all u in users | u.verified)
+```
+
+The v1 semantics are bounded single-state, not trace-based:
+
+- `always(P)` is checked by asking whether $I \land \neg P$ is satisfiable; if Alloy finds any
+  $I$-satisfying state where $P$ is false within the current scope, the property is violated.
+- `eventually(P)` is checked by asking whether $I \land P$ is satisfiable; if Alloy cannot find
+  any $I$-satisfying state where $P$ holds within the current scope, the property is unreachable.
+- `fairness(op)` is not supported and raises a translator error; implementing it requires
+  trace-based verification via Alloy 6's `var`-sig mode, deferred to a future milestone.
+
+The bounded-scope caveat applies: absence of a counterexample is not a proof for all sizes.
+Increase `--alloy-scope` for deeper search.
+
+### Language convention
+
+Inside `ensures` clauses, unprimed state references are pre-state; primed references (`x'`)
+are post-state; `pre(x)` is an explicit-but-equivalent way to name the pre-state.
+
+### Smart frame synthesis
+
+For each state slot `X`, the translator classifies how the operation's `ensures` mentions it:
+
+| Pattern | Synthesised axiom |
+| --- | --- |
+| `X' = RHS`                         | none; the ensures fully specifies `X'` |
+| `k not in X'` (no other mention)   | $\forall k'.\ \textit{X\_dom\_post}(k') \Leftrightarrow \textit{X\_dom}(k') \land k' \neq k$ and $\textit{card\_X\_post} = \textit{card\_X} - 1$ |
+| `X'[k].f = v`                      | $\textit{X\_dom\_post}(k)$ plus $\forall k'.\ k' \neq k \to \textit{map\_post}(k') = \textit{map}(k')$; other fields of $\textit{map\_post}(k)$ equal the corresponding pre-state fields; $\textit{card\_X\_post} = \textit{card\_X}$ |
+| No Prime mention                   | $\forall k.\ \textit{X\_dom\_post}(k) \Leftrightarrow \textit{X\_dom}(k) \land \textit{map\_post}(k) = \textit{map}(k)$ and $\textit{card\_X\_post} = \textit{card\_X}$ |
+| Unclassified Prime mention         | no axiom (conservative; the under-constrained post-state admits more models, so the solver may return `sat` on the VC negation, surfacing as a spurious preservation failure the user investigates) |
+
+### Cardinality delta synthesis
+
+A structural pattern-matcher over `ensures` recognises three shapes on state relations and emits
+the corresponding cardinality-pre-post relationship:
+
+- $k \notin \textit{pre}(X) \land X' = \textit{pre}(X) + \{k \mapsto v\} \;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X} + 1$
+- $k \in \textit{pre}(X) \land X' = \textit{pre}(X) - \{k\} \;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X} - 1$
+- $X' = \textit{pre}(X)$ or frame-implied $\;\Rightarrow\; \textit{card\_X\_post} = \textit{card\_X}$
+
+Any other arithmetic shape leaves `card_X_post` uninterpreted, which is sound but weak;
+affected preservation VCs may come back `unknown`.
+
+### `dom(X) = dom(Y)` lowers extensionally
+
+`dom(X) = dom(Y)` and `dom(X) != dom(Y)` where both sides are `Call(dom, [state-relation])`
+lower to $\forall k.\ \textit{X\_dom}(k) \Leftrightarrow \textit{Y\_dom}(k)$ (and its negation). This is load-bearing for invariants like
+`metadataConsistent` in `url_shortener.spec`.
+
+## Scalar types
+
+Each spec primitive maps to a Z3 theory sort. Integral and temporal types share `Int`
+(`DateTime` / `Date` are epoch seconds and `Duration` is a second span, so ordering and
+arithmetic on them verify directly); fractional types use Z3 `Real`; `String` uses Z3's
+native string sort; `UUID`, entities, and enums are uninterpreted sorts that support
+equality only. A named primitive alias inherits its base type's sort, so a String-refinement
+type (`type Code = String where P`) resolves to the native string sort (with `P` applied at
+use sites) rather than to an uninterpreted sort, and all first-class string operations
+(concatenation, ordering, regex membership) apply to its values.
+
+| Spec type                              | Z3 sort                                    |
+| -------------------------------------- | ------------------------------------------ |
+| `Int`, `DateTime`, `Date`, `Duration`  | `Int`                                      |
+| `Float`, `Decimal`, `Money`            | `Real`                                     |
+| `Bool` / `Boolean`                     | `Bool`                                     |
+| `String`                               | native string sort (`str.<`, regex)        |
+| `UUID`, entities, enums                | uninterpreted                              |
+| `Set[T]`                               | `(Set T)` (see [Set theory](#set-theory))  |
+
+Arithmetic `-`, `*`, `/` requires numeric operands (`Int` or `Real`); `+` is numeric addition
+on two numeric operands or string concatenation on two `String` operands (Z3 `str.++`). Z3
+coerces `Int` to `Real` when numeric operands are mixed (e.g. a `Money` field compared to an
+integer literal). Ordering (`<`, `<=`, `>`, `>=`) works on two numeric operands or two `String`
+operands (lexicographic, encoded as Z3 `str.<` / `str.<=`); a numeric/`String` mix or any other
+sort is reported as skipped (translator coverage), never crashed. Equality (`=`, `!=`) works on
+any sort.
+
+Universal facts over the native string sort (relation domain, frame, and refinement axioms
+quantified over a String-keyed relation) are emitted with E-matching patterns (`:pattern`
+on the relation lookup), so Z3 instantiates them on the ground keys appearing in the goal
+instead of falling back to model-based instantiation over the infinite string domain. Without
+the patterns, String-keyed relations push Z3 into the string theory under unbounded
+quantification and time out; with them they discharge in milliseconds.
+
+The integral-vs-fractional split is part of the proof: the Isabelle `ty` carries both
+`TInt` and `TReal`, and `typeExprFullToTy` (`Semantics_Typing.thy`) assigns fractional names to
+`TReal`. `primitiveSortOf` in the Z3 translator is the hand-maintained mirror of that same
+name policy.
+
+## Set theory
+
+`Set[T]` maps to Z3's built-in set theory (extensional `Array T Bool` under the hood). The
+SMT-LIB emitter and the Z3 Java backend agree on the same surface:
+
+| Spec form                       | SMT-LIB                                                  |
+| ------------------------------- | -------------------------------------------------------- |
+| `Set[Int]` type                 | `(Set Int)`                                              |
+| `x in {A, B, C}`                | `(or (= x A) (= x B) (= x C))`, exact lowering          |
+| `x not in {A, B, C}`            | `(not (or ...))`                                         |
+| `x in (a union b)` etc.         | `(select <expr> x)`                                      |
+| `a union b`                     | `(union a b)`                                            |
+| `a intersect b`                 | `(intersection a b)`                                     |
+| `a minus b`                     | `(setminus a b)`                                         |
+| `a subset b`                    | `(subset a b)`                                           |
+| `{ }` (empty set)               | `((as const (Set T)) false)`, requires receiver context |
+| `{ e1, e2 }` (non-empty lit)    | `(store (store ((as const (Set T)) false) e1 true) e2 true)` |
+
+Set-literal membership (`in {A, B, C}`) lowers to a disjunction of equalities rather than a
+`select` against a skolem set; this is exact and avoids introducing uninterpreted
+infrastructure for the common enum-membership pattern.
+
+`{}` as a standalone expression is rejected (the element sort can't be inferred from the
+literal itself); assign it to a typed receiver or constrain it by equality.
+
+Standalone set comprehensions (`entries = { x in D | P }`) remain a translator throw: the
+comprehension's element sort is the *binder's* sort (e.g. a relation's key sort), which
+typically mismatches the receiver's declared type and would produce a sort-mismatch rather
+than a useful verdict. Use the inline membership form instead: `y in { x in S | P }`.
