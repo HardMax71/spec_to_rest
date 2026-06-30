@@ -10,14 +10,17 @@ object FewShot:
   private val resourceRoot = "/specrest/synth/few-shot"
 
   enum Snippet derives CanEqual:
-    case MapInsertFresh, MapUpdateExisting, MapDelete, SeqSum, StateModify
+    case MapInsertFresh, MapUpdateExisting, MapDelete, SeqSum, SeqAppend, StateModify,
+      GuardedTransition
 
   def fileName(s: Snippet): String = s match
     case Snippet.MapInsertFresh    => "map_insert_fresh.dfy"
     case Snippet.MapUpdateExisting => "map_update_existing.dfy"
     case Snippet.MapDelete         => "map_delete.dfy"
     case Snippet.SeqSum            => "seq_sum.dfy"
+    case Snippet.SeqAppend         => "seq_append.dfy"
     case Snippet.StateModify       => "state_modify.dfy"
+    case Snippet.GuardedTransition => "guarded_transition.dfy"
 
   def text(s: Snippet): String =
     val name     = fileName(s)
@@ -36,5 +39,5 @@ object FewShot:
     case _: CreateChild   => List(Snippet.MapInsertFresh)
     case _: FilteredRead  => List(Snippet.SeqSum)
     case _: SideEffect    => List(Snippet.StateModify, Snippet.SeqSum)
-    case _: BatchMutation => List(Snippet.SeqSum, Snippet.MapInsertFresh)
-    case _: Transition    => List(Snippet.StateModify)
+    case _: BatchMutation => List(Snippet.SeqAppend, Snippet.MapInsertFresh)
+    case _: Transition    => List(Snippet.GuardedTransition, Snippet.StateModify)

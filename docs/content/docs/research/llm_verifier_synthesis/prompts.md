@@ -47,9 +47,11 @@ request asked a different way. That escalation order lives on the
 ## Few-shot examples
 
 The examples are not retrieved by similarity. They are selected by the operation's kind,
-[`selectFor(operation_kind)`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/FewShot.scala), from a five-file library kept as resources. A create draws the
+[`selectFor(operation_kind)`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/synth/src/main/scala/specrest/synth/FewShot.scala), from a seven-file library kept as resources. A create draws the
 fresh-insert and counter examples, a delete draws map-remove, a filtered read draws the sequence-sum,
-and a transition draws the state-modify. Two of the files, verbatim:
+a batch mutation draws sequence-append and fresh-insert, and a transition draws guarded-transition
+and counter. Every file in the library is checked by `dafny verify` in CI, so a broken example
+cannot ship. Two of the files, verbatim:
 
 ```csharp
 // few-shot/map_insert_fresh.dfy
