@@ -2,6 +2,7 @@ package specrest.cli
 
 import cats.effect.IO
 import cats.effect.kernel.Resource
+import cats.syntax.traverse.*
 import specrest.cli.ExitStatus.given
 import specrest.convention.Classify
 import specrest.dafny.DafnyMethodHeader
@@ -19,6 +20,7 @@ import specrest.synth.FallbackBudget
 import specrest.synth.FallbackOrchestrator
 import specrest.synth.FallbackOutcome
 import specrest.synth.LlmProvider
+import specrest.synth.ModelFamily
 import specrest.synth.OpOutcome
 import specrest.synth.PromptStrategy
 import specrest.synth.Reporter
@@ -29,6 +31,7 @@ import specrest.synth.Synthesizer
 import specrest.synth.Tracker
 import specrest.synth.providers.AnthropicProvider
 import specrest.synth.providers.OpenAIProvider
+import specrest.synth.providers.RoutingProvider
 
 import java.io.PrintStream
 import java.nio.file.Paths
@@ -154,7 +157,7 @@ object Synth:
   ): IO[ExitStatus] =
     val req    = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
     val opName = classificationOperationName(c)
-    providerResource(opts.model).use: provider =>
+    routerResource(List(opts.model)).use: provider =>
       cacheResource(opts).flatMap: cache =>
         Tracker.empty.flatMap: tracker =>
           val synth = new Synthesizer(provider, cache, tracker)
@@ -172,10 +175,20 @@ object Synth:
         case None    => Cache.defaultRoot(Paths.get(""))
       Cache.make(root).map(Some(_))
 
-  private def providerResource(model: String): Resource[IO, LlmProvider] =
-    if model.toLowerCase.startsWith("gpt") then
-      OpenAIProvider.fromEnv.map(p => p: LlmProvider)
-    else AnthropicProvider.fromEnv.map(p => p: LlmProvider)
+  private def modelLadder(model: String, escalateTo: List[String]): List[String] =
+    if escalateTo.isEmpty then List(model) else model :: escalateTo
+
+  private def routerResource(models: List[String]): Resource[IO, LlmProvider] =
+    models
+      .flatMap(model => ModelFamily.of(model).toList)
+      .distinct
+      .traverse(family => providerForFamily(family).map(family -> _))
+      .map(pairs => new RoutingProvider(pairs.toMap))
+
+  private def providerForFamily(family: ModelFamily): Resource[IO, LlmProvider] =
+    family match
+      case ModelFamily.OpenAI    => OpenAIProvider.fromEnv.map(p => p: LlmProvider)
+      case ModelFamily.Anthropic => AnthropicProvider.fromEnv.map(p => p: LlmProvider)
 
   private def emitResult(
       r: SynthResult,
@@ -268,9 +281,11 @@ object Synth:
           maxIterations = opts.maxIter,
           maxCostUsd = opts.maxCostUsd
         )
+        val ladder    = modelLadder(opts.model, opts.escalateTo)
+        val runModels = if opts.fallback then ladder else List(opts.model)
         val resources =
           for
-            provider  <- providerResource(opts.model)
+            provider  <- routerResource(runModels)
             cache     <- Resource.eval(verifiedCacheResource(opts))
             skelCache <- Resource.eval(skeletonCacheResource(opts))
             verifier  <- DafnyCli.make(binary)
@@ -279,9 +294,7 @@ object Synth:
           Tracker.empty.flatMap: tracker =>
             if opts.fallback then
               val fb = FallbackBudget.Default.copy(
-                modelLadder =
-                  if opts.escalateTo.isEmpty then List(opts.model)
-                  else opts.model :: opts.escalateTo,
+                modelLadder = ladder,
                 sharedCostCapUsd = opts.maxCostUsd
               )
               val orch = new FallbackOrchestrator(
@@ -460,9 +473,10 @@ object Synth:
       maxIter = opts.maxIter,
       maxCostUsd = opts.maxCostUsd
     )
+    val ladder = modelLadder(opts.model, opts.escalateTo)
     val resources =
       for
-        provider  <- providerResource(opts.model)
+        provider  <- routerResource(ladder)
         cache     <- Resource.eval(verifiedCacheResource(verifyOpts))
         skelCache <- Resource.eval(skeletonCacheResource(verifyOpts))
         verifier  <- DafnyCli.make(binary)
@@ -470,9 +484,7 @@ object Synth:
     resources.use: (provider, cache, skelCache, verifier) =>
       Tracker.empty.flatMap: tracker =>
         val fb = FallbackBudget.Default.copy(
-          modelLadder =
-            if opts.escalateTo.isEmpty then List(opts.model)
-            else opts.model :: opts.escalateTo,
+          modelLadder = ladder,
           sharedCostCapUsd = opts.maxCostUsd
         )
         val orch = new FallbackOrchestrator(

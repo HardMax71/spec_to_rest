@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.kernel.Resource
 import munit.CatsEffectSuite
 import specrest.ir.generated.SpecRestGenerated.classificationOperationName
+import specrest.synth.providers.RoutingProvider
 
 import java.nio.file.Files
 import java.nio.file.Path
@@ -312,3 +313,49 @@ class FallbackOrchestratorTest extends CatsEffectSuite:
           case v: FallbackOutcome.Verified =>
             assertEquals(v.finalModel, "from-req")
           case other => fail(s"expected Verified, got $other")
+
+  test(
+    "cross-family escalation: claude attempt aborts, gpt escalation verifies via its own client"
+  ):
+    Fixtures.loadHeader("safe_counter", "Increment").flatMap:
+      case (c, h, skel) =>
+        for
+          anthropic <-
+            MockProvider.of(List(Right(llmResp(brokenBody, model = "claude-sonnet-4-6"))))
+          openai <- MockProvider.of(List(Right(llmResp(validBody, model = "gpt-5"))))
+          router = new RoutingProvider(
+                     Map(
+                       ModelFamily.Anthropic -> anthropic,
+                       ModelFamily.OpenAI    -> openai
+                     )
+                   )
+          verifier <- MockDafnyVerifier.of(
+                        List(
+                          Right(failingRun(classificationOperationName(c))),
+                          Right(correctRun(classificationOperationName(c)))
+                        )
+                      )
+          tracker <- Tracker.empty
+          orch = new FallbackOrchestrator(
+                   router,
+                   verifier,
+                   None,
+                   None,
+                   tracker,
+                   perAttempt.copy(maxIterations = 1),
+                   FallbackBudget.Default.copy(
+                     promptStrategies = List(PromptStrategy.ZeroShot),
+                     modelLadder = List("claude-sonnet-4-6", "gpt-5")
+                   )
+                 )
+          out          <- orch.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
+          anthropicHit <- anthropic.calls
+          openaiHit    <- openai.calls
+        yield
+          out match
+            case v: FallbackOutcome.Verified =>
+              assertEquals(v.finalModel, "gpt-5")
+              assertEquals(v.attempts.length, 2)
+            case other => fail(s"expected cross-family Verified, got $other")
+          assertEquals(anthropicHit.map(_.model), List("claude-sonnet-4-6"))
+          assertEquals(openaiHit.map(_.model), List("gpt-5"))
