@@ -1,0 +1,345 @@
+---
+title: Behavioral and transition tests
+description: The per-operation property tests (positive ensures, negative in-state, post-op invariant, temporal) plus the M5.9 state-machine transition tests.
+---
+
+## Three test kinds emitted per operation
+
+### 1. Positive ensures tests
+
+For each operation whose `requires` does **not** reference state, every `ensures` clause that
+the IR-to-Python translator can handle becomes a property test:
+
+```python
+@given(url=strategy_long_url())
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_shorten_ensures_0(url):
+    """ensures: (code not in pre(store))"""
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
+    response = client.post("/shorten", json={"url": url})
+    assume(response.status_code == 201)
+    assert response.status_code == 201, response.text
+    response_data = response.json() if response.content else {}
+    post_state = client.get("/admin/state").json()
+    assert ((response_data["code"]) not in (pre_state["store"])), "ensures violated: ensures: (code not in pre(store))"
+```
+
+State-dependent preconditions are partially covered. If `requires` references a state
+field (e.g., `requires: code in store`), positive ensures tests for the *generic* case are
+skipped; driving the system into the precondition-satisfying state requires either calls
+to other operations or direct seed-writes. For the *transition* case (operation referenced
+by a `via` clause in a `TransitionDecl`), M5.9 closes this gap with dedicated transition
+tests (see below). The clause still appears in `_testgen_skips.json`, but the reason text
+flips to `state-dependent precondition; covered by transition tests (M5.9)` for transition
+operations and falls back to `... covered by stateful tests (M5.2) for ops bundled into
+the state machine ...` for the residual non-transition operations (`GetTodo`, `UpdateTodo`,
+`DeleteTodo` in `todo_list`). `ExprToPython` translates every IR `Expr` shape, so the
+*translator coverage* gap is closed.
+
+### 2. Negative `<input> in <state>` tests
+
+For exactly the `<input> in <state>` requires pattern, a negative test is emitted that
+generates a fresh-state input via Hypothesis, asserts the input isn't in the (empty) state,
+calls the operation, and asserts a 4xx response:
+
+```python
+@given(code=strategy_short_code())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_resolve_negative_code_not_in_store(code):
+    """requires 'code in store' (negative): missing key returns 4xx."""
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
+    assume(code not in pre_state.get("store", {}))
+    response = client.get(f"/{code}")
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+A second negative pattern recognises status restrictions on existing entries:
+`<state>[<input>].<enum-field> = <required-value>` (the precondition that the entry,
+once it exists, must be in a particular status). When the underlying entity is in a
+`TransitionDecl` (so `/admin/seed/<entity>` exists), a negative test is
+emitted that seeds the entity in any *other* enum value of the field, picked by
+`st.sampled_from(<all-other-values>)`, and asserts a 4xx response:
+
+```python
+@given(row=strategy_order(), wrong_status=st.sampled_from(["DRAFT", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"]), amount=strategy_money())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_record_payment_negative_orders_status_not_placed(row, wrong_status, amount):
+    """requires 'orders[order_id].status = PLACED' (negative): wrong status returns 4xx."""
+    client.post("/admin/reset")
+    row = dict(row)
+    row["status"] = wrong_status
+    seed = client.post("/admin/seed/order", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+This covers business-logic illegal-from preconditions on **non-via** operations (e.g.,
+ecommerce `AddLineItem` requires `orders[order_id].status = DRAFT` but is not the via
+of any `TransitionDecl`). For via operations the same pattern emits an additional
+negative alongside the per-illegal-from transition negatives, they assert the same
+qualitative property from different angles.
+
+Other requires shapes (predicate violation, ordering, set-content checks) are tracked
+as follow-ups and skipped with reason in `_testgen_skips.json`.
+
+### 3. Post-operation invariant checks
+
+For each global invariant, one test per operation that has a non-state-dep requires:
+
+```python
+@given(url=strategy_long_url())
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_shorten_invariant_all_ur_ls_valid(url):
+    """invariant allURLsValid: (all c in store | isValidURI(store[c]))"""
+    client.post("/admin/reset")
+    pre_state = client.get("/admin/state").json()
+    response = client.post("/shorten", json={"url": url})
+    assume(response.status_code == 201)
+    response_data = response.json() if response.content else {}
+    post_state = client.get("/admin/state").json()
+    assert all(is_valid_uri(post_state["store"][c]) for c in (post_state["store"])), "invariant violated: invariant allURLsValid: (all c in store | isValidURI(store[c]))"
+```
+
+### 4. Temporal predicates (#86)
+
+`temporal X: always(P)` and `temporal X: eventually(P)` declarations participate in
+test emission alongside invariants. The `always(P)` form is structurally an
+invariant (it asserts `P` after every step), so behavioral and stateful tests
+emit it the same way an invariant decl is emitted, distinguished only by the
+method name (`temporal_always_<name>` vs `invariant_<name>`).
+
+`eventually(P)` is liveness-shaped: "at some point during the trace, `P` held."
+The build-time Alloy proof is authoritative (it shows reachability up to the
+configured scope), but at runtime we emit a per-trace witness. In the stateful
+state machine:
+
+- `_reset()` initializes a sticky flag `self._eventually_seen_<name> = False`
+- An `@invariant()` observer evaluates `P` after every step and ORs it into the
+  flag if true
+- The state machine's `teardown(self)` asserts the flag was set
+
+```python
+@invariant()
+def temporal_eventually_observe_some_user_exists(self):
+    """temporal eventually(someUserExists): (some u in users | u.is_active)"""
+    post_state = client.get("/admin/state").json()
+    if any(u["is_active"] for u in post_state["users"].values()):
+        self._eventually_seen_some_user_exists = True
+
+def teardown(self):
+    assert self._eventually_seen_some_user_exists, \
+        "temporal eventually never observed in trace: someUserExists: ..."
+```
+
+This is **strictly weaker** than the build-time Alloy proof: each Hypothesis
+case observes a single bounded trace, so a trace too short to reach `P` will
+fail the teardown even on a sound spec. If a fixture's state machine defaults
+(`max_examples=25`, `stateful_step_count=20`) don't reach `P` reliably, lengthen
+the trace via Hypothesis settings or accept the gap and lean on the verifier.
+
+`fairness(op)` is parsed but emits a `_testgen_skips.json` entry only; the
+verifier already rejects it (`v1` does not implement trace-based verification),
+so a runtime stub for an unverifiable construct creates an unreachable code
+path. Tracked alongside v2 fairness verification.
+
+`always` / `eventually` decls also surface in the generated `openapi.yaml` as
+top-level `x-invariant` and `x-temporal` extensions, machine-readable for
+documentation generators and downstream tooling. Each `x-temporal` entry carries
+`{kind: always|eventually|fairness, expr: <pretty-printed predicate>}`.
+
+```yaml
+x-invariant:
+  usersAreValid: (all u in users | u.is_active)
+x-temporal:
+  someUserExists:
+    kind: eventually
+    expr: '(some u in users | u.is_active)'
+  allUsersAlwaysValid:
+    kind: always
+    expr: (all u in users | u.is_active)
+```
+
+## Transition tests (M5.9)
+
+For specs that declare a state machine via `transition X { entity: E; field: f; FROM -> TO via Op ... }`,
+testgen synthesizes per-`via`-operation behavioral tests that drive the entity directly into
+each `from` status using a generated seed admin endpoint, then exercise the operation:
+
+- Positive test per legal `(from, to)` rule. Seed entity in `from`, call the via operation,
+  assert 2xx and the entity's `field` post-state equals `to`.
+- Negative test per illegal `from` (every value of the field's enum that is *not* a
+  `from`-state for `via X`). Seed entity in that state, call the via operation, assert 4xx.
+
+Setup uses `POST /admin/seed/<entity>`, emitted by `AdminRouter.scala` for every
+entity referenced by a `TransitionDecl`. The endpoint accepts a JSON dict, parses any
+`DateTime`-typed columns from ISO strings, inserts the row, and returns the new primary
+key. Like `/reset` and `/state`, it requires `Authorization: Bearer $ADMIN_TOKEN` and
+answers 404 when no token is configured.
+
+Row strategies come from `Strategies.scala`'s new `strategy_<entity>()` function, emitted
+only for transition entities; non-transition specs (`safe_counter`, `url_shortener`)
+generate byte-identical strategies.py to before.
+
+```python
+@given(row=strategy_todo())
+@settings(max_examples=20, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_start_work_transition_todo_to_in_progress(row):
+    """transition StartWork: TODO -> IN_PROGRESS (post-state status = IN_PROGRESS)"""
+    client.post("/admin/reset")
+    row = dict(row)
+    row["status"] = "TODO"
+    seed = client.post("/admin/seed/todo", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/todos/{seeded_id}/start")
+    assert response.status_code == 200, response.text
+    post_state = client.get("/admin/state").json()
+    bucket = post_state.get("todos", {})
+    entity_view = bucket.get(str(seeded_id)) or bucket.get(seeded_id)
+    actual = entity_view.get("status") if isinstance(entity_view, dict) else entity_view
+    assert actual == "IN_PROGRESS", f"expected status=IN_PROGRESS, got {actual!r}"
+```
+
+```python
+@given(row=strategy_todo())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_archive_transition_illegal_from_in_progress(row):
+    """transition Archive: from=IN_PROGRESS is illegal (no rule); SUT must reject 4xx"""
+    client.post("/admin/reset")
+    row = dict(row)
+    row["status"] = "IN_PROGRESS"
+    seed = client.post("/admin/seed/todo", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/todos/{seeded_id}/archive")
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+### What gets generated for `todo_list.spec`
+
+| `via` operation | Legal `(from, to)` | Positive tests | Illegal `from` (no rule) | Negative tests |
+|---|---|---|---|---|
+| `StartWork` | `TODO -> IN_PROGRESS` | 1 | `IN_PROGRESS, DONE, ARCHIVED` | 3 |
+| `Complete`  | `IN_PROGRESS -> DONE` | 1 | `TODO, DONE, ARCHIVED`        | 3 |
+| `Reopen`    | `DONE -> IN_PROGRESS` (guarded by `updated_at > completed_at`) | 1 | `TODO, IN_PROGRESS, ARCHIVED` | 3 |
+| `Archive`   | `TODO -> ARCHIVED`, `DONE -> ARCHIVED` | 2 | `IN_PROGRESS, ARCHIVED` | 2 |
+
+16 transition tests total, including the `Reopen` positive whose guard
+`updated_at > completed_at` is satisfied deterministically by the recognizer in
+[#152](https://github.com/HardMax71/spec_to_rest/issues/152) (see "Guarded
+positive transitions" below). `PauseWork` is referenced in the spec's transition
+graph but has no operation declaration in `todo_list.spec`, so it produces a
+`transition[PauseWork]` skip in `_testgen_skips.json` with reason
+`no operation named 'PauseWork' for via clause`.
+
+### Guarded positive transitions (#152)
+
+Rules with a `when <guard>` clause are recognized when the guard reduces to a
+conjunction (`and`), or single instance, of these shapes:
+
+| Shape | Example | Emitted fix-up |
+|---|---|---|
+| ordered comparison on two entity fields, both DateTime-ish | `updated_at > completed_at` | `row["updated_at"] = (datetime.datetime.fromisoformat(row["completed_at"]) + datetime.timedelta(seconds=1)).isoformat()` (with optional `if row[..] is None` anchor when the RHS is `Option[DateTime]`) |
+| ordered comparison on two entity fields, both numeric | `score > threshold` | `row["score"] = row["threshold"] + 1` (or `+ 0`/`- 1` for `>=`/`<=`/`<`) |
+| ordered comparison vs. numeric literal | `score > 10` | `row["score"] = 10 + 1` |
+| equality with enum or literal RHS | `tier = GOLD`, `count = 7`, `name = "x"` | `row["tier"] = "GOLD"` |
+| equality with `none` on Option field | `closed_at = none` | `row["closed_at"] = None` |
+| existence (`!= none`) on Option field | `closed_at != none` | `if row["closed_at"] is None: row["closed_at"] = <inner-default>` |
+| cardinality on Set/Seq field | `#tags > 2`, `len(tags) >= 1`, `#tags = 0` | `row["tags"] = ["x0", "x1", "x2"]` (size and fillers depend on inner type) |
+| literal membership in Set/Seq field | `"URGENT" in tags` | `row["tags"] = list(row["tags"]) + ["URGENT"]` |
+| transition-field self-equality matching `from` | rule `LOW -> HIGH ... when phase = LOW` | no extra fix line, already satisfied by the `row[<field>] = LOW` step |
+| top-level `not (...)` (De Morgan inversion) | `not (a > b)` | recurses on `a <= b` |
+
+Recognized clauses can be combined freely with `and`. The arithmetic-shift form
+on ordered comparisons composes with field-level `where` constraints already
+enforced by the strategy because we keep the strategy-generated RHS value and
+shift LHS off it.
+
+Anything outside the table above keeps the skip with reason
+`guard '<expr>' not representable in seed dict (see #152)`. Cases that fall back:
+
+- User function calls other than `len(...)` (e.g. `is_valid_email(addr)`,
+  `paymentCaptured(order_id)`): would need runtime predicate evaluation.
+- Set/map/seq arithmetic beyond cardinality and membership (e.g.
+  `tags - banned = {}`, `tags = other_tags`).
+- Nested field access on either side (e.g. `parent.status = ARCHIVED`,
+  `priority.level > 3`): would need multi-entity seed orchestration; the
+  recognizer only accepts bare `Identifier` operands of the seeded entity.
+- `Pre(...)` / `Prime(...)`: references system pre-/post-state, not the
+  row being seeded; structurally not row-local.
+- Compound RHS expressions other than the literal forms in the table
+  (e.g. `a > b + 1`, `a > some_function()`).
+- Mismatched operand kinds in ordered comparison (one DateTime-ish, one
+  numeric); the recognizer requires the same kind on both sides.
+- Transition-field self-equality contradicting the rule's `from` (e.g.
+  rule `LOW -> HIGH ... when phase = HIGH`; the guard can never hold for any
+  row of phase=LOW).
+- Conjunctions where any branch fails recognition: all-or-nothing across
+  an `and` tree; a partial pass would silently miss the unrecognized branch.
+- Conflicting fixes within a conjunction (e.g. `a > b and a < b` produces
+  two writes to `row[a]` with different RHS); recognition fails fast rather
+  than emitting an unsatisfiable test.
+- Top-level `or` / `implies`: pick-a-branch ambiguity; reduce to a
+  conjunction and re-spec the rule if you want a deterministic test.
+
+### Body and query inputs on `via` operations (#155)
+
+When the via op takes parameters beyond the path id (e.g.,
+`RecordPayment(order_id: OrderId, amount: Money)` mounted at
+`POST /orders/{order_id}/payments`), the body/query inputs are generated through the
+same `Strategies.expressionFor(...)` used in non-transition tests, and wired into the
+`@given` decorator alongside `row=strategy_<entity>()`:
+
+```python
+@given(row=strategy_order(), amount=strategy_money())
+@settings(max_examples=10, suppress_health_check=[HealthCheck.function_scoped_fixture])
+def test_record_payment_transition_illegal_from_draft(row, amount):
+    """transition RecordPayment: from=DRAFT is illegal (no rule); SUT must reject 4xx"""
+    client.post("/admin/reset")
+    row = dict(row)
+    row["status"] = "DRAFT"
+    seed = client.post("/admin/seed/order", json=row)
+    assume(seed.status_code == 201)
+    seeded_id = seed.json()["id"]
+    response = client.post(f"/orders/{seeded_id}/payments", json={"amount": amount})
+    assert 400 <= response.status_code < 500, f"expected 4xx, got {response.status_code}: {response.text}"
+```
+
+Body inputs go to `json={...}`, query inputs to `params={...}`. Sensitive-field redaction
+and per-operation `test_strategy` overrides apply, since the same `expressionFor` path
+is reused. If any non-path input has no known strategy (e.g., `Map[K, V]`,
+`Relation[K, V]`, an unknown named type), the entire via is skipped with a reason
+naming the un-generable input.
+
+If a non-path input shares a name with a generated test local, `row`, `seed`,
+`seeded_id`, `response`, `client`, `pre_state`, `post_state`, `wrong_status`, the
+input is aliased to `_arg_<name>` (with a numeric suffix on collision) for the
+function parameter and the `@given` keyword, while the JSON / query dict key keeps
+the original parameter name. So a spec input named `seed` becomes
+`@given(..., _arg_seed=...)` / `def fn(row, _arg_seed)` / `json={"seed": _arg_seed}`.
+
+The positive transition still requires the via op's other `requires` clauses (besides
+the `from`-state pin) to be satisfied by the generated values; if the SUT enforces
+stricter preconditions (e.g., `requires: amount = orders[order_id].total`), the
+positive test will fail by design, that's a real spec-vs-SUT divergence and surfaces
+where it should. (Recognising such relational preconditions on body inputs is a
+separate concern from #155.)
+
+### Other skipped categories
+
+- Non-enum transition field: if `field: <name>` resolves to a type other than an enum
+  (or alias of an enum), the entire `TransitionDecl` is skipped; illegal-from enumeration
+  is undefined for non-enum status fields.
+- Unknown via operation: a `via X` whose `X` has no matching `operation` declaration is
+  skipped. Spec lint should catch this; the skip is a defensive backstop.
+- Multi-path or zero-path via operation: transition tests need exactly one path
+  parameter to identify the seeded entity; nested-path shapes
+  (e.g., `/orders/{order_id}/items/{item_id}`) and zero-path shapes are skipped pending
+  multi-entity seed orchestration.
+- Non-generable body or query input: if `Strategies.expressionFor(...)` returns
+  `Skip` for any non-path input (most commonly `Map`/`Relation`-typed bodies), the via
+  is skipped with a reason naming the input and the un-generable type.

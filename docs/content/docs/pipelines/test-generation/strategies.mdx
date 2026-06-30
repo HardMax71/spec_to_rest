@@ -1,0 +1,167 @@
+---
+title: Strategies and sensitive fields
+description: Synthesising Hypothesis strategies from where-clauses (M5.6), built-in predicates (M5.10), and sensitive-field redaction (M5.8).
+---
+
+## Custom strategies (M5.6)
+
+`Strategies.scala` synthesizes a Hypothesis strategy from each `TypeAliasDecl`'s
+`where` clause, recognised shapes are length bounds, regex (`matches /.../`), numeric
+range, and the `is_valid_uri` / `is_valid_email` predicate filters. Anything outside
+that set lands in `_testgen_skips.json` under `strategies_skipped`, with the synth
+falling back to an unconstrained base strategy (`st.text()`, `st.integers()`).
+
+To override the synthesized strategy with a hand-written one, declare a `strategy`
+convention rule whose value is a `module:symbol` reference:
+
+```text
+service AuthService {
+  type Email = String where value matches /^[^@]+@[^@]+\.[^@]+$/
+  type PasswordHash = String where len(value) = 64
+
+  conventions {
+    Email.strategy = "tests.strategies_user:valid_email"
+    PasswordHash.strategy = "tests.strategies_user:strong_password_hash"
+  }
+}
+```
+
+Then implement the symbols in `tests/strategies_user.py` (stub emitted on first
+compile, preserved across re-compile):
+
+```python
+from hypothesis import strategies as st
+
+def valid_email():
+    return st.from_regex(r"^[^@]+@[^@]+\.[^@]+$", fullmatch=True)
+
+def strong_password_hash():
+    return st.text(alphabet="0123456789abcdef", min_size=64, max_size=64)
+```
+
+The generated `tests/strategies.py` automatically imports the symbols and routes
+`def strategy_<type>(): return <symbol>()` to the override. Downstream test files
+(`test_behavioral_*.py`, `test_stateful_*.py`) keep calling
+`strategy_<type>()` unchanged, only the body of that function is swapped.
+
+### `--strict-strategies` CI gate
+
+Pass `--strict-strategies` to `compile` to fail the build if any type alias or
+enum has an incomplete synthesized strategy AND no convention override is
+registered. Use it as a CI guard against silently-broken strategies (no-op when
+combined with `--no-tests`):
+
+```bash
+sbt "cli/run compile --strict-strategies --out /tmp/svc fixtures/spec/auth_service.spec"
+# Exit 1 if any strategy falls back to st.text() / st.integers() / st.nothing() with no override
+```
+
+Two synthesis gaps trip the gate:
+
+1. Unhandled `where` constraint, e.g., `type Code = String where custom_pred(value)`
+   produces `st.text()` plus a `# testgen-skip:` note. The synthesized strategy
+   is too permissive (custom_pred is not enforced).
+2. Unsupported base type, e.g., `type Mapping = Map<String, Int>` falls
+   through to `st.nothing()`. The synthesized strategy is unusable.
+
+Both cases land in `_testgen_skips.json`'s `strategies_skipped` array and
+become compile errors under `--strict-strategies`.
+
+## Built-in predicates (M5.10)
+
+`isValidURI` and `isValidEmail` are not hardcoded in Scala. They live in
+`modules/parser/src/main/resources/specrest/parser/preamble.spec` as ordinary
+spec-language `predicate` declarations:
+
+```text
+service Preamble {
+  predicate isValidURI(s: String) = s matches /^https?:..[^\s]+/
+  predicate isValidEmail(s: String) = s matches /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+}
+```
+
+The parser auto-merges this preamble's `predicates` into every parsed
+`ServiceIR`, so user specs can call `isValidURI(x)` or `isValidEmail(x)` without
+declaring them. A user-declared predicate with the same name takes precedence.
+
+### What this enables
+
+- Adding a new built-in predicate is **one line in `preamble.spec`**, no Scala
+  edit, no JSON registry, no helper-import wiring.
+- The verifier sees the predicate body (a regex match), not an opaque function.
+  Z3 still reasons about the `matches_<hash>` declaration as uninterpreted
+  (same proving power as before), but the framework no longer special-cases
+  predicate names.
+- Test-gen synthesises a tighter strategy for type aliases that use a
+  preamble-style `s matches /regex/` predicate: instead of
+  `st.text().filter(lambda v: is_valid_uri(v))`, the generator inlines the regex
+  and emits `st.from_regex("^https?:..[^\s]+", fullmatch=True)`. Hypothesis can
+  hit the property directly rather than rejection-sampling.
+- Adding a custom predicate in a user spec works identically: `predicate
+  isValidUUID(s: String) = s matches /^[0-9a-f-]{36}$/` and the same
+  pipeline applies (Strategy inlines the regex, ExprToPython renders
+  `is_valid_uuid`, the verifier treats it as a Bool predicate).
+
+### Limitations
+
+The preamble's `isValidURI` is a regex approximation, not Python's
+`urlparse`-based check. For property-based testing this is symmetric (the
+strategy generates URI-like strings; the assertion checks the same regex). The
+spec's `matches /regex/` literal cannot contain a literal `/`, character
+classes (`[/]`) and lexer escapes are also unsupported. Predicates that need
+non-regex semantics (e.g. opaque `urlparse(s)` strictness) would require a
+separate `extern predicate` mechanism, out of scope here.
+
+## Sensitive fields (M5.8)
+
+Spec fields whose names match `SensitiveFields.isSensitive` (exact: `password`,
+`password_hash`, `secret`, `token`, `api_key`; suffix: `_hash`, `_secret`, `_password`,
+`_api_key`, `_token`) get sensitivity-aware handling at every stage of the generated
+suite:
+
+- Hypothesis behavioral tests: sensitive operation inputs are wrapped in
+  `redact(...)` from `tests/redaction.py`. The wrapper returns a `_RedactedStr`
+  (a `str` subclass with `__repr__` masking), so failing-example output shows
+  `password=<redacted len=N>` instead of the raw value. JSON serialization is
+  unaffected; the wire format is identical to a plain string.
+- Schemathesis structural tests: a `@schemathesis.hook` `before_call`
+  registers itself with a `_SENSITIVE_BODY_FIELDS` frozenset scoped to the
+  operations in the current spec; sensitive body fields are wrapped in
+  `_RedactedStr` before the request is sent, so failing-case output is masked.
+- Service-side logs: `app/redaction.py` configures structlog with a
+  `redact_sensitive` processor in the chain. Every log line (application code,
+  uvicorn access logs, uvicorn errors) runs through the same processor; sensitive
+  keys at any depth in the structured event dict become `***REDACTED***`. The
+  processor is a pure function; tests in `tests/test_log_redaction.py` cover it
+  directly.
+
+### Per-field overrides
+
+A `test_strategy` convention rule overrides the default redaction policy for a
+specific operation input or entity field:
+
+```spec
+service Demo {
+  // ...
+  conventions {
+    Register.password.test_strategy = "live"      // send constraint-derived live values
+    User.password_hash.test_strategy = "redacted" // force the placeholder
+
+    // Equivalent string-qualifier syntax (mirrors http_header):
+    // Register.test_strategy "password" = "live"
+  }
+}
+```
+
+Resolution: `<Operation>.<input>.test_strategy` wins over `<Entity>.<field>.test_strategy`,
+which broadcasts to every operation whose input shares the field name. The validator
+rejects unknown field qualifiers, missing qualifiers, values other than
+`"live"` / `"redacted"`, conflicting entity-field overrides for the same field name across
+different entities (would resolve ambiguously), and duplicate
+target+qualifier+property rules.
+
+`live` unwraps (no redact, no placeholder; emits the regular constrained strategy).
+`redacted` forces `st.just("***REDACTED***")` regardless of constraints. Bare,
+unconstrained sensitive types under `redacted` may fail server-side input validation
+(the placeholder is short); pair with a constrained type alias if your invariants demand
+a length/regex.

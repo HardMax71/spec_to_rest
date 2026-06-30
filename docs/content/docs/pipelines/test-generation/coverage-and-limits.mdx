@@ -1,0 +1,82 @@
+---
+title: Coverage and limits
+description: Per-fixture coverage of the IR-to-target translator, the skips file, runtime requirements, and the follow-up backlog.
+---
+
+## Coverage on canonical fixtures
+
+`ExprToPython` covers every `Expr` constructor in the IR, no translator coverage gaps
+remain. The remaining `Translated.Skip` outputs split into (i) unbacked-scalar-state
+floor: state fields not backed by an entity table get projected as `null` by the
+admin `/state` endpoint, so they can't be asserted black-box (`safe_counter.count`,
+`url_shortener.base_url`, `todo_list.next_id`, `edge_cases.plain`, `auth_service.next_*_id`),
+(ii) user errors in the spec (unbound identifier, undeclared function, wrong arity,
+reserved-name binding), and (iii) parser-side gaps (currently the multi-clause `let ... in`
+body in ecommerce). These numbers are locked in `SkipRateProbeTest.scala`; CI fails if
+they regress.
+
+| Fixture | Total clauses | Translated | Skipped | Skip rate | Remaining-skip reason |
+|---|---|---|---|---|---|
+| `safe_counter.spec` | 5 | 2 | 3 | **60.0%** | `count` is unbacked scalar state |
+| `url_shortener.spec` | 21 | 20 | 1 | **4.8%** | `base_url` is unbacked scalar state |
+| `todo_list.spec` | 50 | 48 | 2 | **4.0%** | `next_id` is unbacked scalar state |
+| `edge_cases.spec` | 29 | 26 | 3 | **10.3%** | `plain` is unbacked scalar state |
+| `ecommerce.spec` | 76 | 71 | 5 | **6.6%** | 3 unbacked scalar-state + 2 `removed` parser scope leak |
+| `auth_service.spec` | 41 | 37 | 4 | **9.8%** | 4 unbacked scalar-state (`hash`, `minutes`/`hours`/`seconds`, and `recentFailedAttempts` function all translate as of #307) |
+
+## What `_testgen_skips.json` looks like
+
+```json
+{
+  "version": 1,
+  "service": "UrlShortener",
+  "strategies_skipped": [],
+  "behavioral_skipped": [
+    {"operation": "Shorten", "kind": "requires[0]", "reason": "M5.1: only `<input> in <state>` and `<state>[input].<enum-field> = <value>` requires patterns get negative tests"},
+    {"operation": "Resolve", "kind": "ensures", "reason": "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"},
+    {"operation": "Resolve", "kind": "invariant[allURLsValid]", "reason": "state-dependent precondition; positive ensures/invariant tests are covered by stateful tests (M5.2) for ops bundled into the state machine; the single-shot behavioral test would need explicit pre-seeding"}
+  ],
+  "structural_skipped": [
+    {"operation": "Shorten", "kind": "structural_ensures[0]", "reason": "ensures references pre()/prime(), covered by behavioral/stateful layers"},
+    {"operation": "Shorten", "kind": "structural_ensures[2]", "reason": "ensures references state field, covered by stateful invariants"}
+  ]
+}
+```
+
+The `behavioral_skipped` array enumerates clauses that the test generator could not turn
+into a runnable test. Every entry signals one of: (a) state-machine setup is needed before
+the precondition is reachable for a non-transition operation (no `via` rule covers it; the
+remaining gap on `GetTodo`-shaped operations); (b) the requires shape is outside the
+recognized negative-test pattern; (c) a guarded transition rule whose guard sits outside
+the recognizer's recognized shapes (ordered comparison / enum or literal equality /
+not-none / conjunction of those); (d) a real user error in the spec.
+
+## Runtime requirements
+
+- The generated service must be running and reachable at `SPEC_TEST_BASE_URL`
+  (default `http://localhost:8000`).
+- The service must have been started with `ADMIN_TOKEN` set, and the same token must
+  be exported in the test environment; the client attaches the
+  `Authorization: Bearer $ADMIN_TOKEN` header automatically. The conftest fixture
+  fails fast with a clear message on a missing/mismatched token (401) or an
+  unconfigured service (404) rather than failing weirdly.
+- Setting `SPEC_TEST_INPROC=1` flips `conftest.py` to use FastAPI's `TestClient` against
+  an in-process import of `app.main:app` instead of going over HTTP to `SPEC_TEST_BASE_URL`.
+  Each `pytest` invocation re-imports the app fresh, required for mutation testing
+  (see [Mutation Testing](/pipelines/mutation-testing)) where the runner has to
+  observe edits to `app/`. The admin surface is auto-configured in this mode (the
+  conftest mints and exports `ADMIN_TOKEN` before importing `app.main`). Postgres (or
+  whatever `DATABASE_URL` points at) is still required because the in-process app makes
+  real DB calls.
+- By default, `compile` emits service stubs that raise `NotImplementedError` for any
+  operation classified `LLM_SYNTHESIS`. Pass `--with-synthesis` to invoke the M6
+  CEGIS loop ([#27](https://github.com/HardMax71/spec_to_rest/issues/27)) and substitute
+  verified Dafny output into those stubs. Runtime invariant and temporal-property
+  enforcement ([#86](https://github.com/HardMax71/spec_to_rest/issues/86)) ships the
+  `@invariant()` observers and `x-temporal` extensions the assertions rely on.
+
+## Limitations and follow-up issues
+
+For the live test-generation follow-up backlog (state-dependent preconditions on
+non-transition ops and `GuardSatisfier` extensions), see
+[Roadmap, Test generation follow-ups](/roadmap#test-generation-follow-ups).

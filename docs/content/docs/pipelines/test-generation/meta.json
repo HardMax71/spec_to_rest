@@ -1,0 +1,10 @@
+{
+  "title": "Test Generation",
+  "pages": [
+    "index",
+    "behavioral",
+    "stateful-and-structural",
+    "strategies",
+    "coverage-and-limits"
+  ]
+}

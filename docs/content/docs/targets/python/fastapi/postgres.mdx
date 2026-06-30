@@ -355,7 +355,7 @@ GitHub Actions workflow triggered on push/PR to `main` plus a nightly
 
 Schemathesis is invoked **inside** the conformance suite (the `tests/test_structural_*.py`
 files emitted by default, opt out with `--no-tests`) rather than directly from the workflow; see
-[Test Generation, Structural tests](/pipelines/test-generation#structural-tests-m53).
+[Test Generation, Structural tests](/pipelines/test-generation/stateful-and-structural#structural-tests-m53).
 
 Template: `modules/codegen/src/main/resources/templates/python/fastapi/github/workflows/ci.yml.hbs`
 (the leading dot is removed from the resource path since sbt's default `HiddenFileFilter` excludes
