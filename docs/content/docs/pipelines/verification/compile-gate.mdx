@@ -1,0 +1,53 @@
+---
+title: Verify-as-gate
+description: Running verification as a pre-codegen gate in compile, the --ignore-verify escape hatch, and the gate's exit codes.
+---
+
+## Verify-as-gate in `compile`
+
+`spec-to-rest compile` runs the verification engine as a pre-codegen gate. If any check
+reports a failure, `compile` exits non-zero and writes no files, the output directory stays
+untouched (not even created). For a deployment profile that claims "verified correct", the
+gate is the guarantee that what ships matches what was checked.
+
+The gate shares one code path with `spec-to-rest verify`: same `Consistency.runConsistencyChecks`
+call, same diagnostic reporter, same exit-code mapping (0 / 1 / 2 / 3). A spec that `verify`
+exits `1` on will make `compile` exit `1` before any emit runs. A spec that `verify` clears
+(`exit 0`) compiles normally.
+
+### Escape hatch
+
+When you need to emit code against a spec that doesn't (yet) pass verification (active
+debugging, a known translator-coverage gap, a demo on a counterexample spec), pass
+`--ignore-verify`:
+
+```bash
+$ spec-to-rest compile --ignore-verify --out /tmp/out fixtures/spec/unsat_invariants.spec
+WARN proceeding without verification (--ignore-verify)
+OK wrote 26 files to /tmp/out
+```
+
+The warning prints on every `--ignore-verify` run; the flag is conspicuous by design, not a
+silent passthrough.
+
+### Gate defaults and tuning
+
+The gate uses verify's defaults: 30 s per-check timeout, Alloy scope 5, host-CPU parallelism.
+There are no `--timeout` / `--parallel` / `--alloy-scope` flags on `compile` today. If the
+defaults don't fit your spec, run `spec-to-rest verify --timeout X --parallel N <spec>` first
+to confirm green, then `spec-to-rest compile --ignore-verify <spec>`. File an issue if the
+pattern comes up often and the gate deserves its own tuning knobs.
+
+### Exit codes
+
+The gate inherits verify's contract unchanged:
+
+| Code | Meaning                                                                 |
+| ---: | ----------------------------------------------------------------------- |
+|    0 | Gate passed. Codegen ran; files written.                                |
+|    1 | One or more checks reported `unsat` or `unknown`. No files written.     |
+|    2 | Translator coverage gap (Skipped checks with `TranslatorLimitation`).   |
+|    3 | Backend error (Z3 / Alloy crash or setup failure).                      |
+
+A spec that exits `2` blocks codegen because the gate cannot prove the spec correct; use
+`--ignore-verify` if you accept the coverage gap.

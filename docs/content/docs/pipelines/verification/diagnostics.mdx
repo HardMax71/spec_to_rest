@@ -1,0 +1,307 @@
+---
+title: Diagnostics and CLI
+description: Reading a verification failure, the CLI options and exit codes, JSON output, and inspecting the generated SMT-LIB.
+---
+
+## Reading diagnostics
+
+On failure the CLI prints a spec-aware multi-line diagnostic per failing check. Diagnostics
+carry a `category`, a primary source span, related spans, an optional counterexample, and an
+opt-in suggestion.
+
+### Categories
+
+| Category | When it fires | Typical remedy |
+| --- | --- | --- |
+| `contradictory_invariants` | `global` check is `unsat` | two invariants overlap-but-contradict, narrow one's range |
+| `unsatisfiable_precondition` | `<Op>.requires` is `unsat` | `requires` can never be true in isolation, relax an input predicate |
+| `unreachable_operation` | `<Op>.enabled` is `unsat` while `<Op>.requires` is `sat` | invariants block every valid pre-state, relax invariants or tighten the input type |
+| `invariant_violation_by_operation` | preservation VC is satisfied (i.e. invariant fails post) | tighten `ensures` so the invariant's constrained fields are pinned by `=` or a range predicate |
+| `solver_timeout` | Z3 returns `unknown` | raise `--timeout`, simplify the invariant, or split a heavy quantifier |
+| `translator_limitation` | IR construct not yet supported by the verifier | skip the affected check or narrow the invariant so the unsupported construct doesn't appear |
+| `backend_error` | solver crash / init failure | re-run with `-v`; if reproducible, file an issue with `--dump-smt` output |
+
+### Worked example: preservation violation
+
+<CliRun spec="broken_url_shortener" command="verify" expectExit="1" />
+
+The hint names the violating operation, the violated invariant, and the field(s) the
+invariant constrains, extracted from the IR rather than re-rendered. Suggestions are
+capped at 200 chars and can be turned off entirely with `--no-suggestions` (the
+`suggestion` field then comes back as `null` in JSON output as well). The phrasing is
+intentionally non-stable text intended for humans; downstream tooling should switch on
+the `category` enum, not on the suggestion string.
+
+The numbered "Why this violates" block is the narration layer added in #89: a
+deterministic structural walk over the violated invariant's IR, the relevant `ensures`
+clause, and the decoded counterexample. Steps 1 and 2 pretty-print IR (fully
+parenthesized, readability cost is small, ambiguity cost is none); step 3 reads
+input/pre/post values directly off the model (no interpreter, no arithmetic
+re-evaluation); step 4 is a fixed phrasing keyed to the invariant name. Narration is
+populated for `invariant_violation_by_operation`, `contradictory_invariants`, and
+`unreachable_operation`. Other categories surface `narrative: null` in JSON. Suppress
+with `--no-narration` (mirrors `--no-suggestions`).
+
+The decoder enumerates the model's entity universe, evaluates field functions, and shows
+pre-/post-state relations side by side. Uninterpreted sort values like `UrlMapping!val!0` are
+rewritten to the readable `UrlMapping#N` labels.
+
+### Worked example: contradictory invariants
+
+<CliRun spec="unsat_invariants" command="verify" expectExit="1" />
+
+No counterexample is emitted here: the engine concluded `unsat` on the invariant conjunction
+alone, so there's no model to decode. Pass `--explain` to extract the unsat core and sharpen
+the `related:` list to the minimal contradictory subset; with `--explain` off, the related
+spans cover the full invariant set.
+
+## Using the CLI
+
+<CliRun spec="url_shortener" command="verify" />
+
+Add `-v` for stage timing, per-check timing, and the full check table. Each per-check line
+carries its routed backend tag (`[z3]` or `[alloy]`):
+
+<CliRun spec="safe_counter" command="verify" flags="-v" />
+
+Skipped checks (translator coverage gap) print as a separate `WARN translator limitation on
+check '<id>': <reason>` warning block before the surviving entries in the per-check table;
+they don't appear inline as a `skipped` row.
+
+### Options
+
+<TypeTable
+  type={{
+    '--timeout <ms>': {
+      description: 'Per-check timeout. `0` disables the timeout (Z3 default).',
+      type: 'number',
+      default: '30000',
+    },
+    '--alloy-scope <n>': {
+      description: 'Scope (atoms-per-signature upper bound) for Alloy-routed checks.',
+      type: 'number',
+      default: '5',
+    },
+    '--parallel <n>': {
+      description: 'Max concurrent checks. Default: host `availableProcessors`. `0` = serial (regression parity).',
+      type: 'number',
+      default: 'auto',
+    },
+    '--dump-smt': {
+      description: 'Emit Z3 SMT-LIB to stdout and exit without running the solver.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--dump-smt-out <file>': {
+      description: 'Write Z3 SMT-LIB to `<file>` and exit without running the solver.',
+      type: 'path',
+    },
+    '--dump-alloy': {
+      description: 'Emit Alloy source to stdout and exit without running Alloy.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--dump-alloy-out <file>': {
+      description: 'Write Alloy source to `<file>` and exit without running Alloy.',
+      type: 'path',
+    },
+    '--dump-vc <dir>': {
+      description: 'Write per-check VC artifacts (`.smt2` / `.als`) and `verdicts.json` into `<dir>`. Runs the full check pipeline.',
+      type: 'path',
+    },
+    '--explain': {
+      description: 'Extract unsat cores; surface contributing spec spans on `unsat` diagnostics. Modest overhead: Z3 switches to assert-and-track, Alloy to a core-capable SAT backend.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--json': {
+      description: 'Emit machine-readable JSON report to stdout (suppresses text).',
+      type: 'flag',
+      default: 'false',
+    },
+    '--json-out <file>': {
+      description: 'Write machine-readable JSON report to `<file>` (implies JSON mode; suppresses text).',
+      type: 'path',
+    },
+    '--no-suggestions': {
+      description: 'Suppress per-diagnostic `hint:` text in CLI and `suggestion` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '--no-narration': {
+      description: 'Suppress structural "why this fails" narration in CLI and `narrative` in JSON output.',
+      type: 'flag',
+      default: 'false',
+    },
+    '-v, --verbose': {
+      description: 'Print stage timing and per-check timing / status.',
+      type: 'flag',
+      default: 'false',
+    },
+    '-q, --quiet': {
+      description: 'Suppress non-error output.',
+      type: 'flag',
+      default: 'false',
+    },
+  }}
+/>
+
+### Exit codes
+
+| Code | Meaning |
+| ---: | --- |
+| `0` | All translated checks passed (`sat`); no checks were skipped. |
+| `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
+| `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
+| `3` | Backend error (solver init failure or solver crash). |
+| `4` | Soundness coverage gap: at least one check was skipped because its source exprs fall outside the Isabelle `lower` projection, and no higher-precedence outcome (Backend / Violation / Translator) was raised. |
+
+Precedence (highest to lowest): Backend (3), Violation (1), Translator (2), Trust (4), Ok (0).
+A backend crash always wins over a translator gap; a violation always wins over a soundness gap.
+
+Exit `2` is a partial-success signal: the spec *may* still be correct, but the verifier could
+not fully discharge every check. Skipped checks print as warnings with a `translator_limitation`
+diagnostic so CI / editors can surface the coverage gap alongside successes. Exit `4` is the same
+shape but driven by the verified subset: the skipped checks carry a `soundness_limitation`
+diagnostic, which signals that the spec uses constructs the formal soundness theorem does not yet cover
+(rather than constructs the translator does not handle). Verify routes every check that *does*
+run through the extracted (Isabelle-verified) translator; checks that would route through the
+hand-written translator at the *check-body* level always skip instead.
+
+## Inspecting the SMT-LIB
+
+`--dump-smt` emits a standalone `.smt2` file you can hand to any SMT solver, useful for
+cross-solver sanity checks, bug reports, or pasting into the
+[Z3 web playground](https://microsoft.github.io/z3guide/playground).
+
+```bash
+$ spec-to-rest verify --dump-smt-out /tmp/out.smt2 fixtures/spec/url_shortener.spec
+Wrote SMT-LIB to /tmp/out.smt2
+
+$ z3 /tmp/out.smt2
+sat
+```
+
+CI runs exactly this cross-check against the checked-in
+`fixtures/golden/smt/url_shortener.smt2` snapshot using `apt-get install -y z3`, if the
+emitter ever produces invalid SMT-LIB or loses satisfiability, CI fails loudly.
+
+## Machine-readable output (`--json` / `--json-out`)
+
+`spec-to-rest verify --json <spec>` runs the full engine and emits a structured JSON report
+to stdout instead of the human-readable text. `--json-out <file>` writes the same JSON to a
+file and keeps stdout clean. Either flag can compose with `--explain` (core spans land in the
+JSON) and `--dump-vc <dir>` (VC artifacts go to the dir, JSON to stdout/file).
+
+Exit codes (text and JSON modes alike): `0` pass, `1` violation, `2` translator gap, `3`
+backend error, `4` soundness gap (at least one check was skipped because its source exprs fall
+outside the verified subset). Backend errors take precedence over violations and over soundness
+gaps; the JSON complements the exit signal rather than replacing it.
+
+Combining `--json` / `--json-out` with `--dump-smt` / `--dump-alloy` is rejected with a clear
+error: the dump flags short-circuit before any checks run, so there is no report to serialize.
+
+### Top-level schema
+
+```json
+{
+  "schemaVersion": 2,
+  "specFile": "fixtures/spec/url_shortener.spec",
+  "ok": false,
+  "totalMs": 842.0,
+  "checks": [ /* ... */ ]
+}
+```
+
+Each entry in `checks` mirrors the internal `CheckResult` 1:1:
+
+```json
+{
+  "id": "Tamper.preserves.clickCountNonNegative",
+  "kind": "preservation",
+  "tool": "z3",
+  "trust": "best-effort",
+  "operationName": "Tamper",
+  "invariantName": "clickCountNonNegative",
+  "status": "unsat",
+  "durationMs": 142.0,
+  "detail": "operation 'Tamper' does not preserve invariant '...', counterexample found",
+  "sourceSpans": [{ "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 }],
+  "diagnostic": {
+    "level": "error",
+    "category": "invariant_violation_by_operation",
+    "message": "operation 'Tamper' violates invariant 'clickCountNonNegative'",
+    "primarySpan": { "startLine": 11, "startCol": 2, "endLine": 19, "endCol": 3 },
+    "relatedSpans": [{ "span": {...}, "note": "invariant '...' declared here" }],
+    "counterexample": {
+      "entities": [{ "sortName": "UrlMapping", "label": "UrlMapping#0",
+                     "rawElement": "UrlMapping!val!0",
+                     "fields": [{ "name": "click_count",
+                                  "value": { "display": "-1", "entityLabel": null } }] }],
+      "stateRelations": [{ "stateName": "metadata", "side": "pre",
+                           "entries": [{ "key": {...}, "value": {...} }] }],
+      "stateConstants": [],
+      "inputs": [{ "name": "code", "value": { "display": "2", "entityLabel": null } }]
+    },
+    "suggestion": "Tighten the 'ensures' clause so...",
+    "narrative": "Why this violates the invariant:\n  1. Invariant 'clickCountNonNegative' requires:\n       (all c in metadata | (metadata[c].click_count >= 0))\n  ...",
+    "coreSpans": []
+  }
+}
+```
+
+Passing checks have `diagnostic: null`. Checks without a counterexample (e.g. global
+`unsat`) have `counterexample: null`. `coreSpans` is an empty array when `--explain` is off
+or the backend can't provide a core. `narrative` is `null` outside the three categories that
+support narration (see [Reading diagnostics](#reading-diagnostics)) or when `--no-narration`
+is set.
+
+### Stable enum tokens
+
+These snake_case strings are the contract consumers depend on. Breaking changes bump
+`schemaVersion`.
+
+| Field      | Values |
+| ---------- | ------ |
+| `kind`     | `global`, `requires`, `enabled`, `preservation`, `temporal` |
+| `status`   | `sat`, `unsat`, `unknown`, `skipped` |
+| `tool`     | `z3`, `alloy` |
+| `trust`    | `sound`, `best-effort` |
+| `level`    | `error`, `warning` |
+| `category` | `contradictory_invariants`, `unsatisfiable_precondition`, `unreachable_operation`, `invariant_violation_by_operation`, `solver_timeout`, `translator_limitation`, `backend_error`, `soundness_limitation` |
+
+### Example consumer queries
+
+```bash
+# Did verification pass?
+spec-to-rest verify --json spec.spec | jq .ok
+
+# List every failing check ID.
+spec-to-rest verify --json spec.spec | jq '.checks[] | select(.status != "sat" and .status != "skipped") | .id'
+
+# Extract the first preservation counterexample's inputs.
+spec-to-rest verify --json spec.spec \
+  | jq '.checks[] | select(.diagnostic.category == "invariant_violation_by_operation") | .diagnostic.counterexample.inputs'
+```
+
+The JSON is *complementary* to
+[`--dump-vc`](/pipelines/verification/certificates#per-check-vc-dump---dump-vc): `--dump-vc` emits
+the raw solver inputs for replay; `--json` emits the decoded diagnostic data for consumption
+by editors, CI bots, and aggregators.
+
+## Timeout, cancellation, and parallel dispatch
+
+`--timeout` maps to a solver-native deadline (Z3's `timeout` parameter, Alloy's
+`Future.get(timeout, MILLISECONDS)`); there is no outer `IO.timeoutTo` wrapper. The
+`solver_timeout` diagnostic above is the only verifier-specific surface; the inner
+deadline expiry produces a `CheckOutcome.Unknown` carrying that category. `0` disables the
+solver-native deadline; the 30 s default is conservative headroom for heavier preservation
+checks on large specs.
+
+`--parallel n` (or `0` for serial) and the cancel-on-Ctrl+C / SIGINT path live entirely in
+the effect layer: per-check fibers via `parTraverseN`, `Resource[IO, WasmBackend]` /
+`Resource[IO, AlloyBackend]` for backend lifecycle, `Context.interrupt()` wired into
+`onCancel`, and a `CommandIOApp` shutdown hook for signal handling. The full mechanics
+(JMH numbers, native-memory caveats, the cancellation contract, and the `Context.interrupt()`
+mid-call abort details) are documented in
+[Concurrency & Cancellation](/pipelines/concurrency).
