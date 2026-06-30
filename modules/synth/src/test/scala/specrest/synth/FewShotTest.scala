@@ -25,6 +25,16 @@ class FewShotTest extends CatsEffectSuite:
       "Read operations get the map_update_existing example",
       Read(),
       List(FewShot.Snippet.MapUpdateExisting)
+    ),
+    (
+      "Transition operations get the guarded_transition example",
+      Transition(),
+      List(FewShot.Snippet.GuardedTransition, FewShot.Snippet.StateModify)
+    ),
+    (
+      "BatchMutation operations get the seq_append example",
+      BatchMutation(),
+      List(FewShot.Snippet.SeqAppend, FewShot.Snippet.MapInsertFresh)
     )
   ).foreach: (name, kind, expected) =>
     test(name):
