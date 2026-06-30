@@ -1,4 +1,4 @@
 {
   "title": "Synthesis",
-  "pages": ["llm-integration"]
+  "pages": ["index", "cli", "examples", "compile-and-fallback"]
 }

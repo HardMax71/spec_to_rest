@@ -1,0 +1,99 @@
+---
+title: Worked examples
+description: A real gpt-4o-mini run of safe_counter.Increment (cold and warm cache) and a mocked three-iteration convergence on url_shortener.Shorten.
+---
+
+## Real-LLM transcript: `safe_counter.Increment` (gpt-4o-mini)
+
+The simplest end-to-end smoke. Dafny 4.11.0 (`dotnet tool install -g Dafny`),
+gpt-4o-mini, `safe_counter` fixture. Two consecutive runs exercise the cold
+path (LLM call + Dafny verify + cache write) and the warm path (cache hit
+short-circuit, no LLM call).
+
+### Cold run
+
+```bash
+$ sbt "cli/run synth verify fixtures/spec/safe_counter.spec \
+       --operation Increment --max-iter 3 --model gpt-4o-mini --max-tokens 1024"
+```
+
+Stdout (the body the LLM produced, with no signature or fence markers):
+
+```text
+  // First, capture the old count for use in the postcondition
+  var oldCount := st.count;
+
+  // Increment the count
+  st.count := st.count + 1;
+
+  // Assert that the new count is indeed the old count plus one
+  assert st.count == oldCount + 1;
+
+  // Final assertion to verify service state invariant
+  assert ServiceStateInv(st);
+```
+
+Stderr summary (always two lines: outcome + cost ledger):
+
+```text
+[synth-verify] op=Increment VERIFIED iter=1 records=1
+[synth-verify] tokens in=574tok out=127tok cost=$0.0002 calls=1 cachedHits=0
+```
+
+Exit code: `0`.
+
+This particular transcript verified on the first iteration. LLM responses are
+non-deterministic; on a different draw `gpt-4o-mini` may produce a body that
+fails Dafny's postcondition check, in which case `iter` is `2` or higher and
+`records` shows the failed candidate plus the repair. Example from a
+previous run on the same fixture/model:
+
+```text
+[synth-verify] op=Increment VERIFIED iter=2 records=2
+[synth-verify] tokens in=1148tok out=353tok cost=$0.0004 calls=2 cachedHits=0
+```
+
+The repair-prompt path (`PromptBuilder.repair`) embeds the iteration-1 body
+verbatim plus the verifier error category and message, so the LLM sees what
+was wrong and produces a corrected body on iteration 2.
+
+### Warm run (cache hit)
+
+Re-running the same command immediately after the cold run:
+
+```text
+[synth-verify] op=Increment VERIFIED iter=0 records=1
+[synth-verify] tokens in=574tok out=127tok cost=$0.0002 calls=1 cachedHits=1
+```
+
+`iter=0` means no CEGIS iteration ran: the verified body was retrieved from
+`.spec-to-rest/synth-cache/verified/<2-hex-prefix>/<sha>.json` (entries are
+sharded into 2-character subdirectories by the leading hex bytes of the
+SHA-256 key) and re-spliced into a fresh copy of the skeleton. The token / cost numbers reproduce the previous run's
+ledger entry (which is what `cached=true` records mean), but no LLM call was
+billed. `calls=1` here counts the cached-call ledger entry rather than a network
+round-trip; `cachedHits=1` is the canonical signal of a cache hit.
+
+Wall clock for both runs combined: ~32s on a developer laptop. About $0.0002
+spent on real LLM tokens for the cold run; warm run is free.
+
+## Worked example: URL shortener `Shorten` (3 iterations, mocked)
+
+The acceptance test for #29 walks the canonical case where the LLM converges
+in three iterations:
+
+1. Iteration 1, initial prompt. LLM produces a body that hardcodes a
+   `ShortCode("abcdef")`. Dafny rejects: postcondition `code !in old(st.store)`
+   not established (the hardcoded code might already be in the store).
+2. Iteration 2, repair prompt embeds the iteration-1 body and the
+   postcondition error. LLM produces `code :| code !in st.store`. Dafny
+   rejects: cannot establish existence of LHS values.
+3. Iteration 3, repair prompt embeds the iteration-2 body and the
+   existence-failure error. LLM produces a `FreshCodeExists` lemma plus the
+   `:|` operator. **Verified.**
+
+`CegisLoopTest.scala` exercises this flow with `MockProvider` (three staged
+responses) and `MockDafnyVerifier` (three staged outputs), asserting
+`outcome.iterations == 3` and that the iteration-2 prompt contains
+`postcondition_violation` plus the iteration-1 body verbatim, proving
+"error feedback improves subsequent iterations" (AC 2).

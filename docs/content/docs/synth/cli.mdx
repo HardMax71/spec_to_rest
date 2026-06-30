@@ -1,0 +1,200 @@
+---
+title: CLI and configuration
+description: The synth subcommands (inspect, try, verify), the iteration budget, the Dafny binary requirement, the on-disk cache, and the Anthropic temperature note.
+---
+
+## `inspect --format dafny-prompt`
+
+Pure render: no network call, no API key required.
+
+```bash
+sbt "cli/run inspect fixtures/spec/url_shortener.spec --format dafny-prompt"
+sbt "cli/run inspect fixtures/spec/url_shortener.spec --format dafny-prompt --operation Shorten"
+```
+
+With `--operation NAME`, only that operation's prompt is rendered. Without it,
+every operation classified `LLM_SYNTHESIS` is emitted, separated by a markdown
+horizontal rule.
+
+## `synth try`
+
+Sends the constructed prompt to the LLM and prints the parsed body to stdout.
+**No verification.** Cost goes to stderr.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... \
+  sbt "cli/run synth try fixtures/spec/url_shortener.spec --operation Shorten"
+```
+
+<TypeTable
+  type={{
+    '--operation NAME': {
+      description: 'Must match an `LLM_SYNTHESIS`-classified op.',
+      type: 'string',
+      required: true,
+    },
+    '--model M': {
+      description: '`gpt-*` routes to OpenAI; otherwise Anthropic.',
+      type: 'string',
+      default: 'claude-sonnet-4-6',
+    },
+    '--temperature T': {
+      description: 'Honoured by OpenAI; **ignored on Anthropic** (see below).',
+      type: 'number',
+      default: '1.0',
+    },
+    '--max-tokens N': {
+      description: 'Per-response output cap.',
+      type: 'number',
+      default: '2048',
+    },
+    '--no-cache': {
+      description: 'Skip on-disk cache for this call.',
+      type: 'flag',
+      default: 'off',
+    },
+    '--cache-dir PATH': {
+      description: 'Override cache root.',
+      type: 'path',
+      default: '.spec-to-rest/synth-cache/',
+    },
+  }}
+/>
+
+Exit codes: `0` body produced + diff-check passed; `1` spec/parse/build/op-not-found/DIRECT_EMIT;
+`2` LLM response unparseable or diff-check rejected; `3` provider HTTP / API error.
+
+## `synth verify`
+
+Runs the full CEGIS loop: generate $\to$ diff-check $\to$ splice $\to$ `dafny verify`
+$\to$ repair $\to$ repeat, until the body verifies or the budget is exhausted.
+**Requires a `dafny` binary on `$PATH`** (or `--dafny-bin` / `$DAFNY_BIN`).
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... DAFNY_BIN=/usr/local/bin/dafny \
+  sbt "cli/run synth verify fixtures/spec/url_shortener.spec --operation Shorten"
+```
+
+<TypeTable
+  type={{
+    '--operation NAME': {
+      description: 'Must match an `LLM_SYNTHESIS`-classified op.',
+      type: 'string',
+      required: true,
+    },
+    '--model M': {
+      description: 'Same routing as `synth try`.',
+      type: 'string',
+      default: 'claude-sonnet-4-6',
+    },
+    '--temperature T': {
+      description: 'Same caveat as `synth try`, ignored on Anthropic.',
+      type: 'number',
+      default: '1.0',
+    },
+    '--max-tokens N': {
+      description: 'Per-iteration output cap.',
+      type: 'number',
+      default: '2048',
+    },
+    '--max-iter N': {
+      description: 'Hard cap on CEGIS iterations.',
+      type: 'number',
+      default: '8',
+    },
+    '--cost-cap-usd N': {
+      description: 'Abort if cumulative LLM cost exceeds this.',
+      type: 'number',
+      default: '1.00',
+    },
+    '--dafny-bin PATH': {
+      description: 'Path to the Dafny binary.',
+      type: 'path',
+      default: '$DAFNY_BIN then `dafny` on PATH',
+    },
+    '--dafny-timeout SEC': {
+      description: 'Per-iteration `--verification-time-limit`.',
+      type: 'number',
+      default: '60',
+    },
+    '--no-cache': {
+      description: 'Skip the verified-body cache.',
+      type: 'flag',
+      default: 'off',
+    },
+    '--cache-dir PATH': {
+      description: 'Verified bodies live under `<root>/verified/`.',
+      type: 'path',
+      default: '.spec-to-rest/synth-cache/',
+    },
+  }}
+/>
+
+Exit codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | Body verified within budget |
+| 1 | Budget exhausted (max iter / token / cost) or stuck on the same error |
+| 2 | LLM response unparseable, diff-check rejected, or splice failed |
+| 3 | Provider HTTP / API error, or Dafny binary missing / crashed |
+
+End-of-run stderr summary line:
+
+```text
+[synth-verify] op=Shorten VERIFIED iter=3 records=3
+[synth-verify] tokens in=4321tok out=987tok cost=$0.0421 calls=3 cachedHits=0
+```
+
+## Iteration budget
+
+The CEGIS loop uses `CegisBudget` to bound work. Defaults:
+
+```text
+maxIterations         = 8     # hard cap on repair rounds
+maxInputTokens        = 100000
+maxOutputTokens       = 50000
+maxCostUsd            = 1.00
+repeatedErrorThreshold = 3    # same (category, line) -> abort as "stuck"
+```
+
+The CLI exposes `--max-iter` and `--cost-cap-usd`. The token caps and stuck
+threshold are not surfaced as flags today, they're sane defaults that
+correspond to the cost cap on Claude Sonnet 4.6 / GPT-5 pricing. Override
+in code when embedding `CegisLoop` directly.
+
+## Dafny binary
+
+`DafnyCli.resolveBinary` checks (in order): the `--dafny-bin` flag, the
+`DAFNY_BIN` environment variable, and finally the unqualified `dafny` on
+`$PATH`. The check runs `dafny --version` with a 10-second timeout, if it
+fails, the command exits `3` (Backend) with a clear error.
+
+The structured-JSON log format used by `DafnyOutputParser` was added in
+**Dafny 4.5.0**. Earlier versions lack `--log-format json` for `verify` and
+will not work. We do **not** install Dafny in CI: the CEGIS loop is exercised
+end-to-end with `MockDafnyVerifier` against staged JSON shapes.
+
+## Caching
+
+Cache keys are content-addressed and intentionally do not include the spec
+source or skeleton text; only the contract surface that matters is keyed. Trivial
+spec edits (renames, comment changes) do not invalidate the cache; any change
+to signature / requires / ensures / modifies / `SynthPromptVersion` does.
+
+`synth try` and `synth verify` use **separate cache namespaces**:
+
+- `synth-cache/<key>.json` for `synth try` (diff-checked bodies; not
+  necessarily verified).
+- `synth-cache/verified/<key>.json` for `synth verify` (verified bodies).
+
+A `try`-passing body may not verify, so the two stores must not be merged.
+
+## Anthropic temperature note
+
+The Anthropic Messages API rejects `temperature != 1.0` on models released
+after Claude Opus 4.6. To stay forward-compatible, `AnthropicProvider` does
+**not** call the SDK's `.temperature(...)` builder for any model; Anthropic's
+server-side default applies. The flag is honoured by `OpenAIProvider`. For
+deterministic synthesis on Anthropic, rely on prompt structure and
+`--max-tokens` instead.
