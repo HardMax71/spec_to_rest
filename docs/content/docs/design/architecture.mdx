@@ -102,7 +102,8 @@ parser emits it and every consumer module reads it. Until
 [#391](https://github.com/HardMax71/spec_to_rest/issues/391) the repo carried a second,
 23-constructor subset datatype plus a `lower` projection between the two; that twin
 pipeline is gone. The verified subset is now carved out by the extracted translator
-itself: `translate :: expr => smt_term option` returns `Some` exactly on the subset the
+itself: `translate :: String.literal list => expr => smt_term option` (the first
+argument is the service's enum names) returns `Some` exactly on the subset the
 soundness theorem covers, and the extracted `trustGlobal` / `trustRequires` /
 `trustEnabled` / `trustPreservation` classifiers drive the per-check `trust` dimension
 from that same boundary. The capstone theorem is `translate_soundness_standalone` in

@@ -35,8 +35,7 @@ flowchart TD
   C -->|BestEffort: some expr is not| E[Skipped]
   D --> F[Translator entry, declarations]
   F --> G[per-check expr]
-  G --> H[lower, project onto the verified subset]
-  H --> I[translate, expr to smt_term]
+  G --> I[translate, expr to smt_term, None outside the subset]
   I --> J[SmtTermBridge]
   J --> K[Z3 via JNI]
   K --> L[Verdict]
@@ -57,7 +56,7 @@ Each layer's correctness obligation:
 | Sort inference, Z3 declaration management, set monomorphization, Skolem allocation, span threading | `TranslationContext`, `Z3EncodingSupport`, `Declarations`, `RelationFrames`, `SmtTermBridge` | trusted, outside the soundness statement; runs around the bridge |
 | Z3 solver (`com.microsoft.z3`) | external | trusted, incomplete on quantifiers, nonlinear arithmetic, and theory combinations; `unsat` is sound, `sat`/`unknown` can be solver artifacts |
 | Counterexample decoder | `z3/CounterExample.scala` | trusted, hand-written, outside soundness |
-| Alloy backend | `verify/alloy/*` | trusted, a separate bounded-model-checking story, not routed through the extracted translator |
+| Alloy backend | `modules/verify/.../alloy/*` | trusted, a separate bounded-model-checking story, not routed through the extracted translator |
 
 ## What "verified" means
 
