@@ -16,11 +16,14 @@ runs in CI ([#131](https://github.com/HardMax71/spec_to_rest/issues/131)). Bound
 checking uses Alloy 6.2 (powerset + temporal `always`/`eventually`).
 
 Translator soundness is mechanically verified in an Isabelle/HOL session under
-`proofs/isabelle/SpecRest/`. The universal `soundness` theorem closes with zero `sorry`;
-`Code_Target_Scala` extracts the verified translator and the canonical IR ADT to
+`proofs/isabelle/SpecRest/`. The universal `translate_soundness_standalone` theorem
+closes with zero `sorry`; `Code_Target_Scala` extracts the verified translator and the
+canonical IR ADT to
 `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`. The track
 pivoted from Lean 4 in [#193](https://github.com/HardMax71/spec_to_rest/issues/193); IR
-canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
+canonicalized in [#202](https://github.com/HardMax71/spec_to_rest/issues/202); the
+two-level IR collapsed into one verified `expr` in
+[#391](https://github.com/HardMax71/spec_to_rest/issues/391).
 
 Code generation uses Handlebars templates (`handlebars.java`) for the
 `python-fastapi-postgres`, `go-chi-postgres`
@@ -66,9 +69,9 @@ flowchart LR
 3. Verify. `verify` runs structural lints (L01-L06; see
    [structural lints](/spec-language#structural-lints)) and then translates each obligation
    to either Z3 SMT-LIB or Alloy (non-overlapping routing) and checks it. The translator's
-   correctness is mechanically validated by the universal `soundness` theorem in
-   `proofs/isabelle/SpecRest/Soundness.thy`. The `compile` command treats `verify` as a
-   hard gate (`--ignore-verify` to bypass).
+   correctness is mechanically validated by the universal `translate_soundness_standalone`
+   theorem in `proofs/isabelle/SpecRest/soundness/DirectSound.thy`. The `compile` command
+   treats `verify` as a hard gate (`--ignore-verify` to bypass).
 4. Convention map. The convention engine applies M1-M10 operation-classification
    rules; user-supplied `conventions { ... }` overrides win where present. See
    [Convention Engine](/design/convention-engine).
@@ -86,36 +89,39 @@ flowchart LR
 
 The IR is a Scala 3 ADT (sealed abstract classes + final case classes) **extracted from
 Isabelle** by `Code_Target_Scala`. The source-of-truth definitions live in
-[`proofs/isabelle/SpecRest/IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/IR.thy)
+[`proofs/isabelle/SpecRest/core/IR.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/core/IR.thy)
 and are extracted to
 [`modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala)
-on every `isabelle build SpecRest`. Two levels:
+on every `isabelle build SpecRest`.
 
-`expr_full` is the full input language (27 constructors: `BoolLitF`, `IntLitF`,
-`IdentifierF`, `BinaryOpF(op: bin_op_full, l, r, span)`, `UnaryOpF`, `QuantifierF`,
-`WithF`, `LambdaF`, `MapLiteralF`, `SetComprehensionF`, and so on). This is what the
-parser emits and what every consumer module reads.
+There is one expression datatype: `expr`, 27 constructors covering the full input
+language (`BoolLitF`, `IntLitF`, `IdentifierF`, `BinaryOpF(op, l, r, span)`, `UnaryOpF`,
+`QuantifierF`, `WithF`, `LambdaF`, `MapLiteralF`, `SetComprehensionF`, and so on),
+mutually recursive with `field_assign`, `map_entry`, and `quantifier_binding`. The
+parser emits it and every consumer module reads it. Until
+[#391](https://github.com/HardMax71/spec_to_rest/issues/391) the repo carried a second,
+23-constructor subset datatype plus a `lower` projection between the two; that twin
+pipeline is gone. The verified subset is now carved out by the extracted translator
+itself: `translate :: expr => smt_term option` returns `Some` exactly on the subset the
+soundness theorem covers, and the extracted `trustGlobal` / `trustRequires` /
+`trustEnabled` / `trustPreservation` classifiers drive the per-check `trust` dimension
+from that same boundary. The capstone theorem is `translate_soundness_standalone` in
+`proofs/isabelle/SpecRest/soundness/DirectSound.thy`; see
+[Isabelle proofs, session layout](/design/isabelle-proofs/session-layout).
 
-`expr` is the verified subset (23 constructors, dropping `MapLiteral`, `Lambda`,
-`Constructor`, `SomeWrap`, `SetComprehension`, `Matches`, `SeqLiteral`, `With`,
-`MapType`, `RelationType`, and `UPower`). The translator-soundness theorem is stated
-against this shape.
-
-`lower :: expr_full => expr option` is the projection from input to verified subset,
-proven sound by `lower_soundness` in `Soundness.thy`.
-
-The top-level `service_ir_full` plus 18 sub-records (`entity_decl_full`, `field_decl_full`,
-`operation_decl_full`, `invariant_decl_full`, `function_decl_full`, `predicate_decl_full`,
-`transition_decl_full`, `conventions_decl_full`, `state_decl_full`, ...) carry the surrounding
-declaration shape. Extracted Scala fields are positional letters (`a`, `b`, `c`, ...) since
-the extractor doesn't preserve English names; the conceptual mapping (e.g. `ServiceIRFull.a`
-is the service name, `.c` the entity list, `.g` the operation list, `.i` the invariants) is
-spelled out in `IR.thy`.
+The top-level `service_ir` plus the `*_decl` sub-declarations (`entity_decl`,
+`field_decl`, `operation_decl`, `invariant_decl`, `function_decl`, `predicate_decl`,
+`transition_decl`, `conventions_decl`, `state_decl`, ...) carry the surrounding
+declaration shape; constructors keep a `Full`/`F` suffix (`ServiceIRFull`,
+`FieldDeclFull`, `BoolLitF`). Extracted case-class fields are positional letters (`a`,
+`b`, `c`, ...) since the extractor doesn't preserve English names, but named selector
+functions (`svcName`, `svcOperations`, `fldName`, ...) are extracted alongside, so
+hand-written code never needs the letter mapping.
 
 The same IR feeds the verifier (Z3 + Alloy translators), the convention engine, the codegen,
-and the testgen. The translator's correctness is mechanically validated by the universal
-soundness theorem in `proofs/isabelle/SpecRest/Soundness.thy`. IR canonicalization shipped
-in [#202](https://github.com/HardMax71/spec_to_rest/issues/202).
+and the testgen. IR canonicalization shipped
+in [#202](https://github.com/HardMax71/spec_to_rest/issues/202); the one-IR collapse
+in [#391](https://github.com/HardMax71/spec_to_rest/issues/391).
 
 ## Project layout
 
