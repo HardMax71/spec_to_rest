@@ -30,6 +30,7 @@ import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.openapi.OpenApi
 import specrest.convention.EndpointSpec
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -573,12 +574,7 @@ object EmitPython:
       EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
     }
 
-    val method = endpoint.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val method = HttpMethods.lower(endpoint.method)
 
     val ctx = OperationContext.from(op, entity)
 
@@ -687,7 +683,7 @@ object EmitPython:
       requestBodyType = requestBodyType,
       responseAnnotation = responseAnnotation,
       serviceCallArgs = effectiveServiceCallArgs,
-      routeKind = routeKindTsName(routeKind),
+      routeKind = EmitShared.routeKindName(routeKind),
       pathParamSignature = pathParamSignature,
       serviceSignatureExtraArgs = serviceExtraArgs,
       serviceReturnAnnotation = serviceReturnAnno,
@@ -726,14 +722,6 @@ object EmitPython:
       (if endpoint.bodyParams.nonEmpty then List("body") else Nil)
     parts.mkString(", ")
 
-  private def routeKindTsName(rk: route_kind): String = rk match
-    case _: RkCreate   => "create"
-    case _: RkRead     => "read"
-    case _: RkList     => "list"
-    case _: RkDelete   => "delete"
-    case _: RkRedirect => "redirect"
-    case _: RkOther    => "other"
-
   private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
     if entity.fields.exists(_.columnName == pathParamName) then pathParamName
     else
@@ -762,13 +750,8 @@ object EmitPython:
     else ormColumnType
 
   private def pyScalarOp(v: ScalarOpView): PyScalarOp =
-    val ep = v.operation.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val ep     = v.operation.endpoint
+    val method = HttpMethods.lower(ep.method)
     val guardConds = v.guards.map: g =>
       s"ServiceState.${g.columnName} ${ScalarOps.pyCmp(g.cmp)} ${g.lit}"
     val valuesArgs = v.updates

@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.go.GoLit
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -20,7 +21,7 @@ object GoStructural:
       if StubOps.isStub(profiled, pop) then
         Left(TestSkip(pop.operationName, "structural", StubOps.skipReason(pop)))
       else
-        goInputArbs(pop, ir) match
+        TestFormat.inputArbs(pop, ir, GoRapidStrategy) match
           case Left(reason) =>
             Left(TestSkip(pop.operationName, "structural", reason))
           case Right(arbs) =>
@@ -30,30 +31,9 @@ object GoStructural:
       skips = collected.collect { case Left(s) => s }
     )
 
-  private def goInputArbs(
-      pop: ProfiledOperation,
-      ir: ServiceIRFull
-  ): Either[String, List[(String, String)]] =
-    val ep     = pop.endpoint
-    val params = ep.pathParams ++ ep.bodyParams ++ ep.queryParams
-    if params.isEmpty then Right(Nil)
-    else
-      val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
-        val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
-        (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, GoRapidStrategy))
-      pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
-        case Some(reason) => Left(reason)
-        case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
-
   private def goRequestCall(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val ep     = pop.endpoint
+    val method = HttpMethods.lower(ep.method)
     val pathExpr =
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else

@@ -1,9 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.AdminModel
-import specrest.convention.EndpointSpec
 import specrest.ir.Naming
-import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
@@ -314,9 +312,9 @@ object Stateful:
     sb.append(s"    @rule($ruleArgs)\n")
     sb.append(s"    def $funcName($sigParams):\n")
     sb.append(
-      s"        $TQ${escapeDocstring(operationSummary(opDecl))} (transition $from -> $to)$TQ\n"
+      s"        $TQ${TestFormat.escapeDocstring(operationSummary(opDecl))} (transition $from -> $to)$TQ\n"
     )
-    sb.append(s"        response = ${requestCallExpr(pop)}\n")
+    sb.append(s"        response = ${TestFormat.requestCallExpr(pop)}\n")
     val successCode = pop.endpoint.successStatus
     if guarded then
       sb.append(s"        if response.status_code == $successCode:\n")
@@ -560,8 +558,8 @@ object Stateful:
 
     sb.append(s"    @rule($ruleArgs)\n")
     sb.append(s"    def $funcName($sigParams):\n")
-    sb.append(s"        $TQ${escapeDocstring(operationSummary(opDecl))}$TQ\n")
-    sb.append(s"        response = ${requestCallExpr(pop)}\n")
+    sb.append(s"        $TQ${TestFormat.escapeDocstring(operationSummary(opDecl))}$TQ\n")
+    sb.append(s"        response = ${TestFormat.requestCallExpr(pop)}\n")
 
     val classicBundleInputNames = bindings.collect:
       case (n, InputBinding.BundleDraw(_, _) | InputBinding.BundleConsume(_, _)) => n
@@ -643,7 +641,7 @@ object Stateful:
         sb.append("    @invariant()\n")
         sb.append(s"    def invariant_$methodName(self):\n")
         sb.append(
-          s"        ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(invBody(inv)))}$TQ\n"
+          s"        ${TQ}invariant $name: ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(invBody(inv)))}$TQ\n"
         )
         sb.append("        post_state = client.get(\"/admin/state\").json()\n")
         sb.append(
@@ -669,7 +667,7 @@ object Stateful:
             sb.append("    @invariant()\n")
             sb.append(s"    def temporal_always_$methodName(self):\n")
             sb.append(
-              s"        ${TQ}temporal always(${tmpName(decl)}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
+              s"        ${TQ}temporal always(${tmpName(decl)}): ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(arg))}$TQ\n"
             )
             sb.append("        post_state = client.get(\"/admin/state\").json()\n")
             sb.append(
@@ -689,7 +687,7 @@ object Stateful:
             sb.append("    @invariant()\n")
             sb.append(s"    def temporal_eventually_observe_$methodName(self):\n")
             sb.append(
-              s"        ${TQ}temporal eventually(${tmpName(decl)}): ${escapeDocstring(prettyOneLine(arg))}$TQ\n"
+              s"        ${TQ}temporal eventually(${tmpName(decl)}): ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(arg))}$TQ\n"
             )
             sb.append("        post_state = client.get(\"/admin/state\").json()\n")
             sb.append(s"        if $text:\n")
@@ -699,7 +697,7 @@ object Stateful:
                 declName = tmpName(decl),
                 methodName = methodName,
                 observer = sb.toString,
-                prettyExpr = prettyOneLine(arg)
+                prettyExpr = TestFormat.prettyOneLine(arg)
               )
             )
       case TbFairness(_) =>
@@ -875,41 +873,12 @@ object Stateful:
         |$testName = $machineName.TestCase
         |""".stripMargin
 
-  private def requestCallExpr(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
-    val bodyParamNames  = ep.bodyParams.map(_.name)
-    val queryParamNames = ep.queryParams.map(_.name)
-    val pathExpr        = pythonPathLiteral(ep)
-    val bodyExpr =
-      if bodyParamNames.isEmpty then ""
-      else
-        val pairs =
-          bodyParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
-        s", json={$pairs}"
-    val queryExpr =
-      if queryParamNames.isEmpty then ""
-      else
-        val pairs =
-          queryParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
-        s", params={$pairs}"
-    s"client.$method($pathExpr$bodyExpr$queryExpr)"
-
-  private def pythonPathLiteral(ep: EndpointSpec): String =
-    if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
-    else "f" + ExprToPython.pyString(ep.path)
-
   private def operationSummary(op: operation_decl): String =
     val req = operRequires(op)
       .filterNot(isTrueLit)
-      .map(prettyOneLine)
+      .map(TestFormat.prettyOneLine)
       .mkString("; ")
-    val ens = operEnsures(op).map(prettyOneLine).mkString("; ")
+    val ens = operEnsures(op).map(TestFormat.prettyOneLine).mkString("; ")
     val parts = List(
       Option.when(req.nonEmpty)(s"requires: $req"),
       Option.when(ens.nonEmpty)(s"ensures: $ens")
@@ -931,9 +900,3 @@ object Stateful:
         requiresIsSatisfiedByBundles(l, bundleInputs, stateFields) &&
         requiresIsSatisfiedByBundles(r, bundleInputs, stateFields)
       case _ => false
-
-  private def prettyOneLine(e: expr): String =
-    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
-
-  private def escapeDocstring(s: String): String =
-    s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"")
