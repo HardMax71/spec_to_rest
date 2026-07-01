@@ -37,9 +37,9 @@ text \<open>Productionized Scala extraction. The full-language IR (\<open>expr\<
   The export at this theory's bottom is the canonical Scala consumer-facing
   artifact; consumers \<open>import\<close> it directly.
 
-  Verified-subset records (\<open>schema_field_decl\<close>, …) extract as polymorphic scheme
-  types but Scala consumers don't reference them — \<open>lower\<close>/\<open>eval\<close>/\<open>smtEval\<close>
-  output the verified-subset \<open>expr\<close> datatype which is flat.\<close>
+  Reference-semantics records (\<open>smt_model\<close>, \<open>state\<close>, …) extract as polymorphic
+  scheme types but Scala consumers don't reference them: \<open>translate\<close> outputs the
+  flat \<open>smt_term\<close> datatype, and \<open>smtEval\<close> is exported for self-containment only.\<close>
 
 declare schema.defs[code]
 declare state.defs[code]
