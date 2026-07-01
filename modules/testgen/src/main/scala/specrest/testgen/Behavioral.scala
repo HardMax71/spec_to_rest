@@ -1,6 +1,5 @@
 package specrest.testgen
 
-import specrest.convention.EndpointSpec
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
@@ -349,7 +348,7 @@ object Behavioral:
     sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
-    sb.append(s"    response = ${requestCallExpr(pop)}\n")
+    sb.append(s"    response = ${TestFormat.requestCallExpr(pop)}\n")
     if nonTrivialRequires then
       sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
@@ -382,7 +381,7 @@ object Behavioral:
     sb.append(
       s"    assume($inputName not in pre_state.get(${ExprToPython.pyString(stateName)}, {}))\n"
     )
-    sb.append(s"    response = ${requestCallExpr(pop)}\n")
+    sb.append(s"    response = ${TestFormat.requestCallExpr(pop)}\n")
     sb.append(
       "    assert 400 <= response.status_code < 500, " +
         s"f${'"'}expected 4xx, got {response.status_code}: {response.text}${'"'}\n"
@@ -408,7 +407,7 @@ object Behavioral:
     sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
-    sb.append(s"    response = ${requestCallExpr(pop)}\n")
+    sb.append(s"    response = ${TestFormat.requestCallExpr(pop)}\n")
     sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
     sb.append("    post_state = client.get(\"/admin/state\").json()\n")
@@ -441,32 +440,3 @@ object Behavioral:
           val args  = codes.map((n, t) => s"$n=$t").mkString(", ")
           val gen   = s"@given($args)"
           Right(InputSig(names = codes.map(_._1), signature = sig, givenLine = gen))
-
-  private def requestCallExpr(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
-    val bodyParamNames  = ep.bodyParams.map(_.name)
-    val queryParamNames = ep.queryParams.map(_.name)
-    val pathExpr        = pythonPathLiteral(ep)
-    val bodyExpr =
-      if bodyParamNames.isEmpty then ""
-      else
-        val pairs =
-          bodyParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
-        s", json={$pairs}"
-    val queryExpr =
-      if queryParamNames.isEmpty then ""
-      else
-        val pairs =
-          queryParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
-        s", params={$pairs}"
-    s"client.$method($pathExpr$bodyExpr$queryExpr)"
-
-  private def pythonPathLiteral(ep: EndpointSpec): String =
-    if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)
-    else "f" + ExprToPython.pyString(ep.path)

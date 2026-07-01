@@ -1,7 +1,7 @@
 package specrest.testgen
 
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
-import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -62,7 +62,7 @@ object TsBehavioral:
         )
       )
     else
-      tsInputArbs(pop, ir) match
+      TestFormat.inputArbs(pop, ir, TsFastCheckStrategy) match
         case Left(reason) => List(Left(TestSkip(operName(opDecl), "ensures", reason)))
         case Right(arbs) =>
           val ctx = TestCtx.fromOperation(
@@ -86,7 +86,7 @@ object TsBehavioral:
                   Right(
                     buildPositiveTest(
                       name = s"test_${opSnake}_ensures_$idx",
-                      docstring = s"ensures: ${prettyOneLine(clause)}",
+                      docstring = s"ensures: ${TestFormat.prettyOneLine(clause)}",
                       arbs = arbs,
                       pop = pop,
                       assertion = text,
@@ -94,30 +94,9 @@ object TsBehavioral:
                     )
                   )
 
-  private def tsInputArbs(
-      pop: ProfiledOperation,
-      ir: ServiceIRFull
-  ): Either[String, List[(String, String)]] =
-    val ep     = pop.endpoint
-    val params = ep.pathParams ++ ep.bodyParams ++ ep.queryParams
-    if params.isEmpty then Right(Nil)
-    else
-      val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
-        val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
-        (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, TsFastCheckStrategy))
-      pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
-        case Some(reason) => Left(reason)
-        case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
-
   private def tsRequestCall(pop: ProfiledOperation): String =
-    val ep = pop.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val ep      = pop.endpoint
+    val method  = HttpMethods.lower(ep.method)
     val hasPath = ep.pathParams.nonEmpty
     val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{$1\\}")
     val pathExpr =
@@ -185,12 +164,6 @@ object TsBehavioral:
       sb.append("});\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
-  private def prettyOneLine(e: expr): String =
-    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
-
-  private val RuntimeHelpers =
-    List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
-
   // vitest fails a test file that contains zero tests (the same hazard as
   // pytest exit-5). When every behavioral op is a fail-loud stub / state-dep /
   // untranslatable, emit one honest skip; reasons are in _testgen_skips.json.
@@ -213,7 +186,7 @@ object TsBehavioral:
 
   private def renderFull(ir: ServiceIRFull, tests: List[GeneratedTest]): String =
     val bodies = tests.map(_.body).mkString("\n")
-    val usedRt = RuntimeHelpers.filter(h => bodies.contains(s"$h("))
+    val usedRt = TestFormat.TsRuntimeHelpers.filter(h => bodies.contains(s"$h("))
     val predNames =
       (svcFunctions(ir).map(fncName) ++
         svcPredicates(ir).map(prdName)).distinct.sorted

@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.AdminModel
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
@@ -377,12 +378,7 @@ private[testgen] object StateMachineTests:
           val rendered = ep.path.replace(s"{$p}", "{seeded_id}")
           "f" + ExprToPython.pyString(rendered)
         case None => ExprToPython.pyString(ep.path)
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val method = HttpMethods.lower(ep.method)
     val bodyEntries = nonPath.collect:
       case NonPathInput(n, arg, NonPathKind.Body, _) => s"${ExprToPython.pyString(n)}: $arg"
     val queryEntries = nonPath.collect:
