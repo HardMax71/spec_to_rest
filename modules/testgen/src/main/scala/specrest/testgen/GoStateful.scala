@@ -1,7 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.go.GoLit
-import specrest.ir.PrettyPrint
+import specrest.ir.HttpMethods
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -30,7 +30,7 @@ object GoStateful:
         skips += TestSkip(pop.operationName, "stateful_rule", StubOps.authSkipReason(pop))
         None
       else
-        goInputArbs(pop, ir) match
+        TestFormat.inputArbs(pop, ir, GoRapidStrategy) match
           case Left(reason) =>
             skips += TestSkip(pop.operationName, "stateful_rule", reason)
             None
@@ -47,7 +47,7 @@ object GoStateful:
             skips += TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
             None
           case Translated.Emit(text) =>
-            Some((name, prettyOneLine(invBody(inv)), text))
+            Some((name, TestFormat.prettyOneLine(invBody(inv)), text))
 
     if svcTemporals(ir).nonEmpty || svcTransitions(ir).nonEmpty then
       skips += TestSkip(
@@ -63,30 +63,9 @@ object GoStateful:
 
     StatefulOutput(file = file, skips = skips.toList)
 
-  private def goInputArbs(
-      pop: ProfiledOperation,
-      ir: ServiceIRFull
-  ): Either[String, List[(String, String)]] =
-    val ep     = pop.endpoint
-    val params = ep.pathParams ++ ep.bodyParams ++ ep.queryParams
-    if params.isEmpty then Right(Nil)
-    else
-      val overrides = TestStrategyOverrides.from(ir)
-      val pairs = params.map: p =>
-        val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
-        (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, GoRapidStrategy))
-      pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
-        case Some(reason) => Left(reason)
-        case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
-
   private def dispatchCall(s: StepOp): String =
-    val ep = s.pop.endpoint
-    val method = ep.method match
-      case _: GET    => "get"
-      case _: POST   => "post"
-      case _: PUT    => "put"
-      case _: PATCH  => "patch"
-      case _: DELETE => "delete"
+    val ep     = s.pop.endpoint
+    val method = HttpMethods.lower(ep.method)
     val pathExpr =
       if ep.pathParams.isEmpty then GoLit.str(ep.path)
       else
@@ -176,6 +155,3 @@ object GoStateful:
         |\t\t"black-box assertable (see tests/_testgen_skips.json)")
         |}
         |""".stripMargin
-
-  private def prettyOneLine(e: expr): String =
-    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim

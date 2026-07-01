@@ -97,8 +97,7 @@ object TestEmit:
     val usesRedact =
       bodies.contains("redact(") || specs.exists(_.body.contains("\"***REDACTED***\""))
     val rtHelpers =
-      List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
-        .filter(h => bodies.contains(s"$h("))
+      TestFormat.TsRuntimeHelpers.filter(h => bodies.contains(s"$h("))
     val userImports = specs
       .flatMap(_.imports)
       .distinct

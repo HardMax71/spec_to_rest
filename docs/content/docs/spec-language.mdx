@@ -13,10 +13,11 @@ Looking for the design rationale (why these constructs, what was surveyed, how t
 was chosen)? See the [spec language foundations](/research/spec_language_design/survey).
 
 The semantics on this page are English-prose. The matching formal denotational semantics
-ships in [`Semantics.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/Semantics.thy)
+ships in [`Semantics_Reference.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/semantics/Semantics_Reference.thy)
 (an `eval` mutual function block over the IR ADT), and the universal translator-soundness
-theorem closes in [`Soundness.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/Soundness.thy)
-with zero `sorry` over all 23 expression constructors. Production `verify` routes in-subset
+theorem (`translate_soundness_standalone`) closes in
+[`DirectSound.thy`](https://github.com/HardMax71/spec_to_rest/blob/main/proofs/isabelle/SpecRest/soundness/DirectSound.thy)
+with zero `sorry` over the verified subset. Production `verify` routes in-subset
 shapes through the Isabelle-extracted Scala translator at
 `modules/ir/src/main/scala/specrest/ir/generated/SpecRestGenerated.scala` ([#192](https://github.com/HardMax71/spec_to_rest/issues/192)).
 For the trust-chain framing, the 2026 prior-art survey, and milestone history, see
