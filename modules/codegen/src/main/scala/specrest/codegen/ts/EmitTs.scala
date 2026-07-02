@@ -16,7 +16,7 @@ import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
-import specrest.codegen.migration.Revision
+import specrest.codegen.migration.MigrationPlan
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
@@ -161,22 +161,7 @@ object EmitTs:
       kebabName = ctx.service.kebabName
     )
 
-    val baseTypeLookup = profiled.profile.typeMap.map: (k, v) =>
-      k -> v.domain
-    val aliasExprs =
-      svcTypeAliases(profiled.ir).map(a => talName(a) -> talType(a)).toMap
-    def resolveAliasType(te: type_expr, seen: Set[String] = Set.empty): Option[String] =
-      te match
-        case NamedTypeF(n, _) =>
-          baseTypeLookup
-            .get(n)
-            .orElse(
-              if seen(n) then None
-              else aliasExprs.get(n).flatMap(resolveAliasType(_, seen + n))
-            )
-        case _ => None
-    val typeLookup =
-      baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
+    val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled)
 
     val triggerMaintainedByTable: Map[String, Set[String]] =
       schemaTriggers(profiled.schema)
@@ -365,32 +350,25 @@ object EmitTs:
         engine.renderAny(templates.migrationSql, downScope)
       )
 
-    opts.previousSnapshot match
-      case None                                      => emitInitial()
-      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
-      case Some(prev) =>
-        val ops = SchemaDiff.compute(prev, schema)
-        if ops.nonEmpty then
-          val nextRev = Revision.next(opts.existingRevisions)
-          // A state table first appearing in a delta still needs its singleton
-          // row; without it every scalar op's guarded UPDATE matches 0 rows.
-          val deltaSeeds = ops.collect:
-            case CreateTable(t) if ScalarOps.isStateTable(t) =>
-              ScalarOps.seedSqlFor(t) + ";"
-          val upScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds)
-          )
-          val downScope = Map[String, Any](
-            "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
-          )
-          files += EmittedFile(
-            s"prisma/migrations/${nextRev}_schema_update/migration.sql",
-            engine.renderAny(templates.migrationSql, upScope)
-          )
-          files += EmittedFile(
-            s"prisma/migrations/${nextRev}_schema_update/down.sql",
-            engine.renderAny(templates.migrationSql, downScope)
-          )
+    MigrationPlan.of(opts.previousSnapshot, opts.existingRevisions, schema) match
+      case MigrationPlan.Initial  => emitInitial()
+      case MigrationPlan.UpToDate => ()
+      case MigrationPlan.Delta(ops, nextRev) =>
+        val deltaSeeds = ScalarOps.deltaStateSeeds(ops).map(_ + ";")
+        val upScope = Map[String, Any](
+          "migration" -> PrismaMigrationView(SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds)
+        )
+        val downScope = Map[String, Any](
+          "migration" -> PrismaMigrationView(SqlRenderer.downgrade(ops, dialect))
+        )
+        files += EmittedFile(
+          s"prisma/migrations/${nextRev}_schema_update/migration.sql",
+          engine.renderAny(templates.migrationSql, upScope)
+        )
+        files += EmittedFile(
+          s"prisma/migrations/${nextRev}_schema_update/down.sql",
+          engine.renderAny(templates.migrationSql, downScope)
+        )
 
   final private case class PrismaMigrationView(upgradeStatements: List[String])
 
@@ -900,7 +878,7 @@ object EmitTs:
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (op.operationName, pathArgsCsv, sig, "Promise<boolean>", Option.empty[String], deleteCall)
         case _: RkRedirect =>
-          val tgt = redirectTarget(op, entity).getOrElse("url")
+          val tgt = EmitShared.redirectTargetColumn(entity).map(toCamelCase).getOrElse("url")
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
             op.operationName,
@@ -961,15 +939,6 @@ object EmitTs:
 
   private def toExpressPath(chiPath: String): String =
     """\{([^}]+)\}""".r.replaceAllIn(chiPath, m => ":" + toCamelCase(m.group(1)))
-
-  private def redirectTarget(
-      @scala.annotation.unused op: ProfiledOperation,
-      entity: ProfiledEntity
-  ): Option[String] =
-    val candidates = List("url", "location", "redirect_url")
-    candidates
-      .find(c => entity.fields.exists(_.columnName == c))
-      .map(toCamelCase)
 
   private def tsTypeForParam(typeExpr: type_expr, typeLookup: Map[String, String]): String =
     typeExpr match

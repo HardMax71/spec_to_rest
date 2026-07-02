@@ -16,7 +16,7 @@ import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.TemplateEngine
-import specrest.codegen.migration.Revision
+import specrest.codegen.migration.MigrationPlan
 import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
@@ -174,22 +174,7 @@ object EmitGo:
       kebabName = ctx.service.kebabName
     )
 
-    val baseTypeLookup = profiled.profile.typeMap.map: (k, v) =>
-      k -> v.domain
-    val aliasExprs =
-      svcTypeAliases(profiled.ir).map(a => talName(a) -> talType(a)).toMap
-    def resolveAliasType(te: type_expr, seen: Set[String] = Set.empty): Option[String] =
-      te match
-        case NamedTypeF(n, _) =>
-          baseTypeLookup
-            .get(n)
-            .orElse(
-              if seen(n) then None
-              else aliasExprs.get(n).flatMap(resolveAliasType(_, seen + n))
-            )
-        case _ => None
-    val typeLookup =
-      baseTypeLookup ++ aliasExprs.flatMap((n, t) => resolveAliasType(t).map(n -> _))
+    val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled)
 
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
@@ -475,35 +460,28 @@ object EmitGo:
         engine.renderAny(templates.migrationDown, scope)
       )
 
-    opts.previousSnapshot match
-      case None                                      => emitInitial()
-      case Some(_) if opts.existingRevisions.isEmpty => emitInitial()
-      case Some(prev) =>
-        val ops = SchemaDiff.compute(prev, schema)
-        if ops.nonEmpty then
-          val nextRev = Revision.next(opts.existingRevisions)
-          // A state table first appearing in a delta still needs its singleton
-          // row; without it every scalar op's guarded UPDATE matches 0 rows.
-          val deltaSeeds = ops.collect:
-            case CreateTable(t) if ScalarOps.isStateTable(t) =>
-              ScalarOps.seedSqlFor(t) + ";"
-          val view = SqlMigrationView(
-            upgradeStatements = SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds,
-            downgradeStatements = SqlRenderer.downgrade(ops, dialect)
-          )
-          val scope = Map[String, Any](
-            "migration" -> view,
-            "txBegin"   -> db.txBegin,
-            "txCommit"  -> db.txCommit
-          )
-          files += EmittedFile(
-            s"migrations/${nextRev}_schema_update.up.sql",
-            engine.renderAny(templates.migrationUp, scope)
-          )
-          files += EmittedFile(
-            s"migrations/${nextRev}_schema_update.down.sql",
-            engine.renderAny(templates.migrationDown, scope)
-          )
+    MigrationPlan.of(opts.previousSnapshot, opts.existingRevisions, schema) match
+      case MigrationPlan.Initial  => emitInitial()
+      case MigrationPlan.UpToDate => ()
+      case MigrationPlan.Delta(ops, nextRev) =>
+        val deltaSeeds = ScalarOps.deltaStateSeeds(ops).map(_ + ";")
+        val view = SqlMigrationView(
+          upgradeStatements = SqlRenderer.upgrade(ops, dialect) ++ deltaSeeds,
+          downgradeStatements = SqlRenderer.downgrade(ops, dialect)
+        )
+        val scope = Map[String, Any](
+          "migration" -> view,
+          "txBegin"   -> db.txBegin,
+          "txCommit"  -> db.txCommit
+        )
+        files += EmittedFile(
+          s"migrations/${nextRev}_schema_update.up.sql",
+          engine.renderAny(templates.migrationUp, scope)
+        )
+        files += EmittedFile(
+          s"migrations/${nextRev}_schema_update.down.sql",
+          engine.renderAny(templates.migrationDown, scope)
+        )
 
   final private case class SqlMigrationView(
       upgradeStatements: List[String],
@@ -777,7 +755,7 @@ object EmitGo:
             pathParamSignature
           )
         case _: RkRedirect =>
-          val tgt = redirectTarget(op, entity).getOrElse("URL")
+          val tgt = EmitShared.redirectTargetColumn(entity).map(toPascalCase).getOrElse("URL")
           (
             "string",
             Some(tgt),
@@ -977,15 +955,6 @@ object EmitGo:
         |}
         |
         |$methods""".stripMargin
-
-  private def redirectTarget(
-      @scala.annotation.unused op: ProfiledOperation,
-      entity: ProfiledEntity
-  ): Option[String] =
-    val candidates = List("url", "location", "redirect_url")
-    candidates.find: c =>
-      entity.fields.exists(_.columnName == c)
-    .map(toPascalCase)
 
   private def goTypeForParam(typeExpr: type_expr, typeLookup: Map[String, String]): String =
     typeExpr match
