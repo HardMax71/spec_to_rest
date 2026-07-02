@@ -150,8 +150,6 @@ object TestCtx:
       capture = CaptureMode.PostState
     )
 
-// The declaration walk every predicates-file renderer shares: hand each user
-// function's and predicate's (name, params, body) to the language's renderer.
 private[testgen] object UserDefs:
   def renderAll(ir: ServiceIRFull)(renderOne: (String, List[String], expr) => String): String =
     val parts =
