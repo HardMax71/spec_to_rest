@@ -617,3 +617,51 @@ class BackendTest extends CatsEffectSuite:
       assert(go.contains("t.Skip("), go)
       assert(go.contains("package tests"), go)
       assert(!go.contains("rapid.Check"), go)
+
+  // The skeleton (ExprBackendBase) owns scoping guards and the map-domain peel,
+  // so the three languages cannot drift on them. One matrix per guard.
+  private def text(b: ExprBackend, e: expr, c: TestCtx): String = b.translate(e, c) match
+    case Translated.Emit(t)    => t
+    case Translated.Skip(r, _) => s"<skip:$r>"
+
+  private def reservedFn(name: String): (String, function_decl) =
+    name -> FunctionDeclFull(
+      name,
+      List(ParamDeclFull("n", NamedTypeF("Int", None), None)),
+      NamedTypeF("Int", None),
+      IdentifierF("n", None),
+      None
+    )
+
+  List(("python", ExprToPython), ("typescript", TsExprBackend), ("go", GoExprBackend))
+    .foreach: (label, backend) =>
+      test(s"quantifier with a reserved binding name skips in $label"):
+        val q = QuantifierF(
+          QAll(),
+          List(QuantifierBindingFull("for", IdentifierF("s", None), BkIn(), None)),
+          BoolLitF(true, None),
+          None
+        )
+        val out = text(backend, q, ctx(stateFields = Set("s")))
+        assert(out.contains("-reserved binding name"), out)
+
+  List(
+    ("python", ExprToPython, ".values()"),
+    ("typescript", TsExprBackend, "Object.values("),
+    ("go", GoExprBackend, "_values(")
+  ).foreach: (label, backend, marker) =>
+    test(s"set comprehension over a map-typed state field iterates values in $label"):
+      val e   = SetComprehensionF("m", IdentifierF("lookup", None), BoolLitF(true, None), None)
+      val c   = ctx(stateFields = Set("lookup")).copy(mapStateFields = Set("lookup"))
+      val out = text(backend, e, c)
+      assert(out.contains(marker), out)
+
+  List(
+    ("python", "Class", ExprToPython),
+    ("typescript", "delete", TsExprBackend),
+    ("go", "delete", GoExprBackend)
+  ).foreach: (label, fname, backend) =>
+    test(s"user-defined call rendered to a reserved name skips in $label"):
+      val c    = ctx(inputs = Set("x")).copy(userFunctions = Map(reservedFn(fname)))
+      val call = CallF(IdentifierF(fname, None), List(IdentifierF("x", None)), None)
+      assert(text(backend, call, c).contains("-reserved name"), text(backend, call, c))

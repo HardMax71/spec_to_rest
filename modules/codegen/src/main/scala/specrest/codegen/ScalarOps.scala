@@ -101,5 +101,11 @@ object ScalarOps:
       else columnDefaultValue(c).getOrElse("0")
     s"INSERT INTO ${tableName(t)} (${names.mkString(", ")}) VALUES (${vals.mkString(", ")})"
 
+  // A state table first appearing in a delta still needs its singleton row;
+  // without it every scalar op's guarded UPDATE matches 0 rows.
+  def deltaStateSeeds(ops: List[migration_op]): List[String] =
+    ops.collect:
+      case CreateTable(t) if isStateTable(t) => seedSqlFor(t)
+
   def isStateTable(t: table_spec): Boolean =
     tableName(t) == TableName && tableEntityName(t).isEmpty
