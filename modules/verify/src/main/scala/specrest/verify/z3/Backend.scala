@@ -28,8 +28,6 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.verify.CheckStatus
 import specrest.verify.VerificationConfig
 
-import java.io.PrintWriter
-import java.io.StringWriter
 import scala.collection.mutable
 import scala.util.boundary
 import scala.util.control.NonFatal
@@ -41,11 +39,6 @@ private given CanEqual[Status | Null, Status | Null] = CanEqual.derived
 
 private def backendFail(rctx: RenderCtx, msg: String): Nothing =
   boundary.break(Left(VerifyError.Backend(msg, None)))(using rctx.bnd)
-
-private[z3] def renderStack(e: Throwable): String =
-  val sw = new StringWriter
-  e.printStackTrace(new PrintWriter(sw))
-  sw.toString
 
 final case class SmokeCheckResult(
     status: CheckStatus,
@@ -126,7 +119,7 @@ final class WasmBackend:
         case NonFatal(e) =>
           Left(VerifyError.Backend(
             Option(e.getMessage).getOrElse(e.toString),
-            Some(renderStack(e))
+            Some(specrest.verify.renderStackTrace(e))
           ))
     }.onCancel(IO.blocking(ctx.interrupt()))
 

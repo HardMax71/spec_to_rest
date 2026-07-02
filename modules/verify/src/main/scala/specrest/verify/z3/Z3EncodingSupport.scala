@@ -52,6 +52,65 @@ private[z3] trait Z3EncodingSupport:
         (Z3Expr.OptSome(left), right)
       case _ => (left, right)
 
+  private[z3] def isStrSorted(ctx: TranslateCtx, z: Z3Expr): Boolean =
+    inferSortOfZ3Expr(ctx, z) match
+      case Some(Z3Sort.Str) => true
+      case _                => false
+
+  private[z3] def isNumericSorted(ctx: TranslateCtx, z: Z3Expr): Boolean =
+    inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+
+  private[z3] def sameElemSet(ctx: TranslateCtx, a: Z3Expr, b: Z3Expr): Boolean =
+    (inferSortOfZ3Expr(ctx, a), inferSortOfZ3Expr(ctx, b)) match
+      case (Some(Z3Sort.SetOf(ae)), Some(Z3Sort.SetOf(be))) => Z3Sort.eq(ae, be)
+      case _                                                => false
+
+  // Z3Expr has no Iff node (both renderers stay untouched); this And-of-Implies
+  // pair is the one spelled form.
+  private[z3] def iff(a: Z3Expr, b: Z3Expr): Z3Expr =
+    Z3Expr.And(List(Z3Expr.Implies(a, b), Z3Expr.Implies(b, a)))
+
+  // Declare-on-first-use uninterpreted function over one operand, name-mangled
+  // by the operand sort; the functional dependency (same input -> same output)
+  // is the entire model.
+  private[z3] def uninterpUnaryApp(
+      ctx: TranslateCtx,
+      name: String,
+      arg: Z3Expr,
+      argSort: Z3Sort,
+      resultSort: Z3Sort
+  ): Z3Expr =
+    val funcName = s"${name}_${sortNameOf(argSort)}"
+    ctx.declareFunc(Z3FunctionDecl(funcName, List(argSort), resultSort))
+    Z3Expr.App(funcName, List(arg))
+
+  // `str.in_re` needs a String operand and a supported pattern; for a
+  // refinement-alias sort (modelled as its own sort) or an unsupported
+  // pattern, fall back to the sound uninterpreted matcher. Shared by the
+  // bridge (TMatches) and raw (MatchesF) paths, which emit identical terms.
+  private[z3] def encodeMatches(
+      ctx: TranslateCtx,
+      arg: Z3Expr,
+      argSort: Option[Z3Sort],
+      pattern: String
+  ): Z3Expr =
+    (argSort, RegexParser.parse(pattern)) match
+      case (Some(Z3Sort.Str), Some(re)) => Z3Expr.InRe(arg, re)
+      case _ =>
+        uninterpUnaryApp(
+          ctx,
+          ctx.matchesNameFor(pattern),
+          arg,
+          argSort.getOrElse(Z3Sort.Str),
+          Z3Sort.Bool
+        )
+
+  private[z3] def enumMemberApp(ctx: TranslateCtx, enumName: String, member: String): Z3Expr =
+    val funcName   = s"${enumName}_$member"
+    val resultSort = ctx.enums.get(enumName).map(_.sort).getOrElse(Z3Sort.Uninterp(enumName))
+    ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
+    Z3Expr.App(funcName, Nil)
+
   private[z3] def cardinalityRefFor(
       ctx: TranslateCtx,
       targetName: String,
@@ -107,31 +166,26 @@ private[z3] trait Z3EncodingSupport:
           case Some(r: StateRelationInfo) =>
             val suffix  = if ctx.stateMode == StateMode.Post then "_post" else ""
             val refName = s"state_${name}_ref$suffix"
-            if !ctx.funcs.contains(refName) then
-              val s = Z3Sort.Uninterp(s"Rel_${sortNameOf(r.keySort)}_${sortNameOf(r.valueSort)}")
-              ctx.declareFunc(Z3FunctionDecl(refName, Nil, s))
+            val relSort =
+              Z3Sort.Uninterp(s"Rel_${sortNameOf(r.keySort)}_${sortNameOf(r.valueSort)}")
+            ctx.declareFunc(Z3FunctionDecl(refName, Nil, relSort))
             Z3Expr.App(refName, Nil)
           case None =>
             ctx.entities.get(name) match
               case Some(entity) =>
                 val funcName = s"entity_${name}_ref"
-                if !ctx.funcs.contains(funcName) then
-                  ctx.declareFunc(Z3FunctionDecl(funcName, Nil, entity.sort))
+                ctx.declareFunc(Z3FunctionDecl(funcName, Nil, entity.sort))
                 Z3Expr.App(funcName, Nil)
               case None =>
                 enumMemberConst(ctx, name).getOrElse:
                   val funcName = s"id_$name"
-                  if !ctx.funcs.contains(funcName) then
-                    ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Uninterp("Any")))
+                  ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Uninterp("Any")))
                   Z3Expr.App(funcName, Nil)
 
   private[z3] def enumMemberConst(ctx: TranslateCtx, name: String): Option[Z3Expr] =
     ctx.enums.toList.filter((_, info) => info.members.contains(name)) match
-      case (enumName, info) :: Nil =>
-        val funcName = s"${enumName}_$name"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, info.sort))
-        Some(Z3Expr.App(funcName, Nil))
+      case (enumName, _) :: Nil =>
+        Some(enumMemberApp(ctx, enumName, name))
       case Nil => None
       case matches =>
         fail(

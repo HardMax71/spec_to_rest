@@ -140,10 +140,7 @@ private[z3] trait RelationFrames:
       val aMap    = Z3Expr.App(mapFuncFor(a, aMode), List(keyVar))
       val bMap    = Z3Expr.App(mapFuncFor(b, bMode), List(keyVar))
       val body = Z3Expr.And(List(
-        Z3Expr.And(List(
-          Z3Expr.Implies(aDom, bDom),
-          Z3Expr.Implies(bDom, aDom)
-        )),
+        iff(aDom, bDom),
         Z3Expr.Implies(aDom, Z3Expr.Cmp(CmpOp.Eq, aMap, bMap))
       ))
       Some(Z3Expr.Quantifier(QKind.ForAll, List(Z3Binding(varName, a.keySort)), body))
@@ -167,12 +164,9 @@ private[z3] trait RelationFrames:
     val anyKeyEq = if keyEqs.length == 1 then keyEqs.head else Z3Expr.Or(keyEqs)
     val lhsDom   = Z3Expr.App(domFuncFor(lhs, lhsMode), List(keyVar))
     val baseDom  = Z3Expr.App(domFuncFor(base, baseMode), List(keyVar))
-    val domBody = Z3Expr.And(List(
-      Z3Expr.Implies(lhsDom, Z3Expr.Or(List(baseDom, anyKeyEq))),
-      Z3Expr.Implies(Z3Expr.Or(List(baseDom, anyKeyEq)), lhsDom)
-    ))
-    val lhsMap  = Z3Expr.App(mapFuncFor(lhs, lhsMode), List(keyVar))
-    val baseMap = Z3Expr.App(mapFuncFor(base, baseMode), List(keyVar))
+    val domBody  = iff(lhsDom, Z3Expr.Or(List(baseDom, anyKeyEq)))
+    val lhsMap   = Z3Expr.App(mapFuncFor(lhs, lhsMode), List(keyVar))
+    val baseMap  = Z3Expr.App(mapFuncFor(base, baseMode), List(keyVar))
     // Last-write-wins: a chained / multi-entry insert with a repeated key keeps the LAST value.
     // An entry's value applies only when keyVar matches no later entry's key; without this guard
     // duplicate keys would assert two values for one key and the axiom would be UNSAT.
@@ -214,12 +208,9 @@ private[z3] trait RelationFrames:
     val notAnyKey = Z3Expr.Not(anyKeyEq)
     val lhsDom    = Z3Expr.App(domFuncFor(lhs, lhsMode), List(keyVar))
     val baseDom   = Z3Expr.App(domFuncFor(base, baseMode), List(keyVar))
-    val domBody = Z3Expr.And(List(
-      Z3Expr.Implies(lhsDom, Z3Expr.And(List(baseDom, notAnyKey))),
-      Z3Expr.Implies(Z3Expr.And(List(baseDom, notAnyKey)), lhsDom)
-    ))
-    val lhsMap  = Z3Expr.App(mapFuncFor(lhs, lhsMode), List(keyVar))
-    val baseMap = Z3Expr.App(mapFuncFor(base, baseMode), List(keyVar))
+    val domBody   = iff(lhsDom, Z3Expr.And(List(baseDom, notAnyKey)))
+    val lhsMap    = Z3Expr.App(mapFuncFor(lhs, lhsMode), List(keyVar))
+    val baseMap   = Z3Expr.App(mapFuncFor(base, baseMode), List(keyVar))
     val mapBody = Z3Expr.Implies(
       Z3Expr.And(List(baseDom, notAnyKey)),
       Z3Expr.Cmp(CmpOp.Eq, lhsMap, baseMap)
@@ -606,8 +597,3 @@ private[z3] trait RelationFrames:
       case IdentifierF(n, _) => insidePrime && n == stateName
       case _ =>
         subexprs(expr).exists(walkMentionsPost(_, stateName, insidePrime))
-
-  // An `Option[T]` operand in numeric position (e.g. `now() - order.delivered_at`,
-  // delivered_at: Option[DateTime], guarded by `!= none`) is unwrapped to its `T`
-  // value. Sound because such arithmetic is vacuous-on-eval (`eval_arith` rejects a
-  // non-numeric operand), so the encoder is the trusted oracle - the dual of #431's

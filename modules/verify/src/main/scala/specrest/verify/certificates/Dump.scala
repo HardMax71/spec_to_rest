@@ -8,16 +8,12 @@ import specrest.verify.CheckOutcome
 import specrest.verify.CheckStatus
 import specrest.verify.VerifierTool
 
-import java.io.PrintWriter
-import java.io.StringWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import scala.util.control.NonFatal
 
 private def dumpIoFail(msg: String, cause: Throwable): VerifyError.Backend =
-  val sw = new StringWriter
-  cause.printStackTrace(new PrintWriter(sw))
-  VerifyError.Backend(s"$msg: ${cause.getMessage}", Some(sw.toString))
+  VerifyError.Backend(s"$msg: ${cause.getMessage}", Some(specrest.verify.renderStackTrace(cause)))
 
 final case class DumpEntry(
     id: String,
@@ -41,13 +37,7 @@ final class DumpSink(val dir: Path):
       outcome: CheckOutcome,
       rawStatus: CheckStatus,
       durationMs: Double
-  ): Unit =
-    val name = s"${sanitize(checkId)}.smt2"
-    Files.writeString(dir.resolve(name), smt)
-    val entry = DumpEntry(checkId, VerifierTool.Z3, outcome, rawStatus, durationMs, name)
-    synchronized {
-      val _ = entries += entry
-    }
+  ): Unit = write(checkId, smt, "smt2", VerifierTool.Z3, outcome, rawStatus, durationMs)
 
   def writeAlloy(
       checkId: String,
@@ -55,10 +45,20 @@ final class DumpSink(val dir: Path):
       outcome: CheckOutcome,
       rawStatus: CheckStatus,
       durationMs: Double
+  ): Unit = write(checkId, als, "als", VerifierTool.Alloy, outcome, rawStatus, durationMs)
+
+  private def write(
+      checkId: String,
+      content: String,
+      ext: String,
+      tool: VerifierTool,
+      outcome: CheckOutcome,
+      rawStatus: CheckStatus,
+      durationMs: Double
   ): Unit =
-    val name = s"${sanitize(checkId)}.als"
-    Files.writeString(dir.resolve(name), als)
-    val entry = DumpEntry(checkId, VerifierTool.Alloy, outcome, rawStatus, durationMs, name)
+    val name = s"${sanitize(checkId)}.$ext"
+    Files.writeString(dir.resolve(name), content)
+    val entry = DumpEntry(checkId, tool, outcome, rawStatus, durationMs, name)
     synchronized {
       val _ = entries += entry
     }
