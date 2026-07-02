@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.ir.Builtins
 import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val TsReservedNames: Set[String] = Set(
@@ -48,302 +49,107 @@ private[testgen] val TsReservedNames: Set[String] = Set(
   "eval"
 )
 
-// Translates the IR expression language to TypeScript, paralleling ExprToPython.
 // Set/relation semantics that Python gets from built-ins (`in`, `==` on sets,
 // `len`, `|`/`&`/`-`) are delegated to runtime helpers the vitest harness module
 // provides: _len, _in, _eq, _union, _inter, _diff, _subset, _powerset. State is
 // read from the parsed /admin/state JSON objects `preState`/`postState`
 // and the response body object `responseData`.
-object TsExprBackend extends ExprBackend:
+object TsExprBackend extends ExprBackendBase:
 
+  def languageName: String             = "TypeScript"
+  def reservedNames: Set[String]       = TsReservedNames
   def stringLiteral(s: String): String = TsLit.str(s)
 
-  def translate(expr: expr, ctx: TestCtx): Translated = expr match
-    case BoolLitF(v, _)   => Translated.Emit(if v then "true" else "false")
-    case IntLitF(n, _)    => Translated.Emit(n.toString)
-    case FloatLitF(d, _)  => Translated.Emit(d.toString)
-    case StringLitF(s, _) => Translated.Emit(TsLit.str(s))
-    case NoneLitF(_)      => Translated.Emit("null")
+  def builtinEmit: Builtins.BuiltinSpec => List[String] => String = _.ts
 
-    case IdentifierF(name, span) => resolveIdent(name, ctx, span)
+  def boolLit(v: Boolean): String = if v then "true" else "false"
+  def intLit(n: BigInt): String   = n.toString
+  def noneLit: String             = "null"
 
-    case PrimeF(inner, _) => translate(inner, ctx.withCapture(CaptureMode.PostState))
-    case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
+  def responseData: String = "responseData"
 
-    case BinaryOpF(BAdd(), l, r, _)
-        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
-      ExprLift.lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
-        Translated.Emit(s"{ ...($lp), ...($rp) }")
-      )
+  def stateObject(mode: CaptureMode): String = mode match
+    case CaptureMode.PostState => "postState"
+    case CaptureMode.PreState  => "preState"
 
-    case BinaryOpF(op, l, r, _) =>
-      ExprLift.lift2(translate(l, ctx), translate(r, ctx))(binOpText(op, _, _))
+  def containerAccess(container: String, name: String): String =
+    s"$container[${TsLit.str(name)}]"
 
-    case UnaryOpF(op, x, _) =>
-      ExprLift.lift1(translate(x, ctx))(unOpText(op, _))
+  def indexAccess(base: String, idx: String): String = s"$base[$idx]"
 
-    case FieldAccessF(base, field, _) =>
-      ExprLift.lift1(translate(base, ctx))(b => Translated.Emit(s"$b[${TsLit.str(field)}]"))
+  def userCallName(fname: String): String = fname
 
-    case EnumAccessF(_, member, _) => Translated.Emit(TsLit.str(member))
+  def calleeCall(callee: String, args: List[String]): String =
+    s"($callee)(${args.mkString(", ")})"
 
-    case IndexF(base, idx, _) =>
-      ExprLift.lift2(translate(base, ctx), translate(idx, ctx))((b, i) =>
-        Translated.Emit(s"$b[$i]")
-      )
+  def binOp(op: bin_op, l: String, r: String): String = op match
+    case BAnd()       => s"(($l) && ($r))"
+    case BOr()        => s"(($l) || ($r))"
+    case BImplies()   => s"((!($l)) || ($r))"
+    case BIff()       => s"_eq(($l), ($r))"
+    case BEq()        => s"_eq(($l), ($r))"
+    case BNeq()       => s"(!_eq(($l), ($r)))"
+    case BLt()        => s"(($l) < ($r))"
+    case BGt()        => s"(($l) > ($r))"
+    case BLe()        => s"(($l) <= ($r))"
+    case BGe()        => s"(($l) >= ($r))"
+    case BIn()        => s"_in(($l), ($r))"
+    case BNotIn()     => s"(!_in(($l), ($r)))"
+    case BAdd()       => s"(($l) + ($r))"
+    case BSub()       => s"(($l) - ($r))"
+    case BMul()       => s"(($l) * ($r))"
+    case BDiv()       => s"(($l) / ($r))"
+    case BUnion()     => s"_union(($l), ($r))"
+    case BIntersect() => s"_inter(($l), ($r))"
+    case BDiff()      => s"_diff(($l), ($r))"
+    case BSubset()    => s"_subset(($l), ($r))"
 
-    case CallF(callee, args, span) => callExpr(callee, args, ctx, span)
+  def unOp(op: un_op, x: String): String = op match
+    case UNot()         => s"(!($x))"
+    case UNegate()      => s"(-($x))"
+    case UCardinality() => s"_len($x)"
+    case UPower()       => s"_powerset($x)"
 
-    case IfF(c, t, e, _) =>
-      ExprLift.lift3(translate(c, ctx), translate(t, ctx), translate(e, ctx))((cp, tp, ep) =>
-        Translated.Emit(s"(($cp) ? ($tp) : ($ep))")
-      )
+  def mapMerge(l: String, r: String): String = s"{ ...($l), ...($r) }"
 
-    case LetF(v, value, body, span) =>
-      if TsReservedNames.contains(v) then
-        Translated.Skip(s"Let with TypeScript-reserved binding name '$v'", span)
-      else
-        ExprLift.lift2(translate(value, ctx), translate(body, ctx.withBound(List(v))))((vp, bp) =>
-          Translated.Emit(s"(($v) => ($bp))($vp)")
-        )
+  def ifExpr(c: String, t: String, e: String): String = s"(($c) ? ($t) : ($e))"
 
-    case SetLiteralF(elements, span) =>
-      if elements.isEmpty then Translated.Emit("new Set()")
-      else
-        val parts = elements.map(translate(_, ctx))
-        ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"new Set([${ps.mkString(", ")}])"))
+  def letExpr(v: String, value: String, body: String): String =
+    s"(($v) => ($body))($value)"
 
-    case QuantifierF(kind, bindings, body, span) =>
-      quantifier(kind, bindings, body, ctx, span)
+  def emptySet: String                   = "new Set()"
+  def setOf(elems: List[String]): String = s"new Set([${elems.mkString(", ")}])"
+  def seqOf(elems: List[String]): String = s"[${elems.mkString(", ")}]"
 
-    case MapLiteralF(entries, span) => mapLiteral(entries, ctx, span)
+  def emptyMap: String                      = "{}"
+  def mapPair(k: String, v: String): String = s"[$k, $v]"
+  def mapOf(pairs: List[String]): String    = s"Object.fromEntries([${pairs.mkString(", ")}])"
 
-    case ConstructorF(_, fields, span) => constructorLiteral(fields, ctx, span)
+  def fieldPair(name: String, value: String): String = s"${TsLit.str(name)}: $value"
+  def recordOf(pairs: List[String]): String          = s"{ ${pairs.mkString(", ")} }"
 
-    case WithF(base, updates, span) => withUpdate(base, updates, ctx, span)
+  def withRecord(base: String, pairs: List[String]): String =
+    s"{ ...($base), ${pairs.mkString(", ")} }"
 
-    case SetComprehensionF(v, dom, pred, span) =>
-      setComprehension(v, dom, pred, ctx, span)
+  def comprehension(v: String, dom: String, isMapDomain: Boolean, pred: String): String =
+    val iter = if isMapDomain then s"Object.values($dom)" else dom
+    s"new Set(Array.from($iter).filter(($v) => ($pred)))"
 
-    case SeqLiteralF(elements, span) =>
-      val parts = elements.map(translate(_, ctx))
-      ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"[${ps.mkString(", ")}]"))
+  def quantifierExpr(kind: quant_kind, bound: List[(String, String)], body: String): String =
+    val method = kind match
+      case QAll() => "every"
+      case _      => "some"
+    val nested = bound.foldRight(body): (pair, acc) =>
+      val (v, d) = pair
+      s"Array.from($d).$method(($v) => ($acc))"
+    kind match
+      case QNo() => s"(!($nested))"
+      case _     => nested
 
-    case MatchesF(e, pattern, _) =>
-      ExprLift.lift1(translate(e, ctx))(t =>
-        Translated.Emit(s"(new RegExp(${TsLit.str(s"^(?:$pattern)$$")}).test($t))")
-      )
+  def theExpr(v: String, dom: String, body: String): String =
+    s"(Array.from($dom).find(($v) => ($body)) ?? null)"
 
-    case TheF(v, dom, body, span) =>
-      if TsReservedNames.contains(v) then
-        Translated.Skip(s"The with TypeScript-reserved binding name '$v'", span)
-      else
-        val innerCtx = ctx.withBound(List(v))
-        ExprLift.lift2(translate(dom, ctx), translate(body, innerCtx))((dp, bp) =>
-          Translated.Emit(s"(Array.from($dp).find(($v) => ($bp)) ?? null)")
-        )
+  def lambdaExpr(param: String, body: String): String = s"(($param) => ($body))"
 
-    case LambdaF(param, body, span) =>
-      if TsReservedNames.contains(param) then
-        Translated.Skip(s"Lambda with TypeScript-reserved param name '$param'", span)
-      else
-        val innerCtx = ctx.withBound(List(param))
-        ExprLift.lift1(translate(body, innerCtx))(b => Translated.Emit(s"(($param) => ($b))"))
-
-    case SomeWrapF(inner, _) => translate(inner, ctx)
-
-  private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
-    classifyIdent(ctx.identCtx(TsReservedNames.toList), name) match
-      case _: IcReserved =>
-        Translated.Skip(s"identifier '$name' is a TypeScript-reserved name", span)
-      case _: IcBound    => Translated.Emit(name)
-      case _: IcBareBody => Translated.Emit("responseData")
-      case _: IcOutput   => Translated.Emit(s"responseData[${TsLit.str(name)}]")
-      case _: IcInput    => Translated.Emit(name)
-      case _: IcStateField =>
-        val obj = ctx.capture match
-          case CaptureMode.PostState => "postState"
-          case CaptureMode.PreState  => "preState"
-        Translated.Emit(s"$obj[${TsLit.str(name)}]")
-      case _: IcUnbackedState =>
-        Translated.Skip(
-          s"state field '$name' is not backed by an entity table; the test-admin " +
-            "/state endpoint projects it as null, so it cannot be asserted black-box",
-          span
-        )
-      case _: IcEnumType  => Translated.Skip(s"enum-type identifier '$name'", span)
-      case _: IcEnumValue => Translated.Emit(TsLit.str(name))
-      case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
-
-  private def binOpText(op: bin_op, l: String, r: String): Translated =
-    op match
-      case BAnd()       => Translated.Emit(s"(($l) && ($r))")
-      case BOr()        => Translated.Emit(s"(($l) || ($r))")
-      case BImplies()   => Translated.Emit(s"((!($l)) || ($r))")
-      case BIff()       => Translated.Emit(s"_eq(($l), ($r))")
-      case BEq()        => Translated.Emit(s"_eq(($l), ($r))")
-      case BNeq()       => Translated.Emit(s"(!_eq(($l), ($r)))")
-      case BLt()        => Translated.Emit(s"(($l) < ($r))")
-      case BGt()        => Translated.Emit(s"(($l) > ($r))")
-      case BLe()        => Translated.Emit(s"(($l) <= ($r))")
-      case BGe()        => Translated.Emit(s"(($l) >= ($r))")
-      case BIn()        => Translated.Emit(s"_in(($l), ($r))")
-      case BNotIn()     => Translated.Emit(s"(!_in(($l), ($r)))")
-      case BAdd()       => Translated.Emit(s"(($l) + ($r))")
-      case BSub()       => Translated.Emit(s"(($l) - ($r))")
-      case BMul()       => Translated.Emit(s"(($l) * ($r))")
-      case BDiv()       => Translated.Emit(s"(($l) / ($r))")
-      case BUnion()     => Translated.Emit(s"_union(($l), ($r))")
-      case BIntersect() => Translated.Emit(s"_inter(($l), ($r))")
-      case BDiff()      => Translated.Emit(s"_diff(($l), ($r))")
-      case BSubset()    => Translated.Emit(s"_subset(($l), ($r))")
-
-  private def unOpText(op: un_op, x: String): Translated = op match
-    case UNot()         => Translated.Emit(s"(!($x))")
-    case UNegate()      => Translated.Emit(s"(-($x))")
-    case UCardinality() => Translated.Emit(s"_len($x)")
-    case UPower()       => Translated.Emit(s"_powerset($x)")
-
-  private def callExpr(
-      callee: expr,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    callee match
-      case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
-      case _ =>
-        val parts = args.map(translate(_, ctx))
-        ExprLift.lift1(translate(callee, ctx)): cp =>
-          ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"($cp)(${ps.mkString(", ")})"))
-
-  private def identifierCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    recognizedCall(fname, args, ctx, span) match
-      case Translated.Emit(text) => Translated.Emit(text)
-      case Translated.Skip(_, _) =>
-        userDefinedCall(fname, args, ctx, span) match
-          case Translated.Emit(text)      => Translated.Emit(text)
-          case Translated.Skip(reason, _) => Translated.Skip(reason, span)
-
-  private def recognizedCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    ExprLift.dispatchBuiltin(fname, args.map(translate(_, ctx)), span, _.ts)
-
-  private def userDefinedCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    classifyUserCall(ctx.fnArities, ctx.predArities, fname, BigInt(args.size)) match
-      case _: UcUnknown =>
-        Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-      case w: UcWrongArity =>
-        Translated.Skip(
-          s"wrong arity for user-defined call '$fname': expected ${w.a}, got ${args.size}",
-          span
-        )
-      case _: UcOk if TsReservedNames.contains(fname) =>
-        Translated.Skip(s"user-defined call '$fname' is a TypeScript-reserved name", span)
-      case _: UcOk =>
-        val parts = args.map(translate(_, ctx))
-        ExprLift.liftAll(parts, span)(ps => Translated.Emit(s"$fname(${ps.mkString(", ")})"))
-
-  private def mapLiteral(
-      entries: List[map_entry],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if entries.isEmpty then Translated.Emit("{}")
-    else
-      val pairs = entries.map { e =>
-        ExprLift.lift2(translate(mpeKey(e), ctx), translate(mpeValue(e), ctx))((kx, vx) =>
-          Translated.Emit(s"[$kx, $vx]")
-        )
-      }
-      ExprLift.liftAll(pairs, span)(ps =>
-        Translated.Emit(s"Object.fromEntries([${ps.mkString(", ")}])")
-      )
-
-  private def constructorLiteral(
-      fields: List[field_assign],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if fields.isEmpty then Translated.Emit("{}")
-    else
-      val pairs = fields.map { fa =>
-        ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
-          Translated.Emit(s"${TsLit.str(fasName(fa))}: $vx")
-        )
-      }
-      ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"{ ${ps.mkString(", ")} }"))
-
-  private def withUpdate(
-      base: expr,
-      updates: List[field_assign],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    val basePy = translate(base, ctx)
-    val pairs = updates.map { fa =>
-      ExprLift.lift1(translate(fasValue(fa), ctx))(vx =>
-        Translated.Emit(s"${TsLit.str(fasName(fa))}: $vx")
-      )
-    }
-    ExprLift.lift1(basePy): bp =>
-      ExprLift.liftAll(pairs, span)(ps => Translated.Emit(s"{ ...($bp), ${ps.mkString(", ")} }"))
-
-  private def setComprehension(
-      v: String,
-      dom: expr,
-      pred: expr,
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if TsReservedNames.contains(v) then
-      Translated.Skip(s"SetComprehension with TypeScript-reserved binding name '$v'", span)
-    else
-      val innerCtx    = ctx.withBound(List(v))
-      val domPy       = translate(dom, ctx)
-      val predPy      = translate(pred, innerCtx)
-      val isMapDomain = peelRelationRef(dom).exists(ctx.mapStateFields.contains)
-      ExprLift.lift2(domPy, predPy): (d, p) =>
-        val iter = if isMapDomain then s"Object.values($d)" else s"$d"
-        Translated.Emit(s"new Set(Array.from($iter).filter(($v) => ($p)))")
-
-  private def quantifier(
-      kind: quant_kind,
-      bindings: List[quantifier_binding],
-      body: expr,
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
-    else
-      val boundNames = bindings.map(qbdVar)
-      val domains    = bindings.map(b => translate(qbdCollection(b), ctx))
-      val innerCtx   = ctx.withBound(boundNames)
-      val bodyPy     = translate(body, innerCtx)
-      ExprLift.liftAll(domains :+ bodyPy, span): texts =>
-        val ds = texts.init
-        val bp = texts.last
-        val method = kind match
-          case QAll() => "every"
-          case _      => "some"
-        val nested = boundNames.zip(ds).foldRight(bp): (pair, acc) =>
-          val (v, d) = pair
-          s"Array.from($d).$method(($v) => ($acc))"
-        kind match
-          case QAll()              => Translated.Emit(nested)
-          case QSome() | QExists() => Translated.Emit(nested)
-          case QNo()               => Translated.Emit(s"(!($nested))")
+  def matchesExpr(target: String, pattern: String): String =
+    s"(new RegExp(${TsLit.str(s"^(?:$pattern)$$")}).test($target))"

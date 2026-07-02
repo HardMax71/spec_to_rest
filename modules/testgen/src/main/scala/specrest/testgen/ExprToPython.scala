@@ -1,5 +1,6 @@
 package specrest.testgen
 
+import specrest.ir.Builtins
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
@@ -43,287 +44,102 @@ private[testgen] val PythonReservedNames: Set[String] = Set(
   "case"
 )
 
-object ExprToPython extends ExprBackend:
+object ExprToPython extends ExprBackendBase:
 
+  def languageName: String             = "Python"
+  def reservedNames: Set[String]       = PythonReservedNames
   def stringLiteral(s: String): String = pyString(s)
 
-  def translate(expr: expr, ctx: TestCtx): Translated = expr match
-    case BoolLitF(v, _)   => Translated.Emit(if v then "True" else "False")
-    case IntLitF(n, _)    => Translated.Emit(n.toString)
-    case FloatLitF(d, _)  => Translated.Emit(d.toString)
-    case StringLitF(s, _) => Translated.Emit(pyString(s))
-    case NoneLitF(_)      => Translated.Emit("None")
+  def builtinEmit: Builtins.BuiltinSpec => List[String] => String = _.py
 
-    case IdentifierF(name, span) => resolveIdent(name, ctx, span)
+  def boolLit(v: Boolean): String = if v then "True" else "False"
+  def intLit(n: BigInt): String   = n.toString
+  def noneLit: String             = "None"
 
-    case PrimeF(inner, _) => translate(inner, ctx.withCapture(CaptureMode.PostState))
-    case PreF(inner, _)   => translate(inner, ctx.withCapture(CaptureMode.PreState))
+  def responseData: String = "response_data"
 
-    case BinaryOpF(BAdd(), l, r, _)
-        if isMapLiteralExpr(l) || isMapLiteralExpr(r) =>
-      lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
-        Translated.Emit(s"{**($lp), **($rp)}")
-      )
+  def stateObject(mode: CaptureMode): String = mode match
+    case CaptureMode.PostState => "post_state"
+    case CaptureMode.PreState  => "pre_state"
 
-    case BinaryOpF(op, l, r, _) =>
-      lift2(translate(l, ctx), translate(r, ctx))(binOpText(op, _, _))
+  def containerAccess(container: String, name: String): String =
+    s"$container[${pyString(name)}]"
 
-    case UnaryOpF(op, x, _) =>
-      lift1(translate(x, ctx))(unOpText(op, _))
+  def indexAccess(base: String, idx: String): String = s"$base[$idx]"
 
-    case FieldAccessF(base, field, _) =>
-      lift1(translate(base, ctx))(b => Translated.Emit(s"$b[${pyString(field)}]"))
+  def userCallName(fname: String): String = Naming.toSnakeCase(fname)
 
-    case EnumAccessF(_, member, _) => Translated.Emit(pyString(member))
+  def calleeCall(callee: String, args: List[String]): String =
+    s"($callee)(${args.mkString(", ")})"
 
-    case IndexF(base, idx, _) =>
-      lift2(translate(base, ctx), translate(idx, ctx))((b, i) => Translated.Emit(s"$b[$i]"))
+  def binOp(op: bin_op, l: String, r: String): String = op match
+    case BAnd()       => s"(($l) and ($r))"
+    case BOr()        => s"(($l) or ($r))"
+    case BImplies()   => s"((not ($l)) or ($r))"
+    case BIff()       => s"(($l) == ($r))"
+    case BEq()        => s"(($l) == ($r))"
+    case BNeq()       => s"(($l) != ($r))"
+    case BLt()        => s"(($l) < ($r))"
+    case BGt()        => s"(($l) > ($r))"
+    case BLe()        => s"(($l) <= ($r))"
+    case BGe()        => s"(($l) >= ($r))"
+    case BIn()        => s"(($l) in ($r))"
+    case BNotIn()     => s"(($l) not in ($r))"
+    case BAdd()       => s"(($l) + ($r))"
+    case BSub()       => s"(($l) - ($r))"
+    case BMul()       => s"(($l) * ($r))"
+    case BDiv()       => s"(($l) / ($r))"
+    case BUnion()     => s"(($l) | ($r))"
+    case BIntersect() => s"(($l) & ($r))"
+    case BDiff()      => s"(($l) - ($r))"
+    case BSubset()    => s"(($l) <= ($r))"
 
-    case CallF(callee, args, span) => callExpr(callee, args, ctx, span)
+  def unOp(op: un_op, x: String): String = op match
+    case UNot()         => s"(not ($x))"
+    case UNegate()      => s"(-($x))"
+    case UCardinality() => s"len($x)"
+    case UPower()       => s"_powerset($x)"
 
-    case IfF(c, t, e, _) =>
-      lift3(translate(c, ctx), translate(t, ctx), translate(e, ctx))((cp, tp, ep) =>
-        Translated.Emit(s"(($tp) if ($cp) else ($ep))")
-      )
+  def mapMerge(l: String, r: String): String = s"{**($l), **($r)}"
 
-    case LetF(v, value, body, span) =>
-      if PythonReservedNames.contains(v) then
-        Translated.Skip(s"Let with Python-reserved binding name '$v'", span)
-      else
-        lift2(translate(value, ctx), translate(body, ctx.withBound(List(v))))((vp, bp) =>
-          Translated.Emit(s"((lambda $v=($vp): ($bp))())")
-        )
+  def ifExpr(c: String, t: String, e: String): String = s"(($t) if ($c) else ($e))"
 
-    case SetLiteralF(elements, span) =>
-      if elements.isEmpty then Translated.Emit("set()")
-      else
-        val parts = elements.map(translate(_, ctx))
-        liftAll(parts, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
+  def letExpr(v: String, value: String, body: String): String =
+    s"((lambda $v=($value): ($body))())"
 
-    case QuantifierF(kind, bindings, body, span) =>
-      quantifier(kind, bindings, body, ctx, span)
+  def emptySet: String                   = "set()"
+  def setOf(elems: List[String]): String = s"{${elems.mkString(", ")}}"
+  def seqOf(elems: List[String]): String = s"[${elems.mkString(", ")}]"
 
-    case MapLiteralF(entries, span) => mapLiteral(entries, ctx, span)
+  def emptyMap: String                      = "{}"
+  def mapPair(k: String, v: String): String = s"$k: $v"
+  def mapOf(pairs: List[String]): String    = s"{${pairs.mkString(", ")}}"
 
-    case ConstructorF(_, fields, span) => constructorLiteral(fields, ctx, span)
+  def fieldPair(name: String, value: String): String = s"${pyString(name)}: $value"
+  def recordOf(pairs: List[String]): String          = s"{${pairs.mkString(", ")}}"
 
-    case WithF(base, updates, span) => withUpdate(base, updates, ctx, span)
+  def withRecord(base: String, pairs: List[String]): String =
+    s"{**($base), ${pairs.mkString(", ")}}"
 
-    case SetComprehensionF(v, dom, pred, span) =>
-      setComprehension(v, dom, pred, ctx, span)
+  def comprehension(v: String, dom: String, isMapDomain: Boolean, pred: String): String =
+    val iter = if isMapDomain then s"($dom).values()" else s"($dom)"
+    s"{$v for $v in $iter if ($pred)}"
 
-    case SeqLiteralF(elements, span) =>
-      val parts = elements.map(translate(_, ctx))
-      liftAll(parts, span)(ps => Translated.Emit(s"[${ps.mkString(", ")}]"))
+  def quantifierExpr(kind: quant_kind, bound: List[(String, String)], body: String): String =
+    val pairs   = bound.map((v, d) => s"$v in ($d)").mkString(" for ")
+    val genExpr = s"($body for $pairs)"
+    kind match
+      case QAll()              => s"all$genExpr"
+      case QSome() | QExists() => s"any$genExpr"
+      case QNo()               => s"(not any$genExpr)"
 
-    case MatchesF(e, pattern, span) =>
-      lift1(translate(e, ctx))(t =>
-        Translated.Emit(s"(re.fullmatch(${pyString(pattern)}, $t) is not None)")
-      )
+  def theExpr(v: String, dom: String, body: String): String =
+    s"next(($v for $v in ($dom) if ($body)), None)"
 
-    case TheF(v, dom, body, span) =>
-      if PythonReservedNames.contains(v) then
-        Translated.Skip(s"The with Python-reserved binding name '$v'", span)
-      else
-        val innerCtx = ctx.withBound(List(v))
-        lift2(translate(dom, ctx), translate(body, innerCtx))((dp, bp) =>
-          Translated.Emit(s"next(($v for $v in ($dp) if ($bp)), None)")
-        )
+  def lambdaExpr(param: String, body: String): String = s"(lambda $param: ($body))"
 
-    case LambdaF(param, body, span) =>
-      if PythonReservedNames.contains(param) then
-        Translated.Skip(s"Lambda with Python-reserved param name '$param'", span)
-      else
-        val innerCtx = ctx.withBound(List(param))
-        lift1(translate(body, innerCtx))(b => Translated.Emit(s"(lambda $param: ($b))"))
-
-    case SomeWrapF(inner, _) => translate(inner, ctx)
-
-  private def resolveIdent(name: String, ctx: TestCtx, span: Option[span_t]): Translated =
-    classifyIdent(ctx.identCtx(PythonReservedNames.toList), name) match
-      case _: IcReserved => Translated.Skip(s"identifier '$name' is a Python-reserved name", span)
-      case _: IcBound    => Translated.Emit(name)
-      case _: IcBareBody => Translated.Emit("response_data")
-      case _: IcOutput   => Translated.Emit(s"response_data[${pyString(name)}]")
-      case _: IcInput    => Translated.Emit(name)
-      case _: IcStateField =>
-        val dict = ctx.capture match
-          case CaptureMode.PostState => "post_state"
-          case CaptureMode.PreState  => "pre_state"
-        Translated.Emit(s"$dict[${pyString(name)}]")
-      case _: IcUnbackedState =>
-        Translated.Skip(
-          s"state field '$name' is not backed by an entity table; the test-admin " +
-            "/state endpoint projects it as null, so it cannot be asserted black-box",
-          span
-        )
-      case _: IcEnumType  => Translated.Skip(s"enum-type identifier '$name'", span)
-      case _: IcEnumValue => Translated.Emit(pyString(name))
-      case _: IcUnbound   => Translated.Skip(s"unbound identifier '$name'", span)
-
-  private def binOpText(op: bin_op, l: String, r: String): Translated =
-    op match
-      case BAnd()       => Translated.Emit(s"(($l) and ($r))")
-      case BOr()        => Translated.Emit(s"(($l) or ($r))")
-      case BImplies()   => Translated.Emit(s"((not ($l)) or ($r))")
-      case BIff()       => Translated.Emit(s"(($l) == ($r))")
-      case BEq()        => Translated.Emit(s"(($l) == ($r))")
-      case BNeq()       => Translated.Emit(s"(($l) != ($r))")
-      case BLt()        => Translated.Emit(s"(($l) < ($r))")
-      case BGt()        => Translated.Emit(s"(($l) > ($r))")
-      case BLe()        => Translated.Emit(s"(($l) <= ($r))")
-      case BGe()        => Translated.Emit(s"(($l) >= ($r))")
-      case BIn()        => Translated.Emit(s"(($l) in ($r))")
-      case BNotIn()     => Translated.Emit(s"(($l) not in ($r))")
-      case BAdd()       => Translated.Emit(s"(($l) + ($r))")
-      case BSub()       => Translated.Emit(s"(($l) - ($r))")
-      case BMul()       => Translated.Emit(s"(($l) * ($r))")
-      case BDiv()       => Translated.Emit(s"(($l) / ($r))")
-      case BUnion()     => Translated.Emit(s"(($l) | ($r))")
-      case BIntersect() => Translated.Emit(s"(($l) & ($r))")
-      case BDiff()      => Translated.Emit(s"(($l) - ($r))")
-      case BSubset()    => Translated.Emit(s"(($l) <= ($r))")
-
-  private def unOpText(op: un_op, x: String): Translated = op match
-    case UNot()         => Translated.Emit(s"(not ($x))")
-    case UNegate()      => Translated.Emit(s"(-($x))")
-    case UCardinality() => Translated.Emit(s"len($x)")
-    case UPower()       => Translated.Emit(s"_powerset($x)")
-
-  private def callExpr(
-      callee: expr,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    callee match
-      case IdentifierF(name, _) => identifierCall(name, args, ctx, span)
-      case _ =>
-        val parts = args.map(translate(_, ctx))
-        lift1(translate(callee, ctx)): cp =>
-          liftAll(parts, span)(ps => Translated.Emit(s"($cp)(${ps.mkString(", ")})"))
-
-  private def identifierCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    recognizedCall(fname, args, ctx, span) match
-      case Translated.Emit(text) => Translated.Emit(text)
-      case Translated.Skip(_, _) =>
-        userDefinedCall(fname, args, ctx, span) match
-          case Translated.Emit(text) => Translated.Emit(text)
-          case Translated.Skip(reason, _) =>
-            Translated.Skip(reason, span)
-
-  private def recognizedCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    ExprLift.dispatchBuiltin(fname, args.map(translate(_, ctx)), span, _.py)
-
-  private def userDefinedCall(
-      fname: String,
-      args: List[expr],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    classifyUserCall(ctx.fnArities, ctx.predArities, fname, BigInt(args.size)) match
-      case _: UcUnknown =>
-        Translated.Skip(s"unknown function '$fname/${args.size}' (see #138)", span)
-      case w: UcWrongArity =>
-        Translated.Skip(
-          s"wrong arity for user-defined call '$fname': expected ${w.a}, got ${args.size}",
-          span
-        )
-      case _: UcOk =>
-        val parts  = args.map(translate(_, ctx))
-        val pyName = Naming.toSnakeCase(fname)
-        liftAll(parts, span)(ps => Translated.Emit(s"$pyName(${ps.mkString(", ")})"))
-
-  private def mapLiteral(
-      entries: List[map_entry],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if entries.isEmpty then Translated.Emit("{}")
-    else
-      val pairs = entries.map { e =>
-        lift2(translate(mpeKey(e), ctx), translate(mpeValue(e), ctx))((kx, vx) =>
-          Translated.Emit(s"$kx: $vx")
-        )
-      }
-      liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
-
-  private def constructorLiteral(
-      fields: List[field_assign],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if fields.isEmpty then Translated.Emit("{}")
-    else
-      val pairs = fields.map { fa =>
-        lift1(translate(fasValue(fa), ctx))(vx => Translated.Emit(s"${pyString(fasName(fa))}: $vx"))
-      }
-      liftAll(pairs, span)(ps => Translated.Emit(s"{${ps.mkString(", ")}}"))
-
-  private def withUpdate(
-      base: expr,
-      updates: List[field_assign],
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    val basePy = translate(base, ctx)
-    val pairs = updates.map { fa =>
-      lift1(translate(fasValue(fa), ctx))(vx => Translated.Emit(s"${pyString(fasName(fa))}: $vx"))
-    }
-    lift1(basePy): bp =>
-      liftAll(pairs, span)(ps => Translated.Emit(s"{**($bp), ${ps.mkString(", ")}}"))
-
-  private def setComprehension(
-      v: String,
-      dom: expr,
-      pred: expr,
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if PythonReservedNames.contains(v) then
-      Translated.Skip(s"SetComprehension with Python-reserved binding name '$v'", span)
-    else
-      val innerCtx    = ctx.withBound(List(v))
-      val domPy       = translate(dom, ctx)
-      val predPy      = translate(pred, innerCtx)
-      val isMapDomain = peelRelationRef(dom).exists(ctx.mapStateFields.contains)
-      lift2(domPy, predPy): (d, p) =>
-        val iter = if isMapDomain then s"($d).values()" else s"($d)"
-        Translated.Emit(s"{$v for $v in $iter if ($p)}")
-
-  private def quantifier(
-      kind: quant_kind,
-      bindings: List[quantifier_binding],
-      body: expr,
-      ctx: TestCtx,
-      span: Option[span_t]
-  ): Translated =
-    if !quantifierAllIn(bindings) then Translated.Skip("quantifier with non-`in` binding", span)
-    else
-      val boundNames = bindings.map(qbdVar)
-      val domains    = bindings.map(b => translate(qbdCollection(b), ctx))
-      val innerCtx   = ctx.withBound(boundNames)
-      val bodyPy     = translate(body, innerCtx)
-      liftAll(domains :+ bodyPy, span): texts =>
-        val ds      = texts.init
-        val bp      = texts.last
-        val pairs   = boundNames.zip(ds).map((v, d) => s"$v in ($d)").mkString(" for ")
-        val genFor  = s"for $pairs"
-        val genExpr = s"($bp $genFor)"
-        kind match
-          case QAll()              => Translated.Emit(s"all$genExpr")
-          case QSome() | QExists() => Translated.Emit(s"any$genExpr")
-          case QNo()               => Translated.Emit(s"(not any$genExpr)")
+  def matchesExpr(target: String, pattern: String): String =
+    s"(re.fullmatch(${pyString(pattern)}, $target) is not None)"
 
   private[testgen] def pyString(s: String): String =
     val escaped = s
@@ -333,17 +149,3 @@ object ExprToPython extends ExprBackend:
       .replace("\r", "\\r")
       .replace("\t", "\\t")
     s"\"$escaped\""
-
-  private def lift1(a: Translated)(f: String => Translated): Translated = ExprLift.lift1(a)(f)
-
-  private def lift2(a: Translated, b: Translated)(f: (String, String) => Translated): Translated =
-    ExprLift.lift2(a, b)(f)
-
-  private def lift3(a: Translated, b: Translated, c: Translated)(
-      f: (String, String, String) => Translated
-  ): Translated = ExprLift.lift3(a, b, c)(f)
-
-  private def liftAll(
-      parts: List[Translated],
-      span: Option[span_t]
-  )(f: List[String] => Translated): Translated = ExprLift.liftAll(parts, span)(f)
