@@ -401,15 +401,18 @@ object Compile:
 
   // The verifier checked body and helper declarations spliced together, so the
   // kernel assembly must splice the same pair; the helpers live only in the
-  // cached candidate block.
-  private def methodPartOf(
+  // cached candidate block. Skeleton entries are the exception: their
+  // candidate is the whole spliced file (not an LLM block), so everything
+  // before the method is module content, and their halt-stub bodies need no
+  // helpers anyway.
+  private[cli] def methodPartOf(
       entry: specrest.synth.CacheEntry,
       opName: String
   ): FileAssembly.MethodPart =
-    FileAssembly.MethodPart(
-      entry.body,
-      specrest.synth.ResponseParser.helperSection(entry.candidate, opName)
-    )
+    val helpers =
+      if entry.outcome == specrest.synth.CacheOutcome.Skeleton then ""
+      else specrest.synth.ResponseParser.helperSection(entry.candidate, opName)
+    FileAssembly.MethodPart(entry.body, helpers)
 
   private def missingVerifiedBodyError(
       specFile: String,

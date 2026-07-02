@@ -12,6 +12,7 @@ import specrest.synth.Cache
 import specrest.synth.CacheEntry
 import specrest.synth.CacheOutcome
 import specrest.synth.DafnyCli
+import specrest.synth.FileAssembly
 import specrest.synth.SkeletonGenerator
 import specrest.synth.TokenUsage
 
@@ -148,8 +149,15 @@ class CompileSynthesisTest extends CatsEffectSuite:
                      reason = "test"
                    )
                    val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
+                   // Mirror FallbackOrchestrator.persistSkeleton: the candidate is the
+                   // WHOLE spliced file, so helper extraction on skeleton entries would
+                   // duplicate the module prefix if it were not gated off.
+                   val full = FileAssembly
+                     .splice(dafny.text, header.name, body)
+                     .toOption
+                     .getOrElse(dafny.text)
                    val entry = CacheEntry(
-                     candidate = body,
+                     candidate = full,
                      body = body,
                      usage = TokenUsage(0, 0),
                      model = "claude-sonnet-4-6",
