@@ -2,9 +2,7 @@ package specrest.testgen
 
 import specrest.codegen.go.GoLit
 import specrest.ir.generated.SpecRestGenerated.IntConstraint
-import specrest.ir.generated.SpecRestGenerated.StringConstraint
 import specrest.ir.generated.SpecRestGenerated.int_constraint
-import specrest.ir.generated.SpecRestGenerated.string_constraint
 
 object GoRapidStrategy extends StrategyBackend:
   def string: String       = "genString()"
@@ -37,28 +35,23 @@ object GoRapidStrategy extends StrategyBackend:
       val rows = entries.map((n, t) => s"${GoLit.str(n)}, $t")
       s"genDict(${rows.mkString(", ")})"
 
-  def constrainedString(c: string_constraint): String = c match
-    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(_.toInt)
-      val maxSize = maxOpt.map(_.toInt)
-      val (primaryRegex, extraRegexes) = regexes match
-        case head :: tail => (Some(head), tail)
-        case Nil          => (None, Nil)
-      val base = primaryRegex match
-        case Some(p) => s"genStringMatching(${GoLit.str(s"^(?:$p)$$")})"
-        case None =>
-          val lo = minSize.getOrElse(-1)
-          val hi = maxSize.getOrElse(-1)
-          if lo < 0 && hi < 0 then "genString()" else s"genStringBounded($lo, $hi)"
-      val withLenFilter = (primaryRegex, minSize, maxSize) match
-        case (Some(_), Some(lo), Some(hi)) => s"genFilterLen($base, $lo, $hi)"
-        case (Some(_), Some(lo), None)     => s"genFilterLen($base, $lo, -1)"
-        case (Some(_), None, Some(hi))     => s"genFilterLen($base, -1, $hi)"
-        case _                             => base
-      val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-        s"genFilterRegex($acc, ${GoLit.str(s"^(?:$r)$$")})"
-      predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-        s"genFilterPred($acc, $h)"
+  def regexGen(pattern: String): String =
+    s"genStringMatching(${GoLit.str(Strategies.fullMatchPattern(pattern))})"
+
+  // -1 is the harness's "no bound" sentinel for genStringBounded/genFilterLen.
+  def boundedText(min: Option[Int], max: Option[Int]): String =
+    val lo = min.getOrElse(-1)
+    val hi = max.getOrElse(-1)
+    if lo < 0 && hi < 0 then "genString()" else s"genStringBounded($lo, $hi)"
+
+  def lengthFilter(base: String, min: Option[Int], max: Option[Int]): String =
+    s"genFilterLen($base, ${min.getOrElse(-1)}, ${max.getOrElse(-1)})"
+
+  def regexFilter(base: String, pattern: String): String =
+    s"genFilterRegex($base, ${GoLit.str(Strategies.fullMatchPattern(pattern))})"
+
+  def predicateFilter(base: String, helper: String): String =
+    s"genFilterPred($base, $helper)"
 
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>

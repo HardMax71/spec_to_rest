@@ -3,26 +3,8 @@ package specrest.testgen
 import specrest.codegen.EmittedFile
 import specrest.codegen.go.GoLit
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
-import specrest.ir.generated.SpecRestGenerated.enmName
-import specrest.ir.generated.SpecRestGenerated.enmVariants
 import specrest.ir.generated.SpecRestGenerated.expr
-import specrest.ir.generated.SpecRestGenerated.fncBody
-import specrest.ir.generated.SpecRestGenerated.fncName
-import specrest.ir.generated.SpecRestGenerated.fncParams
-import specrest.ir.generated.SpecRestGenerated.function_decl
-import specrest.ir.generated.SpecRestGenerated.prdBody
-import specrest.ir.generated.SpecRestGenerated.prdName
-import specrest.ir.generated.SpecRestGenerated.prdParams
-import specrest.ir.generated.SpecRestGenerated.predicate_decl
-import specrest.ir.generated.SpecRestGenerated.prmName
-import specrest.ir.generated.SpecRestGenerated.svcEnums
-import specrest.ir.generated.SpecRestGenerated.svcFunctions
-import specrest.ir.generated.SpecRestGenerated.svcPredicates
 
-import java.io.ByteArrayOutputStream
-import java.nio.charset.StandardCharsets
-
-@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object GoTestHarness extends HarnessTemplates:
 
   private val Root = "testgen-templates/go/chi"
@@ -40,14 +22,18 @@ object GoTestHarness extends HarnessTemplates:
 
   def scaffoldFiles(ir: ServiceIRFull): List[EmittedFile] =
     List(
-      EmittedFile(RuntimeFile, loadResource(RuntimeFile)),
-      EmittedFile(GenFile, loadResource(GenFile)),
-      EmittedFile(ClientFile, loadResource(ClientFile)),
-      EmittedFile(RedactionFile, loadResource(RedactionFile)),
-      EmittedFile(StrategiesUserFile, loadResource(StrategiesUserFile), preserve = true),
+      EmittedFile(RuntimeFile, TemplateResources.load(Root, RuntimeFile)),
+      EmittedFile(GenFile, TemplateResources.load(Root, GenFile)),
+      EmittedFile(ClientFile, TemplateResources.load(Root, ClientFile)),
+      EmittedFile(RedactionFile, TemplateResources.load(Root, RedactionFile)),
+      EmittedFile(
+        StrategiesUserFile,
+        TemplateResources.load(Root, StrategiesUserFile),
+        preserve = true
+      ),
       EmittedFile(PredicatesFile, predicates(ir)),
-      EmittedFile(MainTestFile, loadResource(MainTestFile)),
-      EmittedFile(RunConformanceFile, loadResource(RunConformanceFile))
+      EmittedFile(MainTestFile, TemplateResources.load(Root, MainTestFile)),
+      EmittedFile(RunConformanceFile, TemplateResources.load(Root, RunConformanceFile))
     )
 
   def strategiesPath: String = "tests/conf_strategies.go"
@@ -72,18 +58,8 @@ object GoTestHarness extends HarnessTemplates:
        |""".stripMargin
 
   private def predicates(ir: ServiceIRFull): String =
-    (PredicatesHeader + renderUserDefinitions(ir)).stripTrailing + "\n"
-
-  private def renderUserDefinitions(ir: ServiceIRFull): String =
-    val parts = svcFunctions(ir).map(renderFunction(_, ir)) ++
-      svcPredicates(ir).map(renderPredicate(_, ir))
-    parts.mkString("")
-
-  private def renderFunction(fn: function_decl, ir: ServiceIRFull): String =
-    renderUserDef(fncName(fn), fncParams(fn).map(prmName), fncBody(fn), ir)
-
-  private def renderPredicate(pr: predicate_decl, ir: ServiceIRFull): String =
-    renderUserDef(prdName(pr), prdParams(pr).map(prmName), prdBody(pr), ir)
+    val defs = UserDefs.renderAll(ir)((n, ps, b) => renderUserDef(n, ps, b, ir))
+    (PredicatesHeader + defs).stripTrailing + "\n"
 
   private def renderUserDef(
       specName: String,
@@ -104,37 +80,9 @@ object GoTestHarness extends HarnessTemplates:
         case Some(p) =>
           stub(s"testgen: parameter '$p' of '$specName' is a Go-reserved name")
         case None =>
-          val ctx = predicateBodyCtx(paramNames.toSet, ir)
+          val ctx = TestCtx.forPredicateBody(paramNames.toSet, ir)
           GoExprBackend.translate(body, ctx) match
             case Translated.Emit(text) =>
               s"func $specName($sigParams) any {\n\treturn $text\n}\n\n"
             case Translated.Skip(reason, _) =>
               stub(s"testgen: cannot translate body of '$specName': $reason")
-
-  private def predicateBodyCtx(params: Set[String], ir: ServiceIRFull): TestCtx =
-    TestCtx(
-      inputs = params,
-      outputs = Set.empty,
-      stateFields = Set.empty,
-      mapStateFields = Set.empty,
-      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
-      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
-      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
-      boundVars = Set.empty,
-      capture = CaptureMode.PostState
-    )
-
-  private def loadResource(relPath: String): String =
-    val resourcePath = s"$Root/$relPath"
-    val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
-    if is eq null then
-      throw new RuntimeException(s"testgen template resource missing: $resourcePath")
-    try
-      val out    = new ByteArrayOutputStream()
-      val buffer = new Array[Byte](8192)
-      var read   = is.read(buffer)
-      while read != -1 do
-        out.write(buffer, 0, read)
-        read = is.read(buffer)
-      new String(out.toByteArray, StandardCharsets.UTF_8)
-    finally is.close()

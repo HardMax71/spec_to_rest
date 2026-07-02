@@ -13,30 +13,19 @@ object SecurityPython:
     s"require_${requiresAuth.sorted.mkString("_or_")}"
 
   def settingLines(ir: ServiceIRFull): List[String] =
-    val schemes = svcSecurity(ir)
-    val jwtPair =
-      if schemes.exists(s => isJwt(ssdKind(s))) then
-        List(
-          "jwt_secret: SecretStr | None = None",
-          "jwt_algorithm: str = \"HS256\""
-        )
-      else Nil
-    jwtPair ++ schemes.flatMap: s =>
-      val n = ssdName(s)
-      ssdKind(s) match
-        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
-        case SsBearer(_)                                                  => List(s"auth_token_$n: SecretStr | None = None")
-        case SsApiKey(_, _)                                               => List(s"auth_key_$n: SecretStr | None = None")
-        case SsBasic() =>
-          List(
-            s"auth_basic_${n}_username: str | None = None",
-            s"auth_basic_${n}_password: SecretStr | None = None"
-          )
+    AuthSchemes.credSlots(ir).map:
+      case AuthSchemes.CredSlot.JwtSecret        => "jwt_secret: SecretStr | None = None"
+      case AuthSchemes.CredSlot.JwtAlgorithm     => "jwt_algorithm: str = \"HS256\""
+      case AuthSchemes.CredSlot.Token(n)         => s"auth_token_$n: SecretStr | None = None"
+      case AuthSchemes.CredSlot.Key(n)           => s"auth_key_$n: SecretStr | None = None"
+      case AuthSchemes.CredSlot.BasicUsername(n) => s"auth_basic_${n}_username: str | None = None"
+      case AuthSchemes.CredSlot.BasicPassword(n) =>
+        s"auth_basic_${n}_password: SecretStr | None = None"
 
   def emit(profiled: ProfiledService): String =
     val ir       = profiled.ir
     val schemes  = svcSecurity(ir)
-    val needsJwt = schemes.exists(s => isJwt(ssdKind(s)))
+    val needsJwt = AuthSchemes.needsJwt(ir)
     val needsBasic = schemes.exists(s =>
       ssdKind(s) match { case SsBasic() => true; case _ => false }
     )
@@ -54,10 +43,7 @@ object SecurityPython:
         apiKeyClasses ++
         (if needsBasic then List("HTTPBasic", "HTTPBasicCredentials") else Nil)).distinct.sorted
 
-    val combos = profiled.operations
-      .map(_.requiresAuth.sorted)
-      .filter(_.sizeIs > 1)
-      .distinct
+    val combos = AuthSchemes.orCombos(profiled.operations)
 
     val schemeSections = schemes.map(schemeSection)
     val comboSections  = combos.map(comboSection(schemes, _))
@@ -115,7 +101,7 @@ object SecurityPython:
   private def schemeSection(decl: security_scheme_decl): String =
     val n = ssdName(decl)
     val (singletons, checker) = ssdKind(decl) match
-      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
+      case kind if isJwt(kind) =>
         (
           "",
           s"""|def _check_$n(credentials: HTTPAuthorizationCredentials | None) -> bool:

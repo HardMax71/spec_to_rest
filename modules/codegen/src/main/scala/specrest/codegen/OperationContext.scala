@@ -29,6 +29,13 @@ object OperationContext:
       op.endpoint.queryParams.nonEmpty || op.endpoint.bodyParams.nonEmpty
     )
 
+  // The fields of a custom request schema: the operation's body fields minus
+  // anything already bound as a path parameter. Emitters map these to their
+  // language's field view.
+  def customRequestBodyFields(op: ProfiledOperation): List[specrest.profile.ProfiledField] =
+    val pathParamNames = op.endpoint.pathParams.map(_.name).toSet
+    op.requestBodyFields.filterNot(f => pathParamNames.contains(f.fieldName))
+
   def from(op: ProfiledOperation, entity: ProfiledEntity): OperationContext =
     val entityNonIdColumnNames =
       entity.fields.filterNot(_.fieldName == "id").map(_.columnName).toSet
