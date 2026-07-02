@@ -8,6 +8,8 @@ Generated TypeScript service (TypeScript + Express + Prisma + PostgreSQL).
 cp .env.example .env
 docker compose up --build
 curl http://localhost:8080/health
+curl http://localhost:8080/ready
+curl http://localhost:8080/metrics
 ```
 
 ## Local dev

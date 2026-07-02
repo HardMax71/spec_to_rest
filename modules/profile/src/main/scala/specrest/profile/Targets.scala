@@ -88,7 +88,8 @@ object Fastapi extends Framework:
         driverDep,
         DependencySpec("alembic", ">=1.14"),
         DependencySpec("pydantic-settings", ">=2.0"),
-        DependencySpec("structlog", ">=24,<26")
+        DependencySpec("structlog", ">=24,<26"),
+        DependencySpec("prometheus-client", ">=0.21")
       ),
       devDependencies = List(
         DependencySpec("pytest", ">=8.0"),
@@ -151,7 +152,8 @@ object Chi extends Framework:
         DependencySpec("github.com/google/uuid", "v1.6.0"),
         DependencySpec("github.com/shopspring/decimal", "v1.4.0"),
         DependencySpec("github.com/caarlos0/env/v11", "v11.2.0"),
-        DependencySpec("github.com/go-playground/validator/v10", "v10.22.1")
+        DependencySpec("github.com/go-playground/validator/v10", "v10.22.1"),
+        DependencySpec("github.com/prometheus/client_golang", "v1.20.5")
       ),
       devDependencies = List(
         DependencySpec("github.com/stretchr/testify", "v1.9.0")
@@ -203,7 +205,8 @@ object Express extends Framework:
         DependencySpec("express", "^4.21.2"),
         DependencySpec("@prisma/client", "^6.2.0"),
         DependencySpec("zod", "^3.23.8"),
-        DependencySpec("dotenv", "^16.4.7")
+        DependencySpec("dotenv", "^16.4.7"),
+        DependencySpec("prom-client", "^15.1.3")
       ),
       devDependencies = List(
         DependencySpec("typescript", "^5.6.3"),

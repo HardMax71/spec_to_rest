@@ -7,6 +7,21 @@ servers:
 - url: http://localhost:8000
   description: Local development
 paths:
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Prometheus metrics
+      description: Prometheus text exposition format.
+      tags:
+      - infrastructure
+      responses:
+        '200':
+          description: Current metric values
+          content:
+            text/plain:
+              schema:
+                type:
+                - string
   /urls:
     get:
       operationId: list_all
@@ -131,6 +146,44 @@ paths:
                     - string
                     enum:
                     - ok
+  /ready:
+    get:
+      operationId: readiness_check
+      summary: Readiness check
+      description: Returns 200 when the database answers a probe query, 503 otherwise.
+      tags:
+      - infrastructure
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                required:
+                - status
+                properties:
+                  status:
+                    type:
+                    - string
+                    enum:
+                    - ready
+        '503':
+          description: Database is unreachable
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                required:
+                - status
+                properties:
+                  status:
+                    type:
+                    - string
+                    enum:
+                    - unavailable
   /admin/state:
     get:
       operationId: admin_state

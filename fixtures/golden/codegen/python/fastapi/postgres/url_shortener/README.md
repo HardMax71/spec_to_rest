@@ -10,6 +10,8 @@ they will be overwritten on the next regeneration.
 cp .env.example .env
 make docker-up
 curl http://localhost:8000/health
+curl http://localhost:8000/ready
+curl http://localhost:8000/metrics
 ```
 
 The OpenAPI schema is available at [`openapi.yaml`](./openapi.yaml) and, at runtime,

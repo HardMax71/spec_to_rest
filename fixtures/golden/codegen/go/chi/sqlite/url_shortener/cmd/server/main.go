@@ -7,11 +7,15 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/generated/url-shortener/internal/admin"
 	"github.com/generated/url-shortener/internal/auth"
@@ -21,6 +25,33 @@ import (
 	"github.com/generated/url-shortener/internal/handlers"
 	"github.com/generated/url-shortener/internal/services"
 )
+
+var (
+	httpRequests = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "http_requests_total",
+		Help: "HTTP requests served, by method, route pattern, and status code.",
+	}, []string{"method", "path", "status"})
+	httpRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name: "http_request_duration_seconds",
+		Help: "HTTP request duration in seconds, by method and route pattern.",
+	}, []string{"method", "path"})
+)
+
+func trackRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(ww, r)
+		// The chi route pattern, not the raw URL: raw paths embed ids and would
+		// blow up label cardinality.
+		path := chi.RouteContext(r.Context()).RoutePattern()
+		if path == "" {
+			path = "unmatched"
+		}
+		httpRequests.WithLabelValues(r.Method, path, strconv.Itoa(ww.Status())).Inc()
+		httpRequestDuration.WithLabelValues(r.Method, path).Observe(time.Since(start).Seconds())
+	})
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -47,6 +78,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
+	r.Use(trackRequests)
 
 	// chi panics on r.Use(...) after routes are registered, so the user hook
 	// runs here — before any generated route wiring — and may install both
@@ -57,6 +89,18 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+
+	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := db.PingContext(r.Context()); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte(`{"status":"unavailable"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+	})
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	admin.Register(r, db, auth.RequireAdmin(cfg.AdminToken))
 

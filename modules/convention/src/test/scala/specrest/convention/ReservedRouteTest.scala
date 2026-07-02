@@ -47,11 +47,13 @@ class ReservedRouteTest extends CatsEffectSuite:
       assertEquals(diags.head.target, "Health")
       assertEquals(diags.head.property, "http_path")
 
-  test("operation deriving /admin is rejected"):
-    loadIR(counterService("Admin")).map: ir =>
-      val diags = errorsOf(ir)
-      assert(diags.nonEmpty, "expected a reserved-route diagnostic for /admin")
-      assert(diags.head.message.contains("/admin"), diags.head.message)
+  List(("Admin", "/admin"), ("Ready", "/ready"), ("Metrics", "/metrics")).foreach:
+    (opName, route) =>
+      test(s"operation deriving $route is rejected"):
+        loadIR(counterService(opName)).map: ir =>
+          val diags = errorsOf(ir)
+          assert(diags.nonEmpty, s"expected a reserved-route diagnostic for $route")
+          assert(diags.head.message.contains(route), diags.head.message)
 
   test("http_path override into the /admin prefix is rejected"):
     val conv =
