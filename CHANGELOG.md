@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.2.0](https://github.com/HardMax71/spec_to_rest/compare/v3.1.0...v3.2.0) (2026-07-02)
+
+
+### Features
+
+* **synth:** machine-verify few-shot examples in CI ([#490](https://github.com/HardMax71/spec_to_rest/issues/490)) ([19b8ad6](https://github.com/HardMax71/spec_to_rest/commit/19b8ad6eca78c0891d3903248bc112e4116ae5fa))
+* **synth:** route fallback escalation across provider families ([#493](https://github.com/HardMax71/spec_to_rest/issues/493)) ([ebe0b30](https://github.com/HardMax71/spec_to_rest/commit/ebe0b30d880a8453eeeb47dfb4cd145fd3a463c7))
+
+
+### Code Refactoring
+
+* fold copy-pasted testgen/codegen helpers into shared ones ([#495](https://github.com/HardMax71/spec_to_rest/issues/495)) ([b3a30d9](https://github.com/HardMax71/spec_to_rest/commit/b3a30d90195f34c252cf0585a6f2039125ecde53))
+* **proofs:** drop the dead schema_ subset leftovers from [#391](https://github.com/HardMax71/spec_to_rest/issues/391) ([#497](https://github.com/HardMax71/spec_to_rest/issues/497)) ([189400c](https://github.com/HardMax71/spec_to_rest/commit/189400c9553b16f762f443f3add0d40fac761f12))
+* shared skeletons for testgen backends, Z3Expr walks, and emitter decisions ([#498](https://github.com/HardMax71/spec_to_rest/issues/498)) ([34d585e](https://github.com/HardMax71/spec_to_rest/commit/34d585ea408ecd715cc1ec48e51c970735af6579))
+* **verify:** consolidate the seven Consistency check runners into two ([#496](https://github.com/HardMax71/spec_to_rest/issues/496)) ([58f6b15](https://github.com/HardMax71/spec_to_rest/commit/58f6b15f0c10e3f9dd42530aabd0cbe18fa21bc5))
+
+
+### Documentation
+
+* **design:** split the Isabelle proofs page into a subsection and refresh it ([#486](https://github.com/HardMax71/spec_to_rest/issues/486)) ([bbdfa22](https://github.com/HardMax71/spec_to_rest/commit/bbdfa225f59c56663462e59557f1b0453764decc))
+* **pipelines:** split the test generation page into a subsection and refresh it ([#488](https://github.com/HardMax71/spec_to_rest/issues/488)) ([fab3cb1](https://github.com/HardMax71/spec_to_rest/commit/fab3cb12b536825ddeae0148cb119f63c20d9f1d))
+* **pipelines:** split the verification engine page into a subsection and refresh it ([#487](https://github.com/HardMax71/spec_to_rest/issues/487)) ([4abdc79](https://github.com/HardMax71/spec_to_rest/commit/4abdc79eeb85a0935636269043d6cb7d5b367473))
+* re-baseline proof references stale since the one-IR collapse ([#494](https://github.com/HardMax71/spec_to_rest/issues/494)) ([fc0962a](https://github.com/HardMax71/spec_to_rest/commit/fc0962a734fac5851f6c6d3b9de841a0c6c88347))
+* **research:** restructure the research docs into subsections, rewritten against the code ([#482](https://github.com/HardMax71/spec_to_rest/issues/482)) ([627a2e4](https://github.com/HardMax71/spec_to_rest/commit/627a2e46a3e2da8bb7e2075c89e9911d29879a77))
+* **roadmap:** drop duplicate counterexample-formatting follow-up row ([#491](https://github.com/HardMax71/spec_to_rest/issues/491)) ([e8ab4bc](https://github.com/HardMax71/spec_to_rest/commit/e8ab4bc60b66c02f1b7c199d5296747065cf51e1))
+* **roadmap:** ground the closed-issue decisions and tidy the page ([#484](https://github.com/HardMax71/spec_to_rest/issues/484)) ([09733f5](https://github.com/HardMax71/spec_to_rest/commit/09733f5af7c155a302e0556b253c659d4091718c))
+* **roadmap:** prune shipped and not-planned rows from the follow-up tables ([#485](https://github.com/HardMax71/spec_to_rest/issues/485)) ([704d259](https://github.com/HardMax71/spec_to_rest/commit/704d2593245cf0e08827d07d53d6df63b759930c))
+* split the synthesis page into a subsection and rewrite the homepage intro ([#489](https://github.com/HardMax71/spec_to_rest/issues/489)) ([2cf90a2](https://github.com/HardMax71/spec_to_rest/commit/2cf90a27aed66659f6960d5fc066bfbd3844219a))
+* **synth:** fix stale escalation example and dangling follow-up link ([#492](https://github.com/HardMax71/spec_to_rest/issues/492)) ([379c302](https://github.com/HardMax71/spec_to_rest/commit/379c3027a41122834007e4b9e24b8fc10cf6c873))
+
 ## [3.1.0](https://github.com/HardMax71/spec_to_rest/compare/v3.0.1...v3.1.0) (2026-06-27)
 
 
