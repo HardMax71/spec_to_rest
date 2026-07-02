@@ -104,15 +104,18 @@ object SpecRestGenerated {
     implicit def `SpecRestGenerated.equal_literal`: equal[String] = new equal[String] {
       val `SpecRestGenerated.equal` = (a: String, b: String) => a == b
     }
-    implicit def `SpecRestGenerated.equal_smt_val`: equal[smt_val] = new equal[smt_val] {
-      val `SpecRestGenerated.equal` = (a: smt_val, b: smt_val) =>
-        equal_smt_vala(a, b)
-    }
     implicit def `SpecRestGenerated.equal_span_t`: equal[span_t] = new equal[span_t] {
       val `SpecRestGenerated.equal` = (a: span_t, b: span_t) =>
         equal_span_ta(a, b)
     }
   }
+
+  def eq[A: equal](a: A, b: A): Boolean = equal[A](a, b)
+
+  def equal_proda[A: equal, B: equal](x0: (A, B), x1: (A, B)): Boolean =
+    (x0, x1) match {
+      case ((x1, x2), (y1, y2)) => eq[A](x1, y1) && eq[B](x2, y2)
+    }
 
   def equal_bool(p: Boolean, q: Boolean): Boolean =
     p match {
@@ -120,198 +123,18 @@ object SpecRestGenerated {
       case false => !q
     }
 
-  def eq[A: equal](a: A, b: A): Boolean = equal[A](a, b)
+  def equal_option[A: equal](x0: Option[A], x1: Option[A]): Boolean = (x0, x1) match {
+    case (None, Some(x2))     => false
+    case (Some(x2), None)     => false
+    case (Some(x2), Some(y2)) => eq[A](x2, y2)
+    case (None, None)         => true
+  }
 
   def equal_list[A: equal](x0: List[A], x1: List[A]): Boolean = (x0, x1) match {
     case (Nil, x21 :: x22)        => false
     case (x21 :: x22, Nil)        => false
     case (x21 :: x22, y21 :: y22) => eq[A](x21, y21) && equal_list[A](x22, y22)
     case (Nil, Nil)               => true
-  }
-
-  def equal_proda[A: equal, B: equal](x0: (A, B), x1: (A, B)): Boolean =
-    (x0, x1) match {
-      case ((x1, x2), (y1, y2)) => eq[A](x1, y1) && eq[B](x2, y2)
-    }
-
-  sealed abstract class rat
-  final case class Frct(a: (BigInt, BigInt)) extends rat
-
-  def quotient_of(x0: rat): (BigInt, BigInt) = x0 match {
-    case Frct(x) => x
-  }
-
-  def equal_rat(a: rat, b: rat): Boolean =
-    equal_proda[BigInt, BigInt](quotient_of(a), quotient_of(b))
-
-  sealed abstract class smt_val
-  final case class SBool(a: Boolean)                              extends smt_val
-  final case class SInt(a: BigInt)                                extends smt_val
-  final case class SReal(a: rat)                                  extends smt_val
-  final case class SEnumElem(a: String, b: String)                extends smt_val
-  final case class SEntityElem(a: String, b: String)              extends smt_val
-  final case class SSet(a: List[smt_val])                         extends smt_val
-  final case class SEntityWith(a: smt_val, b: String, c: smt_val) extends smt_val
-  final case class SNone()                                        extends smt_val
-  final case class SSome(a: smt_val)                              extends smt_val
-  final case class SStr(a: String)                                extends smt_val
-  final case class SSeq(a: List[smt_val])                         extends smt_val
-  final case class SMap(a: List[(smt_val, smt_val)])              extends smt_val
-
-  def equal_smt_vala(x0: smt_val, x1: smt_val): Boolean = (x0, x1) match {
-    case (SSeq(x11), SMap(x12))                              => false
-    case (SMap(x12), SSeq(x11))                              => false
-    case (SStr(x10), SMap(x12))                              => false
-    case (SMap(x12), SStr(x10))                              => false
-    case (SStr(x10), SSeq(x11))                              => false
-    case (SSeq(x11), SStr(x10))                              => false
-    case (SSome(x9), SMap(x12))                              => false
-    case (SMap(x12), SSome(x9))                              => false
-    case (SSome(x9), SSeq(x11))                              => false
-    case (SSeq(x11), SSome(x9))                              => false
-    case (SSome(x9), SStr(x10))                              => false
-    case (SStr(x10), SSome(x9))                              => false
-    case (SNone(), SMap(x12))                                => false
-    case (SMap(x12), SNone())                                => false
-    case (SNone(), SSeq(x11))                                => false
-    case (SSeq(x11), SNone())                                => false
-    case (SNone(), SStr(x10))                                => false
-    case (SStr(x10), SNone())                                => false
-    case (SNone(), SSome(x9))                                => false
-    case (SSome(x9), SNone())                                => false
-    case (SEntityWith(x71, x72, x73), SMap(x12))             => false
-    case (SMap(x12), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SSeq(x11))             => false
-    case (SSeq(x11), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SStr(x10))             => false
-    case (SStr(x10), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SSome(x9))             => false
-    case (SSome(x9), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SNone())               => false
-    case (SNone(), SEntityWith(x71, x72, x73))               => false
-    case (SSet(x6), SMap(x12))                               => false
-    case (SMap(x12), SSet(x6))                               => false
-    case (SSet(x6), SSeq(x11))                               => false
-    case (SSeq(x11), SSet(x6))                               => false
-    case (SSet(x6), SStr(x10))                               => false
-    case (SStr(x10), SSet(x6))                               => false
-    case (SSet(x6), SSome(x9))                               => false
-    case (SSome(x9), SSet(x6))                               => false
-    case (SSet(x6), SNone())                                 => false
-    case (SNone(), SSet(x6))                                 => false
-    case (SSet(x6), SEntityWith(x71, x72, x73))              => false
-    case (SEntityWith(x71, x72, x73), SSet(x6))              => false
-    case (SEntityElem(x51, x52), SMap(x12))                  => false
-    case (SMap(x12), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SSeq(x11))                  => false
-    case (SSeq(x11), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SStr(x10))                  => false
-    case (SStr(x10), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SSome(x9))                  => false
-    case (SSome(x9), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SNone())                    => false
-    case (SNone(), SEntityElem(x51, x52))                    => false
-    case (SEntityElem(x51, x52), SEntityWith(x71, x72, x73)) => false
-    case (SEntityWith(x71, x72, x73), SEntityElem(x51, x52)) => false
-    case (SEntityElem(x51, x52), SSet(x6))                   => false
-    case (SSet(x6), SEntityElem(x51, x52))                   => false
-    case (SEnumElem(x41, x42), SMap(x12))                    => false
-    case (SMap(x12), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SSeq(x11))                    => false
-    case (SSeq(x11), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SStr(x10))                    => false
-    case (SStr(x10), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SSome(x9))                    => false
-    case (SSome(x9), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SNone())                      => false
-    case (SNone(), SEnumElem(x41, x42))                      => false
-    case (SEnumElem(x41, x42), SEntityWith(x71, x72, x73))   => false
-    case (SEntityWith(x71, x72, x73), SEnumElem(x41, x42))   => false
-    case (SEnumElem(x41, x42), SSet(x6))                     => false
-    case (SSet(x6), SEnumElem(x41, x42))                     => false
-    case (SEnumElem(x41, x42), SEntityElem(x51, x52))        => false
-    case (SEntityElem(x51, x52), SEnumElem(x41, x42))        => false
-    case (SReal(x3), SMap(x12))                              => false
-    case (SMap(x12), SReal(x3))                              => false
-    case (SReal(x3), SSeq(x11))                              => false
-    case (SSeq(x11), SReal(x3))                              => false
-    case (SReal(x3), SStr(x10))                              => false
-    case (SStr(x10), SReal(x3))                              => false
-    case (SReal(x3), SSome(x9))                              => false
-    case (SSome(x9), SReal(x3))                              => false
-    case (SReal(x3), SNone())                                => false
-    case (SNone(), SReal(x3))                                => false
-    case (SReal(x3), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SReal(x3))             => false
-    case (SReal(x3), SSet(x6))                               => false
-    case (SSet(x6), SReal(x3))                               => false
-    case (SReal(x3), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SReal(x3))                  => false
-    case (SReal(x3), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SReal(x3))                    => false
-    case (SInt(x2), SMap(x12))                               => false
-    case (SMap(x12), SInt(x2))                               => false
-    case (SInt(x2), SSeq(x11))                               => false
-    case (SSeq(x11), SInt(x2))                               => false
-    case (SInt(x2), SStr(x10))                               => false
-    case (SStr(x10), SInt(x2))                               => false
-    case (SInt(x2), SSome(x9))                               => false
-    case (SSome(x9), SInt(x2))                               => false
-    case (SInt(x2), SNone())                                 => false
-    case (SNone(), SInt(x2))                                 => false
-    case (SInt(x2), SEntityWith(x71, x72, x73))              => false
-    case (SEntityWith(x71, x72, x73), SInt(x2))              => false
-    case (SInt(x2), SSet(x6))                                => false
-    case (SSet(x6), SInt(x2))                                => false
-    case (SInt(x2), SEntityElem(x51, x52))                   => false
-    case (SEntityElem(x51, x52), SInt(x2))                   => false
-    case (SInt(x2), SEnumElem(x41, x42))                     => false
-    case (SEnumElem(x41, x42), SInt(x2))                     => false
-    case (SInt(x2), SReal(x3))                               => false
-    case (SReal(x3), SInt(x2))                               => false
-    case (SBool(x1), SMap(x12))                              => false
-    case (SMap(x12), SBool(x1))                              => false
-    case (SBool(x1), SSeq(x11))                              => false
-    case (SSeq(x11), SBool(x1))                              => false
-    case (SBool(x1), SStr(x10))                              => false
-    case (SStr(x10), SBool(x1))                              => false
-    case (SBool(x1), SSome(x9))                              => false
-    case (SSome(x9), SBool(x1))                              => false
-    case (SBool(x1), SNone())                                => false
-    case (SNone(), SBool(x1))                                => false
-    case (SBool(x1), SEntityWith(x71, x72, x73))             => false
-    case (SEntityWith(x71, x72, x73), SBool(x1))             => false
-    case (SBool(x1), SSet(x6))                               => false
-    case (SSet(x6), SBool(x1))                               => false
-    case (SBool(x1), SEntityElem(x51, x52))                  => false
-    case (SEntityElem(x51, x52), SBool(x1))                  => false
-    case (SBool(x1), SEnumElem(x41, x42))                    => false
-    case (SEnumElem(x41, x42), SBool(x1))                    => false
-    case (SBool(x1), SReal(x3))                              => false
-    case (SReal(x3), SBool(x1))                              => false
-    case (SBool(x1), SInt(x2))                               => false
-    case (SInt(x2), SBool(x1))                               => false
-    case (SMap(x12), SMap(y12))                              => equal_list[(smt_val, smt_val)](x12, y12)
-    case (SSeq(x11), SSeq(y11))                              => equal_list[smt_val](x11, y11)
-    case (SStr(x10), SStr(y10))                              => x10 == y10
-    case (SSome(x9), SSome(y9))                              => equal_smt_vala(x9, y9)
-    case (SEntityWith(x71, x72, x73), SEntityWith(y71, y72, y73)) =>
-      equal_smt_vala(x71, y71) && (x72 == y72 && equal_smt_vala(x73, y73))
-    case (SSet(x6), SSet(y6)) => equal_list[smt_val](x6, y6)
-    case (SEntityElem(x51, x52), SEntityElem(y51, y52)) =>
-      x51 == y51 && x52 == y52
-    case (SEnumElem(x41, x42), SEnumElem(y41, y42)) => x41 == y41 && x42 == y42
-    case (SReal(x3), SReal(y3))                     => equal_rat(x3, y3)
-    case (SInt(x2), SInt(y2))                       => equal_int(x2, y2)
-    case (SBool(x1), SBool(y1))                     => equal_bool(x1, y1)
-    case (SNone(), SNone())                         => true
-  }
-
-  def equal_option[A: equal](x0: Option[A], x1: Option[A]): Boolean = (x0, x1) match {
-    case (None, Some(x2))     => false
-    case (Some(x2), None)     => false
-    case (Some(x2), Some(y2)) => eq[A](x2, y2)
-    case (None, None)         => true
   }
 
   sealed abstract class index_spec
@@ -494,6 +317,9 @@ object SpecRestGenerated {
 
   sealed abstract class nat
   final case class Nata(a: BigInt) extends nat
+
+  sealed abstract class rat
+  final case class Frct(a: (BigInt, BigInt)) extends rat
 
   sealed abstract class set[A]
   final case class seta[A](a: List[A])  extends set[A]
@@ -1013,16 +839,6 @@ object SpecRestGenerated {
   final case class AggregateCall(a: String, b: trigger_aggregate, c: Option[String])
       extends aggregate_call
 
-  sealed abstract class smt_model_ext[A]
-  final case class smt_model_exta[A](
-      a: List[(String, List[String])],
-      b: List[(String, smt_val)],
-      c: List[(String, List[smt_val])],
-      d: List[(String, List[(smt_val, smt_val)])],
-      e: List[(String, List[(String, smt_val)])],
-      f: A
-  ) extends smt_model_ext[A]
-
   sealed abstract class alloy_binop_shape
   final case class AbsLogical(a: String)    extends alloy_binop_shape
   final case class AbsInfix(a: String)      extends alloy_binop_shape
@@ -1475,1433 +1291,6 @@ object SpecRestGenerated {
       }
   }
 
-  def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
-    case (f, (x, y)) => (x, f(y))
-  }
-
-  def divmod_integer(k: BigInt, l: BigInt): (BigInt, BigInt) =
-    k == BigInt(0) match {
-      case true => (BigInt(0), BigInt(0))
-      case false => BigInt(0) < l match {
-          case true => BigInt(0) < k match {
-              case true => ((k: BigInt) =>
-                  (l: BigInt) =>
-                    l == 0 match {
-                      case true  => (BigInt(0), k)
-                      case false => k.abs /% l.abs
-                    }).apply(k).apply(l)
-              case false =>
-                val (r, s) =
-                  ((k: BigInt) =>
-                    (l: BigInt) =>
-                      l == 0 match {
-                        case true  => (BigInt(0), k)
-                        case false => k.abs /% l.abs
-                      }).apply(k).apply(l): ((BigInt, BigInt));
-                s == BigInt(0) match {
-                  case true  => (-r, BigInt(0))
-                  case false => ((-r) - BigInt(1), l - s)
-                }
-            }
-          case false => l == BigInt(0) match {
-              case true => (BigInt(0), k)
-              case false => apsnd[BigInt, BigInt, BigInt](
-                  (a: BigInt) => -a,
-                  k < BigInt(0) match {
-                    case true => ((k: BigInt) =>
-                        (l: BigInt) =>
-                          l == 0 match {
-                            case true  => (BigInt(0), k)
-                            case false => k.abs /% l.abs
-                          }).apply(k).apply(l)
-                    case false =>
-                      val (r, s) =
-                        ((k: BigInt) =>
-                          (l: BigInt) =>
-                            l == 0 match {
-                              case true  => (BigInt(0), k)
-                              case false => k.abs /% l.abs
-                            }).apply(k).apply(l): ((BigInt, BigInt));
-                      s == BigInt(0) match {
-                        case true  => (-r, BigInt(0))
-                        case false => ((-r) - BigInt(1), (-l) - s)
-                      }
-                  }
-                )
-            }
-        }
-    }
-
-  def fst[A, B](x0: (A, B)): A = x0 match {
-    case (x1, x2) => x1
-  }
-
-  def divide_integer(k: BigInt, l: BigInt): BigInt =
-    fst[BigInt, BigInt](divmod_integer(k, l))
-
-  def divide_int(k: BigInt, l: BigInt): BigInt = divide_integer(k, l)
-
-  def sm_sort_members[A](x0: smt_model_ext[A]): List[(String, List[String])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_sort_members
-    }
-
-  def smt_model_lookup_sort_members(
-      m: smt_model_ext[Unit],
-      sort_name: String
-  ): Option[List[String]] =
-    map_of[String, List[String]](sm_sort_members[Unit](m), sort_name)
-
-  def uminus_int(k: BigInt): BigInt = -k
-
-  def uminus_rat(p: rat): rat =
-    Frct {
-      val (a, b) = quotient_of(p): ((BigInt, BigInt));
-      (uminus_int(a), b)
-    }
-
-  def zero_int: BigInt = BigInt(0)
-
-  def less_int(k: BigInt, l: BigInt): Boolean = k < l
-
-  def gcd_int(x0: BigInt, x1: BigInt): BigInt = (x0, x1) match {
-    case (x, y) => x.gcd(y)
-  }
-
-  def snd[A, B](x0: (A, B)): B = x0 match {
-    case (x1, x2) => x2
-  }
-
-  def normalize(p: (BigInt, BigInt)): (BigInt, BigInt) =
-    less_int(zero_int, snd[BigInt, BigInt](p)) match {
-      case true =>
-        val a =
-          gcd_int(fst[BigInt, BigInt](p), snd[BigInt, BigInt](p)): BigInt;
-        (divide_int(fst[BigInt, BigInt](p), a), divide_int(snd[BigInt, BigInt](p), a))
-      case false => equal_int(snd[BigInt, BigInt](p), zero_int) match {
-          case true => (zero_int, one_inta)
-          case false =>
-            val a =
-              uminus_int(gcd_int(fst[BigInt, BigInt](p), snd[BigInt, BigInt](p))): BigInt;
-            (divide_int(fst[BigInt, BigInt](p), a), divide_int(snd[BigInt, BigInt](p), a))
-        }
-    }
-
-  def divide_rat(p: rat, q: rat): rat =
-    Frct {
-      val (a, c) = quotient_of(p): ((BigInt, BigInt))
-      val (b, d) = quotient_of(q): ((BigInt, BigInt));
-      normalize((times_inta(a, d), times_inta(c, b)))
-    }
-
-  def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
-    case (Nil, n)     => n
-    case (x :: xs, n) => length_tailrec[A](xs, Suc(n))
-  }
-
-  def size_list[A](xs: List[A]): nat = length_tailrec[A](xs, zero_nat)
-
-  def times_rat(p: rat, q: rat): rat =
-    Frct {
-      val (a, c) = quotient_of(p): ((BigInt, BigInt))
-      val (b, d) = quotient_of(q): ((BigInt, BigInt));
-      normalize((times_inta(a, b), times_inta(c, d)))
-    }
-
-  def minus_int(k: BigInt, l: BigInt): BigInt = k - l
-
-  def minus_rat(p: rat, q: rat): rat =
-    Frct {
-      val (a, c) = quotient_of(p): ((BigInt, BigInt))
-      val (b, d) = quotient_of(q): ((BigInt, BigInt));
-      normalize((minus_int(times_inta(a, d), times_inta(b, c)), times_inta(c, d)))
-    }
-
-  def sm_const_vals[A](x0: smt_model_ext[A]): List[(String, smt_val)] = x0 match {
-    case smt_model_exta(
-          sm_sort_members,
-          sm_const_vals,
-          sm_pred_domain,
-          sm_pred_lookup,
-          sm_pred_fields,
-          more
-        ) => sm_const_vals
-  }
-
-  def smt_model_lookup_const(m: smt_model_ext[Unit], name: String): Option[smt_val] =
-    map_of[String, smt_val](sm_const_vals[Unit](m), name)
-
-  def contains_smt_val(x0: List[smt_val], v: smt_val): Boolean = (x0, v) match {
-    case (Nil, v)     => false
-    case (x :: xs, v) => equal_smt_vala(x, v) || contains_smt_val(xs, v)
-  }
-
-  def dedupe_smt_vals(x0: List[smt_val]): List[smt_val] = x0 match {
-    case Nil => Nil
-    case x :: xs =>
-      val rest = dedupe_smt_vals(xs): List[smt_val];
-      contains_smt_val(rest, x) match {
-        case true  => rest
-        case false => x :: rest
-      }
-  }
-
-  def set_intersect_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
-    dedupe_smt_vals(filter[smt_val]((a: smt_val) => contains_smt_val(r, a), l))
-
-  def zero_rat: rat = Frct((zero_int, one_inta))
-
-  def plus_int(k: BigInt, l: BigInt): BigInt = k + l
-
-  def plus_rat(p: rat, q: rat): rat =
-    Frct {
-      val (a, c) = quotient_of(p): ((BigInt, BigInt))
-      val (b, d) = quotient_of(q): ((BigInt, BigInt));
-      normalize((plus_int(times_inta(a, d), times_inta(b, c)), times_inta(c, d)))
-    }
-
-  def int_of_nat(n: nat): BigInt = integer_of_nat(n)
-
-  def less_rat(p: rat, q: rat): Boolean = {
-    val (a, c) = quotient_of(p): ((BigInt, BigInt))
-    val (b, d) = quotient_of(q): ((BigInt, BigInt));
-    less_int(times_inta(a, d), times_inta(c, b))
-  }
-
-  def sm_pred_fields[A](x0: smt_model_ext[A]): List[(String, List[(String, smt_val)])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_fields
-    }
-
-  def smt_model_lookup_field(
-      m: smt_model_ext[Unit],
-      entity_id: String,
-      field_name: String
-  ): Option[smt_val] =
-    map_of[String, List[(String, smt_val)]](sm_pred_fields[Unit](m), entity_id) match {
-      case None     => None
-      case Some(fs) => map_of[String, smt_val](fs, field_name)
-    }
-
-  def smt_val_field_lookup(m: smt_model_ext[Unit], x1: smt_val, fld: String): Option[smt_val] =
-    (m, x1, fld) match {
-      case (m, SEntityElem(uu, eid), fld) => smt_model_lookup_field(m, eid, fld)
-      case (m, SEntityWith(base, ov_fld, ov_val), fld) =>
-        fld == ov_fld match {
-          case true  => Some[smt_val](ov_val)
-          case false => smt_val_field_lookup(m, base, fld)
-        }
-      case (uv, SBool(v), ux)         => None
-      case (uv, SInt(v), ux)          => None
-      case (uv, SReal(v), ux)         => None
-      case (uv, SEnumElem(v, va), ux) => None
-      case (uv, SSet(v), ux)          => None
-      case (uv, SNone(), ux)          => None
-      case (uv, SSome(v), ux)         => None
-      case (uv, SStr(v), ux)          => None
-      case (uv, SSeq(v), ux)          => None
-      case (uv, SMap(v), ux)          => None
-    }
-
-  def sm_pred_domain[A](x0: smt_model_ext[A]): List[(String, List[smt_val])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_domain
-    }
-
-  def smt_model_lookup_rel(m: smt_model_ext[Unit], name: String): Option[List[smt_val]] =
-    map_of[String, List[smt_val]](sm_pred_domain[Unit](m), name)
-
-  def sm_pred_lookup[A](x0: smt_model_ext[A]): List[(String, List[(smt_val, smt_val)])] =
-    x0 match {
-      case smt_model_exta(
-            sm_sort_members,
-            sm_const_vals,
-            sm_pred_domain,
-            sm_pred_lookup,
-            sm_pred_fields,
-            more
-          ) => sm_pred_lookup
-    }
-
-  def map_option[A, B](f: A => B, x1: Option[A]): Option[B] = (f, x1) match {
-    case (f, None)     => None
-    case (f, Some(x2)) => Some[B](f(x2))
-  }
-
-  def smt_model_lookup_key(
-      m: smt_model_ext[Unit],
-      rel_name: String,
-      key: smt_val
-  ): Option[smt_val] =
-    map_of[String, List[(smt_val, smt_val)]](sm_pred_lookup[Unit](m), rel_name) match {
-      case None => None
-      case Some(pairs) =>
-        map_option[(smt_val, smt_val), smt_val](
-          (a: (smt_val, smt_val)) =>
-            snd[smt_val, smt_val](a),
-          find[(smt_val, smt_val)](
-            (p: (smt_val, smt_val)) =>
-              equal_smt_vala(fst[smt_val, smt_val](p), key),
-            pairs
-          )
-        )
-    }
-
-  def set_union_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
-    dedupe_smt_vals(l ++ r)
-
-  def relRefVarName(x0: smt_term): Option[String] = x0 match {
-    case TVar(rel)              => Some[String](rel)
-    case BLit(v)                => None
-    case ILit(v)                => None
-    case RLit(v)                => None
-    case EnumElemConst(v, va)   => None
-    case TNot(v)                => None
-    case TAnd(v, va)            => None
-    case TOr(v, va)             => None
-    case TImplies(v, va)        => None
-    case TEq(v, va)             => None
-    case TLt(v, va)             => None
-    case TNeg(v)                => None
-    case TAdd(v, va)            => None
-    case TSub(v, va)            => None
-    case TMul(v, va)            => None
-    case TDiv(v, va)            => None
-    case TInDom(v, va)          => None
-    case TCardRel(v)            => None
-    case TCard(v)               => None
-    case TLetIn(v, va, vb)      => None
-    case TForallEnum(v, va, vb) => None
-    case TForallRel(v, va, vb)  => None
-    case TExistsRel(v, va, vb)  => None
-    case TTheRel(v, va, vb)     => None
-    case TEntityBase(v)         => None
-    case TForallSet(v, va, vb)  => None
-    case TTheSet(v, va, vb)     => None
-    case TIndexRel(v, va)       => None
-    case TFieldAccess(v, va)    => None
-    case TSetEmpty()            => None
-    case TSetInsert(v, va)      => None
-    case TSetMember(v, va)      => None
-    case TSetUnion(v, va)       => None
-    case TSetIntersect(v, va)   => None
-    case TSetDiff(v, va)        => None
-    case TPrime(v)              => None
-    case TPre(v)                => None
-    case TWithRec(v, va, vb)    => None
-    case TIte(v, va, vb)        => None
-    case TNone()                => None
-    case TSome(v)               => None
-    case TStrLit(v)             => None
-    case TMatches(v, va)        => None
-    case TUStrPred(v, va)       => None
-    case TUStrFunc(v, va)       => None
-    case TUIntFunc(v, va)       => None
-    case TStrLen(v)             => None
-    case TUConst(v)             => None
-    case TSeqEmpty()            => None
-    case TSeqCons(v, va)        => None
-    case TMapEmpty()            => None
-    case TMapCons(v, va, vb)    => None
-    case TSum(v, va)            => None
-  }
-
-  def peelSmtRelationRef(x0: smt_term): Option[String] = x0 match {
-    case TVar(rel)              => Some[String](rel)
-    case TPre(t)                => relRefVarName(t)
-    case TPrime(t)              => relRefVarName(t)
-    case BLit(v)                => None
-    case ILit(v)                => None
-    case RLit(v)                => None
-    case EnumElemConst(v, va)   => None
-    case TNot(v)                => None
-    case TAnd(v, va)            => None
-    case TOr(v, va)             => None
-    case TImplies(v, va)        => None
-    case TEq(v, va)             => None
-    case TLt(v, va)             => None
-    case TNeg(v)                => None
-    case TAdd(v, va)            => None
-    case TSub(v, va)            => None
-    case TMul(v, va)            => None
-    case TDiv(v, va)            => None
-    case TInDom(v, va)          => None
-    case TCardRel(v)            => None
-    case TCard(v)               => None
-    case TLetIn(v, va, vb)      => None
-    case TForallEnum(v, va, vb) => None
-    case TForallRel(v, va, vb)  => None
-    case TExistsRel(v, va, vb)  => None
-    case TTheRel(v, va, vb)     => None
-    case TEntityBase(v)         => None
-    case TForallSet(v, va, vb)  => None
-    case TTheSet(v, va, vb)     => None
-    case TIndexRel(v, va)       => None
-    case TFieldAccess(v, va)    => None
-    case TSetEmpty()            => None
-    case TSetInsert(v, va)      => None
-    case TSetMember(v, va)      => None
-    case TSetUnion(v, va)       => None
-    case TSetIntersect(v, va)   => None
-    case TSetDiff(v, va)        => None
-    case TWithRec(v, va, vb)    => None
-    case TIte(v, va, vb)        => None
-    case TNone()                => None
-    case TSome(v)               => None
-    case TStrLit(v)             => None
-    case TMatches(v, va)        => None
-    case TUStrPred(v, va)       => None
-    case TUStrFunc(v, va)       => None
-    case TUIntFunc(v, va)       => None
-    case TStrLen(v)             => None
-    case TUConst(v)             => None
-    case TSeqEmpty()            => None
-    case TSeqCons(v, va)        => None
-    case TMapEmpty()            => None
-    case TMapCons(v, va, vb)    => None
-    case TSum(v, va)            => None
-  }
-
-  def set_diff_smt_vals(l: List[smt_val], r: List[smt_val]): List[smt_val] =
-    dedupe_smt_vals(filter[smt_val]((v: smt_val) => !contains_smt_val(r, v), l))
-
-  def smt_env_lookup(env: List[(String, smt_val)], name: String): Option[smt_val] =
-    map_of[String, smt_val](env, name)
-
-  def list_all[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
-    case (p, Nil)     => true
-    case (p, x :: xs) => p(x) && list_all[A](p, xs)
-  }
-
-  def smtEval_forall_enum(
-      m: smt_model_ext[Unit],
-      env: List[(String, smt_val)],
-      vara: String,
-      sort_name: String,
-      x4: List[String],
-      body: smt_term
-  ): Option[smt_val] =
-    (m, env, vara, sort_name, x4, body) match {
-      case (m, env, vara, sort_name, Nil, body) => Some[smt_val](SBool(true))
-      case (m, env, vara, sort_name, mem :: rest, body) =>
-        smtEval(m, (vara, SEnumElem(sort_name, mem)) :: env, body) match {
-          case None => None
-          case Some(SBool(b)) =>
-            smtEval_forall_enum(m, env, vara, sort_name, rest, body) match {
-              case None                       => None
-              case Some(SBool(acc))           => Some[smt_val](SBool(b && acc))
-              case Some(SInt(_))              => None
-              case Some(SReal(_))             => None
-              case Some(SEnumElem(_, _))      => None
-              case Some(SEntityElem(_, _))    => None
-              case Some(SSet(_))              => None
-              case Some(SEntityWith(_, _, _)) => None
-              case Some(SNone())              => None
-              case Some(SSome(_))             => None
-              case Some(SStr(_))              => None
-              case Some(SSeq(_))              => None
-              case Some(SMap(_))              => None
-            }
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-    }
-
-  def smtEval_forall_rel(
-      m: smt_model_ext[Unit],
-      env: List[(String, smt_val)],
-      vara: String,
-      x3: List[smt_val],
-      body: smt_term
-  ): Option[smt_val] =
-    (m, env, vara, x3, body) match {
-      case (m, env, vara, Nil, body) => Some[smt_val](SBool(true))
-      case (m, env, vara, v :: rest, body) =>
-        smtEval(m, (vara, v) :: env, body) match {
-          case None => None
-          case Some(SBool(b)) =>
-            smtEval_forall_rel(m, env, vara, rest, body) match {
-              case None                       => None
-              case Some(SBool(acc))           => Some[smt_val](SBool(b && acc))
-              case Some(SInt(_))              => None
-              case Some(SReal(_))             => None
-              case Some(SEnumElem(_, _))      => None
-              case Some(SEntityElem(_, _))    => None
-              case Some(SSet(_))              => None
-              case Some(SEntityWith(_, _, _)) => None
-              case Some(SNone())              => None
-              case Some(SSome(_))             => None
-              case Some(SStr(_))              => None
-              case Some(SSeq(_))              => None
-              case Some(SMap(_))              => None
-            }
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-    }
-
-  def smtEval_the_rel(
-      m: smt_model_ext[Unit],
-      env: List[(String, smt_val)],
-      vara: String,
-      x3: List[smt_val],
-      body: smt_term
-  ): Option[List[smt_val]] =
-    (m, env, vara, x3, body) match {
-      case (m, env, vara, Nil, body) => Some[List[smt_val]](Nil)
-      case (m, env, vara, v :: rest, body) =>
-        smtEval(m, (vara, v) :: env, body) match {
-          case None => None
-          case Some(SBool(b)) =>
-            smtEval_the_rel(m, env, vara, rest, body) match {
-              case None => None
-              case Some(matches) =>
-                Some[List[smt_val]](b match {
-                  case true  => v :: matches
-                  case false => matches
-                })
-            }
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-    }
-
-  def smtEval(m: smt_model_ext[Unit], env: List[(String, smt_val)], x2: smt_term): Option[smt_val] =
-    (m, env, x2) match {
-      case (m, env, BLit(b)) => Some[smt_val](SBool(b))
-      case (m, env, ILit(n)) => Some[smt_val](SInt(n))
-      case (m, env, RLit(r)) => Some[smt_val](SReal(r))
-      case (m, env, TVar(x)) => smt_env_lookup(env, x) match {
-          case None    => smt_model_lookup_const(m, x)
-          case Some(a) => Some[smt_val](a)
-        }
-      case (m, env, EnumElemConst(en, mem)) =>
-        smt_model_lookup_sort_members(m, en) match {
-          case None => None
-          case Some(members) =>
-            membera[String](members, mem) match {
-              case true  => Some[smt_val](SEnumElem(en, mem))
-              case false => None
-            }
-        }
-      case (m, env, TNot(t)) => smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(b))             => Some[smt_val](SBool(!b))
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TAnd(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                    => None
-          case (Some(SBool(_)), None)                       => None
-          case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(a && b))
-          case (Some(SBool(_)), Some(SInt(_)))              => None
-          case (Some(SBool(_)), Some(SReal(_)))             => None
-          case (Some(SBool(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SBool(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SBool(_)), Some(SSet(_)))              => None
-          case (Some(SBool(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SBool(_)), Some(SNone()))              => None
-          case (Some(SBool(_)), Some(SSome(_)))             => None
-          case (Some(SBool(_)), Some(SStr(_)))              => None
-          case (Some(SBool(_)), Some(SSeq(_)))              => None
-          case (Some(SBool(_)), Some(SMap(_)))              => None
-          case (Some(SInt(_)), _)                           => None
-          case (Some(SReal(_)), _)                          => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TOr(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                    => None
-          case (Some(SBool(_)), None)                       => None
-          case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(a || b))
-          case (Some(SBool(_)), Some(SInt(_)))              => None
-          case (Some(SBool(_)), Some(SReal(_)))             => None
-          case (Some(SBool(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SBool(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SBool(_)), Some(SSet(_)))              => None
-          case (Some(SBool(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SBool(_)), Some(SNone()))              => None
-          case (Some(SBool(_)), Some(SSome(_)))             => None
-          case (Some(SBool(_)), Some(SStr(_)))              => None
-          case (Some(SBool(_)), Some(SSeq(_)))              => None
-          case (Some(SBool(_)), Some(SMap(_)))              => None
-          case (Some(SInt(_)), _)                           => None
-          case (Some(SReal(_)), _)                          => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TImplies(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                    => None
-          case (Some(SBool(_)), None)                       => None
-          case (Some(SBool(a)), Some(SBool(b)))             => Some[smt_val](SBool(!a || b))
-          case (Some(SBool(_)), Some(SInt(_)))              => None
-          case (Some(SBool(_)), Some(SReal(_)))             => None
-          case (Some(SBool(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SBool(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SBool(_)), Some(SSet(_)))              => None
-          case (Some(SBool(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SBool(_)), Some(SNone()))              => None
-          case (Some(SBool(_)), Some(SSome(_)))             => None
-          case (Some(SBool(_)), Some(SStr(_)))              => None
-          case (Some(SBool(_)), Some(SSeq(_)))              => None
-          case (Some(SBool(_)), Some(SMap(_)))              => None
-          case (Some(SInt(_)), _)                           => None
-          case (Some(SReal(_)), _)                          => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TEq(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)              => None
-          case (Some(SBool(_)), None) => None
-          case (Some(SBool(bool)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SBool(bool), b)))
-          case (Some(SInt(_)), None) => None
-          case (Some(SInt(a)), Some(SBool(bool))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SBool(bool))))
-          case (Some(SInt(a)), Some(SInt(intb))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SInt(intb))))
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            Some[smt_val](SBool(equal_rat(of_int(a), b)))
-          case (Some(SInt(a)), Some(SEnumElem(literal1, literal2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SEnumElem(literal1, literal2))))
-          case (Some(SInt(a)), Some(SEntityElem(literal1, literal2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SEntityElem(literal1, literal2))))
-          case (Some(SInt(a)), Some(SSet(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SSet(list))))
-          case (Some(SInt(a)), Some(SEntityWith(smt_val1, literal, smt_val2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SEntityWith(smt_val1, literal, smt_val2))))
-          case (Some(SInt(a)), Some(SNone())) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SNone())))
-          case (Some(SInt(a)), Some(SSome(smt_val))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SSome(smt_val))))
-          case (Some(SInt(a)), Some(SStr(literal))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SStr(literal))))
-          case (Some(SInt(a)), Some(SSeq(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SSeq(list))))
-          case (Some(SInt(a)), Some(SMap(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SInt(a), SMap(list))))
-          case (Some(SReal(_)), None) => None
-          case (Some(SReal(a)), Some(SBool(bool))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SBool(bool))))
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            Some[smt_val](SBool(equal_rat(a, of_int(b))))
-          case (Some(SReal(a)), Some(SReal(ratb))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SReal(ratb))))
-          case (Some(SReal(a)), Some(SEnumElem(literal1, literal2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SEnumElem(literal1, literal2))))
-          case (Some(SReal(a)), Some(SEntityElem(literal1, literal2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SEntityElem(literal1, literal2))))
-          case (Some(SReal(a)), Some(SSet(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SSet(list))))
-          case (Some(SReal(a)), Some(SEntityWith(smt_val1, literal, smt_val2))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SEntityWith(smt_val1, literal, smt_val2))))
-          case (Some(SReal(a)), Some(SNone())) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SNone())))
-          case (Some(SReal(a)), Some(SSome(smt_val))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SSome(smt_val))))
-          case (Some(SReal(a)), Some(SStr(literal))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SStr(literal))))
-          case (Some(SReal(a)), Some(SSeq(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SSeq(list))))
-          case (Some(SReal(a)), Some(SMap(list))) =>
-            Some[smt_val](SBool(equal_smt_vala(SReal(a), SMap(list))))
-          case (Some(SEnumElem(_, _)), None) => None
-          case (Some(SEnumElem(literal1, literal2)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SEnumElem(literal1, literal2), b)))
-          case (Some(SEntityElem(_, _)), None) => None
-          case (Some(SEntityElem(literal1, literal2)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SEntityElem(literal1, literal2), b)))
-          case (Some(SSet(_)), None) => None
-          case (Some(SSet(list)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SSet(list), b)))
-          case (Some(SEntityWith(_, _, _)), None) => None
-          case (Some(SEntityWith(smt_val1, literal, smt_val2)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SEntityWith(smt_val1, literal, smt_val2), b)))
-          case (Some(SNone()), None) => None
-          case (Some(SNone()), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SNone(), b)))
-          case (Some(SSome(_)), None) => None
-          case (Some(SSome(smt_val)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SSome(smt_val), b)))
-          case (Some(SStr(_)), None) => None
-          case (Some(SStr(literal)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SStr(literal), b)))
-          case (Some(SSeq(_)), None) => None
-          case (Some(SSeq(list)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SSeq(list), b)))
-          case (Some(SMap(_)), None) => None
-          case (Some(SMap(list)), Some(b)) =>
-            Some[smt_val](SBool(equal_smt_vala(SMap(list), b)))
-        }
-      case (m, env, TLt(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                       => None
-          case (Some(SBool(_)), _)             => None
-          case (Some(SInt(_)), None)           => None
-          case (Some(SInt(_)), Some(SBool(_))) => None
-          case (Some(SInt(a)), Some(SInt(b))) =>
-            Some[smt_val](SBool(less_int(a, b)))
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            Some[smt_val](SBool(less_rat(of_int(a), b)))
-          case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SInt(_)), Some(SSet(_)))              => None
-          case (Some(SInt(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SInt(_)), Some(SNone()))              => None
-          case (Some(SInt(_)), Some(SSome(_)))             => None
-          case (Some(SInt(_)), Some(SStr(_)))              => None
-          case (Some(SInt(_)), Some(SSeq(_)))              => None
-          case (Some(SInt(_)), Some(SMap(_)))              => None
-          case (Some(SReal(_)), None)                      => None
-          case (Some(SReal(_)), Some(SBool(_)))            => None
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            Some[smt_val](SBool(less_rat(a, of_int(b))))
-          case (Some(SReal(a)), Some(SReal(b))) =>
-            Some[smt_val](SBool(less_rat(a, b)))
-          case (Some(SReal(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SReal(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SReal(_)), Some(SSet(_)))              => None
-          case (Some(SReal(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SReal(_)), Some(SNone()))              => None
-          case (Some(SReal(_)), Some(SSome(_)))             => None
-          case (Some(SReal(_)), Some(SStr(_)))              => None
-          case (Some(SReal(_)), Some(SSeq(_)))              => None
-          case (Some(SReal(_)), Some(SMap(_)))              => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), None)                        => None
-          case (Some(SStr(_)), Some(SBool(_)))              => None
-          case (Some(SStr(_)), Some(SInt(_)))               => None
-          case (Some(SStr(_)), Some(SReal(_)))              => None
-          case (Some(SStr(_)), Some(SEnumElem(_, _)))       => None
-          case (Some(SStr(_)), Some(SEntityElem(_, _)))     => None
-          case (Some(SStr(_)), Some(SSet(_)))               => None
-          case (Some(SStr(_)), Some(SEntityWith(_, _, _)))  => None
-          case (Some(SStr(_)), Some(SNone()))               => None
-          case (Some(SStr(_)), Some(SSome(_)))              => None
-          case (Some(SStr(a)), Some(SStr(b)))               => Some[smt_val](SBool(a < b))
-          case (Some(SStr(_)), Some(SSeq(_)))               => None
-          case (Some(SStr(_)), Some(SMap(_)))               => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TNeg(t)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(n))              => Some[smt_val](SInt(uminus_int(n)))
-          case Some(SReal(n))             => Some[smt_val](SReal(uminus_rat(n)))
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TAdd(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                       => None
-          case (Some(SBool(_)), _)             => None
-          case (Some(SInt(_)), None)           => None
-          case (Some(SInt(_)), Some(SBool(_))) => None
-          case (Some(SInt(a)), Some(SInt(b))) =>
-            Some[smt_val](SInt(plus_int(a, b)))
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(plus_rat(of_int(a), b)))
-          case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SInt(_)), Some(SSet(_)))              => None
-          case (Some(SInt(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SInt(_)), Some(SNone()))              => None
-          case (Some(SInt(_)), Some(SSome(_)))             => None
-          case (Some(SInt(_)), Some(SStr(_)))              => None
-          case (Some(SInt(_)), Some(SSeq(_)))              => None
-          case (Some(SInt(_)), Some(SMap(_)))              => None
-          case (Some(SReal(_)), None)                      => None
-          case (Some(SReal(_)), Some(SBool(_)))            => None
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            Some[smt_val](SReal(plus_rat(a, of_int(b))))
-          case (Some(SReal(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(plus_rat(a, b)))
-          case (Some(SReal(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SReal(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SReal(_)), Some(SSet(_)))              => None
-          case (Some(SReal(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SReal(_)), Some(SNone()))              => None
-          case (Some(SReal(_)), Some(SSome(_)))             => None
-          case (Some(SReal(_)), Some(SStr(_)))              => None
-          case (Some(SReal(_)), Some(SSeq(_)))              => None
-          case (Some(SReal(_)), Some(SMap(_)))              => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), None)                        => None
-          case (Some(SStr(_)), Some(SBool(_)))              => None
-          case (Some(SStr(_)), Some(SInt(_)))               => None
-          case (Some(SStr(_)), Some(SReal(_)))              => None
-          case (Some(SStr(_)), Some(SEnumElem(_, _)))       => None
-          case (Some(SStr(_)), Some(SEntityElem(_, _)))     => None
-          case (Some(SStr(_)), Some(SSet(_)))               => None
-          case (Some(SStr(_)), Some(SEntityWith(_, _, _)))  => None
-          case (Some(SStr(_)), Some(SNone()))               => None
-          case (Some(SStr(_)), Some(SSome(_)))              => None
-          case (Some(SStr(a)), Some(SStr(b)))               => Some[smt_val](SStr(a + b))
-          case (Some(SStr(_)), Some(SSeq(_)))               => None
-          case (Some(SStr(_)), Some(SMap(_)))               => None
-          case (Some(SSeq(_)), None)                        => None
-          case (Some(SSeq(_)), Some(SBool(_)))              => None
-          case (Some(SSeq(_)), Some(SInt(_)))               => None
-          case (Some(SSeq(_)), Some(SReal(_)))              => None
-          case (Some(SSeq(_)), Some(SEnumElem(_, _)))       => None
-          case (Some(SSeq(_)), Some(SEntityElem(_, _)))     => None
-          case (Some(SSeq(_)), Some(SSet(_)))               => None
-          case (Some(SSeq(_)), Some(SEntityWith(_, _, _)))  => None
-          case (Some(SSeq(_)), Some(SNone()))               => None
-          case (Some(SSeq(_)), Some(SSome(_)))              => None
-          case (Some(SSeq(_)), Some(SStr(_)))               => None
-          case (Some(SSeq(a)), Some(SSeq(b)))               => Some[smt_val](SSeq(a ++ b))
-          case (Some(SSeq(_)), Some(SMap(_)))               => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TSub(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                       => None
-          case (Some(SBool(_)), _)             => None
-          case (Some(SInt(_)), None)           => None
-          case (Some(SInt(_)), Some(SBool(_))) => None
-          case (Some(SInt(a)), Some(SInt(b))) =>
-            Some[smt_val](SInt(minus_int(a, b)))
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(minus_rat(of_int(a), b)))
-          case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SInt(_)), Some(SSet(_)))              => None
-          case (Some(SInt(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SInt(_)), Some(SNone()))              => None
-          case (Some(SInt(_)), Some(SSome(_)))             => None
-          case (Some(SInt(_)), Some(SStr(_)))              => None
-          case (Some(SInt(_)), Some(SSeq(_)))              => None
-          case (Some(SInt(_)), Some(SMap(_)))              => None
-          case (Some(SReal(_)), None)                      => None
-          case (Some(SReal(_)), Some(SBool(_)))            => None
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            Some[smt_val](SReal(minus_rat(a, of_int(b))))
-          case (Some(SReal(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(minus_rat(a, b)))
-          case (Some(SReal(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SReal(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SReal(_)), Some(SSet(_)))              => None
-          case (Some(SReal(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SReal(_)), Some(SNone()))              => None
-          case (Some(SReal(_)), Some(SSome(_)))             => None
-          case (Some(SReal(_)), Some(SStr(_)))              => None
-          case (Some(SReal(_)), Some(SSeq(_)))              => None
-          case (Some(SReal(_)), Some(SMap(_)))              => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TMul(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                       => None
-          case (Some(SBool(_)), _)             => None
-          case (Some(SInt(_)), None)           => None
-          case (Some(SInt(_)), Some(SBool(_))) => None
-          case (Some(SInt(a)), Some(SInt(b))) =>
-            Some[smt_val](SInt(times_inta(a, b)))
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(times_rat(of_int(a), b)))
-          case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SInt(_)), Some(SSet(_)))              => None
-          case (Some(SInt(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SInt(_)), Some(SNone()))              => None
-          case (Some(SInt(_)), Some(SSome(_)))             => None
-          case (Some(SInt(_)), Some(SStr(_)))              => None
-          case (Some(SInt(_)), Some(SSeq(_)))              => None
-          case (Some(SInt(_)), Some(SMap(_)))              => None
-          case (Some(SReal(_)), None)                      => None
-          case (Some(SReal(_)), Some(SBool(_)))            => None
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            Some[smt_val](SReal(times_rat(a, of_int(b))))
-          case (Some(SReal(a)), Some(SReal(b))) =>
-            Some[smt_val](SReal(times_rat(a, b)))
-          case (Some(SReal(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SReal(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SReal(_)), Some(SSet(_)))              => None
-          case (Some(SReal(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SReal(_)), Some(SNone()))              => None
-          case (Some(SReal(_)), Some(SSome(_)))             => None
-          case (Some(SReal(_)), Some(SStr(_)))              => None
-          case (Some(SReal(_)), Some(SSeq(_)))              => None
-          case (Some(SReal(_)), Some(SMap(_)))              => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TDiv(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                       => None
-          case (Some(SBool(_)), _)             => None
-          case (Some(SInt(_)), None)           => None
-          case (Some(SInt(_)), Some(SBool(_))) => None
-          case (Some(SInt(a)), Some(SInt(b))) =>
-            equal_int(b, zero_int) match {
-              case true  => None
-              case false => Some[smt_val](SInt(divide_int(a, b)))
-            }
-          case (Some(SInt(a)), Some(SReal(b))) =>
-            equal_rat(b, zero_rat) match {
-              case true  => None
-              case false => Some[smt_val](SReal(divide_rat(of_int(a), b)))
-            }
-          case (Some(SInt(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SInt(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SInt(_)), Some(SSet(_)))              => None
-          case (Some(SInt(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SInt(_)), Some(SNone()))              => None
-          case (Some(SInt(_)), Some(SSome(_)))             => None
-          case (Some(SInt(_)), Some(SStr(_)))              => None
-          case (Some(SInt(_)), Some(SSeq(_)))              => None
-          case (Some(SInt(_)), Some(SMap(_)))              => None
-          case (Some(SReal(_)), None)                      => None
-          case (Some(SReal(_)), Some(SBool(_)))            => None
-          case (Some(SReal(a)), Some(SInt(b))) =>
-            equal_int(b, zero_int) match {
-              case true  => None
-              case false => Some[smt_val](SReal(divide_rat(a, of_int(b))))
-            }
-          case (Some(SReal(a)), Some(SReal(b))) =>
-            equal_rat(b, zero_rat) match {
-              case true  => None
-              case false => Some[smt_val](SReal(divide_rat(a, b)))
-            }
-          case (Some(SReal(_)), Some(SEnumElem(_, _)))      => None
-          case (Some(SReal(_)), Some(SEntityElem(_, _)))    => None
-          case (Some(SReal(_)), Some(SSet(_)))              => None
-          case (Some(SReal(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SReal(_)), Some(SNone()))              => None
-          case (Some(SReal(_)), Some(SSome(_)))             => None
-          case (Some(SReal(_)), Some(SStr(_)))              => None
-          case (Some(SReal(_)), Some(SSeq(_)))              => None
-          case (Some(SReal(_)), Some(SMap(_)))              => None
-          case (Some(SEnumElem(_, _)), _)                   => None
-          case (Some(SEntityElem(_, _)), _)                 => None
-          case (Some(SSet(_)), _)                           => None
-          case (Some(SEntityWith(_, _, _)), _)              => None
-          case (Some(SNone()), _)                           => None
-          case (Some(SSome(_)), _)                          => None
-          case (Some(SStr(_)), _)                           => None
-          case (Some(SSeq(_)), _)                           => None
-          case (Some(SMap(_)), _)                           => None
-        }
-      case (m, env, TInDom(rel_name, arg)) =>
-        smtEval(m, env, arg) match {
-          case None => None
-          case Some(v) =>
-            smt_model_lookup_rel(m, rel_name) match {
-              case None    => None
-              case Some(d) => Some[smt_val](SBool(contains_smt_val(d, v)))
-            }
-        }
-      case (m, env, TCardRel(rel_name)) =>
-        smt_model_lookup_rel(m, rel_name) match {
-          case None    => None
-          case Some(d) => Some[smt_val](SInt(int_of_nat(size_list[smt_val](d))))
-        }
-      case (m, env, TCard(t)) =>
-        smtEval(m, env, t) match {
-          case None                    => None
-          case Some(SBool(_))          => None
-          case Some(SInt(_))           => None
-          case Some(SReal(_))          => None
-          case Some(SEnumElem(_, _))   => None
-          case Some(SEntityElem(_, _)) => None
-          case Some(SSet(xs)) =>
-            Some[smt_val](SInt(int_of_nat(size_list[smt_val](xs))))
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TLetIn(x, v, body)) =>
-        smtEval(m, env, v) match {
-          case None     => None
-          case Some(va) => smtEval(m, (x, va) :: env, body)
-        }
-      case (m, env, TForallEnum(vara, sort_name, body)) =>
-        smt_model_lookup_sort_members(m, sort_name) match {
-          case None => None
-          case Some(members) =>
-            smtEval_forall_enum(m, env, vara, sort_name, members, body)
-        }
-      case (m, env, TForallRel(vara, rel_name, body)) =>
-        smt_model_lookup_rel(m, rel_name) match {
-          case None    => None
-          case Some(d) => smtEval_forall_rel(m, env, vara, d, body)
-        }
-      case (m, env, TExistsRel(vara, rel_name, body)) =>
-        smt_model_lookup_rel(m, rel_name) match {
-          case None => None
-          case Some(d) =>
-            smtEval_the_rel(m, env, vara, d, body) match {
-              case None => None
-              case Some(matches) =>
-                Some[smt_val](SBool(!nulla[smt_val](matches)))
-            }
-        }
-      case (m, env, TTheRel(vara, rel_name, body)) =>
-        smt_model_lookup_rel(m, rel_name) match {
-          case None => None
-          case Some(d) =>
-            smtEval_the_rel(m, env, vara, d, body) match {
-              case None      => None
-              case Some(Nil) => None
-              case Some(x :: rest) =>
-                list_all[smt_val]((y: smt_val) => equal_smt_vala(y, x), rest) match {
-                  case true  => Some[smt_val](x)
-                  case false => None
-                }
-            }
-        }
-      case (m, env, TEntityBase(name)) => Some[smt_val](SEntityElem(name, ""))
-      case (m, env, TForallSet(vara, setT, body)) =>
-        smtEval(m, env, setT) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(elems))          => smtEval_forall_rel(m, env, vara, elems, body)
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TTheSet(vara, setT, body)) =>
-        smtEval(m, env, setT) match {
-          case None                    => None
-          case Some(SBool(_))          => None
-          case Some(SInt(_))           => None
-          case Some(SReal(_))          => None
-          case Some(SEnumElem(_, _))   => None
-          case Some(SEntityElem(_, _)) => None
-          case Some(SSet(elems)) =>
-            smtEval_the_rel(m, env, vara, elems, body) match {
-              case None      => None
-              case Some(Nil) => None
-              case Some(x :: rest) =>
-                list_all[smt_val]((y: smt_val) => equal_smt_vala(y, x), rest) match {
-                  case true  => Some[smt_val](x)
-                  case false => None
-                }
-            }
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TIndexRel(base, key)) =>
-        (peelSmtRelationRef(base), smtEval(m, env, key)) match {
-          case (None, _)            => None
-          case (Some(_), None)      => None
-          case (Some(rel), Some(a)) => smt_model_lookup_key(m, rel, a)
-        }
-      case (m, env, TFieldAccess(base, fname)) =>
-        smtEval(m, env, base) match {
-          case None    => None
-          case Some(v) => smt_val_field_lookup(m, v, fname)
-        }
-      case (m, env, TSetEmpty()) => Some[smt_val](SSet(Nil))
-      case (m, env, TSetInsert(elem, set_t)) =>
-        (smtEval(m, env, elem), smtEval(m, env, set_t)) match {
-          case (None, _)                          => None
-          case (Some(_), None)                    => None
-          case (Some(_), Some(SBool(_)))          => None
-          case (Some(_), Some(SInt(_)))           => None
-          case (Some(_), Some(SReal(_)))          => None
-          case (Some(_), Some(SEnumElem(_, _)))   => None
-          case (Some(_), Some(SEntityElem(_, _))) => None
-          case (Some(v), Some(SSet(members))) =>
-            Some[smt_val](SSet(dedupe_smt_vals(v :: members)))
-          case (Some(_), Some(SEntityWith(_, _, _))) => None
-          case (Some(_), Some(SNone()))              => None
-          case (Some(_), Some(SSome(_)))             => None
-          case (Some(_), Some(SStr(_)))              => None
-          case (Some(_), Some(SSeq(_)))              => None
-          case (Some(_), Some(SMap(_)))              => None
-        }
-      case (m, env, TSetMember(elem, set_t)) =>
-        (smtEval(m, env, elem), smtEval(m, env, set_t)) match {
-          case (None, _)                          => None
-          case (Some(_), None)                    => None
-          case (Some(_), Some(SBool(_)))          => None
-          case (Some(_), Some(SInt(_)))           => None
-          case (Some(_), Some(SReal(_)))          => None
-          case (Some(_), Some(SEnumElem(_, _)))   => None
-          case (Some(_), Some(SEntityElem(_, _))) => None
-          case (Some(v), Some(SSet(members))) =>
-            Some[smt_val](SBool(contains_smt_val(members, v)))
-          case (Some(_), Some(SEntityWith(_, _, _))) => None
-          case (Some(_), Some(SNone()))              => None
-          case (Some(_), Some(SSome(_)))             => None
-          case (Some(_), Some(SStr(_)))              => None
-          case (Some(_), Some(SSeq(_)))              => None
-          case (Some(_), Some(SMap(_)))              => None
-        }
-      case (m, env, TSetUnion(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                => None
-          case (Some(SBool(_)), _)                      => None
-          case (Some(SInt(_)), _)                       => None
-          case (Some(SReal(_)), _)                      => None
-          case (Some(SEnumElem(_, _)), _)               => None
-          case (Some(SEntityElem(_, _)), _)             => None
-          case (Some(SSet(_)), None)                    => None
-          case (Some(SSet(_)), Some(SBool(_)))          => None
-          case (Some(SSet(_)), Some(SInt(_)))           => None
-          case (Some(SSet(_)), Some(SReal(_)))          => None
-          case (Some(SSet(_)), Some(SEnumElem(_, _)))   => None
-          case (Some(SSet(_)), Some(SEntityElem(_, _))) => None
-          case (Some(SSet(a)), Some(SSet(b))) =>
-            Some[smt_val](SSet(set_union_smt_vals(a, b)))
-          case (Some(SSet(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SSet(_)), Some(SNone()))              => None
-          case (Some(SSet(_)), Some(SSome(_)))             => None
-          case (Some(SSet(_)), Some(SStr(_)))              => None
-          case (Some(SSet(_)), Some(SSeq(_)))              => None
-          case (Some(SSet(_)), Some(SMap(_)))              => None
-          case (Some(SEntityWith(_, _, _)), _)             => None
-          case (Some(SNone()), _)                          => None
-          case (Some(SSome(_)), _)                         => None
-          case (Some(SStr(_)), _)                          => None
-          case (Some(SSeq(_)), _)                          => None
-          case (Some(SMap(_)), _)                          => None
-        }
-      case (m, env, TSetIntersect(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                => None
-          case (Some(SBool(_)), _)                      => None
-          case (Some(SInt(_)), _)                       => None
-          case (Some(SReal(_)), _)                      => None
-          case (Some(SEnumElem(_, _)), _)               => None
-          case (Some(SEntityElem(_, _)), _)             => None
-          case (Some(SSet(_)), None)                    => None
-          case (Some(SSet(_)), Some(SBool(_)))          => None
-          case (Some(SSet(_)), Some(SInt(_)))           => None
-          case (Some(SSet(_)), Some(SReal(_)))          => None
-          case (Some(SSet(_)), Some(SEnumElem(_, _)))   => None
-          case (Some(SSet(_)), Some(SEntityElem(_, _))) => None
-          case (Some(SSet(a)), Some(SSet(b))) =>
-            Some[smt_val](SSet(set_intersect_smt_vals(a, b)))
-          case (Some(SSet(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SSet(_)), Some(SNone()))              => None
-          case (Some(SSet(_)), Some(SSome(_)))             => None
-          case (Some(SSet(_)), Some(SStr(_)))              => None
-          case (Some(SSet(_)), Some(SSeq(_)))              => None
-          case (Some(SSet(_)), Some(SMap(_)))              => None
-          case (Some(SEntityWith(_, _, _)), _)             => None
-          case (Some(SNone()), _)                          => None
-          case (Some(SSome(_)), _)                         => None
-          case (Some(SStr(_)), _)                          => None
-          case (Some(SSeq(_)), _)                          => None
-          case (Some(SMap(_)), _)                          => None
-        }
-      case (m, env, TSetDiff(l, r)) =>
-        (smtEval(m, env, l), smtEval(m, env, r)) match {
-          case (None, _)                                => None
-          case (Some(SBool(_)), _)                      => None
-          case (Some(SInt(_)), _)                       => None
-          case (Some(SReal(_)), _)                      => None
-          case (Some(SEnumElem(_, _)), _)               => None
-          case (Some(SEntityElem(_, _)), _)             => None
-          case (Some(SSet(_)), None)                    => None
-          case (Some(SSet(_)), Some(SBool(_)))          => None
-          case (Some(SSet(_)), Some(SInt(_)))           => None
-          case (Some(SSet(_)), Some(SReal(_)))          => None
-          case (Some(SSet(_)), Some(SEnumElem(_, _)))   => None
-          case (Some(SSet(_)), Some(SEntityElem(_, _))) => None
-          case (Some(SSet(a)), Some(SSet(b))) =>
-            Some[smt_val](SSet(set_diff_smt_vals(a, b)))
-          case (Some(SSet(_)), Some(SEntityWith(_, _, _))) => None
-          case (Some(SSet(_)), Some(SNone()))              => None
-          case (Some(SSet(_)), Some(SSome(_)))             => None
-          case (Some(SSet(_)), Some(SStr(_)))              => None
-          case (Some(SSet(_)), Some(SSeq(_)))              => None
-          case (Some(SSet(_)), Some(SMap(_)))              => None
-          case (Some(SEntityWith(_, _, _)), _)             => None
-          case (Some(SNone()), _)                          => None
-          case (Some(SSome(_)), _)                         => None
-          case (Some(SStr(_)), _)                          => None
-          case (Some(SSeq(_)), _)                          => None
-          case (Some(SMap(_)), _)                          => None
-        }
-      case (m, env, TPrime(t)) => smtEval(m, env, t)
-      case (m, env, TPre(t))   => smtEval(m, env, t)
-      case (m, env, TWithRec(base, fld, value_t)) =>
-        (smtEval(m, env, base), smtEval(m, env, value_t)) match {
-          case (None, _)           => None
-          case (Some(_), None)     => None
-          case (Some(bv), Some(v)) => Some[smt_val](SEntityWith(bv, fld, v))
-        }
-      case (m, env, TIte(c, a, b)) =>
-        smtEval(m, env, c) match {
-          case None                       => None
-          case Some(SBool(true))          => smtEval(m, env, a)
-          case Some(SBool(false))         => smtEval(m, env, b)
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TNone()) => Some[smt_val](SNone())
-      case (m, env, TSome(t)) =>
-        map_option[smt_val, smt_val]((a: smt_val) => SSome(a), smtEval(m, env, t))
-      case (m, env, TStrLit(v)) => Some[smt_val](SStr(v))
-      case (m, env, TMatches(t, pat)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(str))            => Some[smt_val](SBool(str == pat))
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TUStrPred(name, t)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(str))            => Some[smt_val](SBool(name == str))
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TUStrFunc(name, t)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(str))            => Some[smt_val](SStr(name + str))
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TUIntFunc(name, t)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(n))              => Some[smt_val](SInt(BigInt(name.hashCode) + n))
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(_))              => None
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TStrLen(t)) =>
-        smtEval(m, env, t) match {
-          case None                       => None
-          case Some(SBool(_))             => None
-          case Some(SInt(_))              => None
-          case Some(SReal(_))             => None
-          case Some(SEnumElem(_, _))      => None
-          case Some(SEntityElem(_, _))    => None
-          case Some(SSet(_))              => None
-          case Some(SEntityWith(_, _, _)) => None
-          case Some(SNone())              => None
-          case Some(SSome(_))             => None
-          case Some(SStr(s))              => Some[smt_val](SInt(BigInt(s.length)))
-          case Some(SSeq(_))              => None
-          case Some(SMap(_))              => None
-        }
-      case (m, env, TUConst(nm)) => Some[smt_val](SInt(BigInt(nm.hashCode)))
-      case (m, env, TSeqEmpty()) => Some[smt_val](SSeq(Nil))
-      case (m, env, TSeqCons(e, rest)) =>
-        (smtEval(m, env, e), smtEval(m, env, rest)) match {
-          case (None, _)                             => None
-          case (Some(_), None)                       => None
-          case (Some(_), Some(SBool(_)))             => None
-          case (Some(_), Some(SInt(_)))              => None
-          case (Some(_), Some(SReal(_)))             => None
-          case (Some(_), Some(SEnumElem(_, _)))      => None
-          case (Some(_), Some(SEntityElem(_, _)))    => None
-          case (Some(_), Some(SSet(_)))              => None
-          case (Some(_), Some(SEntityWith(_, _, _))) => None
-          case (Some(_), Some(SNone()))              => None
-          case (Some(_), Some(SSome(_)))             => None
-          case (Some(_), Some(SStr(_)))              => None
-          case (Some(v), Some(SSeq(vs)))             => Some[smt_val](SSeq(v :: vs))
-          case (Some(_), Some(SMap(_)))              => None
-        }
-      case (m, env, TMapEmpty()) => Some[smt_val](SMap(Nil))
-      case (m, env, TMapCons(k, v, rest)) =>
-        (smtEval(m, env, k), (smtEval(m, env, v), smtEval(m, env, rest))) match {
-          case (None, _)                                        => None
-          case (Some(_), (None, _))                             => None
-          case (Some(_), (Some(_), None))                       => None
-          case (Some(_), (Some(_), Some(SBool(_))))             => None
-          case (Some(_), (Some(_), Some(SInt(_))))              => None
-          case (Some(_), (Some(_), Some(SReal(_))))             => None
-          case (Some(_), (Some(_), Some(SEnumElem(_, _))))      => None
-          case (Some(_), (Some(_), Some(SEntityElem(_, _))))    => None
-          case (Some(_), (Some(_), Some(SSet(_))))              => None
-          case (Some(_), (Some(_), Some(SEntityWith(_, _, _)))) => None
-          case (Some(_), (Some(_), Some(SNone())))              => None
-          case (Some(_), (Some(_), Some(SSome(_))))             => None
-          case (Some(_), (Some(_), Some(SStr(_))))              => None
-          case (Some(_), (Some(_), Some(SSeq(_))))              => None
-          case (Some(kv), (Some(vv), Some(SMap(ps)))) =>
-            Some[smt_val](SMap((kv, vv) :: ps))
-        }
-      case (m, env, TSum(c, f)) =>
-        smtEval(m, env, c) match {
-          case None     => None
-          case Some(cv) => Some[smt_val](SInt(BigInt(cv.hashCode + f.hashCode)))
-        }
-    }
-
   def binOpToTs(x0: bin_op): String = x0 match {
     case BAnd()       => "and"
     case BOr()        => "or"
@@ -3129,6 +1518,101 @@ object SpecRestGenerated {
     case (f, x21 :: x22) => f(x21) :: map[A, B](f, x22)
   }
 
+  def apsnd[A, B, C](f: A => B, x1: (C, A)): (C, B) = (f, x1) match {
+    case (f, (x, y)) => (x, f(y))
+  }
+
+  def divmod_integer(k: BigInt, l: BigInt): (BigInt, BigInt) =
+    k == BigInt(0) match {
+      case true => (BigInt(0), BigInt(0))
+      case false => BigInt(0) < l match {
+          case true => BigInt(0) < k match {
+              case true => ((k: BigInt) =>
+                  (l: BigInt) =>
+                    l == 0 match {
+                      case true  => (BigInt(0), k)
+                      case false => k.abs /% l.abs
+                    }).apply(k).apply(l)
+              case false =>
+                val (r, s) =
+                  ((k: BigInt) =>
+                    (l: BigInt) =>
+                      l == 0 match {
+                        case true  => (BigInt(0), k)
+                        case false => k.abs /% l.abs
+                      }).apply(k).apply(l): ((BigInt, BigInt));
+                s == BigInt(0) match {
+                  case true  => (-r, BigInt(0))
+                  case false => ((-r) - BigInt(1), l - s)
+                }
+            }
+          case false => l == BigInt(0) match {
+              case true => (BigInt(0), k)
+              case false => apsnd[BigInt, BigInt, BigInt](
+                  (a: BigInt) => -a,
+                  k < BigInt(0) match {
+                    case true => ((k: BigInt) =>
+                        (l: BigInt) =>
+                          l == 0 match {
+                            case true  => (BigInt(0), k)
+                            case false => k.abs /% l.abs
+                          }).apply(k).apply(l)
+                    case false =>
+                      val (r, s) =
+                        ((k: BigInt) =>
+                          (l: BigInt) =>
+                            l == 0 match {
+                              case true  => (BigInt(0), k)
+                              case false => k.abs /% l.abs
+                            }).apply(k).apply(l): ((BigInt, BigInt));
+                      s == BigInt(0) match {
+                        case true  => (-r, BigInt(0))
+                        case false => ((-r) - BigInt(1), (-l) - s)
+                      }
+                  }
+                )
+            }
+        }
+    }
+
+  def fst[A, B](x0: (A, B)): A = x0 match {
+    case (x1, x2) => x1
+  }
+
+  def divide_integer(k: BigInt, l: BigInt): BigInt =
+    fst[BigInt, BigInt](divmod_integer(k, l))
+
+  def divide_int(k: BigInt, l: BigInt): BigInt = divide_integer(k, l)
+
+  def uminus_int(k: BigInt): BigInt = -k
+
+  def zero_int: BigInt = BigInt(0)
+
+  def less_int(k: BigInt, l: BigInt): Boolean = k < l
+
+  def gcd_int(x0: BigInt, x1: BigInt): BigInt = (x0, x1) match {
+    case (x, y) => x.gcd(y)
+  }
+
+  def snd[A, B](x0: (A, B)): B = x0 match {
+    case (x1, x2) => x2
+  }
+
+  def normalize(p: (BigInt, BigInt)): (BigInt, BigInt) =
+    less_int(zero_int, snd[BigInt, BigInt](p)) match {
+      case true =>
+        val a =
+          gcd_int(fst[BigInt, BigInt](p), snd[BigInt, BigInt](p)): BigInt;
+        (divide_int(fst[BigInt, BigInt](p), a), divide_int(snd[BigInt, BigInt](p), a))
+      case false => equal_int(snd[BigInt, BigInt](p), zero_int) match {
+          case true => (zero_int, one_inta)
+          case false =>
+            val a =
+              uminus_int(gcd_int(fst[BigInt, BigInt](p), snd[BigInt, BigInt](p))): BigInt;
+            (divide_int(fst[BigInt, BigInt](p), a), divide_int(snd[BigInt, BigInt](p), a))
+        }
+    }
+
   def allSubexprs_bindings(x0: List[quantifier_binding]): List[expr] = x0 match {
     case Nil => Nil
     case QuantifierBindingFull(n, d, a, sp) :: bs =>
@@ -3251,6 +1735,46 @@ object SpecRestGenerated {
     case None    => true
     case Some(x) => false
   }
+
+  def quotient_of(x0: rat): (BigInt, BigInt) = x0 match {
+    case Frct(x) => x
+  }
+
+  def uminus_rat(p: rat): rat =
+    Frct {
+      val (a, b) = quotient_of(p): ((BigInt, BigInt));
+      (uminus_int(a), b)
+    }
+
+  def divide_rat(p: rat, q: rat): rat =
+    Frct {
+      val (a, c) = quotient_of(p): ((BigInt, BigInt))
+      val (b, d) = quotient_of(q): ((BigInt, BigInt));
+      normalize((times_inta(a, d), times_inta(c, b)))
+    }
+
+  def length_tailrec[A](x0: List[A], n: nat): nat = (x0, n) match {
+    case (Nil, n)     => n
+    case (x :: xs, n) => length_tailrec[A](xs, Suc(n))
+  }
+
+  def size_list[A](xs: List[A]): nat = length_tailrec[A](xs, zero_nat)
+
+  def times_rat(p: rat, q: rat): rat =
+    Frct {
+      val (a, c) = quotient_of(p): ((BigInt, BigInt))
+      val (b, d) = quotient_of(q): ((BigInt, BigInt));
+      normalize((times_inta(a, b), times_inta(c, d)))
+    }
+
+  def plus_int(k: BigInt, l: BigInt): BigInt = k + l
+
+  def plus_rat(p: rat, q: rat): rat =
+    Frct {
+      val (a, c) = quotient_of(p): ((BigInt, BigInt))
+      val (b, d) = quotient_of(q): ((BigInt, BigInt));
+      normalize((plus_int(times_inta(a, d), times_inta(b, c)), times_inta(c, d)))
+    }
 
   def one_rat: rat = Frct((one_inta, one_inta))
 
@@ -4425,6 +2949,8 @@ object SpecRestGenerated {
     case BDiff()      => "--"
   }
 
+  def minus_int(k: BigInt, l: BigInt): BigInt = k - l
+
   def highBoundEffective(x0: bin_op, n: BigInt): BigInt = (x0, n) match {
     case (BLt(), n)        => minus_int(n, one_inta)
     case (BAnd(), n)       => n
@@ -4554,6 +3080,62 @@ object SpecRestGenerated {
     case ForeignKeySpec(uu, rt, uv, uw) => rt
   }
 
+  def relRefVarName(x0: smt_term): Option[String] = x0 match {
+    case TVar(rel)              => Some[String](rel)
+    case BLit(v)                => None
+    case ILit(v)                => None
+    case RLit(v)                => None
+    case EnumElemConst(v, va)   => None
+    case TNot(v)                => None
+    case TAnd(v, va)            => None
+    case TOr(v, va)             => None
+    case TImplies(v, va)        => None
+    case TEq(v, va)             => None
+    case TLt(v, va)             => None
+    case TNeg(v)                => None
+    case TAdd(v, va)            => None
+    case TSub(v, va)            => None
+    case TMul(v, va)            => None
+    case TDiv(v, va)            => None
+    case TInDom(v, va)          => None
+    case TCardRel(v)            => None
+    case TCard(v)               => None
+    case TLetIn(v, va, vb)      => None
+    case TForallEnum(v, va, vb) => None
+    case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
+    case TTheRel(v, va, vb)     => None
+    case TEntityBase(v)         => None
+    case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
+    case TIndexRel(v, va)       => None
+    case TFieldAccess(v, va)    => None
+    case TSetEmpty()            => None
+    case TSetInsert(v, va)      => None
+    case TSetMember(v, va)      => None
+    case TSetUnion(v, va)       => None
+    case TSetIntersect(v, va)   => None
+    case TSetDiff(v, va)        => None
+    case TPrime(v)              => None
+    case TPre(v)                => None
+    case TWithRec(v, va, vb)    => None
+    case TIte(v, va, vb)        => None
+    case TNone()                => None
+    case TSome(v)               => None
+    case TStrLit(v)             => None
+    case TMatches(v, va)        => None
+    case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
+    case TUConst(v)             => None
+    case TSeqEmpty()            => None
+    case TSeqCons(v, va)        => None
+    case TMapEmpty()            => None
+    case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
+  }
+
   def is_builtin_func(nm: String): Boolean = nm == "hash"
 
   def is_builtin_pred(nm: String): Boolean =
@@ -4580,6 +3162,11 @@ object SpecRestGenerated {
     case BUnion()     => false
     case BIntersect() => false
     case BDiff()      => false
+  }
+
+  def list_all[A](p: A => Boolean, x1: List[A]): Boolean = (p, x1) match {
+    case (p, Nil)     => true
+    case (p, x :: xs) => p(x) && list_all[A](p, xs)
   }
 
   def remove_names(x0: List[String], xs: List[String]): List[String] = (x0, xs) match {
@@ -5654,6 +4241,11 @@ object SpecRestGenerated {
     case BoolLitF(v, va)                  => None
     case NoneLitF(v)                      => None
     case IdentifierF(v, va)               => None
+  }
+
+  def map_option[A, B](f: A => B, x1: Option[A]): Option[B] = (f, x1) match {
+    case (f, None)     => None
+    case (f, Some(x2)) => Some[B](f(x2))
   }
 
   def pre_rel_name(x0: expr): Option[String] = x0 match {
@@ -7940,6 +6532,62 @@ object SpecRestGenerated {
               (map[table_spec, migration_op]((a: table_spec) => CreateTable(a), cts) ++
                 (alters_inside ++ (adds_inside ++ added_triggers))))))
     }
+  }
+
+  def peelSmtRelationRef(x0: smt_term): Option[String] = x0 match {
+    case TVar(rel)              => Some[String](rel)
+    case TPre(t)                => relRefVarName(t)
+    case TPrime(t)              => relRefVarName(t)
+    case BLit(v)                => None
+    case ILit(v)                => None
+    case RLit(v)                => None
+    case EnumElemConst(v, va)   => None
+    case TNot(v)                => None
+    case TAnd(v, va)            => None
+    case TOr(v, va)             => None
+    case TImplies(v, va)        => None
+    case TEq(v, va)             => None
+    case TLt(v, va)             => None
+    case TNeg(v)                => None
+    case TAdd(v, va)            => None
+    case TSub(v, va)            => None
+    case TMul(v, va)            => None
+    case TDiv(v, va)            => None
+    case TInDom(v, va)          => None
+    case TCardRel(v)            => None
+    case TCard(v)               => None
+    case TLetIn(v, va, vb)      => None
+    case TForallEnum(v, va, vb) => None
+    case TForallRel(v, va, vb)  => None
+    case TExistsRel(v, va, vb)  => None
+    case TTheRel(v, va, vb)     => None
+    case TEntityBase(v)         => None
+    case TForallSet(v, va, vb)  => None
+    case TTheSet(v, va, vb)     => None
+    case TIndexRel(v, va)       => None
+    case TFieldAccess(v, va)    => None
+    case TSetEmpty()            => None
+    case TSetInsert(v, va)      => None
+    case TSetMember(v, va)      => None
+    case TSetUnion(v, va)       => None
+    case TSetIntersect(v, va)   => None
+    case TSetDiff(v, va)        => None
+    case TWithRec(v, va, vb)    => None
+    case TIte(v, va, vb)        => None
+    case TNone()                => None
+    case TSome(v)               => None
+    case TStrLit(v)             => None
+    case TMatches(v, va)        => None
+    case TUStrPred(v, va)       => None
+    case TUStrFunc(v, va)       => None
+    case TUIntFunc(v, va)       => None
+    case TStrLen(v)             => None
+    case TUConst(v)             => None
+    case TSeqEmpty()            => None
+    case TSeqCons(v, va)        => None
+    case TMapEmpty()            => None
+    case TMapCons(v, va, vb)    => None
+    case TSum(v, va)            => None
   }
 
   def min[A: ord](a: A, b: A): A =
@@ -11327,6 +9975,8 @@ object SpecRestGenerated {
   def signalsDeletesKey(x0: analysis_signals): Boolean = x0 match {
     case AnalysisSignals(uu, uv, uw, d, ux, uy, uz, va, vb) => d
   }
+
+  def int_of_nat(n: nat): BigInt = integer_of_nat(n)
 
   def postgresCaps: dialect_caps =
     DialectCaps(true, true, true, true, false, true)

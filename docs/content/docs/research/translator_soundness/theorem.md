@@ -70,7 +70,7 @@ solver.
 
 The proof track started in Lean 4, for its closeness to Scala syntax, and pivoted to Isabelle/HOL in
 2026 ([#193](https://github.com/HardMax71/spec_to_rest/issues/193)). The deciding factor was
-extraction. Isabelle's `Code_Target_Scala` turns the verified `translate` and `smtEval` into idiomatic
+extraction. Isabelle's `Code_Target_Scala` turns the verified `translate` into idiomatic
 Scala 3 directly, which is the whole point, the production translator becomes the proved definition
 instead of a hand-written sibling that could drift, and Lean had no production Scala extractor. Two
 smaller reasons reinforced it: Isabelle releases yearly with migration support where Lean churned

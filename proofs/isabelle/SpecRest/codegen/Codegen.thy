@@ -37,9 +37,12 @@ text \<open>Productionized Scala extraction. The full-language IR (\<open>expr\<
   The export at this theory's bottom is the canonical Scala consumer-facing
   artifact; consumers \<open>import\<close> it directly.
 
-  Reference-semantics records (\<open>smt_model\<close>, \<open>state\<close>, …) extract as polymorphic
-  scheme types but Scala consumers don't reference them: \<open>translate\<close> outputs the
-  flat \<open>smt_term\<close> datatype, and \<open>smtEval\<close> is exported for self-containment only.\<close>
+  Reference-semantics records (\<open>state\<close>, \<open>smt_model\<close> where reached, …) extract as
+  polymorphic scheme types but Scala consumers don't reference them: \<open>translate\<close>
+  outputs the flat \<open>smt_term\<close> datatype. The \<open>eval\<close>/\<open>smtEval\<close> reference
+  interpreters are proof-internal and deliberately NOT exported: they have no
+  Scala callers, and their subtree (abstract-const stubs included) was the
+  largest consumer-dead slice of the artifact.\<close>
 
 declare schema.defs[code]
 declare state.defs[code]
@@ -114,23 +117,8 @@ code_printing
 | class_instance Int.int :: ord \<rightharpoonup> (Scala) -
 | class_instance Int.int :: equal \<rightharpoonup> (Scala) -
 
-text \<open>\<open>string_matches\<close>, \<open>str_predicate\<close>, \<open>builtin_const_val\<close>, \<open>builtin_str_func\<close>, and \<open>agg_sum\<close> are
-  abstract (see \<open>IR\<close>); the real semantics is Z3's (regex \<open>str.in_re\<close>, an uninterpreted predicate /
-  constant / function, an uninterpreted sum keyed by collection and field) in the hand-written
-  translator. The extracted \<open>eval\<close>/\<open>smtEval\<close> reference interpreters are not called by Scala consumers,
-  so these serialisations are never-evaluated stubs that only have to type-check.\<close>
-code_printing
-  constant string_matches \<rightharpoonup> (Scala) "((_) == (_))"
-| constant str_predicate \<rightharpoonup> (Scala) "((_) == (_))"
-| constant builtin_const_val \<rightharpoonup> (Scala) "(BigInt((_).hashCode))"
-| constant builtin_str_func \<rightharpoonup> (Scala) "((_) + (_))"
-| constant builtin_int_func \<rightharpoonup> (Scala) "(BigInt((_).hashCode) + (_))"
-| constant str_length \<rightharpoonup> (Scala) "(BigInt((_).length))"
-| constant agg_sum \<rightharpoonup> (Scala) "(BigInt((_).hashCode + (_).hashCode))"
-
 export_code
     translate
-    smtEval
     isLitFull
     isTrueLit
     enumLiteralOf
