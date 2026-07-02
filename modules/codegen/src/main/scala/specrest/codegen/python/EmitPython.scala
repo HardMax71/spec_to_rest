@@ -103,8 +103,15 @@ final private case class EnrichedOperation(
     pathParamName: String,
     customRequestSchema: Option[CustomRequestSchema],
     dafnyMethod: Option[String],
-    dafnyCallArgs: List[String],
     kernelHandlerSignature: String,
+    kernelCallArgs: List[String],
+    kernelGuardName: String,
+    kernelGuardStatus: Int,
+    kernelGuardDetail: String,
+    kernelHasState: Boolean,
+    kernelHasInv: Boolean,
+    kernelResultBind: String,
+    kernelResultExpr: String,
     initFields: List[ModelInitFieldView],
     authDependency: Option[String]
 )
@@ -120,6 +127,7 @@ final private case class RouterTemplateImports(
     needsResponse: Boolean,
     needsRedirectResponse: Boolean,
     needsPagination: Boolean,
+    needsAny: Boolean,
     schemas: List[String],
     stdlibImports: List[StdlibImport],
     authDeps: List[String]
@@ -131,6 +139,9 @@ final private case class ServiceTemplateImports(
     schemas: List[String],
     needsModelImport: Boolean,
     needsDafnyKernel: Boolean,
+    needsStateBridge: Boolean,
+    needsAny: Boolean,
+    adapterImports: List[String],
     hasAppImports: Boolean,
     needsTypingCast: Boolean
 )
@@ -151,9 +162,15 @@ object EmitPython:
     val ctx        = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val engine     = new TemplateEngine
     val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled, Some(t => s"$t | None"))
-    val templates  = Templates.pythonFastapiPostgres
-    val dialect    = Dialect.forDatabase(profiled.profile.database)
-    val files      = List.newBuilder[EmittedFile]
+    val bridgePlan = StateBridge.plan(profiled)
+    val kernelCtx = KernelCtx(
+      stateReady = irStateFields(profiled.ir).isEmpty || bridgePlan.isRight,
+      hasState = bridgePlan.toOption.exists(StateBridge.hasState),
+      hasInv = irStateFields(profiled.ir).nonEmpty
+    )
+    val templates = Templates.pythonFastapiPostgres
+    val dialect   = Dialect.forDatabase(profiled.profile.database)
+    val files     = List.newBuilder[EmittedFile]
 
     files += EmittedFile("app/__init__.py", "")
     files += EmittedFile("app/main.py", engine.renderAny(templates.main, ctx))
@@ -205,7 +222,7 @@ object EmitPython:
       val table = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup))
+        .map(op => enrichOperation(op, entity, typeLookup, kernelCtx))
         .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
 
       val imports        = collectEntityImports(entity, dialect)
@@ -354,6 +371,8 @@ object EmitPython:
         "app/services/_synth.py",
         engine.renderAny(templates.synthService, ctx)
       )
+      if kernelCtx.hasState then
+        files += EmittedFile("app/services/_state_bridge.py", StateBridge.emit(profiled))
 
     files.result()
 
@@ -420,10 +439,27 @@ object EmitPython:
   ): String =
     EmitShared.paramType(typeExpr, typeLookup, "str", t => s"$t | None")
 
+  final private case class KernelCtx(
+      stateReady: Boolean,
+      hasState: Boolean,
+      hasInv: Boolean
+  )
+
+  // Python types the kernel boundary can convert (matching the Go/TS gates);
+  // an op with anything else falls back to its route-kind body, which for an
+  // LLM_SYNTHESIS op is the fail-loud stub.
+  private val KernelScalarTypes = Set("str", "int", "bool")
+
+  private def kernelFromDafny(domainType: String, ref: String): String = domainType match
+    case "str"  => s"from_dafny_str($ref)"
+    case "bool" => s"bool($ref)"
+    case _      => s"int($ref)"
+
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
-      typeLookup: Map[String, String]
+      typeLookup: Map[String, String],
+      kernelCtx: KernelCtx
   ): EnrichedOperation =
     val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map { p =>
@@ -499,15 +535,62 @@ object EmitPython:
     val modelLookupColumn =
       EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name))
 
-    val (kernelSig, dafnyArgs) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
+    // The kernel boundary converts scalars only; state must round-trip through
+    // the bridge; every output must convert back. Anything else keeps today's
+    // fail-loud stub instead of silently running on wrong values.
+    val kernelArgSources: List[(String, String)] =
+      endpoint.pathParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
+        endpoint.queryParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
+        endpoint.bodyParams.map(p =>
+          s"body.${p.name}" -> pythonTypeForParam(p.typeExpr, typeLookup)
+        )
+    val kernelOuts = op.responseFields
+    val kernelEligible =
+      op.dafnyMethod.isDefined &&
+        kernelCtx.stateReady &&
+        kernelArgSources.forall((_, t) => KernelScalarTypes.contains(t)) &&
+        kernelOuts.nonEmpty &&
+        kernelOuts.forall(f => !f.nullable && KernelScalarTypes.contains(f.domainType))
+    val dafnyMethodFinal = if kernelEligible then op.dafnyMethod else None
+
+    val kernelCallArgs = kernelArgSources.map: (arg, t) =>
+      if t == "str" then s"to_dafny_str($arg)" else arg
+    val isRedirectKind = routeKind match
+      case _: RkRedirect => true
+      case _             => false
+    val (kernelResultBind, kernelResultExpr) =
+      if isRedirectKind then
+        val out = kernelOuts.headOption
+        ("result", out.map(f => kernelFromDafny(f.domainType, "result")).getOrElse("result"))
+      else
+        kernelOuts match
+          case Nil => ("result", "result")
+          case outs =>
+            val binds = outs.map(f => s"out_${f.fieldName}")
+            val pairs = outs
+              .zip(binds)
+              .map((f, b) => s"\"${f.fieldName}\": ${kernelFromDafny(f.domainType, b)}")
+            (binds.mkString(", "), s"{${pairs.mkString(", ")}}")
+    val kernelGuardStatus = routeKind match
+      case _: RkRead | _: RkRedirect | _: RkDelete => 404
+      case _                                       => 409
+    val kernelGuardDetail =
+      if kernelGuardStatus == 404 then "not found" else "precondition failed"
+
+    val (kernelSig, _) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
 
     // When the operation is routed through the Dafny kernel, the service handler's signature
     // is `kernelHandlerSignature` (path + query + body, in that order). The router must pass
     // the same arg list — `serviceCallArgs` is route-kind specific and may omit some of them
     // (e.g. RkCreate's serviceCallArgs is just "body", losing path/query params).
     val effectiveServiceCallArgs =
-      if op.dafnyMethod.isDefined then kernelRouterCallArgs(endpoint)
+      if dafnyMethodFinal.isDefined then kernelRouterCallArgs(endpoint)
       else serviceCallArgs
+
+    val (responseAnnotationFinal, serviceReturnAnnoFinal) =
+      if dafnyMethodFinal.isDefined && !isRedirectKind then
+        ("dict[str, Any]", "dict[str, Any]")
+      else (responseAnnotation, serviceReturnAnno)
 
     val kindName = op.kind match
       case _: Create        => "Create"
@@ -535,18 +618,25 @@ object EmitPython:
       pathParamsWithTypes = pathParamsWithTypes,
       hasRequestBody = hasRequestBody,
       requestBodyType = requestBodyType,
-      responseAnnotation = responseAnnotation,
+      responseAnnotation = responseAnnotationFinal,
       serviceCallArgs = effectiveServiceCallArgs,
       routeKind = EmitShared.routeKindName(routeKind),
       pathParamSignature = pathParamSignature,
       serviceSignatureExtraArgs = serviceExtraArgs,
-      serviceReturnAnnotation = serviceReturnAnno,
+      serviceReturnAnnotation = serviceReturnAnnoFinal,
       modelLookupColumn = modelLookupColumn,
       pathParamName = pathParamName,
       customRequestSchema = customRequestSchema,
-      dafnyMethod = op.dafnyMethod,
-      dafnyCallArgs = dafnyArgs,
+      dafnyMethod = dafnyMethodFinal,
       kernelHandlerSignature = kernelSig,
+      kernelCallArgs = kernelCallArgs,
+      kernelGuardName = s"Requires${op.operationName}",
+      kernelGuardStatus = kernelGuardStatus,
+      kernelGuardDetail = kernelGuardDetail,
+      kernelHasState = kernelCtx.hasState,
+      kernelHasInv = kernelCtx.hasInv,
+      kernelResultBind = kernelResultBind,
+      kernelResultExpr = kernelResultExpr,
       initFields = createInitFields,
       authDependency =
         Option.when(op.requiresAuth.nonEmpty)(SecurityPython.dependencyName(op.requiresAuth))
@@ -673,6 +763,7 @@ object EmitPython:
       needsResponse = needsResponse,
       needsRedirectResponse = needsRedirectResponse,
       needsPagination = needsPagination,
+      needsAny = operations.exists(_.responseAnnotation.contains("Any")),
       schemas = schemaSet.toList.sorted,
       stdlibImports = finalizeStdlibImports(stdlibByModule),
       authDeps = operations.flatMap(_.authDependency).distinct.sorted
@@ -704,13 +795,25 @@ object EmitPython:
     if needsSaDelete then aliasImports += "delete as sa_delete"
     if needsSelect then plainImports += "select"
 
-    val needsDafnyKernel = operations.exists(_.dafnyMethod.isDefined)
+    val kernelOps        = operations.filter(_.dafnyMethod.isDefined)
+    val needsDafnyKernel = kernelOps.nonEmpty
+    val kernelText = kernelOps
+      .flatMap(o => o.kernelResultExpr :: o.kernelCallArgs)
+      .mkString(" ")
+    val adapterImports = List(
+      Option.when(kernelText.contains("from_dafny_str("))("from_dafny_str"),
+      Option.when(kernelOps.exists(!_.kernelHasState))("make_state"),
+      Option.when(kernelText.contains("to_dafny_str("))("to_dafny_str")
+    ).flatten
     ServiceTemplateImports(
       sqlalchemyPlainImports = plainImports.result().sorted,
       sqlalchemyAliasImports = aliasImports.result().sorted,
       schemas = schemaSet.toList.sorted,
       needsModelImport = needsModelImport,
       needsDafnyKernel = needsDafnyKernel,
+      needsStateBridge = kernelOps.exists(_.kernelHasState),
+      needsAny = kernelOps.exists(_.serviceReturnAnnotation == "dict[str, Any]"),
+      adapterImports = adapterImports,
       hasAppImports = needsDafnyKernel || needsModelImport || schemaSet.nonEmpty,
       needsTypingCast = needsSaDelete
     )

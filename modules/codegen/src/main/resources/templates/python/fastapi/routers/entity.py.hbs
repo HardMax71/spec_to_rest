@@ -1,3 +1,7 @@
+{{#if routerImports.needsAny}}
+from typing import Any
+
+{{/if}}
 {{#each routerImports.stdlibImports}}
 from {{this.module}} import {{join this.names ", "}}
 {{/each}}
