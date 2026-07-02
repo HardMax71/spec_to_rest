@@ -17,6 +17,20 @@ function asArray(x: Anything): Anything[] {
   return [];
 }
 
+// Appends the params as an encoded query string. A null/undefined value is
+// an absent optional parameter and is skipped, so the call reaches the
+// server without that key at all.
+export function withQuery(path: string, params: Record<string, unknown>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined) {
+      q.set(k, String(v));
+    }
+  }
+  const s = q.toString();
+  return s === "" ? path : `${path}?${s}`;
+}
+
 export function _len(x: Anything): number {
   if (x instanceof Set || x instanceof Map) return x.size;
   if (Array.isArray(x) || typeof x === "string") return (x as { length: number }).length;

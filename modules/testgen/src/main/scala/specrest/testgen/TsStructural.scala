@@ -68,6 +68,7 @@ object TsStructural:
     sb.append("import { test } from \"vitest\";\n")
     sb.append("import fc from \"fast-check\";\n")
     sb.append("import { client } from \"./_client.js\";\n")
+    TsRender.runtimeImport(bodies).foreach(sb.append)
     TsRender.strategiesImport(ir, bodies).foreach(sb.append)
     sb.append("\n")
     sb.append(TsRender.NumRunsPreamble)

@@ -20,7 +20,18 @@ private[testgen] object TestFormat:
 
   // Names must match the exports of testgen-templates/typescript/express/tests/_runtime.ts.
   val TsRuntimeHelpers: List[String] =
-    List("_diff", "_eq", "_in", "_inter", "_len", "_powerset", "_sha256Hex", "_subset", "_union")
+    List(
+      "_diff",
+      "_eq",
+      "_in",
+      "_inter",
+      "_len",
+      "_powerset",
+      "_sha256Hex",
+      "_subset",
+      "_union",
+      "withQuery"
+    )
 
   def inputArbs(
       pop: ProfiledOperation,
