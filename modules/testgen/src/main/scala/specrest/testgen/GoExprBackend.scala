@@ -190,4 +190,4 @@ object GoExprBackend extends ExprBackendBase:
     s"func($param any) any { return $body }"
 
   def matchesExpr(target: String, pattern: String): String =
-    s"_matches($target, ${GoLit.str(s"^(?:$pattern)$$")})"
+    s"_matches($target, ${GoLit.str(Strategies.fullMatchPattern(pattern))})"
