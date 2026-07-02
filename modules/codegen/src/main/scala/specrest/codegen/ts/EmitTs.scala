@@ -571,7 +571,8 @@ object EmitTs:
       "needsJwt"          -> ctx.needsJwt,
       "authSchemaLines"   -> proj.authSchemaLines,
       "authConfigLines"   -> proj.authConfigLines,
-      "pagination"        -> Pagination.view
+      "pagination"        -> Pagination.view,
+      "pins"              -> ctx.pins
     )
     currentEntity match
       case Some(e) =>

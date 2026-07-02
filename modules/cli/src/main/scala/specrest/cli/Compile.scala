@@ -23,7 +23,9 @@ import specrest.ir.generated.SpecRestGenerated.synthesis_strategy
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.profile.Annotate
+import specrest.profile.LanguageId
 import specrest.profile.ProfiledService
+import specrest.profile.TargetKey
 import specrest.synth.Cache
 import specrest.synth.DafnyCli
 import specrest.synth.DafnyTranslateCli
@@ -249,26 +251,12 @@ object Compile:
                 case Right(fullDfy) =>
                   resolveDafnyAndTranslate(specFile, fullDfy, opts, log).map: r =>
                     r.map: translated =>
-                      val bindings = TargetLanguage.forCompileTarget(opts.target) match
-                        case TargetLanguage.Go =>
-                          boundOps
-                            .map: c =>
-                              val n = classificationOperationName(c)
-                              n -> n
-                            .toMap
-                        case TargetLanguage.JavaScript =>
-                          boundOps
-                            .map: c =>
-                              val n = classificationOperationName(c)
-                              n -> n
-                            .toMap
-                        case TargetLanguage.Python =>
-                          boundOps
-                            .map: c =>
-                              val n = classificationOperationName(c)
-                              n -> dafnyCallable(n)
-                            .toMap
-                      val (packagePath, files) = TargetLanguage.forCompileTarget(opts.target) match
+                      val bindings = boundOps
+                        .map: c =>
+                          val n = classificationOperationName(c)
+                          n -> n
+                        .toMap
+                      val (packagePath, files) = kernelTargetLanguage(opts.target) match
                         case TargetLanguage.Go =>
                           (DafnyKernel.GoDefaultPackagePath, translated.files)
                         case TargetLanguage.JavaScript =>
@@ -434,14 +422,24 @@ object Compile:
         IO.delay(log.error(s"$specFile: $msg")).as(Left(ExitStatus.Backend))
       case Right(binary) =>
         DafnyTranslateCli.make(binary).use: translator =>
-          val lang = TargetLanguage.forCompileTarget(opts.target)
+          val lang = kernelTargetLanguage(opts.target)
           translator.translate(fullDfy, lang, opts.dafnyTranslateTimeoutSec).map:
             case Left(err) =>
               log.error(s"$specFile: dafny translate failed: $err")
               Left(ExitStatus.Backend)
             case Right(out) => Right(out)
 
-  private def dafnyCallable(opName: String): String = opName
+  // The Dafny kernel's target language follows the compile target's language
+  // through the one slug grammar (TargetKey); the CLI constructs the slug from
+  // validated flags, so the Python default is the unreachable-parse fallback.
+  private def kernelTargetLanguage(target: String): TargetLanguage =
+    TargetKey.parse(target).toOption match
+      case Some(key) =>
+        key.language match
+          case LanguageId.Python => TargetLanguage.Python
+          case LanguageId.Go     => TargetLanguage.Go
+          case LanguageId.Ts     => TargetLanguage.JavaScript
+      case None => TargetLanguage.Python
 
   private def warnOnDialectDegradations(profiled: ProfiledService, log: Logger): Unit =
     val dialect     = Dialect.forDatabase(profiled.profile.database)
