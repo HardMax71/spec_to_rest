@@ -32,6 +32,8 @@ datatype UrlMapping = UrlMapping(code: ShortCode, url: LongURL, created_at: int,
 predicate UrlMappingInv(x: UrlMapping)
 {
   (x.click_count >= 0)
+  && (ShortCodeWhere(x.code))
+  && (LongURLWhere(x.url))
   && (isValidURI(x.url))
 }
 
@@ -48,6 +50,11 @@ predicate ServiceStateInv(st: ServiceState)
   (forall c :: (c in st.store) ==> (isValidURI(st.store[c])))
   && (st.store.Keys == st.metadata.Keys)
   && (forall c :: (c in st.metadata) ==> (st.metadata[c].click_count >= 0))
+  && (forall k :: k in st.store ==> ShortCodeWhere(k))
+  && (forall k :: k in st.store ==> LongURLWhere(st.store[k]))
+  && (forall k :: k in st.metadata ==> ShortCodeWhere(k))
+  && (forall k :: k in st.metadata ==> UrlMappingInv(st.metadata[k]))
+  && (BaseURLWhere(st.base_url))
 }
 
 predicate isValidURI(x1: string)
@@ -59,6 +66,13 @@ predicate matches___a_zA_Z0_9___(s: string)
   true
 }
 
+predicate RequiresShorten(st: ServiceState, url: LongURL)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (LongURLWhere(url))
+  && (isValidURI(url))
+}
 method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_url: string)
   modifies st
   requires ServiceStateInv(st)
@@ -75,6 +89,13 @@ method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_u
   // YOUR CODE HERE
 }
 
+predicate RequiresResolve(st: ServiceState, code: ShortCode)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (ShortCodeWhere(code))
+  && (code in st.store)
+}
 method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
   modifies st
   requires ServiceStateInv(st)
@@ -88,6 +109,13 @@ method Resolve(st: ServiceState, code: ShortCode) returns (url: LongURL)
   // YOUR CODE HERE
 }
 
+predicate RequiresDelete(st: ServiceState, code: ShortCode)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (ShortCodeWhere(code))
+  && (code in st.store)
+}
 method Delete(st: ServiceState, code: ShortCode)
   modifies st
   requires ServiceStateInv(st)
@@ -101,6 +129,11 @@ method Delete(st: ServiceState, code: ShortCode)
   // YOUR CODE HERE
 }
 
+predicate RequiresListAll(st: ServiceState)
+  reads st
+{
+  (ServiceStateInv(st))
+}
 method ListAll(st: ServiceState) returns (entries: set<UrlMapping>)
   modifies st
   requires ServiceStateInv(st)

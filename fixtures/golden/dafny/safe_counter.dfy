@@ -22,6 +22,11 @@ predicate ServiceStateInv(st: ServiceState)
   (st.count >= 0)
 }
 
+predicate RequiresIncrement(st: ServiceState)
+  reads st
+{
+  (ServiceStateInv(st))
+}
 method Increment(st: ServiceState)
   modifies st
   requires ServiceStateInv(st)
@@ -31,6 +36,12 @@ method Increment(st: ServiceState)
   // YOUR CODE HERE
 }
 
+predicate RequiresDecrement(st: ServiceState)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (st.count > 0)
+}
 method Decrement(st: ServiceState)
   modifies st
   requires ServiceStateInv(st)
