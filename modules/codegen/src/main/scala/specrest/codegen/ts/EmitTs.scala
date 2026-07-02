@@ -81,7 +81,6 @@ final private case class TsOperation(
 )
 
 final private case class TsEntityCtx(
-    service: TsServiceNames,
     packageName: String,
     entity: ProfiledEntity,
     entityCamel: String,
@@ -105,10 +104,6 @@ final private case class TsEntityCtx(
     customSchemas: List[TsCustomSchema]
 )
 
-final private case class TsServiceNames(name: String, snakeName: String, kebabName: String)
-
-final private case class TsComposeEnv(key: String, value: String)
-
 final private case class TsDbView(
     provider: String,
     appDsn: String,
@@ -119,7 +114,7 @@ final private case class TsDbView(
     dbPort: String,
     dbHealthCmd: String,
     dbVolumePath: String,
-    composeEnv: List[TsComposeEnv],
+    composeEnv: List[specrest.codegen.migration.ComposeEnv],
     dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 )
 
@@ -134,7 +129,7 @@ final private case class TsScalarOpView(
 )
 
 final private case class TsProjectCtx(
-    service: TsServiceNames,
+    service: specrest.codegen.ServiceNames,
     packageName: String,
     entities: List[TsEntityCtx],
     needsDecimal: Boolean,
@@ -155,11 +150,7 @@ object EmitTs:
     val templates   = TsTemplates.tsExpressPostgres
     val ctx         = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val packageName = npmPackageName(ctx.service.kebabName)
-    val service = TsServiceNames(
-      name = ctx.service.name,
-      snakeName = ctx.service.snakeName,
-      kebabName = ctx.service.kebabName
-    )
+    val service     = ctx.service
 
     val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled)
 
@@ -394,18 +385,13 @@ object EmitTs:
   private def tsScalarOp(v: ScalarOpView): TsScalarOpView =
     val ep     = v.operation.endpoint
     val method = HttpMethods.lower(ep.method)
-    val setSql = v.updates
-      .map(u => s"${u.columnName} = ${ScalarOps.renderRhs(u.rhs, u.columnName)}")
-      .mkString(", ")
-    val whereSql =
-      ("id = 1" :: v.guards.map(g => s"${g.columnName} ${ScalarOps.sqlCmp(g.cmp)} ${g.lit}"))
-        .mkString(" AND ")
     TsScalarOpView(
       handlerName = Naming.toCamelCase(v.operation.operationName, Naming.CamelStrategy.Ts),
       method = method,
       expressPath = ep.path,
       successStatus = ep.successStatus,
-      updateSql = s"UPDATE ${ScalarOps.TableName} SET $setSql WHERE $whereSql",
+      updateSql =
+        s"UPDATE ${ScalarOps.TableName} SET ${ScalarOps.updateSetSql(v)} WHERE ${ScalarOps.guardWhereSql(v)}",
       guardPretty = v.guardPretty,
       authMiddleware = Option.when(v.operation.requiresAuth.nonEmpty)(
         SecurityTs.middlewareName(v.operation.requiresAuth)
@@ -488,14 +474,8 @@ object EmitTs:
   private def tsDbView(database: String, snake: String): TsDbView = database match
     case "postgres" =>
       val dv = specrest.codegen.migration.Postgres.deployment(snake)
-      val recipe = specrest.codegen.Dsn.Recipe(
-        spec = specrest.codegen.Dsn.Spec(
-          shape = specrest.codegen.Dsn.Shape.Url("postgresql"),
-          port = 5432,
-          suffix = "?schema=public"
-        ),
-        secrets = specrest.codegen.Dsn.Secrets("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
-      )
+      val recipe = specrest.codegen.Dsn
+        .postgresRecipe(specrest.codegen.Dsn.Shape.Url("postgresql"), "?schema=public")
       TsDbView(
         provider = "postgresql",
         appDsn = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
@@ -506,7 +486,7 @@ object EmitTs:
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = Some(recipe)
       )
     case "sqlite" =>
@@ -521,18 +501,13 @@ object EmitTs:
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = None
       )
     case "mysql" =>
       val dv = specrest.codegen.migration.Mysql.deployment(snake)
-      val recipe = specrest.codegen.Dsn.Recipe(
-        spec = specrest.codegen.Dsn.Spec(
-          shape = specrest.codegen.Dsn.Shape.Url("mysql"),
-          port = 3306
-        ),
-        secrets = specrest.codegen.Dsn.Secrets("MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
-      )
+      val recipe =
+        specrest.codegen.Dsn.mysqlRecipe(specrest.codegen.Dsn.Shape.Url("mysql"))
       TsDbView(
         provider = "mysql",
         appDsn = specrest.codegen.Dsn.renderDev(recipe, host = "localhost", snake),
@@ -543,7 +518,7 @@ object EmitTs:
         dbPort = dv.dbPort,
         dbHealthCmd = dv.dbHealthCmd,
         dbVolumePath = dv.dbVolumePath,
-        composeEnv = dv.composeEnv.map(e => TsComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = Some(recipe)
       )
     case other =>
@@ -655,8 +630,6 @@ object EmitTs:
       op.customRequestSchemaName.map(name => TsCustomSchema(name, op.customRequestFields))
 
     TsEntityCtx(
-      service =
-        TsServiceNames(entity.entityName, entitySnake, Naming.toKebabCase(entity.entityName)),
       packageName = packageName,
       entity = entity,
       entityCamel = entityCamel,
@@ -810,19 +783,13 @@ object EmitTs:
           case None =>
             (entity.createSchemaName, List.empty[TsFieldView])
           case Some(name) =>
-            val pathParamNames = endpoint.pathParams.map(_.name).toSet
-            val fields = op.requestBodyFields
-              .filterNot(f => pathParamNames.contains(f.fieldName))
-              .map(toTsField(_, nativeAttrs))
-            (name, fields)
+            (name, OperationContext.customRequestBodyFields(op).map(toTsField(_, nativeAttrs)))
 
     val readSchemaName = entity.readSchemaName
     val pathArgsCsv    = pathParams.map(_.tsName).mkString(", ")
 
-    val lookupField = pathParams.headOption match
-      case Some(p) if entity.fields.exists(_.columnName == p.name) =>
-        toCamelCase(p.name)
-      case _ => "id"
+    val lookupField =
+      toCamelCase(EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name)))
 
     val createDataObj = nonIdFields
       .map(f => s"${f.tsField}: body.${f.tsField}")
@@ -941,10 +908,7 @@ object EmitTs:
     """\{([^}]+)\}""".r.replaceAllIn(chiPath, m => ":" + toCamelCase(m.group(1)))
 
   private def tsTypeForParam(typeExpr: type_expr, typeLookup: Map[String, String]): String =
-    typeExpr match
-      case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "string")
-      case OptionTypeF(inner, _) => s"${tsTypeForParam(inner, typeLookup)} | null"
-      case _                     => "string"
+    EmitShared.paramType(typeExpr, typeLookup, "string", t => s"$t | null")
 
   // Idiomatic-TS <-> Dafny-runtime converters keyed by the TS domain type; the empty pair marks a
   // type whose TS and Dafny representations coincide (boolean), so no conversion call is emitted.

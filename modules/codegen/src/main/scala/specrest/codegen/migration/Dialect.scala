@@ -269,13 +269,8 @@ object Postgres extends Dialect:
       case None => FeatureEmission("", Nil)
 
   def deployment(snake: String): DialectView =
-    val recipe = specrest.codegen.Dsn.Recipe(
-      spec = specrest.codegen.Dsn.Spec(
-        shape = specrest.codegen.Dsn.Shape.Url("postgresql+asyncpg"),
-        port = 5432
-      ),
-      secrets = specrest.codegen.Dsn.Secrets("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
-    )
+    val recipe =
+      specrest.codegen.Dsn.postgresRecipe(specrest.codegen.Dsn.Shape.Url("postgresql+asyncpg"))
     DialectView(
       id = "postgres",
       hasDbService = true,
@@ -382,13 +377,8 @@ object Mysql extends Dialect:
       case None => FeatureEmission("", Nil)
 
   def deployment(snake: String): DialectView =
-    val recipe = specrest.codegen.Dsn.Recipe(
-      spec = specrest.codegen.Dsn.Spec(
-        shape = specrest.codegen.Dsn.Shape.Url("mysql+aiomysql"),
-        port = 3306
-      ),
-      secrets = specrest.codegen.Dsn.Secrets("MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
-    )
+    val recipe =
+      specrest.codegen.Dsn.mysqlRecipe(specrest.codegen.Dsn.Shape.Url("mysql+aiomysql"))
     DialectView(
       id = "mysql",
       hasDbService = true,

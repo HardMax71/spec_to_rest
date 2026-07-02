@@ -39,22 +39,8 @@ object AdminRouter:
     val stateProjections =
       if stateFieldsList.isEmpty then "    return {}"
       else
-        val projections = stateFieldsList.map(f => f -> AdminModel.projectionFor(f, ir))
-        val needsRows = projections.exists:
-          case (_, Some(p)) =>
-            p.valueShape match
-              case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
-              case _                                               => true
-          case _ => false
-        val neededEntityNames = projections
-          .collect:
-            case (_, Some(p))
-                if p.valueShape match
-                  case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
-                  case _                                               => true
-                =>
-              p.entityName
-          .distinct
+        val neededEntityNames = AdminModel.entityBackedProjectionNames(ir)
+        val needsRows         = neededEntityNames.nonEmpty
         val rowsLine =
           if entities.size == 1 && needsRows then
             val e = entities.head
@@ -76,8 +62,7 @@ object AdminRouter:
         val body  = pairs.mkString(",\n")
         s"$rowsLine$stateRowLine    return {\n$body,\n    }"
 
-    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
+    val seedTargets = AdminModel.seedTargets(ir)
     val seedSection =
       if seedTargets.isEmpty then ""
       else seedTargets.map(e => seedHandler(e, ir)).mkString("\n", "\n", "")

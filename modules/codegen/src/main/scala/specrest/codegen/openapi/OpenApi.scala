@@ -1,5 +1,6 @@
 package specrest.codegen.openapi
 
+import specrest.codegen.AdminModel
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
 import specrest.codegen.ScalarOpView
@@ -299,8 +300,7 @@ object Paths:
     )
     paths("/admin/reset") = PathItemObject(post = Some(adminResetOperation))
     paths("/admin/state") = PathItemObject(get = Some(adminStateOperation))
-    val seedEntities = svcTransitions(profiled.ir).map(trnEntity).toSet
-    for e <- svcEntities(profiled.ir) if seedEntities.contains(entName(e)) do
+    for e <- AdminModel.seedTargets(profiled.ir) do
       val snake = Naming.toSnakeCase(entName(e))
       paths(s"/admin/seed/$snake") = PathItemObject(post = Some(adminSeedOperation(snake)))
     paths.toMap

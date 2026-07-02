@@ -11,46 +11,27 @@ object SecurityGo:
     s"Require${requiresAuth.sorted.map(AuthSchemes.pascalName).mkString("Or")}"
 
   def configLines(ir: ServiceIRFull): List[List[String]] =
-    val schemes = svcSecurity(ir)
-    val jwtPair =
-      if AuthSchemes.needsJwt(ir) then
-        List(
-          List("JwtSecret", "string", "`env:\"JWT_SECRET\" envDefault:\"\"`"),
-          List("JwtAlgorithm", "string", "`env:\"JWT_ALGORITHM\" envDefault:\"HS256\"`")
-        )
-      else Nil
-    jwtPair ++ schemes.flatMap: s =>
-      val p = AuthSchemes.pascalName(ssdName(s))
-      val u = ssdName(s).toUpperCase
-      ssdKind(s) match
-        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
-        case SsBearer(_) =>
-          List(List(s"AuthToken$p", "string", s"`env:\"AUTH_TOKEN_$u\" envDefault:\"\"`"))
-        case SsApiKey(_, _) =>
-          List(List(s"AuthKey$p", "string", s"`env:\"AUTH_KEY_$u\" envDefault:\"\"`"))
-        case SsBasic() =>
-          List(
-            List(
-              s"AuthBasic${p}Username",
-              "string",
-              s"`env:\"AUTH_BASIC_${u}_USERNAME\" envDefault:\"\"`"
-            ),
-            List(
-              s"AuthBasic${p}Password",
-              "string",
-              s"`env:\"AUTH_BASIC_${u}_PASSWORD\" envDefault:\"\"`"
-            )
-          )
+    AuthSchemes.credSlots(ir).map: slot =>
+      val field = slot match
+        case AuthSchemes.CredSlot.JwtSecret    => "JwtSecret"
+        case AuthSchemes.CredSlot.JwtAlgorithm => "JwtAlgorithm"
+        case AuthSchemes.CredSlot.Token(n)     => s"AuthToken${AuthSchemes.pascalName(n)}"
+        case AuthSchemes.CredSlot.Key(n)       => s"AuthKey${AuthSchemes.pascalName(n)}"
+        case AuthSchemes.CredSlot.BasicUsername(n) =>
+          s"AuthBasic${AuthSchemes.pascalName(n)}Username"
+        case AuthSchemes.CredSlot.BasicPassword(n) =>
+          s"AuthBasic${AuthSchemes.pascalName(n)}Password"
+      val default = slot match
+        case AuthSchemes.CredSlot.JwtAlgorithm => "HS256"
+        case _                                 => ""
+      List(field, "string", s"`env:\"${slot.envKey}\" envDefault:\"$default\"`")
 
   def emit(profiled: ProfiledService, module: String): String =
     val ir       = profiled.ir
     val schemes  = svcSecurity(ir)
     val needsJwt = AuthSchemes.needsJwt(ir)
 
-    val combos = profiled.operations
-      .map(_.requiresAuth.sorted)
-      .filter(_.sizeIs > 1)
-      .distinct
+    val combos = AuthSchemes.orCombos(profiled.operations)
 
     val checkers    = schemes.map(checker)
     val middlewares = schemes.map(s => middleware(List(ssdName(s))))
@@ -59,11 +40,7 @@ object SecurityGo:
     val hasBearer = schemes.exists(s =>
       ssdKind(s) match { case SsBearer(_) => true; case _ => false }
     )
-    val needsSubtle = schemes.exists(s =>
-      ssdKind(s) match
-        case SsBearer(_) => !AuthSchemes.isJwt(ssdKind(s))
-        case _           => true
-    )
+    val needsSubtle = AuthSchemes.needsConstantTimeCompare(ir)
     val imports = (
       List("\"net/http\"") ++
         (if needsSubtle then List("\"crypto/subtle\"") else Nil) ++
@@ -124,7 +101,7 @@ object SecurityGo:
     val n = ssdName(decl)
     val p = AuthSchemes.pascalName(n)
     val body = ssdKind(decl) match
-      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
+      case kind if AuthSchemes.isJwt(kind) =>
         s"""|	header := r.Header.Get("Authorization")
             |	$bearerToken
             |	if token == "" || cfg.JwtSecret == "" {

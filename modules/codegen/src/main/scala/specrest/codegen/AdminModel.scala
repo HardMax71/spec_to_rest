@@ -16,6 +16,25 @@ object AdminModel:
     case EntityRow
     case ScalarStateColumn(columnName: String)
 
+  // Entities whose transitions make them seedable through /admin/seed. The
+  // same list drives all three admin routers and the OpenAPI document.
+  def seedTargets(ir: ServiceIRFull): List[entity_decl] =
+    val transitioned = svcTransitions(ir).map(trnEntity).toSet
+    svcEntities(ir).filter(e => transitioned.contains(entName(e)))
+
+  // Entity names the /admin/state handler must query rows for: every
+  // projection except the scalar-state columns, in state-field order.
+  def entityBackedProjectionNames(ir: ServiceIRFull): List[String] =
+    irStateFields(ir)
+      .flatMap(f => projectionFor(f, ir))
+      .filter(p =>
+        p.valueShape match
+          case ProjectionValue.ScalarStateColumn(_) => false
+          case _                                    => true
+      )
+      .map(_.entityName)
+      .distinct
+
   def unbackedStateFieldNames(ir: ServiceIRFull): Set[String] =
     irStateFields(ir)
       .filter(f => projectionFor(f, ir).isEmpty)

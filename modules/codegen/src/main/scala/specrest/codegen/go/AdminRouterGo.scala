@@ -10,8 +10,6 @@ import specrest.ir.generated.SpecRestGenerated.fldName
 import specrest.ir.generated.SpecRestGenerated.irStateFields
 import specrest.ir.generated.SpecRestGenerated.stfName
 import specrest.ir.generated.SpecRestGenerated.svcEntities
-import specrest.ir.generated.SpecRestGenerated.svcTransitions
-import specrest.ir.generated.SpecRestGenerated.trnEntity
 import specrest.profile.ProfiledService
 
 // Spec-derived /admin router for go-chi, compiled into every build; main.go
@@ -97,8 +95,7 @@ object AdminRouterGo:
             s"\t\tstate[${GoLit.str(stfName(f))}] = nil"
       .mkString("\n")
 
-    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
+    val seedTargets = AdminModel.seedTargets(ir)
     val seedHandlers = seedTargets
       .map(e => seedHandler(e, isPg))
       .mkString("\n\n")

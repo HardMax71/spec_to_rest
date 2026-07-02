@@ -75,6 +75,18 @@ object ScalarOps:
     case SrSub(a, b) => s"(${renderRhs(a, selfRef)} - ${renderRhs(b, selfRef)})"
     case SrMul(a, b) => s"(${renderRhs(a, selfRef)} * ${renderRhs(b, selfRef)})"
 
+  // Raw-SQL assembly for the Go and TS state-op services: the SET list and the
+  // guarded WHERE (the singleton state row is always id = 1, and the requires
+  // clause rides in the WHERE so the update is atomic under concurrency).
+  def updateSetSql(v: ScalarOpView): String =
+    v.updates
+      .map(u => s"${u.columnName} = ${renderRhs(u.rhs, u.columnName)}")
+      .mkString(", ")
+
+  def guardWhereSql(v: ScalarOpView): String =
+    ("id = 1" :: v.guards.map(g => s"${g.columnName} ${sqlCmp(g.cmp)} ${g.lit}"))
+      .mkString(" AND ")
+
   def sqlCmp(c: scalar_cmp): String = c match
     case _: ScGt  => ">"
     case _: ScGe  => ">="
