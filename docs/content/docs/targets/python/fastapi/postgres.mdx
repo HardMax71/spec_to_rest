@@ -224,7 +224,7 @@ ErrorResponse:
         OpenAPI 3.1, emitted artifact
       </div>
       <div className="text-base font-medium">
-        UrlShortener, 5 operations across 4 paths
+        UrlShortener, 7 operations across 6 paths
       </div>
       <div className="text-xs text-fd-muted-foreground">
         Snapshot of <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">openapi.yaml</code> emitted from <code className="rounded bg-fd-muted px-1.5 py-0.5 text-[0.7rem]">fixtures/spec/url_shortener.spec</code>.
@@ -258,6 +258,8 @@ ErrorResponse:
         { path: '/{code}', method: 'delete' },
         { path: '/urls', method: 'get' },
         { path: '/health', method: 'get' },
+        { path: '/ready', method: 'get' },
+        { path: '/metrics', method: 'get' },
       ]}
     />
   </div>
@@ -269,6 +271,18 @@ cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml`}</code>
 </div>
 
 ## Infrastructure
+
+### Observability routes
+
+Three routes ship outside the spec surface, all tagged `infrastructure` in the OpenAPI
+document. `GET /health` returns 200 unconditionally (liveness; the Dockerfile healthcheck
+probes it). `GET /ready` round-trips `SELECT 1` through the SQLAlchemy engine under a
+5-second timeout and answers 200 `{"status": "ready"}` or 503 `{"status": "unavailable"}`,
+logging the failure reason. `GET /metrics` serves
+Prometheus text format via `prometheus-client`: `http_requests_total` and
+`http_request_duration_seconds`, labelled by method, route template (never the raw URL),
+and status code, counted in a middleware `finally` so requests that raise are observed as
+500s. The generated `tests/test_health.py` covers all three.
 
 ### Docker image
 

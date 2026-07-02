@@ -65,8 +65,10 @@ object Validate:
     Registry.map(p => p.name -> p).toMap
 
   private val ReservedRoutes: List[(String, String)] = List(
-    "/health" -> "the generated health endpoint",
-    "/admin"  -> "the generated admin surface"
+    "/health"  -> "the generated health endpoint",
+    "/ready"   -> "the generated readiness endpoint",
+    "/metrics" -> "the generated Prometheus endpoint",
+    "/admin"   -> "the generated admin surface"
   )
 
   def validateRoutes(ir: ServiceIRFull): List[ConventionDiagnostic] =

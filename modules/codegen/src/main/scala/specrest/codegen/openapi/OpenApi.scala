@@ -287,6 +287,16 @@ object Paths:
       GET(),
       healthOperation
     )
+    paths("/ready") = setMethod(
+      paths.getOrElse("/ready", PathItemObject()),
+      GET(),
+      readyOperation
+    )
+    paths("/metrics") = setMethod(
+      paths.getOrElse("/metrics", PathItemObject()),
+      GET(),
+      metricsOperation
+    )
     paths("/admin/reset") = PathItemObject(post = Some(adminResetOperation))
     paths("/admin/state") = PathItemObject(get = Some(adminStateOperation))
     val seedEntities = svcTransitions(profiled.ir).map(trnEntity).toSet
@@ -400,7 +410,7 @@ object Paths:
 
   private def healthOperation: OperationObject =
     OperationObject(
-      operationId = "health_check",
+      operationId = "infra_health_check",
       summary = Some("Health check"),
       description = Some("Returns 200 if the service is running."),
       tags = List("infrastructure"),
@@ -419,6 +429,60 @@ object Paths:
                 enum_ = Some(List("ok"))
               )
             ))
+          ))))
+        )
+      )
+    )
+
+  private def statusOnlySchema(value: String): SchemaObject =
+    SchemaObject(
+      `type` = Some(List("object")),
+      required = Some(List("status")),
+      properties = Some(Map(
+        "status" -> SchemaObject(
+          `type` = Some(List("string")),
+          enum_ = Some(List(value))
+        )
+      ))
+    )
+
+  private def readyOperation: OperationObject =
+    OperationObject(
+      operationId = "infra_readiness_check",
+      summary = Some("Readiness check"),
+      description = Some("Returns 200 when the database answers a probe query, 503 otherwise."),
+      tags = List("infrastructure"),
+      parameters = None,
+      requestBody = None,
+      responses = Map(
+        "200" -> ResponseObject(
+          description = "Service is ready",
+          headers = None,
+          content = Some(Map("application/json" -> MediaTypeObject(statusOnlySchema("ready"))))
+        ),
+        "503" -> ResponseObject(
+          description = "Database is unreachable",
+          headers = None,
+          content =
+            Some(Map("application/json" -> MediaTypeObject(statusOnlySchema("unavailable"))))
+        )
+      )
+    )
+
+  private def metricsOperation: OperationObject =
+    OperationObject(
+      operationId = "infra_metrics",
+      summary = Some("Prometheus metrics"),
+      description = Some("Prometheus text exposition format."),
+      tags = List("infrastructure"),
+      parameters = None,
+      requestBody = None,
+      responses = Map(
+        "200" -> ResponseObject(
+          description = "Current metric values",
+          headers = None,
+          content = Some(Map("text/plain" -> MediaTypeObject(SchemaObject(
+            `type` = Some(List("string"))
           ))))
         )
       )
@@ -755,7 +819,7 @@ object OpenApi:
     profiled.entities.map: e =>
       TagObject(Naming.toSnakeCase(e.entityName), Some(s"${e.entityName} operations"))
     :+ TagObject("infrastructure", Some("Health and metrics endpoints"))
-      :+ TagObject("admin", Some("Bearer-guarded admin surface (state export / import / reset)"))
+      :+ TagObject("admin", Some("Bearer-guarded admin surface (state export / seed / reset)"))
 
   def serialize(doc: OpenApiDocument): String =
     val yaml = new org.yaml.snakeyaml.Yaml(customRepresenter, dumperOptions)

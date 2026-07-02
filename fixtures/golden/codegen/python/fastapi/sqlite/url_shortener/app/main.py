@@ -1,15 +1,33 @@
-from collections.abc import AsyncIterator
+import asyncio
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+from sqlalchemy import text
 
 from app.database import engine
 from app.extensions import register as register_extensions
-from app.redaction import configure_logging
+from app.redaction import configure_logging, get_logger
 from app.routers import admin, url_mappings
 
 configure_logging()
+
+logger = get_logger()
+
+HTTP_REQUESTS = Counter(
+    "http_requests_total",
+    "HTTP requests served, by method, route template, and status code.",
+    ["method", "path", "status"],
+)
+HTTP_REQUEST_DURATION = Histogram(
+    "http_request_duration_seconds",
+    "HTTP request duration in seconds, by method and route template.",
+    ["method", "path"],
+)
 
 
 @asynccontextmanager
@@ -34,9 +52,50 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def track_requests(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    start = time.perf_counter()
+    status = "500"
+    try:
+        response = await call_next(request)
+        status = str(response.status_code)
+        return response
+    finally:
+        route = request.scope.get("route")
+        # The route template, not the raw URL: raw paths embed ids and would blow up
+        # label cardinality. Counting sits in `finally` so requests that raise are
+        # still observed, as 500s.
+        path = route.path if route is not None else "unmatched"
+        HTTP_REQUESTS.labels(request.method, path, status).inc()
+        HTTP_REQUEST_DURATION.labels(request.method, path).observe(time.perf_counter() - start)
+
+
 @app.get("/health", tags=["infrastructure"])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready", tags=["infrastructure"])
+async def readiness_check() -> JSONResponse:
+    async def probe() -> None:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+
+    try:
+        # Bounded so a degraded database fails the probe fast instead of piling
+        # up orchestrator polls on the connection pool.
+        await asyncio.wait_for(probe(), timeout=5.0)
+    except Exception:
+        logger.warning("readiness_check_failed", exc_info=True)
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
+    return JSONResponse(content={"status": "ready"})
+
+
+@app.get("/metrics", tags=["infrastructure"])
+async def metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 register_extensions(app)

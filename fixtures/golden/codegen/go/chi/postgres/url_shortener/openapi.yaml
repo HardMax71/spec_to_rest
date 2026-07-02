@@ -7,6 +7,21 @@ servers:
 - url: http://localhost:8080
   description: Local development
 paths:
+  /metrics:
+    get:
+      operationId: infra_metrics
+      summary: Prometheus metrics
+      description: Prometheus text exposition format.
+      tags:
+      - infrastructure
+      responses:
+        '200':
+          description: Current metric values
+          content:
+            text/plain:
+              schema:
+                type:
+                - string
   /urls:
     get:
       operationId: list_all
@@ -110,7 +125,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /health:
     get:
-      operationId: health_check
+      operationId: infra_health_check
       summary: Health check
       description: Returns 200 if the service is running.
       tags:
@@ -131,6 +146,44 @@ paths:
                     - string
                     enum:
                     - ok
+  /ready:
+    get:
+      operationId: infra_readiness_check
+      summary: Readiness check
+      description: Returns 200 when the database answers a probe query, 503 otherwise.
+      tags:
+      - infrastructure
+      responses:
+        '200':
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                required:
+                - status
+                properties:
+                  status:
+                    type:
+                    - string
+                    enum:
+                    - ready
+        '503':
+          description: Database is unreachable
+          content:
+            application/json:
+              schema:
+                type:
+                - object
+                required:
+                - status
+                properties:
+                  status:
+                    type:
+                    - string
+                    enum:
+                    - unavailable
   /admin/state:
     get:
       operationId: admin_state
@@ -335,7 +388,7 @@ tags:
 - name: infrastructure
   description: Health and metrics endpoints
 - name: admin
-  description: Bearer-guarded admin surface (state export / import / reset)
+  description: Bearer-guarded admin surface (state export / seed / reset)
 x-invariant:
   allURLsValid: (all c in store | isValidURI(store[c]))
   metadataConsistent: (dom(store) = dom(metadata))
