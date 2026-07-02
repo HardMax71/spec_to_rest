@@ -143,13 +143,50 @@ final class CegisLoop(
       yield (block, body)
     parsed match
       case Left(perr) =>
-        recorded *> abort(AbortReason.ResponseUnparseable(perr, i), history)
+        recorded *> malformedRetry(req, key, i, history, resp, cost, perr.message)
       case Right((block, body)) =>
         DiffChecker.check(req.header, block) match
           case Left(diff) =>
-            recorded *> abort(AbortReason.DiffViolation(diff, i), history)
+            recorded *> malformedRetry(
+              req,
+              key,
+              i,
+              history,
+              resp,
+              cost,
+              s"${diff.message}\n${diff.diff}".strip
+            )
           case Right(()) =>
             recorded *> verifyAndContinue(req, key, i, history, resp, block, body, cost)
+
+  // A malformed or contract-editing response is a counterexample like any
+  // verifier failure: feed it back instead of aborting the run, and let the
+  // repeated-error threshold stop a model that keeps missing the shape. At
+  // temperature 1.0 a single bad-shaped reply is common noise, and an abort
+  // here used to throw away every iteration of proof progress before it.
+  private def malformedRetry(
+      req: SynthRequest,
+      key: CacheKey,
+      i: Int,
+      history: CegisHistory,
+      resp: LlmResponse,
+      cost: Double,
+      message: String
+  ): IO[CegisOutcome] =
+    val err = VerifierError(
+      category = "malformed_response",
+      message = s"the previous response was rejected before verification: $message. " +
+        s"Reply with one fenced Dafny code block containing the complete " +
+        s"method '${classificationOperationName(req.classification)}' with its contracts unchanged."
+    )
+    val record =
+      IterationRecord(i, history.lastBody.getOrElse(""), "", List(err), resp.usage, cost)
+    val nextHistory = history.add(record)
+    repeatedErrorCheck(nextHistory, List(err)) match
+      case Some(reason) =>
+        IO.pure(CegisOutcome.Aborted(reason, history.lastBody, nextHistory): CegisOutcome)
+      case None =>
+        iterate(req, key, i + 1, nextHistory, Some(err))
 
   private def verifyAndContinue(
       req: SynthRequest,
