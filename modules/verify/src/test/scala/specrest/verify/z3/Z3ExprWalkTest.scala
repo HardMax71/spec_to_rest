@@ -58,3 +58,29 @@ class Z3ExprWalkTest extends CatsEffectSuite:
       val node = Not(k, Some(span))
       val out  = node.mapChildren(_ => v)
       assertEquals(out, Not(v, Some(span)))
+
+  test("substitute renames a binder that would capture the replacement's free variable"):
+    IO:
+      val x = Var("x", Z3Sort.IntS)
+      val q = Quantifier(
+        QKind.ForAll,
+        List(Z3Binding("x", Z3Sort.IntS)),
+        And(List(App("p", List(k)), App("q", List(x))))
+      )
+      assertEquals(
+        q.substitute("k", x),
+        Quantifier(
+          QKind.ForAll,
+          List(Z3Binding("x_1", Z3Sort.IntS)),
+          And(List(App("p", List(x)), App("q", List(Var("x_1", Z3Sort.IntS)))))
+        )
+      )
+
+  test("freeVars excludes quantifier-bound names"):
+    IO:
+      val q = Quantifier(
+        QKind.ForAll,
+        List(Z3Binding("x", Z3Sort.IntS)),
+        And(List(App("p", List(Var("x", Z3Sort.IntS))), App("q", List(k))))
+      )
+      assertEquals(q.freeVars, Set("k"))

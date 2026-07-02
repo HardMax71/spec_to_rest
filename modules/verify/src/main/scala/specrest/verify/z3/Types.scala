@@ -180,10 +180,35 @@ enum Z3Expr derives CanEqual:
     case SeqLit(es, ms, sp)             => SeqLit(es, ms.map(f), sp)
     case MapLit(ks, vs, es, sp)         => MapLit(ks, vs, es.map((k, v) => (f(k), f(v))), sp)
 
+  def freeVars: Set[String] = this match
+    case Var(n, _, _)               => Set(n)
+    case Quantifier(_, bs, body, _) => body.freeVars -- bs.map(_.name)
+    case other                      => other.children.foldLeft(Set.empty[String])(_ ++ _.freeVars)
+
   def substitute(varName: String, replacement: Z3Expr): Z3Expr = this match
-    case Var(n, _, _) if n == varName                                            => replacement
-    case q @ Quantifier(_, bindings, _, _) if bindings.exists(_.name == varName) => q
-    case other                                                                   => other.mapChildren(_.substitute(varName, replacement))
+    case Var(n, _, _) if n == varName                                                            => replacement
+    case q @ Quantifier(_, bindings, _, _) if bindings.exists(_.name == varName)                 => q
+    case Quantifier(k, bindings, body, sp) if bindings.exists(b => replacement.freeVars(b.name)) =>
+      // Capture avoidance: a binder that also occurs free in the replacement is
+      // renamed apart before substituting under it.
+      val replFree     = replacement.freeVars
+      val initialTaken = replFree ++ body.freeVars ++ bindings.map(_.name) + varName
+      val (renamedBindings, renamedBody, _) =
+        bindings.foldLeft((List.empty[Z3Binding], body, initialTaken)):
+          case ((bs, bd, taken), b) =>
+            if replFree(b.name) then
+              val fresh = freshName(b.name, taken)
+              (
+                bs :+ Z3Binding(fresh, b.sort),
+                bd.substitute(b.name, Var(fresh, b.sort)),
+                taken + fresh
+              )
+            else (bs :+ b, bd, taken)
+      Quantifier(k, renamedBindings, renamedBody.substitute(varName, replacement), sp)
+    case other => other.mapChildren(_.substitute(varName, replacement))
+
+  private def freshName(base: String, taken: Set[String]): String =
+    LazyList.from(1).map(i => s"${base}_$i").find(n => !taken(n)).getOrElse(base)
 
   def spanOpt: Option[span_t] = this match
     case e: Var         => e.span
