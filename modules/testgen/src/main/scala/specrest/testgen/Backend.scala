@@ -10,6 +10,8 @@ import specrest.ir.generated.SpecRestGenerated.span_t
 import specrest.ir.generated.SpecRestGenerated.string_constraint
 import specrest.profile.ProfiledService
 
+import java.nio.charset.StandardCharsets
+
 // Translates an IR expression to a target-language expression. Each backend owns
 // its own recursion — Python comprehensions/quantifiers do not leaf-swap to TS
 // `.every`/`.map` or Go loops — over the shared Translated result ADT and TestCtx.
@@ -29,6 +31,18 @@ trait HarnessTemplates:
   def behavioralTestPath(serviceSnake: String): String
   def statefulTestPath(serviceSnake: String): String
   def structuralTestPath(serviceSnake: String): String
+
+// Loads a bundled testgen template resource. A missing resource is a build
+// packaging error, so it fails loudly.
+private[testgen] object TemplateResources:
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
+  def load(root: String, relPath: String): String =
+    val resourcePath = s"$root/$relPath"
+    val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
+    if is eq null then
+      throw new RuntimeException(s"testgen template resource missing: $resourcePath")
+    try new String(is.readAllBytes(), StandardCharsets.UTF_8)
+    finally is.close()
 
 object PythonFastApiHarness extends HarnessTemplates:
   def scaffoldFiles(ir: ServiceIRFull): List[EmittedFile] =
@@ -77,9 +91,35 @@ trait StrategyBackend:
   def redactWrap(inner: String): String
   def enumSampled(values: List[String]): String
   def fixedDict(entries: List[(String, String)]): String
-  def constrainedString(c: string_constraint): String
   def constrainedInt(c: int_constraint): String
   def functionName(typeName: String): String
+
+  def regexGen(pattern: String): String
+  def boundedText(min: Option[Int], max: Option[Int]): String
+  def lengthFilter(base: String, min: Option[Int], max: Option[Int]): String
+  def regexFilter(base: String, pattern: String): String
+  def predicateFilter(base: String, helper: String): String
+
+  // One decision pipeline for string constraints across all backends: a
+  // primary regex beats bounded text as the base, length bounds re-apply as a
+  // filter only when a regex claimed the base, and the remaining regexes and
+  // predicate helpers stack as filters. The five leaves above render.
+  final def constrainedString(c: string_constraint): String = c match
+    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
+      val minSize = minOpt.map(_.toInt)
+      val maxSize = maxOpt.map(_.toInt)
+      val (primaryRegex, extraRegexes) = regexes match
+        case head :: tail => (Some(head), tail)
+        case Nil          => (None, Nil)
+      val base = primaryRegex match
+        case Some(p) => regexGen(p)
+        case None    => boundedText(minSize, maxSize)
+      val withLenFilter =
+        if primaryRegex.isDefined && (minSize.isDefined || maxSize.isDefined) then
+          lengthFilter(base, minSize, maxSize)
+        else base
+      val withExtraRegex = extraRegexes.foldLeft(withLenFilter)(regexFilter)
+      predicateHelpers.foldLeft(withExtraRegex)(predicateFilter)
 
 object PythonHypothesisStrategy extends StrategyBackend:
   def string: String       = "st.text()"
@@ -111,30 +151,30 @@ object PythonHypothesisStrategy extends StrategyBackend:
       val rows = entries.map((n, t) => s"        ${ExprToPython.pyString(n)}: $t")
       s"st.fixed_dictionaries({\n${rows.mkString(",\n")},\n    })"
 
-  def constrainedString(c: string_constraint): String = c match
-    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(_.toInt)
-      val maxSize = maxOpt.map(_.toInt)
-      val (primaryRegex, extraRegexes) = regexes match
-        case head :: tail => (Some(head), tail)
-        case Nil          => (None, Nil)
-      val base = primaryRegex match
-        case Some(p) => s"st.from_regex(${ExprToPython.pyString(p)}, fullmatch=True)"
-        case None =>
-          val args = List(
-            minSize.map(n => s"min_size=$n"),
-            maxSize.map(n => s"max_size=$n")
-          ).flatten.mkString(", ")
-          if args.isEmpty then "st.text()" else s"st.text($args)"
-      val withLenFilter = (primaryRegex, minSize, maxSize) match
-        case (Some(_), Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
-        case (Some(_), Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
-        case (Some(_), None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
-        case _                             => base
-      val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-        s"$acc.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(r)}, v) is not None)"
-      predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-        s"$acc.filter(lambda v: $h(v))"
+  // Hypothesis's from_regex/fullmatch already whole-string-matches, so no
+  // pattern anchoring here (unlike the JS and Go leaves).
+  def regexGen(pattern: String): String =
+    s"st.from_regex(${ExprToPython.pyString(pattern)}, fullmatch=True)"
+
+  def boundedText(min: Option[Int], max: Option[Int]): String =
+    val args = List(
+      min.map(n => s"min_size=$n"),
+      max.map(n => s"max_size=$n")
+    ).flatten.mkString(", ")
+    if args.isEmpty then "st.text()" else s"st.text($args)"
+
+  def lengthFilter(base: String, min: Option[Int], max: Option[Int]): String =
+    (min, max) match
+      case (Some(lo), Some(hi)) => s"$base.filter(lambda v: $lo <= len(v) <= $hi)"
+      case (Some(lo), None)     => s"$base.filter(lambda v: len(v) >= $lo)"
+      case (None, Some(hi))     => s"$base.filter(lambda v: len(v) <= $hi)"
+      case (None, None)         => base
+
+  def regexFilter(base: String, pattern: String): String =
+    s"$base.filter(lambda v: __import__('re').fullmatch(${ExprToPython.pyString(pattern)}, v) is not None)"
+
+  def predicateFilter(base: String, helper: String): String =
+    s"$base.filter(lambda v: $helper(v))"
 
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
@@ -242,31 +282,28 @@ object TsFastCheckStrategy extends StrategyBackend:
       val rows = entries.map((n, t) => s"        ${TsLit.str(n)}: $t")
       s"fc.record({\n${rows.mkString(",\n")},\n    })"
 
-  def constrainedString(c: string_constraint): String = c match
-    case StringConstraint(minOpt, maxOpt, regexes, predicateHelpers, _) =>
-      val minSize = minOpt.map(_.toInt)
-      val maxSize = maxOpt.map(_.toInt)
-      val (primaryRegex, extraRegexes) = regexes match
-        case head :: tail => (Some(head), tail)
-        case Nil          => (None, Nil)
-      val base = primaryRegex match
-        case Some(p) => s"fc.stringMatching(new RegExp(${TsLit.str(s"^(?:$p)$$")}))"
-        case None =>
-          val args = List(
-            minSize.map(n => s"minLength: $n"),
-            maxSize.map(n => s"maxLength: $n")
-          ).flatten.mkString(", ")
-          if args.isEmpty then "fc.string()" else s"fc.string({ $args })"
-      val withLenFilter = (primaryRegex, minSize, maxSize) match
-        case (Some(_), Some(lo), Some(hi)) =>
-          s"$base.filter((v) => $lo <= v.length && v.length <= $hi)"
-        case (Some(_), Some(lo), None) => s"$base.filter((v) => v.length >= $lo)"
-        case (Some(_), None, Some(hi)) => s"$base.filter((v) => v.length <= $hi)"
-        case _                         => base
-      val withExtraRegex = extraRegexes.foldLeft(withLenFilter): (acc, r) =>
-        s"$acc.filter((v) => new RegExp(${TsLit.str(s"^(?:$r)$$")}).test(v))"
-      predicateHelpers.foldLeft(withExtraRegex): (acc, h) =>
-        s"$acc.filter((v) => $h(v))"
+  def regexGen(pattern: String): String =
+    s"fc.stringMatching(new RegExp(${TsLit.str(Strategies.fullMatchPattern(pattern))}))"
+
+  def boundedText(min: Option[Int], max: Option[Int]): String =
+    val args = List(
+      min.map(n => s"minLength: $n"),
+      max.map(n => s"maxLength: $n")
+    ).flatten.mkString(", ")
+    if args.isEmpty then "fc.string()" else s"fc.string({ $args })"
+
+  def lengthFilter(base: String, min: Option[Int], max: Option[Int]): String =
+    (min, max) match
+      case (Some(lo), Some(hi)) => s"$base.filter((v) => $lo <= v.length && v.length <= $hi)"
+      case (Some(lo), None)     => s"$base.filter((v) => v.length >= $lo)"
+      case (None, Some(hi))     => s"$base.filter((v) => v.length <= $hi)"
+      case (None, None)         => base
+
+  def regexFilter(base: String, pattern: String): String =
+    s"$base.filter((v) => new RegExp(${TsLit.str(Strategies.fullMatchPattern(pattern))}).test(v))"
+
+  def predicateFilter(base: String, helper: String): String =
+    s"$base.filter((v) => $helper(v))"
 
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>

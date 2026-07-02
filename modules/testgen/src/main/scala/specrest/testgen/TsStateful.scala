@@ -1,84 +1,25 @@
 package specrest.testgen
 
-import specrest.ir.HttpMethods
 import specrest.ir.generated.SpecRestGenerated.*
-import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
-// Native TypeScript (vitest + fast-check) stateful emitter. Drives random
-// operation sequences against the live service and asserts the global
-// invariants after every step — reusing the shared decisions: StubOps.isStub
-// for which ops are rules, Stateful.invariantCtx + TsExprBackend for invariant
-// translation/skip (incl. the F4 unbacked-state skip, identical to Python).
-// Bundle id-flow / transitions / temporals are not yet modelled and are
-// honestly skipped. Python `Stateful` stays the byte-identical oracle.
+// TypeScript rendering for the shared NativeStateful selection (vitest +
+// fast-check): random operation sequences against the live service, global
+// invariants asserted after every step. Python `Stateful` stays the
+// byte-identical oracle.
 object TsStateful:
 
-  private case class StepOp(name: String, pop: ProfiledOperation, args: List[(String, String)])
-
   def emitFor(profiled: ProfiledService): StatefulOutput =
-    val ir        = profiled.ir
-    val skips     = scala.collection.mutable.ListBuffer.empty[TestSkip]
-    val opsByName = svcOperations(ir).map(o => operName(o) -> o).toMap
-
-    val stepOps = profiled.operations.flatMap: pop =>
-      if StubOps.isStub(profiled, pop) then
-        skips += TestSkip(pop.operationName, "stateful_rule", StubOps.skipReason(pop))
-        None
-      else if pop.requiresAuth.nonEmpty then
-        skips += TestSkip(pop.operationName, "stateful_rule", StubOps.authSkipReason(pop))
-        None
-      else
-        TestFormat.inputArbs(pop, ir, TsFastCheckStrategy) match
-          case Left(reason) =>
-            skips += TestSkip(pop.operationName, "stateful_rule", reason)
-            None
-          case Right(args) if opsByName.contains(pop.operationName) =>
-            Some(StepOp(pop.operationName, pop, args))
-          case _ => None
-
-    val invCtx = Stateful.invariantCtx(ir)
-    val invariants =
-      svcInvariants(ir).zipWithIndex.flatMap: (inv, idx) =>
-        val name = invName(inv).getOrElse(s"anon_$idx")
-        TsExprBackend.translate(invBody(inv), invCtx) match
-          case Translated.Skip(reason, _) =>
-            skips += TestSkip("<invariants>", s"stateful_invariant[$name]", reason)
-            None
-          case Translated.Emit(text) =>
-            Some((name, TestFormat.prettyOneLine(invBody(inv)), text))
-
-    if svcTemporals(ir).nonEmpty || svcTransitions(ir).nonEmpty then
-      skips += TestSkip(
-        "<stateful>",
-        "stateful_ts_pending",
-        "bundle id-flow, transitions and temporals are not yet modelled by the " +
-          "TypeScript stateful backend (#420); covered by the Python oracle suite"
-      )
-
+    val ir                           = profiled.ir
+    val (stepOps, invariants, skips) = NativeStateful.collect(profiled, NativeTarget.Ts)
     val file =
       if stepOps.isEmpty || invariants.isEmpty then skipPlaceholder(ir)
       else renderModule(ir, stepOps, invariants)
-
-    StatefulOutput(file = file, skips = skips.toList)
-
-  private def dispatchCall(s: StepOp): String =
-    val ep      = s.pop.endpoint
-    val method  = HttpMethods.lower(ep.method)
-    val hasPath = ep.pathParams.nonEmpty
-    val rawPath = ep.path.replaceAll("\\{([^}]+)\\}", "\\$\\{step.$1\\}")
-    val pathExpr =
-      if hasPath then s"`$rawPath`" else TsLit.str(ep.path)
-    val bodyExpr =
-      if ep.bodyParams.isEmpty then ""
-      else
-        val pairs = ep.bodyParams.map(p => s"${TsLit.str(p.name)}: step.${p.name}").mkString(", ")
-        s", { $pairs }"
-    s"client.$method($pathExpr$bodyExpr)"
+    StatefulOutput(file = file, skips = skips)
 
   private def renderModule(
       ir: ServiceIRFull,
-      stepOps: List[StepOp],
+      stepOps: List[NativeStepOp],
       invariants: List[(String, String, String)]
   ): String =
     val stepArbs = stepOps
@@ -92,7 +33,7 @@ object TsStateful:
 
     val dispatchCases = stepOps
       .map: s =>
-        s"    case ${TsLit.str(s.name)}: { await ${dispatchCall(s)}; return; }"
+        s"    case ${TsLit.str(s.name)}: { await ${TsRender.requestCall(s.pop, n => s"step.$n")}; return; }"
       .mkString("\n")
 
     val invChecks = invariants
@@ -102,27 +43,15 @@ object TsStateful:
       .mkString("\n")
 
     val bodyForScan = stepArbs + dispatchCases + invChecks
-    val usedRt      = TestFormat.TsRuntimeHelpers.filter(h => bodyForScan.contains(s"$h("))
-    val predNames =
-      (svcFunctions(ir).map(fncName) ++
-        svcPredicates(ir).map(prdName)).distinct.sorted
-        .filter(n => bodyForScan.contains(s"$n("))
-    val stratNames =
-      Strategies.forIR(ir, TsFastCheckStrategy).map(_.functionName).distinct.sorted
-        .filter(n => bodyForScan.contains(s"$n("))
 
     val sb = new StringBuilder
-    sb.append("// Auto-generated by spec-to-rest. Do not edit by hand.\n")
-    sb.append("/* eslint-disable @typescript-eslint/no-explicit-any */\n")
+    sb.append(TsRender.Header)
     sb.append("import { test } from \"vitest\";\n")
     sb.append("import fc from \"fast-check\";\n")
     sb.append("import { client } from \"./_client.js\";\n")
-    if usedRt.nonEmpty then
-      sb.append(s"import { ${usedRt.mkString(", ")} } from \"./_runtime.js\";\n")
-    if predNames.nonEmpty then
-      sb.append(s"import { ${predNames.mkString(", ")} } from \"./_predicates.js\";\n")
-    if stratNames.nonEmpty then
-      sb.append(s"import { ${stratNames.mkString(", ")} } from \"./_strategies.js\";\n")
+    TsRender.runtimeImport(bodyForScan).foreach(sb.append)
+    TsRender.predicatesImport(ir, bodyForScan).foreach(sb.append)
+    TsRender.strategiesImport(ir, bodyForScan).foreach(sb.append)
     sb.append("\n")
     sb.append("const _RUNS: Record<string, number> = ")
     sb.append("{ smoke: 10, thorough: 25, exhaustive: 75 };\n")

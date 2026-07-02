@@ -1,6 +1,5 @@
 package specrest.testgen
 
-import specrest.codegen.AdminModel
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated
 import specrest.ir.generated.SpecRestGenerated.*
@@ -629,7 +628,7 @@ object Stateful:
       idx: Int,
       ir: ServiceIRFull
   ): (Option[String], Option[TestSkip]) =
-    val ctx        = invariantCtx(ir)
+    val ctx        = TestCtx.forInvariants(ir)
     val name       = invName(inv).getOrElse(s"anon_$idx")
     val methodName = Naming.toSnakeCase(name)
     ExprToPython.translate(invBody(inv), ctx) match
@@ -653,7 +652,7 @@ object Stateful:
       decl: temporal_decl,
       ir: ServiceIRFull
   ): TemporalEmission =
-    val ctx = invariantCtx(ir)
+    val ctx = TestCtx.forInvariants(ir)
     tmpBody(decl) match
       case TbAlways(arg) =>
         ExprToPython.translate(arg, ctx) match
@@ -718,22 +717,6 @@ object Stateful:
               s"${raw.getClass.getSimpleName}"
           )
         )
-
-  private[testgen] def invariantCtx(ir: ServiceIRFull): TestCtx =
-    val stateFieldsAll = irStateFields(ir)
-    TestCtx(
-      inputs = Set.empty,
-      outputs = Set.empty,
-      stateFields = stateFieldsAll.map(stfName).toSet,
-      mapStateFields =
-        stateFieldsAll.filter(f => stfType(f).isInstanceOf[MapTypeF]).map(stfName).toSet,
-      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
-      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
-      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
-      boundVars = Set.empty,
-      capture = CaptureMode.PostState,
-      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
-    )
 
   private def statefulSkipPlaceholder(ir: ServiceIRFull): String =
     s"""|${TQ}Auto-generated stateful tests for ${svcName(ir)}.

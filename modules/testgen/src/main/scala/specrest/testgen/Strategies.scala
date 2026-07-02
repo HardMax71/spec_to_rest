@@ -119,6 +119,11 @@ object Strategies:
 
   private[testgen] val RedactedPlaceholder: String = "***REDACTED***"
 
+  // Anchors a user pattern for whole-string matching in engines whose match
+  // primitive is search-like (JS RegExp.test, Go regexp). Python needs none of
+  // this: it matches via re.fullmatch.
+  private[testgen] def fullMatchPattern(pattern: String): String = s"^(?:$pattern)$$"
+
   private def bareExpression(
       t: type_expr,
       ir: ServiceIRFull,
