@@ -68,8 +68,8 @@ class FileAssemblyTest extends CatsEffectSuite:
       .spliceAll(
         skeleton,
         Map(
-          "Increment" -> "st.count := st.count + 1;",
-          "Reset"     -> "st.count := 0;"
+          "Increment" -> FileAssembly.MethodPart("st.count := st.count + 1;"),
+          "Reset"     -> FileAssembly.MethodPart("st.count := 0;")
         )
       )
       .getOrElse(fail("spliceAll failed"))
@@ -77,8 +77,29 @@ class FileAssemblyTest extends CatsEffectSuite:
     assert(r.contains("st.count := 0;"), "Reset body present")
     assert(!r.contains("// YOUR CODE HERE"), "no placeholders remain")
 
+  test("spliceAll injects a part's helper declarations before its method"):
+    val part = FileAssembly.MethodPart(
+      body = "st.count := Bump(st.count);",
+      helpers = "function Bump(n: int): int { n + 1 }"
+    )
+    val r = FileAssembly
+      .spliceAll(skeleton, Map("Increment" -> part))
+      .getOrElse(fail("spliceAll failed"))
+    assert(r.contains("function Bump(n: int): int { n + 1 }"), r)
+    assert(
+      r.indexOf("function Bump") < r.indexOf("method Increment"),
+      "helpers must precede the method they serve"
+    )
+    assert(r.contains("st.count := Bump(st.count);"), r)
+
   test("spliceAll fails if a method is missing in the skeleton"):
-    val r = FileAssembly.spliceAll(skeleton, Map("Increment" -> "ok;", "Ghost" -> "no;"))
+    val r = FileAssembly.spliceAll(
+      skeleton,
+      Map(
+        "Increment" -> FileAssembly.MethodPart("ok;"),
+        "Ghost"     -> FileAssembly.MethodPart("no;")
+      )
+    )
     assert(r.isLeft, s"expected Left, got $r")
 
   test("anchor matches method name with parameters but not method-name prefix"):
