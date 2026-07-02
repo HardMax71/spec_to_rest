@@ -56,6 +56,7 @@ final case class SynthVerifyOptions(
     dafnyTimeoutSec: Int,
     maxIter: Int,
     maxCostUsd: Double,
+    maxOutputTokens: Long,
     fallback: Boolean = false,
     escalateTo: List[String] = Nil,
     withHints: Option[Boolean] = None
@@ -72,6 +73,7 @@ final case class SynthVerifyAllOptions(
     dafnyTimeoutSec: Int,
     maxIter: Int,
     maxCostUsd: Double,
+    maxOutputTokens: Long,
     escalateTo: List[String] = Nil,
     withHints: Option[Boolean] = None
 ):
@@ -279,7 +281,8 @@ object Synth:
         val req = SynthRequest(c, header, skeleton, opts.model, opts.temperature, opts.maxTokens)
         val budget = CegisBudget.Default.copy(
           maxIterations = opts.maxIter,
-          maxCostUsd = opts.maxCostUsd
+          maxCostUsd = opts.maxCostUsd,
+          maxOutputTokens = opts.maxOutputTokens
         )
         val ladder    = modelLadder(opts.model, opts.escalateTo)
         val runModels = if opts.fallback then ladder else List(opts.model)
@@ -459,7 +462,8 @@ object Synth:
   ): IO[ExitStatus] =
     val budget = CegisBudget.Default.copy(
       maxIterations = opts.maxIter,
-      maxCostUsd = opts.maxCostUsd
+      maxCostUsd = opts.maxCostUsd,
+      maxOutputTokens = opts.maxOutputTokens
     )
     val verifyOpts = SynthVerifyOptions(
       operation = "",
@@ -471,7 +475,8 @@ object Synth:
       dafnyBin = opts.dafnyBin,
       dafnyTimeoutSec = opts.dafnyTimeoutSec,
       maxIter = opts.maxIter,
-      maxCostUsd = opts.maxCostUsd
+      maxCostUsd = opts.maxCostUsd,
+      maxOutputTokens = opts.maxOutputTokens
     )
     val ladder = modelLadder(opts.model, opts.escalateTo)
     val resources =
