@@ -1,3 +1,5 @@
+import { shutdownTracing } from './tracing.js';
+
 import { app } from './app.js';
 import { config } from './config.js';
 import { prisma } from './prisma.js';
@@ -9,6 +11,7 @@ const server = app.listen(config.port, () => {
 const shutdown = async (signal: string): Promise<void> => {
   console.log(JSON.stringify({ level: 'info', msg: 'shutdown requested', signal }));
   server.close(async () => {
+    await shutdownTracing();
     await prisma.$disconnect();
     process.exit(0);
   });

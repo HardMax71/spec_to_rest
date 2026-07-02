@@ -221,13 +221,12 @@ plus the codegen behind it; see [Convention engine edge cases](/research/convent
 
 ## Code generation follow-ups
 
-Remaining observability the emitter does not generate yet. `/health`, `/ready`, and `/metrics`
-ship by default since [#500](https://github.com/HardMax71/spec_to_rest/pull/500); tracing is the
-open piece. See [generated project](/research/code_generation_pipeline/generated-project).
-
-| Feature | Status |
-| ------- | ------ |
-| Distributed tracing (OpenTelemetry spans) in generated services | not built; only structured, redacted logging ships |
+The observability backlog is closed. `/health`, `/ready`, and `/metrics` ship by default since
+[#500](https://github.com/HardMax71/spec_to_rest/pull/500), and every generated service exports
+OpenTelemetry spans since [#508](https://github.com/HardMax71/spec_to_rest/pull/508): set
+`OTEL_EXPORTER_OTLP_ENDPOINT` and each request produces a server span named by its route
+template; leave it unset and tracing stays off with nothing wired. See
+[generated project](/research/code_generation_pipeline/generated-project).
 
 <Collapsible title="Closed not-planned (decisions of record)">
 

@@ -14,6 +14,11 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/metrics
 ```
 
+Traces are opt-in: set `OTEL_EXPORTER_OTLP_ENDPOINT` (for example
+`http://localhost:4318`) to export OTLP spans for every request; leave it
+unset and tracing stays off. `OTEL_SERVICE_NAME` overrides the default
+service name.
+
 The OpenAPI schema is available at [`openapi.yaml`](./openapi.yaml) and, at runtime,
 at `http://localhost:8000/openapi.json` / `http://localhost:8000/docs`.
 

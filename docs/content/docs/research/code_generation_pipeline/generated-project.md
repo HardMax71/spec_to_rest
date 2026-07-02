@@ -73,7 +73,7 @@ with safe defaults.
 
 ## Observability
 
-The observability that ships is logging, not tracing. Each service logs through structlog, and a
+Each service logs through structlog, and a
 redaction processor replaces any field the spec marks sensitive, or whose name matches a pattern like
 `password`, `api_key`, or `session_token`, with `***REDACTED***` before the line is written:
 
@@ -86,5 +86,7 @@ redaction processor replaces any field the spec marks sensitive, or whose name m
 routes: `GET /health` is the liveness signal the Dockerfile probes, `GET /ready` reports readiness
 by probing the database (200 or 503), and `GET /metrics` exposes
 Prometheus text format with `http_requests_total` and `http_request_duration_seconds`, labelled by
-method, route template, and status code. The pipeline does not generate distributed tracing; that
-is left to the operator.
+method, route template, and status code. Tracing is generated but opt-in: with
+`OTEL_EXPORTER_OTLP_ENDPOINT` set, every request produces an OpenTelemetry server span named by
+its route template and exported over OTLP/HTTP (`OTEL_SERVICE_NAME` overrides the default service
+name); without it, nothing is wired and no exporter dials out.

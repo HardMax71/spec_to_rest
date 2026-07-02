@@ -209,6 +209,7 @@ object EmitTs:
       "tsconfig.json"              -> templates.tsconfig,
       "prisma/schema.prisma"       -> templates.prismaSchema,
       "src/index.ts"               -> templates.index,
+      "src/tracing.ts"             -> templates.tracing,
       "src/app.ts"                 -> templates.app,
       "src/config.ts"              -> templates.config,
       "src/prisma.ts"              -> templates.prisma,

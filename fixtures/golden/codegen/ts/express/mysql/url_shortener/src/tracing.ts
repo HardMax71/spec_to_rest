@@ -1,0 +1,31 @@
+// Loaded before anything that imports express (first import in index.ts) so
+// the http and express patches are in place. Tracing is opt-in: without
+// OTEL_EXPORTER_OTLP_ENDPOINT this module is inert and no exporter dials out.
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+
+const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? '';
+
+let sdk: NodeSDK | undefined;
+
+if (endpoint !== '') {
+  sdk = new NodeSDK({
+    serviceName: process.env.OTEL_SERVICE_NAME ?? 'url_shortener',
+    traceExporter: new OTLPTraceExporter(),
+    instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
+  });
+  sdk.start();
+}
+
+// Flushes buffered spans; index.ts awaits this in its shutdown path (both
+// SIGTERM and SIGINT) before exiting. A collector failure during shutdown
+// logs and resolves rather than surfacing an unhandled rejection.
+export const shutdownTracing = async (): Promise<void> => {
+  if (sdk !== undefined) {
+    await sdk.shutdown().catch((e: unknown) => {
+      console.error('tracing shutdown failed', e);
+    });
+  }
+};
