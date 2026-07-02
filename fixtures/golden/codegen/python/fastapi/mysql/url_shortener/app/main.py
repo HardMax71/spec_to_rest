@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -10,10 +11,12 @@ from sqlalchemy import text
 
 from app.database import engine
 from app.extensions import register as register_extensions
-from app.redaction import configure_logging
+from app.redaction import configure_logging, get_logger
 from app.routers import admin, url_mappings
 
 configure_logging()
+
+logger = get_logger()
 
 HTTP_REQUESTS = Counter(
     "http_requests_total",
@@ -76,10 +79,16 @@ async def health_check() -> dict[str, str]:
 
 @app.get("/ready", tags=["infrastructure"])
 async def readiness_check() -> JSONResponse:
-    try:
+    async def probe() -> None:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
+
+    try:
+        # Bounded so a degraded database fails the probe fast instead of piling
+        # up orchestrator polls on the connection pool.
+        await asyncio.wait_for(probe(), timeout=5.0)
     except Exception:
+        logger.warning("readiness_check_failed", exc_info=True)
         return JSONResponse(status_code=503, content={"status": "unavailable"})
     return JSONResponse(content={"status": "ready"})
 

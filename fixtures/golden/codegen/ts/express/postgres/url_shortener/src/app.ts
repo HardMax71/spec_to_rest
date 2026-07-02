@@ -60,7 +60,8 @@ app.get('/ready', async (_req: Request, res: Response) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     res.status(200).json({ status: 'ready' });
-  } catch {
+  } catch (err) {
+    console.error('readiness check failed', err);
     res.status(503).json({ status: 'unavailable' });
   }
 });

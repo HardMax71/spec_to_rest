@@ -84,7 +84,7 @@ redaction processor replaces any field the spec marks sensitive, or whose name m
 `email` is not sensitive and passes through; `password` matches and is redacted. The generated
 `tests/test_log_redaction.py` locks that in. Three infrastructure routes ship alongside the spec
 routes: `GET /health` is the liveness signal the Dockerfile probes, `GET /ready` reports readiness
-by round-tripping a `SELECT 1` through the database (200 or 503), and `GET /metrics` exposes
+by probing the database (200 or 503), and `GET /metrics` exposes
 Prometheus text format with `http_requests_total` and `http_request_duration_seconds`, labelled by
 method, route template, and status code. The pipeline does not generate distributed tracing; that
 is left to the operator.

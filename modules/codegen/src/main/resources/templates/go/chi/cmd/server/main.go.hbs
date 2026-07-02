@@ -98,6 +98,7 @@ func main() {
 	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if err := db.PingContext(r.Context()); err != nil {
+			slog.Error("readiness check failed", "error", err)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			_, _ = w.Write([]byte(`{"status":"unavailable"}`))
 			return
