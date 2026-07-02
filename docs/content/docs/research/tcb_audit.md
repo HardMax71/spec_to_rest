@@ -35,8 +35,7 @@ flowchart TD
   C -->|BestEffort: some expr is not| E[Skipped]
   D --> F[Translator entry, declarations]
   F --> G[per-check expr]
-  G --> H[lower, project onto the verified subset]
-  H --> I[translate, expr to smt_term]
+  G --> I[translate, expr to smt_term, None outside the subset]
   I --> J[SmtTermBridge]
   J --> K[Z3 via JNI]
   K --> L[Verdict]
@@ -48,8 +47,7 @@ Each layer's correctness obligation:
 | ----- | --------- | ------ |
 | Parse | `modules/parser/.../Parser.scala`, `Builder.scala` | trusted, hand-written; build errors surface as exit 1 |
 | Classifier | `Trust.classify` | trusted, hand-written, but only decides which path runs; a classification error causes a spurious skip, not unsoundness |
-| `lower` projection | extracted from `core/IR.thy` via `Code_Target_Scala`, in `SpecRestGenerated.scala` | verified, proven total in Isabelle; returns `None` for shapes outside the subset |
-| `translate` (verified) | extracted from `semantics/Translate.thy`, same generated file | verified; this is the function the soundness theorem talks about |
+| `translate` (verified) | extracted from `semantics/Translate.thy` via `Code_Target_Scala`, in `SpecRestGenerated.scala` | verified; this is the function the soundness theorem talks about; returns `None` for shapes outside the subset |
 | `Code_Target_Scala` extraction | Isabelle stock tool | trusted, production-grade but not formally verified end to end |
 | Z3 entrypoint | `modules/verify/.../z3/Translator.scala` | trusted, hand-written; a small public API that declares context and dispatches checks |
 | Checked / declaration boundary | `z3/ExpressionEncoder.scala` (`translateCheckedExpr`, `translateDeclarationExpr`) | trusted; check bodies use the extracted translator only, declaration refinements may use the fallback |
@@ -58,7 +56,7 @@ Each layer's correctness obligation:
 | Sort inference, Z3 declaration management, set monomorphization, Skolem allocation, span threading | `TranslationContext`, `Z3EncodingSupport`, `Declarations`, `RelationFrames`, `SmtTermBridge` | trusted, outside the soundness statement; runs around the bridge |
 | Z3 solver (`com.microsoft.z3`) | external | trusted, incomplete on quantifiers, nonlinear arithmetic, and theory combinations; `unsat` is sound, `sat`/`unknown` can be solver artifacts |
 | Counterexample decoder | `z3/CounterExample.scala` | trusted, hand-written, outside soundness |
-| Alloy backend | `verify/alloy/*` | trusted, a separate bounded-model-checking story, not subject to `lower` |
+| Alloy backend | `modules/verify/.../alloy/*` | trusted, a separate bounded-model-checking story, not routed through the extracted translator |
 
 ## What "verified" means
 
@@ -79,7 +77,7 @@ evaluates to the SMT encoding of that value. A companion theorem,
 expression always translates. Both close with zero `sorry`, checked by building the `SpecRest_Soundness`
 session in CI. What the theorem does not claim: nothing about Z3's own evaluation (the bridge converts
 `smt_term` to `Z3Expr` and Z3 takes over, so Z3 is in the TCB); nothing about shapes outside the
-subset (`lower` returns `None` and the check skips); nothing about declaration-level expressions, which
+subset (`translate` returns `None` and the check skips); nothing about declaration-level expressions, which
 still run through the hand-written path; and nothing about the parser, builder, or sort inference,
 whose errors set the meaning of a failure even though they are not what soundness is about.
 
@@ -90,7 +88,7 @@ single-file implementation), and although the soundness theorem existed, only th
 exercised the verified path, on too few probes to call the production path verified. After #192 the
 declaration fallback is isolated behind `translateDeclarationExpr`, check bodies call
 `translateCheckedExpr` with no Scala fallback, and check-body translation routes through the verified
-`lower` and `translate` plus the bridge. The only new piece of TCB is the bridge itself, which is
+`translate` plus the bridge. The only new piece of TCB is the bridge itself, which is
 small, syntax-directed, and structurally constrained: each `smt_term` constructor maps to one or two
 `Z3Expr` shapes with sort checks at the boundary. Everything else in the trust closure shrank or
 stayed the same; best-effort checks no longer produce a verdict at all, they skip.

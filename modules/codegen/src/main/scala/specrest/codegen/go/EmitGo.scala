@@ -22,6 +22,7 @@ import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
@@ -710,12 +711,7 @@ object EmitGo:
       case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
       case _                                                       => "id"
 
-    val method = endpoint.method match
-      case _: GET    => "GET"
-      case _: POST   => "POST"
-      case _: PUT    => "PUT"
-      case _: PATCH  => "PATCH"
-      case _: DELETE => "DELETE"
+    val method  = HttpMethods.upper(endpoint.method)
     val chiPath = endpoint.path
 
     val ctx = OperationContext.from(op, entity)
@@ -841,13 +837,8 @@ object EmitGo:
     )
 
   private def goScalarOp(v: ScalarOpView): GoScalarOpView =
-    val ep = v.operation.endpoint
-    val methodPascal = ep.method match
-      case _: GET    => "Get"
-      case _: POST   => "Post"
-      case _: PUT    => "Put"
-      case _: PATCH  => "Patch"
-      case _: DELETE => "Delete"
+    val ep           = v.operation.endpoint
+    val methodPascal = HttpMethods.pascal(ep.method)
     val setSql = v.updates
       .map(u => s"${u.columnName} = ${ScalarOps.renderRhs(u.rhs, u.columnName)}")
       .mkString(", ")

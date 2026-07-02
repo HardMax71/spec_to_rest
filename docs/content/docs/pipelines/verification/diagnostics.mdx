@@ -154,7 +154,7 @@ they don't appear inline as a `skipped` row.
 | `1` | Specification or spec-file issue: at least one ran check failed (unsat / preservation `sat` / timeout), **or** the spec could not be read / parsed / IR-built. |
 | `2` | Translator coverage gap: the verifier hit an unsupported construct, either when translating the whole spec (e.g., under `--dump-smt`) or while running individual checks. In normal check runs affected checks surface as `skipped`; other checks may still pass. |
 | `3` | Backend error (solver init failure or solver crash). |
-| `4` | Soundness coverage gap: at least one check was skipped because its source exprs fall outside the Isabelle `lower` projection, and no higher-precedence outcome (Backend / Violation / Translator) was raised. |
+| `4` | Soundness coverage gap: at least one check was skipped because its source exprs fall outside the domain of the Isabelle-verified `translate`, and no higher-precedence outcome (Backend / Violation / Translator) was raised. |
 
 Precedence (highest to lowest): Backend (3), Violation (1), Translator (2), Trust (4), Ok (0).
 A backend crash always wins over a translator gap; a violation always wins over a soundness gap.

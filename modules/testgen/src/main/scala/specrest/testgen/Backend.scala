@@ -280,10 +280,8 @@ object TsFastCheckStrategy extends StrategyBackend:
     s"strategy$typeName"
 
 object TestBackend:
-  // Only the Python/FastAPI backend exists today; this is the dispatch point through
-  // which the TypeScript (vitest+fast-check) and Go (test+rapid) backends plug in.
-  // The conformance decision logic (Behavioral/Stateful/Structural) stays shared —
-  // only the rendered target language differs.
+  // Python-path backends only: TestEmit dispatches ts-express and go-chi to their own
+  // emitter stacks, and Python stays byte-identical as the differential oracle.
   def harnessFor(profiled: ProfiledService): HarnessTemplates =
     PythonFastApiHarness
 

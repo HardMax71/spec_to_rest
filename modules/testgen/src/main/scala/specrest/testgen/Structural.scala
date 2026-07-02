@@ -2,8 +2,8 @@ package specrest.testgen
 
 import specrest.codegen.AdminModel
 import specrest.codegen.SensitiveFields
+import specrest.ir.HttpMethods
 import specrest.ir.Naming
-import specrest.ir.PrettyPrint
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
@@ -66,7 +66,7 @@ object Structural:
         val sb         = new StringBuilder
         sb.append(s"def _check_invariant_$methodName(ctx, response, case):\n")
         sb.append(
-          s"    ${TQ}invariant $name: ${escapeDocstring(prettyOneLine(invBody(inv)))}$TQ\n"
+          s"    ${TQ}invariant $name: ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(invBody(inv)))}$TQ\n"
         )
         sb.append("    if response.status_code >= 500:\n")
         sb.append("        return\n")
@@ -140,20 +140,15 @@ object Structural:
             case Translated.Skip(reason, _) =>
               List(Left(TestSkip(operName(opDecl), s"structural_ensures[$idx]", reason)))
             case Translated.Emit(text) =>
-              val checkName = s"_check_${opSnake}_ensures_$idx"
-              val pathLit   = ExprToPython.pyString(pop.endpoint.path)
-              val methodName = pop.endpoint.method match
-                case _: GET    => "GET"
-                case _: POST   => "POST"
-                case _: PUT    => "PUT"
-                case _: PATCH  => "PATCH"
-                case _: DELETE => "DELETE"
+              val checkName  = s"_check_${opSnake}_ensures_$idx"
+              val pathLit    = ExprToPython.pyString(pop.endpoint.path)
+              val methodName = HttpMethods.upper(pop.endpoint.method)
               val methodLit  = ExprToPython.pyString(methodName)
               val successLit = pop.endpoint.successStatus.toString
               val sb         = new StringBuilder
               sb.append(s"def $checkName(ctx, response, case):\n")
               sb.append(
-                s"    ${TQ}ensures: ${escapeDocstring(prettyOneLine(clause))}$TQ\n"
+                s"    ${TQ}ensures: ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(clause))}$TQ\n"
               )
               sb.append(s"    if not _path_matches(case, $pathLit, $methodLit):\n")
               sb.append("        return\n")
@@ -180,12 +175,7 @@ object Structural:
       profiled.operations
         .filter(StubOps.isStub(profiled, _))
         .map: op =>
-          val methodName = op.endpoint.method match
-            case _: GET    => "GET"
-            case _: POST   => "POST"
-            case _: PUT    => "PUT"
-            case _: PATCH  => "PATCH"
-            case _: DELETE => "DELETE"
+          val methodName = HttpMethods.upper(op.endpoint.method)
           s"""schema = schema.exclude(method="$methodName", path="${op.endpoint.path}")"""
     val stubExcludes =
       if stubExcludeLines.isEmpty then ""
@@ -293,9 +283,3 @@ object Structural:
         |    else:
         |        case.validate_response(response)
         |""".stripMargin
-
-  private def prettyOneLine(e: expr): String =
-    PrettyPrint.expr(e).replace("\n", " ").replace("\r", " ").trim
-
-  private def escapeDocstring(s: String): String =
-    s.replace("\\", "\\\\").replace("\"\"\"", "\\\"\\\"\\\"")
