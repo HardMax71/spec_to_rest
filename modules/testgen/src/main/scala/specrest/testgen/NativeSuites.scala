@@ -219,12 +219,18 @@ private[testgen] object GoRender:
             "%v"
         )
         s"fmt.Sprintf(${GoLit.str(tmpl)}, ${names.map(ref).mkString(", ")})"
+    val target =
+      if ep.queryParams.isEmpty then pathExpr
+      else
+        val pairs =
+          ep.queryParams.map(p => s"${GoLit.str(p.name)}, ${ref(p.name)}").mkString(", ")
+        s"withQuery($pathExpr, $pairs)"
     val bodyExpr =
       if ep.bodyParams.isEmpty then ""
       else
         val pairs = ep.bodyParams.map(p => s"${GoLit.str(p.name)}: ${ref(p.name)}").mkString(", ")
         s", map[string]any{$pairs}"
-    s"client.$method($pathExpr$bodyExpr)"
+    s"client.$method($target$bodyExpr)"
 
   def module(bodies: String): String =
     val stdlib     = (if bodies.contains("fmt.") then List("\t\"fmt\"") else Nil) :+ "\t\"testing\""
@@ -262,12 +268,18 @@ private[testgen] object TsRender:
           m => scala.util.matching.Regex.quoteReplacement(s"$${${ref(m.group(1))}}")
         )
         s"`$raw`"
+    val target =
+      if ep.queryParams.isEmpty then pathExpr
+      else
+        val pairs =
+          ep.queryParams.map(p => s"${TsLit.str(p.name)}: ${ref(p.name)}").mkString(", ")
+        s"withQuery($pathExpr, { $pairs })"
     val bodyExpr =
       if ep.bodyParams.isEmpty then ""
       else
         val pairs = ep.bodyParams.map(p => s"${TsLit.str(p.name)}: ${ref(p.name)}").mkString(", ")
         s", { $pairs }"
-    s"client.$method($pathExpr$bodyExpr)"
+    s"client.$method($target$bodyExpr)"
 
   def runtimeImport(scanText: String): Option[String] =
     val used = TestFormat.TsRuntimeHelpers.filter(h => scanText.contains(s"$h("))

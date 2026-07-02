@@ -520,6 +520,26 @@ class BackendTest extends CatsEffectSuite:
       assert(preds.contains("package tests"), preds.take(200))
       assert(preds.contains("func isValidURI("), preds)
 
+  test("native structural suites send query parameters through withQuery"):
+    loadIR("fixtures/spec/todo_list.spec").map: ir =>
+      val profiled = SynthFixture.profiled(ir)
+      val go = GoStructural
+        .emitFor(profiled)
+        .tests
+        .find(_.name == "Test_structural_list_todos")
+        .getOrElse(fail("missing Test_structural_list_todos"))
+      assert(go.body.contains("client.get(withQuery("), go.body)
+      assert(go.body.contains("\"status_filter\", status_filter"), go.body)
+      assert(go.body.contains("\"tag_filter\", tag_filter"), go.body)
+      val tsOut = TsStructural.emitFor(profiled)
+      val ts = tsOut.tests
+        .find(_.name == "test_structural_list_todos")
+        .getOrElse(fail("missing test_structural_list_todos"))
+      assert(ts.body.contains("client.get(withQuery("), ts.body)
+      assert(ts.body.contains("\"status_filter\": status_filter"), ts.body)
+      val mod = TsStructural.renderModule(ir, tsOut.tests)
+      assert(mod.contains("import { withQuery } from \"./_runtime.js\";"), mod.take(700))
+
   test("GoBehavioral emits go test + rapid for the positive-ensures path"):
     loadIR("fixtures/spec/edge_cases.spec").map: ir =>
       val out = GoBehavioral.emitFor(SynthFixture.profiled(ir))

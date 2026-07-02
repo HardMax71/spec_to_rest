@@ -12,8 +12,10 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"testing"
 )
@@ -85,6 +87,24 @@ func httpDo(method, path string, body any) clientResponse {
 	defer func() { _ = resp.Body.Close() }()
 	buf, _ := io.ReadAll(resp.Body)
 	return clientResponse{status: resp.StatusCode, body: buf}
+}
+
+// withQuery appends the alternating key/value pairs as an encoded query
+// string. A nil value is an absent optional parameter and is skipped, so the
+// call reaches the server without that key at all.
+func withQuery(p string, kv ...any) string {
+	q := url.Values{}
+	for i := 0; i+1 < len(kv); i += 2 {
+		k, ok := kv[i].(string)
+		if !ok || kv[i+1] == nil {
+			continue
+		}
+		q.Set(k, fmt.Sprintf("%v", kv[i+1]))
+	}
+	if len(q) == 0 {
+		return p
+	}
+	return p + "?" + q.Encode()
 }
 
 type httpClient struct{}
