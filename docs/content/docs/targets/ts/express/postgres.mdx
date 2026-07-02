@@ -127,10 +127,11 @@ serves `prom-client`'s registry (default process metrics plus `http_requests_tot
 recorded on the response `finish` event); a scrape failure forwards through `next(err)` into
 the generated `errorHandler` rather than dying as an unhandled rejection.
 
-Tracing is opt-in. `src/tracing.ts` loads before anything imports express; with
-`OTEL_EXPORTER_OTLP_ENDPOINT` set it starts the Node SDK with the http and express
-instrumentations and exports OTLP/HTTP spans, and unset it is inert. `OTEL_SERVICE_NAME`
-overrides the default service name.
+Tracing is opt-in. `src/tracing.ts` loads before anything imports Express; with
+`OTEL_EXPORTER_OTLP_ENDPOINT` set it starts the Node SDK with the HTTP and Express
+instrumentations and exports OTLP/HTTP spans, and when unset it is inert. The shutdown
+path awaits a final span flush before exiting. `OTEL_SERVICE_NAME` overrides the default
+service name.
 
 ## Dafny → JavaScript integration
 

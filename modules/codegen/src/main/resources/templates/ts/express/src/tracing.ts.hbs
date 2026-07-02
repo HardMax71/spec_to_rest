@@ -8,14 +8,24 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 
 const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? '';
 
+let sdk: NodeSDK | undefined;
+
 if (endpoint !== '') {
-  const sdk = new NodeSDK({
+  sdk = new NodeSDK({
     serviceName: process.env.OTEL_SERVICE_NAME ?? '{{service.snakeName}}',
     traceExporter: new OTLPTraceExporter(),
     instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
   });
   sdk.start();
-  process.on('SIGTERM', () => {
-    void sdk.shutdown();
-  });
 }
+
+// Flushes buffered spans; index.ts awaits this in its shutdown path (both
+// SIGTERM and SIGINT) before exiting. A collector failure during shutdown
+// logs and resolves rather than surfacing an unhandled rejection.
+export const shutdownTracing = async (): Promise<void> => {
+  if (sdk !== undefined) {
+    await sdk.shutdown().catch((e: unknown) => {
+      console.error('tracing shutdown failed', e);
+    });
+  }
+};
