@@ -118,6 +118,15 @@ require a `@unique` constraint). Lookups by `id` use `findUnique` / `delete`.
 Spec paths use `{name}` placeholders (chi/OpenAPI style); Express expects `:name`. The emitter
 converts `/{code}` → `/:code` before rendering the route template.
 
+## Observability
+
+`GET /health` returns 200 unconditionally (liveness; the Dockerfile healthcheck probes it).
+`GET /ready` runs `SELECT 1` through the Prisma client and answers 200 or 503. `GET /metrics`
+serves `prom-client`'s registry (default process metrics plus `http_requests_total` and
+`http_request_duration_seconds`, labelled by method, matched route pattern, and status,
+recorded on the response `finish` event); a scrape failure forwards through `next(err)` into
+the generated `errorHandler` rather than dying as an unhandled rejection.
+
 ## Dafny → JavaScript integration
 
 When `compile --framework express --db postgres --with-synthesis` is invoked and the verified-body

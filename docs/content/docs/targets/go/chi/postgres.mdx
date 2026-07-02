@@ -97,6 +97,16 @@ Operations whose body shape does not match the entity's field set route to `othe
 the user fills in (the spec contract is preserved by the verify gate, so the stub still has a known
 interface).
 
+## Observability
+
+`GET /health` returns 200 unconditionally (liveness; the Dockerfile healthcheck probes it).
+`GET /ready` pings the database through `db.PingContext` and answers 200 or 503.
+`GET /metrics` is `promhttp.Handler()` from `prometheus/client_golang`, registered for GET
+only. A `trackRequests` middleware records `http_requests_total` and
+`http_request_duration_seconds` labelled by method, chi route pattern, and status; it sits
+outside `Recoverer` in the middleware chain so a panicking request is still counted as the
+500 Recoverer writes.
+
 ## Dafny → Go integration
 
 When `compile --framework chi --db postgres --with-synthesis` is invoked and the verified-body cache

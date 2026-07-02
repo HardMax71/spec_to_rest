@@ -272,6 +272,17 @@ cp /tmp/openapi-gen/openapi.yaml docs/public/openapi/url_shortener.yaml`}</code>
 
 ## Infrastructure
 
+### Observability routes
+
+Three routes ship outside the spec surface, all tagged `infrastructure` in the OpenAPI
+document. `GET /health` returns 200 unconditionally (liveness; the Dockerfile healthcheck
+probes it). `GET /ready` round-trips `SELECT 1` through the SQLAlchemy engine and answers
+200 `{"status": "ready"}` or 503 `{"status": "unavailable"}`. `GET /metrics` serves
+Prometheus text format via `prometheus-client`: `http_requests_total` and
+`http_request_duration_seconds`, labelled by method, route template (never the raw URL),
+and status code, counted in a middleware `finally` so requests that raise are observed as
+500s. The generated `tests/test_health.py` covers all three.
+
 ### Docker image
 
 Two-stage build. `uv` is copied from the upstream image; app runs as non-root `appuser`;

@@ -167,6 +167,12 @@ type matches the relation's domain key. The status code comes from
 for `Delete` (and any DELETE method), and `200` everywhere else. GET methods
 send non-path params as query parameters; everything else sends them in the body.
 
+Derived or overridden paths must stay clear of the generated infrastructure
+surface: `check` and `compile` reject any operation whose route resolves to
+`/health`, `/ready`, `/metrics`, or into the `/admin` prefix
+(`Validate.validateRoutes`). Rename the operation or point its `http_path`
+somewhere else.
+
 ## Entity -> DB schema
 
 `Schema.deriveSchema` lifts the IR's entities and state relations into a `DatabaseSchema` of
