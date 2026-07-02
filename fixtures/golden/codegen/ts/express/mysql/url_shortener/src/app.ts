@@ -65,9 +65,13 @@ app.get('/ready', async (_req: Request, res: Response) => {
   }
 });
 
-app.get('/metrics', async (_req: Request, res: Response) => {
-  res.set('Content-Type', register.contentType);
-  res.send(await register.metrics());
+app.get('/metrics', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.send(await register.metrics());
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Express applies middleware only to routes registered after the

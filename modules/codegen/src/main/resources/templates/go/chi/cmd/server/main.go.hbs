@@ -79,9 +79,11 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
+	// Outside Recoverer, so a panicking request is still counted (as the 500
+	// Recoverer writes).
+	r.Use(trackRequests)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
-	r.Use(trackRequests)
 
 	// chi panics on r.Use(...) after routes are registered, so the user hook
 	// runs here — before any generated route wiring — and may install both
@@ -103,7 +105,7 @@ func main() {
 		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	})
 
-	r.Handle("/metrics", promhttp.Handler())
+	r.Method(http.MethodGet, "/metrics", promhttp.Handler())
 
 	admin.Register(r, db, auth.RequireAdmin(cfg.AdminToken))
 

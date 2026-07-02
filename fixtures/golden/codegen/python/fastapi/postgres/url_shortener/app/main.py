@@ -54,14 +54,19 @@ async def track_requests(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
     start = time.perf_counter()
-    response = await call_next(request)
-    route = request.scope.get("route")
-    # The route template, not the raw URL: raw paths embed ids and would blow up
-    # label cardinality.
-    path = route.path if route is not None else "unmatched"
-    HTTP_REQUESTS.labels(request.method, path, str(response.status_code)).inc()
-    HTTP_REQUEST_DURATION.labels(request.method, path).observe(time.perf_counter() - start)
-    return response
+    status = "500"
+    try:
+        response = await call_next(request)
+        status = str(response.status_code)
+        return response
+    finally:
+        route = request.scope.get("route")
+        # The route template, not the raw URL: raw paths embed ids and would blow up
+        # label cardinality. Counting sits in `finally` so requests that raise are
+        # still observed, as 500s.
+        path = route.path if route is not None else "unmatched"
+        HTTP_REQUESTS.labels(request.method, path, status).inc()
+        HTTP_REQUEST_DURATION.labels(request.method, path).observe(time.perf_counter() - start)
 
 
 @app.get("/health", tags=["infrastructure"])

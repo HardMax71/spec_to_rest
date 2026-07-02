@@ -410,7 +410,7 @@ object Paths:
 
   private def healthOperation: OperationObject =
     OperationObject(
-      operationId = "health_check",
+      operationId = "infra_health_check",
       summary = Some("Health check"),
       description = Some("Returns 200 if the service is running."),
       tags = List("infrastructure"),
@@ -448,7 +448,7 @@ object Paths:
 
   private def readyOperation: OperationObject =
     OperationObject(
-      operationId = "readiness_check",
+      operationId = "infra_readiness_check",
       summary = Some("Readiness check"),
       description = Some("Returns 200 when the database answers a probe query, 503 otherwise."),
       tags = List("infrastructure"),
@@ -471,7 +471,7 @@ object Paths:
 
   private def metricsOperation: OperationObject =
     OperationObject(
-      operationId = "metrics",
+      operationId = "infra_metrics",
       summary = Some("Prometheus metrics"),
       description = Some("Prometheus text exposition format."),
       tags = List("infrastructure"),
@@ -819,7 +819,7 @@ object OpenApi:
     profiled.entities.map: e =>
       TagObject(Naming.toSnakeCase(e.entityName), Some(s"${e.entityName} operations"))
     :+ TagObject("infrastructure", Some("Health and metrics endpoints"))
-      :+ TagObject("admin", Some("Bearer-guarded admin surface (state export / import / reset)"))
+      :+ TagObject("admin", Some("Bearer-guarded admin surface (state export / seed / reset)"))
 
   def serialize(doc: OpenApiDocument): String =
     val yaml = new org.yaml.snakeyaml.Yaml(customRepresenter, dumperOptions)
