@@ -99,3 +99,83 @@ class AuthWiringTest extends CatsEffectSuite:
       assert(!tsFiles.contains("src/middleware/schemes.ts"))
       assert(!goFiles("go.mod").contains("golang-jwt"), goFiles("go.mod"))
       assert(!tsFiles("package.json").contains("jsonwebtoken"), tsFiles("package.json"))
+
+  test("credential slots agree across .env, python settings, go config, ts schema/config"):
+    val source =
+      """|service Demo {
+         |  state {
+         |    count: Int
+         |  }
+         |
+         |  security {
+         |    jwt: Bearer(bearer_format: "JWT")
+         |    token: Bearer
+         |    api_key: ApiKey(header: "X-API-Key")
+         |    login: Basic
+         |  }
+         |}
+         |""".stripMargin
+    SpecFixtures.buildFromSource("slot-service", source).map: ir =>
+      assertEquals(
+        AuthSchemes.envEntries(ir).map(_._1),
+        List(
+          "JWT_SECRET",
+          "JWT_ALGORITHM",
+          "AUTH_TOKEN_TOKEN",
+          "AUTH_KEY_API_KEY",
+          "AUTH_BASIC_LOGIN_USERNAME",
+          "AUTH_BASIC_LOGIN_PASSWORD"
+        )
+      )
+      assertEquals(
+        specrest.codegen.python.SecurityPython.settingLines(ir),
+        List(
+          "jwt_secret: SecretStr | None = None",
+          "jwt_algorithm: str = \"HS256\"",
+          "auth_token_token: SecretStr | None = None",
+          "auth_key_api_key: SecretStr | None = None",
+          "auth_basic_login_username: str | None = None",
+          "auth_basic_login_password: SecretStr | None = None"
+        )
+      )
+      assertEquals(
+        specrest.codegen.go.SecurityGo.configLines(ir),
+        List(
+          List("JwtSecret", "string", "`env:\"JWT_SECRET\" envDefault:\"\"`"),
+          List("JwtAlgorithm", "string", "`env:\"JWT_ALGORITHM\" envDefault:\"HS256\"`"),
+          List("AuthTokenToken", "string", "`env:\"AUTH_TOKEN_TOKEN\" envDefault:\"\"`"),
+          List("AuthKeyApiKey", "string", "`env:\"AUTH_KEY_API_KEY\" envDefault:\"\"`"),
+          List(
+            "AuthBasicLoginUsername",
+            "string",
+            "`env:\"AUTH_BASIC_LOGIN_USERNAME\" envDefault:\"\"`"
+          ),
+          List(
+            "AuthBasicLoginPassword",
+            "string",
+            "`env:\"AUTH_BASIC_LOGIN_PASSWORD\" envDefault:\"\"`"
+          )
+        )
+      )
+      assertEquals(
+        specrest.codegen.ts.SecurityTs.schemaLines(ir),
+        List(
+          "JWT_SECRET: z.string().optional(),",
+          "JWT_ALGORITHM: z.string().default('HS256'),",
+          "AUTH_TOKEN_TOKEN: z.string().optional(),",
+          "AUTH_KEY_API_KEY: z.string().optional(),",
+          "AUTH_BASIC_LOGIN_USERNAME: z.string().optional(),",
+          "AUTH_BASIC_LOGIN_PASSWORD: z.string().optional(),"
+        )
+      )
+      assertEquals(
+        specrest.codegen.ts.SecurityTs.configLines(ir),
+        List(
+          "jwtSecret: parsed.JWT_SECRET,",
+          "jwtAlgorithm: parsed.JWT_ALGORITHM,",
+          "authTokenToken: parsed.AUTH_TOKEN_TOKEN,",
+          "authKeyApiKey: parsed.AUTH_KEY_API_KEY,",
+          "authBasicLoginUsername: parsed.AUTH_BASIC_LOGIN_USERNAME,",
+          "authBasicLoginPassword: parsed.AUTH_BASIC_LOGIN_PASSWORD,"
+        )
+      )

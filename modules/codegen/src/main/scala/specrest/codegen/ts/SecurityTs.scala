@@ -11,54 +11,28 @@ object SecurityTs:
     s"require${requiresAuth.sorted.map(AuthSchemes.pascalName).mkString("Or")}"
 
   def schemaLines(ir: ServiceIRFull): List[String] =
-    val schemes = svcSecurity(ir)
-    val jwtPair =
-      if AuthSchemes.needsJwt(ir) then
-        List(
-          "JWT_SECRET: z.string().optional(),",
-          "JWT_ALGORITHM: z.string().default('HS256'),"
-        )
-      else Nil
-    jwtPair ++ schemes.flatMap: s =>
-      val u = ssdName(s).toUpperCase
-      ssdKind(s) match
-        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
-        case SsBearer(_)                                                  => List(s"AUTH_TOKEN_$u: z.string().optional(),")
-        case SsApiKey(_, _)                                               => List(s"AUTH_KEY_$u: z.string().optional(),")
-        case SsBasic() =>
-          List(
-            s"AUTH_BASIC_${u}_USERNAME: z.string().optional(),",
-            s"AUTH_BASIC_${u}_PASSWORD: z.string().optional(),"
-          )
+    AuthSchemes.credSlots(ir).map:
+      case AuthSchemes.CredSlot.JwtAlgorithm => "JWT_ALGORITHM: z.string().default('HS256'),"
+      case slot                              => s"${slot.envKey}: z.string().optional(),"
 
   def configLines(ir: ServiceIRFull): List[String] =
-    val schemes = svcSecurity(ir)
-    val jwtPair =
-      if AuthSchemes.needsJwt(ir) then
-        List("jwtSecret: parsed.JWT_SECRET,", "jwtAlgorithm: parsed.JWT_ALGORITHM,")
-      else Nil
-    jwtPair ++ schemes.flatMap: s =>
-      val c = AuthSchemes.pascalName(ssdName(s))
-      val u = ssdName(s).toUpperCase
-      ssdKind(s) match
-        case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) => Nil
-        case SsBearer(_)                                                  => List(s"authToken$c: parsed.AUTH_TOKEN_$u,")
-        case SsApiKey(_, _)                                               => List(s"authKey$c: parsed.AUTH_KEY_$u,")
-        case SsBasic() =>
-          List(
-            s"authBasic${c}Username: parsed.AUTH_BASIC_${u}_USERNAME,",
-            s"authBasic${c}Password: parsed.AUTH_BASIC_${u}_PASSWORD,"
-          )
+    AuthSchemes.credSlots(ir).map: slot =>
+      val property = slot match
+        case AuthSchemes.CredSlot.JwtSecret    => "jwtSecret"
+        case AuthSchemes.CredSlot.JwtAlgorithm => "jwtAlgorithm"
+        case AuthSchemes.CredSlot.Token(n)     => s"authToken${AuthSchemes.pascalName(n)}"
+        case AuthSchemes.CredSlot.Key(n)       => s"authKey${AuthSchemes.pascalName(n)}"
+        case AuthSchemes.CredSlot.BasicUsername(n) =>
+          s"authBasic${AuthSchemes.pascalName(n)}Username"
+        case AuthSchemes.CredSlot.BasicPassword(n) =>
+          s"authBasic${AuthSchemes.pascalName(n)}Password"
+      s"$property: parsed.${slot.envKey},"
 
   def emit(profiled: ProfiledService): String =
-    val ir       = profiled.ir
-    val schemes  = svcSecurity(ir)
-    val needsJwt = AuthSchemes.needsJwt(ir)
-    val needsSafeEqual = schemes.exists(s =>
-      ssdKind(s) match
-        case SsBearer(_) => !AuthSchemes.isJwt(ssdKind(s))
-        case _           => true
-    )
+    val ir             = profiled.ir
+    val schemes        = svcSecurity(ir)
+    val needsJwt       = AuthSchemes.needsJwt(ir)
+    val needsSafeEqual = AuthSchemes.needsConstantTimeCompare(ir)
     val hasBearer = schemes.exists(s =>
       ssdKind(s) match { case SsBearer(_) => true; case _ => false }
     )
@@ -69,10 +43,7 @@ object SecurityTs:
       ssdKind(s) match { case SsApiKey("cookie", _) => true; case _ => false }
     )
 
-    val combos = profiled.operations
-      .map(_.requiresAuth.sorted)
-      .filter(_.sizeIs > 1)
-      .distinct
+    val combos = AuthSchemes.orCombos(profiled.operations)
 
     val helpers = List(
       Option.when(needsSafeEqual)(
@@ -141,7 +112,7 @@ object SecurityTs:
     val n = ssdName(decl)
     val c = AuthSchemes.pascalName(n)
     ssdKind(decl) match
-      case SsBearer(format) if format.exists(_.equalsIgnoreCase("JWT")) =>
+      case kind if AuthSchemes.isJwt(kind) =>
         s"""|const check$c = (req: Request): boolean => {
             |  const token = bearerToken(req);
             |  if (token === '' || config.jwtSecret === undefined || config.jwtSecret === '') {

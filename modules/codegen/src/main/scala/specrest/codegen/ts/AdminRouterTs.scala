@@ -12,9 +12,7 @@ import specrest.ir.generated.SpecRestGenerated.irStateFields
 import specrest.ir.generated.SpecRestGenerated.isDateTimeType
 import specrest.ir.generated.SpecRestGenerated.stfName
 import specrest.ir.generated.SpecRestGenerated.svcEntities
-import specrest.ir.generated.SpecRestGenerated.svcTransitions
 import specrest.ir.generated.SpecRestGenerated.svcTypeAliases
-import specrest.ir.generated.SpecRestGenerated.trnEntity
 import specrest.profile.ProfiledService
 
 object AdminRouterTs:
@@ -69,17 +67,8 @@ object AdminRouterTs:
           .map(e => s"      await (prisma as unknown as AnyPrisma).${accessor(e)}.deleteMany();")
           .mkString("\n") + scalarReset
 
-    val stateFields = irStateFields(ir)
-    val projections = stateFields.map(f => f -> AdminModel.projectionFor(f, ir))
-    val neededEntities = projections
-      .collect:
-        case (_, Some(p))
-            if p.valueShape match
-              case AdminModel.ProjectionValue.ScalarStateColumn(_) => false
-              case _                                               => true
-            =>
-          p.entityName
-      .distinct
+    val stateFields    = irStateFields(ir)
+    val neededEntities = AdminModel.entityBackedProjectionNames(ir)
     val stateRowDecl =
       if ScalarState.fields(ir).isEmpty then ""
       else
@@ -113,8 +102,7 @@ object AdminRouterTs:
             s"        ${tsKey(stfName(f))}: null,"
       .mkString("\n")
 
-    val seedEntities = svcTransitions(ir).map(trnEntity).toSet
-    val seedTargets  = entities.filter(e => seedEntities.contains(entName(e)))
+    val seedTargets = AdminModel.seedTargets(ir)
     val seedHandlers = seedTargets
       .map: e =>
         val snake = Naming.toSnakeCase(entName(e))

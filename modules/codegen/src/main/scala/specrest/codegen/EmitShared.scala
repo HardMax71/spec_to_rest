@@ -20,9 +20,13 @@ private[codegen] object EmitShared:
     aPath.count(_ == '{') < bPath.count(_ == '{')
 
   // Profile base types keyed by name, with type aliases resolved to their base
-  // domain (cycle-guarded). Shared by the Go and TS emitters; the Python emitter
-  // resolves aliases straight to Python types and additionally unwraps Option.
-  def aliasResolvedDomainLookup(profiled: ProfiledService): Map[String, String] =
+  // domain (cycle-guarded). Go and TS pass no optionWrap, so Option-typed
+  // aliases stay unresolved (their historical behavior); Python wraps them as
+  // `T | None`.
+  def aliasResolvedDomainLookup(
+      profiled: ProfiledService,
+      optionWrap: Option[String => String] = None
+  ): Map[String, String] =
     val base = profiled.profile.typeMap.map((k, v) => k -> v.domain)
     val aliasExprs =
       svcTypeAliases(profiled.ir).map(a => talName(a) -> talType(a)).toMap
@@ -34,8 +38,27 @@ private[codegen] object EmitShared:
             if seen(n) then None
             else aliasExprs.get(n).flatMap(resolve(_, seen + n))
           )
+      case OptionTypeF(inner, _) =>
+        optionWrap.flatMap(w => resolve(inner, seen).map(w))
       case _ => None
     base ++ aliasExprs.flatMap((n, t) => resolve(t, Set.empty).map(n -> _))
 
+  def paramType(
+      te: type_expr,
+      lookup: Map[String, String],
+      default: String,
+      optionWrap: String => String
+  ): String = te match
+    case NamedTypeF(n, _)      => lookup.getOrElse(n, default)
+    case OptionTypeF(inner, _) => optionWrap(paramType(inner, lookup, default, optionWrap))
+    case _                     => default
+
   def redirectTargetColumn(entity: ProfiledEntity): Option[String] =
     List("url", "location", "redirect_url").find(c => entity.fields.exists(_.columnName == c))
+
+  // The row-lookup column for single-row routes: the first path param when it
+  // names an entity column, otherwise the primary key.
+  def lookupColumn(entity: ProfiledEntity, firstPathParam: Option[String]): String =
+    firstPathParam match
+      case Some(p) if entity.fields.exists(_.columnName == p) => p
+      case _                                                  => "id"
