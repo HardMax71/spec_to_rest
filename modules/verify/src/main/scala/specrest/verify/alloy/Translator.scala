@@ -99,8 +99,7 @@ object Translator:
         Right(AlloyModule(
           name = sanitizeName(svcName(ir)),
           sigs = buildSigs(ctx),
-          facts = operRequires(op).zipWithIndex.map: (r, i) =>
-            AlloyFact(Some(s"${operName(op)}_requires_$i"), renderExpr(ctx, r), r.spanOpt),
+          facts = requiresFacts(ctx, op),
           commands =
             List(AlloyCommand(s"${operName(op)}_requires", AlloyCommandKind.Run, "", scope))
         ))
@@ -113,9 +112,8 @@ object Translator:
   ): IO[Either[VerifyError.AlloyTranslator, AlloyModule]] =
     IO.delay {
       boundary:
-        val ctx = buildCtxWithInputs(ir, op)
-        val reqFacts = operRequires(op).zipWithIndex.map: (r, i) =>
-          AlloyFact(Some(s"${operName(op)}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
+        val ctx      = buildCtxWithInputs(ir, op)
+        val reqFacts = requiresFacts(ctx, op)
         Right(AlloyModule(
           name = sanitizeName(svcName(ir)),
           sigs = buildSigs(ctx),
@@ -129,6 +127,10 @@ object Translator:
       .map(sf => stfName(sf) -> stfType(sf))
     val inputFields = operInputs(op).map(p => prmName(p) -> prmType(p))
     Ctx(ir, stateFields.toMap, inputFields.toMap)
+
+  private def requiresFacts(ctx: Ctx, op: operation_decl)(using AlloyLabel): List[AlloyFact] =
+    operRequires(op).zipWithIndex.map: (r, i) =>
+      AlloyFact(Some(s"${operName(op)}_requires_$i"), renderExpr(ctx, r), r.spanOpt)
 
   private def invariantFacts(ctx: Ctx, ir: service_ir)(using AlloyLabel): List[AlloyFact] =
     svcInvariants(ir).zipWithIndex.map { case (inv, i) =>
@@ -157,8 +159,7 @@ object Translator:
             AlloyFact(Some(s"${n}_pre"), renderExpr(preCtx, invBody(preInv)), invSpan(preInv))
         }
 
-        val requiresFacts = operRequires(op).zipWithIndex.map: (r, i) =>
-          AlloyFact(Some(s"${operName(op)}_requires_$i"), renderExpr(preCtx, r), r.spanOpt)
+        val opRequiresFacts = requiresFacts(preCtx, op)
 
         val ensuresFacts = operEnsures(op).zipWithIndex.map: (e, i) =>
           AlloyFact(Some(s"${operName(op)}_ensures_$i"), renderExpr(postCtx, e), e.spanOpt)
@@ -182,8 +183,9 @@ object Translator:
           invSpan(inv)
         )
 
-        val allFacts = invariantsPre ++ requiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
-        val cmdName  = s"${operName(op)}_preserves_$invariantName"
+        val allFacts =
+          invariantsPre ++ opRequiresFacts ++ ensuresFacts ++ frameFacts :+ postViolation
+        val cmdName = s"${operName(op)}_preserves_$invariantName"
         Right(AlloyModule(
           name = sanitizeName(svcName(ir)),
           sigs = sigs,

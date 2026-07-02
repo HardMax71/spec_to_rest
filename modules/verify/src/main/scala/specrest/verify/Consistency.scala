@@ -276,12 +276,7 @@ object Consistency:
   ): List[RelatedSpan] =
     if result.corePositions.isEmpty then Nil
     else
-      val noteForKind = kind match
-        case CheckKind.Global       => "contributing invariant"
-        case CheckKind.Requires     => "contributing requires clause"
-        case CheckKind.Enabled      => "contributing assertion"
-        case CheckKind.Preservation => "contributing assertion"
-        case CheckKind.Temporal     => "contributing assertion"
+      val noteForKind = contributionNote(kind)
       // De-duplicate by spec span; multiple Pos entries can map to the same fact.
       val seen = scala.collection.mutable.LinkedHashSet.empty[span_t]
       for
@@ -306,12 +301,7 @@ object Consistency:
   ): List[RelatedSpan] =
     if result.unsatCoreTrackers.isEmpty then Nil
     else
-      val noteForKind = kind match
-        case CheckKind.Global       => "contributing invariant"
-        case CheckKind.Requires     => "contributing requires clause"
-        case CheckKind.Enabled      => "contributing assertion"
-        case CheckKind.Preservation => "contributing assertion"
-        case CheckKind.Temporal     => "contributing assertion"
+      val noteForKind = contributionNote(kind)
       result.unsatCoreTrackers.flatMap: name =>
         name.stripPrefix("_t_").toIntOption.flatMap: idx =>
           script.assertions.lift(idx).flatMap(_.spanOpt).map: span =>
@@ -871,63 +861,51 @@ object Consistency:
       trust = trust
     )
 
+  private def contributionNote(kind: CheckKind): String = kind match
+    case CheckKind.Global       => "contributing invariant"
+    case CheckKind.Requires     => "contributing requires clause"
+    case CheckKind.Enabled      => "contributing assertion"
+    case CheckKind.Preservation => "contributing assertion"
+    case CheckKind.Temporal     => "contributing assertion"
+
   private def detailFor(
       kind: CheckKind,
       op: Option[String],
       inv: Option[String],
       outcome: CheckOutcome
-  ): Option[String] = kind match
-    case CheckKind.Preservation =>
-      outcome match
-        case CheckOutcome.Sat => None
-        case CheckOutcome.Unsat =>
-          Some(
-            s"operation '${op.getOrElse("?")}' does not preserve invariant '${inv.getOrElse("?")}' — counterexample found"
-          )
-        case CheckOutcome.Unknown =>
-          Some(
-            s"solver could not decide preservation of invariant '${inv.getOrElse("?")}' by operation '${op.getOrElse("?")}'"
-          )
-        case CheckOutcome.Skipped => None
-    case CheckKind.Global =>
-      outcome match
-        case CheckOutcome.Sat => None
-        case CheckOutcome.Unsat =>
-          Some("invariants are jointly contradictory — no valid state exists")
-        case CheckOutcome.Unknown =>
-          Some("solver could not decide invariant satisfiability within the timeout")
-        case CheckOutcome.Skipped => None
-    case CheckKind.Requires =>
-      outcome match
-        case CheckOutcome.Sat => None
-        case CheckOutcome.Unsat =>
-          Some(
-            s"'requires' of operation '${op.getOrElse("?")}' is unsatisfiable under the spec's base constraints — the operation can never fire"
-          )
-        case CheckOutcome.Unknown =>
-          Some(
-            s"solver could not decide 'requires' satisfiability for operation '${op.getOrElse("?")}'"
-          )
-        case CheckOutcome.Skipped => None
-    case CheckKind.Enabled =>
-      outcome match
-        case CheckOutcome.Sat => None
-        case CheckOutcome.Unsat =>
-          Some(
-            s"operation '${op.getOrElse("?")}' is dead — no valid pre-state satisfies both the invariants and its 'requires'"
-          )
-        case CheckOutcome.Unknown =>
-          Some(s"solver could not decide enablement for operation '${op.getOrElse("?")}'")
-        case CheckOutcome.Skipped => None
-    case CheckKind.Temporal =>
-      outcome match
-        case CheckOutcome.Sat => None
-        case CheckOutcome.Unsat =>
-          Some(
-            s"temporal property '${inv.getOrElse("?")}' does not hold under the invariants at the current Alloy scope"
-          )
-        case CheckOutcome.Unknown =>
-          Some(
-            s"solver could not decide temporal property '${inv.getOrElse("?")}' within the timeout"
-          )
-        case CheckOutcome.Skipped => None
+  ): Option[String] = (kind, outcome) match
+    case (_, CheckOutcome.Sat | CheckOutcome.Skipped) => None
+    case (CheckKind.Preservation, CheckOutcome.Unsat) =>
+      Some(
+        s"operation '${op.getOrElse("?")}' does not preserve invariant '${inv.getOrElse("?")}' — counterexample found"
+      )
+    case (CheckKind.Preservation, CheckOutcome.Unknown) =>
+      Some(
+        s"solver could not decide preservation of invariant '${inv.getOrElse("?")}' by operation '${op.getOrElse("?")}'"
+      )
+    case (CheckKind.Global, CheckOutcome.Unsat) =>
+      Some("invariants are jointly contradictory — no valid state exists")
+    case (CheckKind.Global, CheckOutcome.Unknown) =>
+      Some("solver could not decide invariant satisfiability within the timeout")
+    case (CheckKind.Requires, CheckOutcome.Unsat) =>
+      Some(
+        s"'requires' of operation '${op.getOrElse("?")}' is unsatisfiable under the spec's base constraints — the operation can never fire"
+      )
+    case (CheckKind.Requires, CheckOutcome.Unknown) =>
+      Some(
+        s"solver could not decide 'requires' satisfiability for operation '${op.getOrElse("?")}'"
+      )
+    case (CheckKind.Enabled, CheckOutcome.Unsat) =>
+      Some(
+        s"operation '${op.getOrElse("?")}' is dead — no valid pre-state satisfies both the invariants and its 'requires'"
+      )
+    case (CheckKind.Enabled, CheckOutcome.Unknown) =>
+      Some(s"solver could not decide enablement for operation '${op.getOrElse("?")}'")
+    case (CheckKind.Temporal, CheckOutcome.Unsat) =>
+      Some(
+        s"temporal property '${inv.getOrElse("?")}' does not hold under the invariants at the current Alloy scope"
+      )
+    case (CheckKind.Temporal, CheckOutcome.Unknown) =>
+      Some(
+        s"solver could not decide temporal property '${inv.getOrElse("?")}' within the timeout"
+      )

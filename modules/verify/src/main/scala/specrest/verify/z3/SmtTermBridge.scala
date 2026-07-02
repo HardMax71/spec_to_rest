@@ -42,13 +42,8 @@ private[z3] trait SmtTermBridge:
   ): Z3Expr =
     val lz = encodeFromSmtTerm(ctx, l, env)
     val rz = encodeFromSmtTerm(ctx, r, env)
-    def isStr(z: Z3Expr): Boolean =
-      inferSortOfZ3Expr(ctx, z) match
-        case Some(Z3Sort.Str) => true
-        case _                => false
-    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
-    if isStr(lz) && isStr(rz) then Z3Expr.StrCmp(op, lz, rz)
-    else if isNum(lz) && isNum(rz) then Z3Expr.Cmp(op, lz, rz)
+    if isStrSorted(ctx, lz) && isStrSorted(ctx, rz) then Z3Expr.StrCmp(op, lz, rz)
+    else if isNumericSorted(ctx, lz) && isNumericSorted(ctx, rz) then Z3Expr.Cmp(op, lz, rz)
     else fail(ctx, "ordering requires two numeric (Int or Real) operands or two String operands")
 
   // Equality/inequality of a verified TEq: coerce a base-vs-optional pair (e.g. `todo.title = title`
@@ -76,24 +71,16 @@ private[z3] trait SmtTermBridge:
   ): Z3Expr =
     val lz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, l, env))
     val rz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, r, env))
-    def isStr(z: Z3Expr): Boolean =
-      inferSortOfZ3Expr(ctx, z) match
-        case Some(Z3Sort.Str) => true
-        case _                => false
-    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
     def isSeq(z: Z3Expr): Boolean =
       inferSortOfZ3Expr(ctx, z) match
         case Some(Z3Sort.SeqOf(_)) => true
         case _                     => false
-    // `set + set` is set union (e.g. `items + {item}`); both operands must share an element sort.
-    def sameSet(a: Z3Expr, b: Z3Expr): Boolean =
-      (inferSortOfZ3Expr(ctx, a), inferSortOfZ3Expr(ctx, b)) match
-        case (Some(Z3Sort.SetOf(ae)), Some(Z3Sort.SetOf(be))) => Z3Sort.eq(ae, be)
-        case _                                                => false
-    if isStr(lz) && isStr(rz) then Z3Expr.StrConcat(lz, rz)
+    if isStrSorted(ctx, lz) && isStrSorted(ctx, rz) then Z3Expr.StrConcat(lz, rz)
     else if isSeq(lz) && isSeq(rz) then Z3Expr.SeqConcat(lz, rz)
-    else if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Add, List(lz, rz))
-    else if sameSet(lz, rz) then Z3Expr.SetBinOp(SetOpKind.Union, lz, rz)
+    else if isNumericSorted(ctx, lz) && isNumericSorted(ctx, rz) then
+      Z3Expr.Arith(ArithOp.Add, List(lz, rz))
+    // `set + set` is set union (e.g. `items + {item}`); both operands must share an element sort.
+    else if sameElemSet(ctx, lz, rz) then Z3Expr.SetBinOp(SetOpKind.Union, lz, rz)
     else
       fail(
         ctx,
@@ -106,16 +93,12 @@ private[z3] trait SmtTermBridge:
       r: smt_term,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val lz                        = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, l, env))
-    val rz                        = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, r, env))
-    def isNum(z: Z3Expr): Boolean = inferSortOfZ3Expr(ctx, z).exists(Z3Sort.isNumeric)
+    val lz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, l, env))
+    val rz = coerceOptionalNumeric(ctx, encodeFromSmtTerm(ctx, r, env))
+    if isNumericSorted(ctx, lz) && isNumericSorted(ctx, rz) then
+      Z3Expr.Arith(ArithOp.Sub, List(lz, rz))
     // `set - set` is set difference (e.g. `items - {removed}`); both operands must share an element sort.
-    def sameSet(a: Z3Expr, b: Z3Expr): Boolean =
-      (inferSortOfZ3Expr(ctx, a), inferSortOfZ3Expr(ctx, b)) match
-        case (Some(Z3Sort.SetOf(ae)), Some(Z3Sort.SetOf(be))) => Z3Sort.eq(ae, be)
-        case _                                                => false
-    if isNum(lz) && isNum(rz) then Z3Expr.Arith(ArithOp.Sub, List(lz, rz))
-    else if sameSet(lz, rz) then Z3Expr.SetBinOp(SetOpKind.Diff, lz, rz)
+    else if sameElemSet(ctx, lz, rz) then Z3Expr.SetBinOp(SetOpKind.Diff, lz, rz)
     else
       fail(ctx, "subtraction requires two numeric (Int or Real) or two Set operands")
 
@@ -190,13 +173,8 @@ private[z3] trait SmtTermBridge:
       case RLit(r) =>
         val (num, den) = quotient_of(r)
         Z3Expr.RealLit(num, den)
-      case TVar(name) => resolveIdentifier(ctx, name, env)
-      case EnumElemConst(en, mem) =>
-        val funcName = s"${en}_$mem"
-        if !ctx.funcs.contains(funcName) then
-          val resultSort = ctx.enums.get(en).map(_.sort).getOrElse(Z3Sort.Uninterp(en))
-          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
-        Z3Expr.App(funcName, Nil)
+      case TVar(name)             => resolveIdentifier(ctx, name, env)
+      case EnumElemConst(en, mem) => enumMemberApp(ctx, en, mem)
 
       case TNot(TEq(l, r)) => encEq(ctx, CmpOp.Neq, l, r, env)
       case TOr(TLt(a1, b1), TEq(a2, b2)) if a1 == a2 && b1 == b2 =>
@@ -325,63 +303,31 @@ private[z3] trait SmtTermBridge:
           case Some(Z3Sort.SetOf(e)) => e
           case _ =>
             fail(ctx, "definite description `the` requires a set-sorted domain")
-        // a Skolem constant denotes "the unique element" only at quantifier-free position;
-        // under a binder it would need a Skolem function of the bound vars (mirrors TTheRel)
-        if env.values.exists { case _: Z3Expr.Var => true; case _ => false } then
-          fail(ctx, "definite description `the` is not supported under a quantifier")
-        val skolemName = ctx.freshSkolem(s"the_set_$varName")
-        ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, elemSort))
-        val c    = Z3Expr.App(skolemName, Nil)
-        val envC = env.clone()
-        envC(varName) = c
-        val bodyC = encodeFromSmtTerm(ctx, body, envC)
-        ctx.assertions += Z3Expr.And(List(Z3Expr.SetMember(c, setZ), bodyC))
-        val wName = ctx.freshSkolem(s"the_set_witness_$varName")
-        val w     = Z3Expr.Var(wName, elemSort)
-        val envW  = env.clone()
-        envW(varName) = w
-        val bodyW = encodeFromSmtTerm(ctx, body, envW)
-        ctx.assertions += Z3Expr.Quantifier(
-          QKind.ForAll,
-          List(Z3Binding(wName, elemSort)),
-          Z3Expr.Implies(
-            Z3Expr.And(List(Z3Expr.SetMember(w, setZ), bodyW)),
-            Z3Expr.Cmp(CmpOp.Eq, w, c)
-          )
+        definiteDescription(
+          ctx,
+          env,
+          varName,
+          elemSort,
+          body,
+          z => Z3Expr.SetMember(z, setZ),
+          s"the_set_$varName",
+          s"the_set_witness_$varName"
         )
-        c
 
       case TTheRel(varName, rel, body) =>
         ctx.state.get(rel) match
-          case Some(_: StateRelationInfo)
-              if env.values.exists { case _: Z3Expr.Var => true; case _ => false } =>
-            // a Skolem constant only denotes "the unique element" at quantifier-free
-            // position; under a binder it would need a Skolem function of the bound vars
-            fail(ctx, "definite description `the` is not supported under a quantifier")
           case Some(r: StateRelationInfo) =>
-            val mode       = ctx.stateMode
-            val sort       = r.keySort
-            val skolemName = ctx.freshSkolem(s"the_$rel")
-            ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, sort))
-            val c    = Z3Expr.App(skolemName, Nil)
-            val envC = env.clone()
-            envC(varName) = c
-            val bodyC = encodeFromSmtTerm(ctx, body, envC)
-            ctx.assertions += Z3Expr.And(List(Z3Expr.App(domFuncFor(r, mode), List(c)), bodyC))
-            val wName = ctx.freshSkolem(s"the_witness_$rel")
-            val w     = Z3Expr.Var(wName, sort)
-            val envW  = env.clone()
-            envW(varName) = w
-            val bodyW = encodeFromSmtTerm(ctx, body, envW)
-            ctx.assertions += Z3Expr.Quantifier(
-              QKind.ForAll,
-              List(Z3Binding(wName, sort)),
-              Z3Expr.Implies(
-                Z3Expr.And(List(Z3Expr.App(domFuncFor(r, mode), List(w)), bodyW)),
-                Z3Expr.Cmp(CmpOp.Eq, w, c)
-              )
+            val mode = ctx.stateMode
+            definiteDescription(
+              ctx,
+              env,
+              varName,
+              r.keySort,
+              body,
+              z => Z3Expr.App(domFuncFor(r, mode), List(z)),
+              s"the_$rel",
+              s"the_witness_$rel"
             )
-            c
           case _ =>
             fail(
               ctx,
@@ -536,62 +482,58 @@ private[z3] trait SmtTermBridge:
       case TStrLit(s) =>
         Z3Expr.StrLit(s)
       case TMatches(t, pat) =>
-        val strZ    = encodeFromSmtTerm(ctx, t, env)
-        val strSort = inferSortOfZ3Expr(ctx, strZ)
-        (strSort, RegexParser.parse(pat)) match
-          case (Some(Z3Sort.Str), Some(re)) => Z3Expr.InRe(strZ, re)
-          case _                            =>
-            // `str.in_re` needs a String operand and a supported pattern; for a
-            // refinement-alias sort (modelled as its own sort) or an unsupported
-            // pattern, fall back to the sound uninterpreted matcher
-            val s        = strSort.getOrElse(Z3Sort.Str)
-            val funcName = s"${ctx.matchesNameFor(pat)}_${sortNameOf(s)}"
-            if !ctx.funcs.contains(funcName) then
-              ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
-            Z3Expr.App(funcName, List(strZ))
+        val strZ = encodeFromSmtTerm(ctx, t, env)
+        encodeMatches(ctx, strZ, inferSortOfZ3Expr(ctx, strZ), pat)
       case TUStrPred(name, t) =>
-        val strZ     = encodeFromSmtTerm(ctx, t, env)
-        val s        = inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str)
-        val funcName = s"${name}_${sortNameOf(s)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
-        Z3Expr.App(funcName, List(strZ))
+        val strZ = encodeFromSmtTerm(ctx, t, env)
+        uninterpUnaryApp(
+          ctx,
+          name,
+          strZ,
+          inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str),
+          Z3Sort.Bool
+        )
       // 1-arg reserved builtin string function (e.g. hash(x)): an uninterpreted Str-valued function.
       // Same name mangling as TUStrPred; determinism (same input -> same output) is the functionality.
       case TUStrFunc(name, t) =>
-        val strZ     = encodeFromSmtTerm(ctx, t, env)
-        val s        = inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str)
-        val funcName = s"${name}_${sortNameOf(s)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Str))
-        Z3Expr.App(funcName, List(strZ))
+        val strZ = encodeFromSmtTerm(ctx, t, env)
+        uninterpUnaryApp(
+          ctx,
+          name,
+          strZ,
+          inferSortOfZ3Expr(ctx, strZ).getOrElse(Z3Sort.Str),
+          Z3Sort.Str
+        )
       // 1-arg reserved builtin int function (e.g. days(n)): an uninterpreted Int-valued function.
       // Same name mangling as TUStrFunc; determinism (same input -> same output) is the functionality.
       case TUIntFunc(name, t) =>
-        val argZ     = encodeFromSmtTerm(ctx, t, env)
-        val s        = inferSortOfZ3Expr(ctx, argZ).getOrElse(Z3Sort.Int)
-        val funcName = s"${name}_${sortNameOf(s)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
-        Z3Expr.App(funcName, List(argZ))
+        val argZ = encodeFromSmtTerm(ctx, t, env)
+        uninterpUnaryApp(
+          ctx,
+          name,
+          argZ,
+          inferSortOfZ3Expr(ctx, argZ).getOrElse(Z3Sort.Int),
+          Z3Sort.Int
+        )
       // len(s): an uninterpreted Int-valued function, like the builtins above. Native Z3 str.len
       // forces the string solver to materialise concrete strings of the constrained length (e.g.
       // `len(token) = 128` with `distinct` tokens), which blows up by ~75x on string-heavy specs;
       // the functional dependency (same string -> same length) is all the refinement constraints
       // (`= 64`, `>= 8`) need, and `len` is vacuous-on-eval so the proof does not constrain this.
       case TStrLen(t) =>
-        val argZ     = encodeFromSmtTerm(ctx, t, env)
-        val s        = inferSortOfZ3Expr(ctx, argZ).getOrElse(Z3Sort.Str)
-        val funcName = s"len_${sortNameOf(s)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
-        Z3Expr.App(funcName, List(argZ))
+        val argZ = encodeFromSmtTerm(ctx, t, env)
+        uninterpUnaryApp(
+          ctx,
+          "len",
+          argZ,
+          inferSortOfZ3Expr(ctx, argZ).getOrElse(Z3Sort.Str),
+          Z3Sort.Int
+        )
       // 0-arg reserved builtin (e.g. now()): an uninterpreted Int constant. The `${name}_0`
       // name matches translateCall's argSortsMangled, so the in-subset and raw paths share it.
       case TUConst(name) =>
         val funcName = s"${name}_0"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Int))
+        ctx.declareFunc(Z3FunctionDecl(funcName, Nil, Z3Sort.Int))
         Z3Expr.App(funcName, Nil)
       // sum(coll, i => body): an uninterpreted Int-valued function keyed by the lambda body and the
       // collection sort. Same collection + same body => same sum (a functional dependency), so
@@ -603,8 +545,7 @@ private[z3] trait SmtTermBridge:
         inferSortOfZ3Expr(ctx, collZ) match
           case Some(s) =>
             val funcName = s"aggsum_${ctx.aggSumKeyFor(body.toString)}_${sortNameOf(s)}"
-            if !ctx.funcs.contains(funcName) then
-              ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
+            ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Int))
             Z3Expr.App(funcName, List(collZ))
           case None =>
             fail(ctx, "cannot infer collection sort for sum aggregate")
@@ -721,3 +662,42 @@ private[z3] trait SmtTermBridge:
     if mismatch >= 0 then
       fail(ctx, "set literal elements must all have the same sort")
     (elemSort, encoded)
+
+  // Two-phase definite description shared by TTheSet/TTheRel: a fresh Skolem
+  // constant asserted to satisfy the domain guard and the body, then a
+  // uniqueness forall collapsing every witness onto it. Only legal at
+  // quantifier-free position: under a binder the constant would need to be a
+  // Skolem function of the bound variables.
+  private[z3] def definiteDescription(
+      ctx: TranslateCtx,
+      env: mutable.Map[String, Z3Expr],
+      varName: String,
+      elemSort: Z3Sort,
+      body: smt_term,
+      domGuard: Z3Expr => Z3Expr,
+      constPrefix: String,
+      witnessPrefix: String
+  ): Z3Expr =
+    if env.values.exists { case _: Z3Expr.Var => true; case _ => false } then
+      fail(ctx, "definite description `the` is not supported under a quantifier")
+    val skolemName = ctx.freshSkolem(constPrefix)
+    ctx.declareFunc(Z3FunctionDecl(skolemName, Nil, elemSort))
+    val c    = Z3Expr.App(skolemName, Nil)
+    val envC = env.clone()
+    envC(varName) = c
+    val bodyC = encodeFromSmtTerm(ctx, body, envC)
+    ctx.assertions += Z3Expr.And(List(domGuard(c), bodyC))
+    val wName = ctx.freshSkolem(witnessPrefix)
+    val w     = Z3Expr.Var(wName, elemSort)
+    val envW  = env.clone()
+    envW(varName) = w
+    val bodyW = encodeFromSmtTerm(ctx, body, envW)
+    ctx.assertions += Z3Expr.Quantifier(
+      QKind.ForAll,
+      List(Z3Binding(wName, elemSort)),
+      Z3Expr.Implies(
+        Z3Expr.And(List(domGuard(w), bodyW)),
+        Z3Expr.Cmp(CmpOp.Eq, w, c)
+      )
+    )
+    c
