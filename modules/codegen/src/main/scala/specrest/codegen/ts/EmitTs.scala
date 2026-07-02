@@ -30,6 +30,8 @@ import specrest.profile.ProfiledField
 import specrest.profile.ProfiledOperation
 import specrest.profile.ProfiledService
 
+import java.util.Locale
+
 final private case class TsCustomSchema(name: String, fields: List[TsFieldView])
 
 final private case class TsFieldView(
@@ -693,7 +695,7 @@ object EmitTs:
   )
 
   private def prismaTypeFor(sqlColumnType: String): String =
-    PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.typeName).getOrElse("String")
+    PrismaSqlTypes.get(sqlColumnType.toUpperCase(Locale.ROOT)).map(_.typeName).getOrElse("String")
 
   private def prismaAttrs(f: ProfiledField, tsName: String, nativeAttrs: Boolean): String =
     val mapAttr =
@@ -703,7 +705,7 @@ object EmitTs:
     List(mapAttr, nativeAttr).filter(_.nonEmpty).mkString(" ")
 
   private def nativePrismaAttr(sqlColumnType: String): String =
-    PrismaSqlTypes.get(sqlColumnType.toUpperCase).map(_.dbAttr).getOrElse("")
+    PrismaSqlTypes.get(sqlColumnType.toUpperCase(Locale.ROOT)).map(_.dbAttr).getOrElse("")
 
   private def zodSchemaFor(f: ProfiledField): String =
     val base = baseZod(f.domainType)

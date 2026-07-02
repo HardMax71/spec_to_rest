@@ -3,6 +3,8 @@ package specrest.codegen
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledOperation
 
+import java.util.Locale
+
 object AuthSchemes:
 
   // One credential slot per configuration value a scheme needs. The env-var
@@ -21,10 +23,10 @@ object AuthSchemes:
     def envKey: String = this match
       case JwtSecret        => "JWT_SECRET"
       case JwtAlgorithm     => "JWT_ALGORITHM"
-      case Token(s)         => s"AUTH_TOKEN_${s.toUpperCase}"
-      case Key(s)           => s"AUTH_KEY_${s.toUpperCase}"
-      case BasicUsername(s) => s"AUTH_BASIC_${s.toUpperCase}_USERNAME"
-      case BasicPassword(s) => s"AUTH_BASIC_${s.toUpperCase}_PASSWORD"
+      case Token(s)         => s"AUTH_TOKEN_${s.toUpperCase(Locale.ROOT)}"
+      case Key(s)           => s"AUTH_KEY_${s.toUpperCase(Locale.ROOT)}"
+      case BasicUsername(s) => s"AUTH_BASIC_${s.toUpperCase(Locale.ROOT)}_USERNAME"
+      case BasicPassword(s) => s"AUTH_BASIC_${s.toUpperCase(Locale.ROOT)}_PASSWORD"
 
   def credSlots(ir: ServiceIRFull): List[CredSlot] =
     val jwtPair =
