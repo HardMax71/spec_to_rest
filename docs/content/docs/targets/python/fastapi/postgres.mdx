@@ -284,6 +284,10 @@ Prometheus text format via `prometheus-client`: `http_requests_total` and
 and status code, counted in a middleware `finally` so requests that raise are observed as
 500s. The generated `tests/test_health.py` covers all three.
 
+Tracing is opt-in. With `OTEL_EXPORTER_OTLP_ENDPOINT` set, the app instruments itself with
+`FastAPIInstrumentor` and exports OTLP/HTTP spans named by route template; unset, nothing is
+wired. `OTEL_SERVICE_NAME` overrides the default service name.
+
 ### Docker image
 
 Two-stage build. `uv` is copied from the upstream image; app runs as non-root `appuser`;

@@ -107,6 +107,10 @@ only. A `trackRequests` middleware records `http_requests_total` and
 outside `Recoverer` in the middleware chain so a panicking request is still counted as the
 500 Recoverer writes.
 
+Tracing is opt-in. With `OTEL_EXPORTER_OTLP_ENDPOINT` set, `otelhttp.NewHandler` wraps the
+router and exports OTLP/HTTP spans, renamed to `METHOD /route/{pattern}` once chi has routed;
+unset, nothing is wired. `OTEL_SERVICE_NAME` overrides the default service name.
+
 ## Dafny → Go integration
 
 When `compile --framework chi --db postgres --with-synthesis` is invoked and the verified-body cache
