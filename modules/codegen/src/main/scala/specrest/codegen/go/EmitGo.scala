@@ -84,7 +84,6 @@ final private case class GoOperation(
 )
 
 final private case class GoEntityCtx(
-    service: GoServiceNames,
     module: String,
     entity: ProfiledEntity,
     entitySnake: String,
@@ -114,10 +113,6 @@ final private case class GoEntityCtx(
     handlerImports: String
 )
 
-final private case class GoServiceNames(name: String, snakeName: String, kebabName: String)
-
-final private case class GoComposeEnv(key: String, value: String)
-
 final private case class GoDbView(
     id: String,
     databaseImports: String,
@@ -133,7 +128,7 @@ final private case class GoDbView(
     dbPort: String,
     dbVolumePath: String,
     dbHealthCmd: String,
-    composeEnv: List[GoComposeEnv],
+    composeEnv: List[specrest.codegen.migration.ComposeEnv],
     dsnRecipe: Option[specrest.codegen.Dsn.Recipe]
 )
 
@@ -149,7 +144,7 @@ final private case class GoScalarOpView(
 )
 
 final private case class GoProjectCtx(
-    service: GoServiceNames,
+    service: specrest.codegen.ServiceNames,
     module: String,
     entities: List[GoEntityCtx],
     needsTime: Boolean,
@@ -168,11 +163,7 @@ object EmitGo:
     val templates = GoTemplates.goChiPostgres
     val ctx       = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val module    = goModuleName(ctx.service.kebabName)
-    val service = GoServiceNames(
-      name = ctx.service.name,
-      snakeName = ctx.service.snakeName,
-      kebabName = ctx.service.kebabName
-    )
+    val service   = ctx.service
 
     val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled)
 
@@ -322,14 +313,8 @@ object EmitGo:
   private def goDbView(database: String, snake: String): GoDbView = database match
     case "postgres" =>
       val dv = specrest.codegen.migration.Postgres.deployment(snake)
-      val recipe = specrest.codegen.Dsn.Recipe(
-        spec = specrest.codegen.Dsn.Spec(
-          shape = specrest.codegen.Dsn.Shape.Url("postgres"),
-          port = 5432,
-          suffix = "?sslmode=disable"
-        ),
-        secrets = specrest.codegen.Dsn.Secrets("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB")
-      )
+      val recipe = specrest.codegen.Dsn
+        .postgresRecipe(specrest.codegen.Dsn.Shape.Url("postgres"), "?sslmode=disable")
       GoDbView(
         id = dv.id,
         databaseImports = importBlock(
@@ -351,7 +336,7 @@ object EmitGo:
         dbPort = dv.dbPort,
         dbVolumePath = dv.dbVolumePath,
         dbHealthCmd = dv.dbHealthCmd,
-        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = Some(recipe)
       )
     case "sqlite" =>
@@ -377,19 +362,13 @@ object EmitGo:
         dbPort = dv.dbPort,
         dbVolumePath = dv.dbVolumePath,
         dbHealthCmd = dv.dbHealthCmd,
-        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = None
       )
     case "mysql" =>
       val dv = specrest.codegen.migration.Mysql.deployment(snake)
-      val recipe = specrest.codegen.Dsn.Recipe(
-        spec = specrest.codegen.Dsn.Spec(
-          shape = specrest.codegen.Dsn.Shape.MysqlGo,
-          port = 3306,
-          suffix = "?parseTime=true"
-        ),
-        secrets = specrest.codegen.Dsn.Secrets("MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE")
-      )
+      val recipe = specrest.codegen.Dsn
+        .mysqlRecipe(specrest.codegen.Dsn.Shape.MysqlGo, "?parseTime=true")
       GoDbView(
         id = dv.id,
         databaseImports = importBlock(
@@ -411,7 +390,7 @@ object EmitGo:
         dbPort = dv.dbPort,
         dbVolumePath = dv.dbVolumePath,
         dbHealthCmd = dv.dbHealthCmd,
-        composeEnv = dv.composeEnv.map(e => GoComposeEnv(e.key, e.value)),
+        composeEnv = dv.composeEnv,
         dsnRecipe = Some(recipe)
       )
     case other =>
@@ -586,8 +565,6 @@ object EmitGo:
       )
 
     GoEntityCtx(
-      service =
-        GoServiceNames(entity.entityName, entitySnake, Naming.toKebabCase(entity.entityName)),
       module = module,
       entity = entity,
       entitySnake = entitySnake,
@@ -686,9 +663,7 @@ object EmitGo:
 
     val nonIdFields   = entity.fields.filterNot(_.fieldName == "id").map(toGoField)
     val createAssigns = nonIdFields.map(f => s"${f.goField}: body.${f.goField}")
-    val lookupCol = pathParams.headOption match
-      case Some(p) if entity.fields.exists(_.columnName == p.name) => p.name
-      case _                                                       => "id"
+    val lookupCol     = EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name))
 
     val method  = HttpMethods.upper(endpoint.method)
     val chiPath = endpoint.path
@@ -706,11 +681,7 @@ object EmitGo:
           case None =>
             (entity.createSchemaName, List.empty[GoFieldView])
           case Some(name) =>
-            val pathParamNames = endpoint.pathParams.map(_.name).toSet
-            val fields = op.requestBodyFields
-              .filterNot(f => pathParamNames.contains(f.fieldName))
-              .map(toGoField)
-            (name, fields)
+            (name, OperationContext.customRequestBodyFields(op).map(toGoField))
 
     val pathParamCallArgs  = pathParams.map(_.goName).mkString(", ")
     val pathParamSignature = pathParams.map(p => s"${p.goName} ${p.domainType}").mkString(", ")
@@ -818,19 +789,13 @@ object EmitGo:
   private def goScalarOp(v: ScalarOpView): GoScalarOpView =
     val ep           = v.operation.endpoint
     val methodPascal = HttpMethods.pascal(ep.method)
-    val setSql = v.updates
-      .map(u => s"${u.columnName} = ${ScalarOps.renderRhs(u.rhs, u.columnName)}")
-      .mkString(", ")
-    val whereSql =
-      ("id = 1" :: v.guards.map(g => s"${g.columnName} ${ScalarOps.sqlCmp(g.cmp)} ${g.lit}"))
-        .mkString(" AND ")
     GoScalarOpView(
       handlerName = Naming.toPascalCase(v.operation.operationName, Naming.PascalStrategy.Go),
       methodPascal = methodPascal,
       chiPath = ep.path,
       successStatus = ep.successStatus,
-      setSql = setSql,
-      whereSql = whereSql,
+      setSql = ScalarOps.updateSetSql(v),
+      whereSql = ScalarOps.guardWhereSql(v),
       guardPretty = v.guardPretty,
       authMiddleware = Option.when(v.operation.requiresAuth.nonEmpty)(
         s"auth.${SecurityGo.middlewareName(v.operation.requiresAuth)}(cfg)"
@@ -958,10 +923,7 @@ object EmitGo:
         |$methods""".stripMargin
 
   private def goTypeForParam(typeExpr: type_expr, typeLookup: Map[String, String]): String =
-    typeExpr match
-      case NamedTypeF(n, _)      => typeLookup.getOrElse(n, "string")
-      case OptionTypeF(inner, _) => s"*${goTypeForParam(inner, typeLookup)}"
-      case _                     => "string"
+    EmitShared.paramType(typeExpr, typeLookup, "string", t => s"*$t")
 
   // Idiomatic-Go <-> Dafny-runtime converters keyed by the Go domain type. The empty pair marks a
   // type whose Go and Dafny representations coincide (bool), so no conversion call is emitted.

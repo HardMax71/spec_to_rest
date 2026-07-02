@@ -10,15 +10,12 @@ import specrest.codegen.ExtensionStub
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
-import specrest.codegen.RenderProfile
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
 import specrest.codegen.SensitiveFields
-import specrest.codegen.ServiceNames
 import specrest.codegen.TemplateEngine
 import specrest.codegen.Templates
-import specrest.codegen.alembic.AlembicMigration
 import specrest.codegen.alembic.BuildMigrationOptions
 import specrest.codegen.alembic.Migration
 import specrest.codegen.migration.AlembicRenderer
@@ -47,12 +44,6 @@ final case class AlembicDelta(
     upgradeStatements: List[String],
     downgradeStatements: List[String],
     needsPostgresDialect: Boolean
-)
-
-final case class AlembicDeltaCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    migration: AlembicDelta
 )
 
 final case class StateModelCtx(
@@ -144,75 +135,6 @@ final private case class ServiceTemplateImports(
     needsTypingCast: Boolean
 )
 
-final private case class ModelCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
-    endpoints: List[EndpointSpec],
-    schema: database_schema,
-    entity: ProfiledEntity,
-    table: Option[table_spec],
-    entityOperations: List[EnrichedOperation],
-    nonIdFields: List[ProfiledField],
-    sqlalchemyImports: List[String],
-    postgresImports: List[String],
-    stdlibImports: List[StdlibImport]
-)
-
-final private case class SchemaCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
-    endpoints: List[EndpointSpec],
-    schema: database_schema,
-    entity: ProfiledEntity,
-    table: Option[table_spec],
-    entityOperations: List[EnrichedOperation],
-    nonIdFields: List[SchemaFieldView],
-    readFields: List[SchemaFieldView],
-    customRequestSchemas: List[CustomRequestSchema],
-    needsSecretStr: Boolean,
-    stdlibImports: List[StdlibImport]
-)
-
-final private case class RouterCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
-    endpoints: List[EndpointSpec],
-    schema: database_schema,
-    entity: ProfiledEntity,
-    table: Option[table_spec],
-    entityOperations: List[EnrichedOperation],
-    routerImports: RouterTemplateImports
-)
-
-final private case class ServiceCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
-    endpoints: List[EndpointSpec],
-    schema: database_schema,
-    entity: ProfiledEntity,
-    table: Option[table_spec],
-    entityOperations: List[EnrichedOperation],
-    serviceImports: ServiceTemplateImports
-)
-
-final private case class AlembicCtx(
-    service: ServiceNames,
-    profile: RenderProfile,
-    entities: List[ProfiledEntity],
-    operations: List[ProfiledOperation],
-    endpoints: List[EndpointSpec],
-    schema: database_schema,
-    migration: AlembicMigration
-)
-
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object EmitPython:
 
@@ -228,7 +150,7 @@ object EmitPython:
   def emit(profiled: ProfiledService, opts: EmitOptions = EmitOptions()): List[EmittedFile] =
     val ctx        = RenderContext.buildRenderContext(profiled, opts.dafnyKernel)
     val engine     = new TemplateEngine
-    val typeLookup = buildTypeLookup(profiled)
+    val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled, Some(t => s"$t | None"))
     val templates  = Templates.pythonFastapiPostgres
     val dialect    = Dialect.forDatabase(profiled.profile.database)
     val files      = List.newBuilder[EmittedFile]
@@ -306,64 +228,20 @@ object EmitPython:
         nonIdFields.exists(f => SensitiveFields.isSensitive(f.columnName)) ||
           customRequestSchemas.exists(_.fields.exists(_.validationType == "SecretStr"))
 
-      val modelCtx = ModelCtx(
-        service = ctx.service,
-        profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
-        endpoints = ctx.endpoints,
-        schema = ctx.schema,
-        entity = entity,
-        table = table,
-        entityOperations = entityOps,
-        nonIdFields = modelFields,
-        sqlalchemyImports = imports.sqlalchemyImports,
-        postgresImports = imports.postgresImports,
-        stdlibImports = imports.stdlibImports
-      )
-
-      val schemaCtx = SchemaCtx(
-        service = ctx.service,
-        profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
-        endpoints = ctx.endpoints,
-        schema = ctx.schema,
-        entity = entity,
-        table = table,
-        entityOperations = entityOps,
-        nonIdFields = nonIdFieldViews,
-        readFields = readFieldViews,
-        customRequestSchemas = customRequestSchemas,
-        needsSecretStr = needsSecretStr,
-        stdlibImports = schemaStdlib
-      )
-
-      val routerCtx = RouterCtx(
-        service = ctx.service,
-        profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
-        endpoints = ctx.endpoints,
-        schema = ctx.schema,
-        entity = entity,
-        table = table,
-        entityOperations = entityOps,
-        routerImports = routerImports
-      )
-
-      val serviceCtx = ServiceCtx(
-        service = ctx.service,
-        profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
-        endpoints = ctx.endpoints,
-        schema = ctx.schema,
-        entity = entity,
-        table = table,
-        entityOperations = entityOps,
-        serviceImports = serviceImports
-      )
+      val base = entityScope(ctx, entity, table, entityOps)
+      val modelCtx = base +
+        ("nonIdFields"       -> modelFields) +
+        ("sqlalchemyImports" -> imports.sqlalchemyImports) +
+        ("postgresImports"   -> imports.postgresImports) +
+        ("stdlibImports"     -> imports.stdlibImports)
+      val schemaCtx = base +
+        ("nonIdFields"          -> nonIdFieldViews) +
+        ("readFields"           -> readFieldViews) +
+        ("customRequestSchemas" -> customRequestSchemas) +
+        ("needsSecretStr"       -> needsSecretStr) +
+        ("stdlibImports"        -> schemaStdlib)
+      val routerCtx  = base + ("routerImports"  -> routerImports)
+      val serviceCtx = base + ("serviceImports" -> serviceImports)
 
       files += EmittedFile(
         s"app/models/$entitySnake.py",
@@ -396,15 +274,7 @@ object EmitPython:
         BuildMigrationOptions(revision = opts.revision, createdDate = opts.createdDate),
         dialect
       )
-      val alembicCtx = AlembicCtx(
-        service = ctx.service,
-        profile = ctx.profile,
-        entities = ctx.entities,
-        operations = ctx.operations,
-        endpoints = ctx.endpoints,
-        schema = ctx.schema,
-        migration = migration
-      )
+      val alembicCtx = projectScope(ctx) + ("migration" -> migration)
       files += EmittedFile(
         s"alembic/versions/${migration.revision}_initial_schema.py",
         engine.renderAny(templates.alembicMigration, alembicCtx)
@@ -425,10 +295,10 @@ object EmitPython:
           downgradeStatements = AlembicRenderer.downgrade(ops, dialect),
           needsPostgresDialect = Dialect.hasPostgresDialectTypes(ops, dialect)
         )
-        val deltaCtx = AlembicDeltaCtx(
-          service = ctx.service,
-          profile = ctx.profile,
-          migration = delta
+        val deltaCtx = Map[String, Any](
+          "service"   -> ctx.service,
+          "profile"   -> ctx.profile,
+          "migration" -> delta
         )
         files += EmittedFile(
           s"alembic/versions/${nextRev}_schema_update.py",
@@ -504,6 +374,29 @@ object EmitPython:
         Some(s"Database connection string (async SQLAlchemy + ${ctx.profile.dbDriver})")
     )
 
+  // One shared base scope per entity render (the Go and TS emitters use the
+  // same merged-map pattern); each template's extras ride on top.
+  private def projectScope(ctx: RenderContext): Map[String, Any] =
+    Map[String, Any](
+      "service"    -> ctx.service,
+      "profile"    -> ctx.profile,
+      "entities"   -> ctx.entities,
+      "operations" -> ctx.operations,
+      "endpoints"  -> ctx.endpoints,
+      "schema"     -> ctx.schema
+    )
+
+  private def entityScope(
+      ctx: RenderContext,
+      entity: ProfiledEntity,
+      table: Option[table_spec],
+      entityOps: List[EnrichedOperation]
+  ): Map[String, Any] =
+    projectScope(ctx) +
+      ("entity"           -> entity) +
+      ("table"            -> table) +
+      ("entityOperations" -> entityOps)
+
   private def schemaInputField(f: ProfiledField): SchemaFieldView =
     val ptype =
       if SensitiveFields.isSensitive(f.columnName) then "SecretStr" else f.validationType
@@ -521,41 +414,11 @@ object EmitPython:
       else s"body.${f.columnName}"
     ModelInitFieldView(f.columnName, accessor)
 
-  private def buildTypeLookup(profiled: ProfiledService): Map[String, String] =
-    val base = mutable.Map.empty[String, String]
-    for (specType, mapping) <- profiled.profile.typeMap do base(specType) = mapping.domain
-    val aliasesByName = svcTypeAliases(profiled.ir).map(a => talName(a) -> a).toMap
-    for alias <- svcTypeAliases(profiled.ir) do
-      val resolved = resolveAliasToPython(talType(alias), base.toMap, aliasesByName, Set.empty)
-      resolved.foreach(r => base(talName(alias)) = r)
-    base.toMap
-
-  private def resolveAliasToPython(
-      typeExpr: type_expr,
-      base: Map[String, String],
-      aliasesByName: Map[String, type_alias_decl],
-      visited: Set[String]
-  ): Option[String] = typeExpr match
-    case NamedTypeF(name, _) =>
-      base.get(name).orElse:
-        if visited.contains(name) then None
-        else
-          aliasesByName.get(name).flatMap { ta =>
-            resolveAliasToPython(talType(ta), base, aliasesByName, visited + name)
-          }
-    case OptionTypeF(inner, _) =>
-      resolveAliasToPython(inner, base, aliasesByName, visited).map(i => s"$i | None")
-    case _ => None
-
   private def pythonTypeForParam(
       typeExpr: type_expr,
       typeLookup: Map[String, String]
   ): String =
-    typeExpr match
-      case NamedTypeF(n, _) => typeLookup.getOrElse(n, "str")
-      case OptionTypeF(inner, _) =>
-        s"${pythonTypeForParam(inner, typeLookup)} | None"
-      case _ => "str"
+    EmitShared.paramType(typeExpr, typeLookup, "str", t => s"$t | None")
 
   private def enrichOperation(
       op: ProfiledOperation,
@@ -582,10 +445,7 @@ object EmitPython:
           case None =>
             (entity.createSchemaName, Option.empty[CustomRequestSchema])
           case Some(name) =>
-            val requestBodyByName = op.requestBodyFields.map(f => f.fieldName -> f).toMap
-            val pathParamNames    = endpoint.pathParams.map(_.name).toSet
-            val fields = op.requestBodyFields.filter: f =>
-              !pathParamNames.contains(f.fieldName) && requestBodyByName.contains(f.fieldName)
+            val fields = OperationContext.customRequestBodyFields(op)
             (name, Some(CustomRequestSchema(name, fields.map(schemaInputField))))
 
     val (
@@ -636,7 +496,8 @@ object EmitPython:
 
     val pathParamName =
       if pathParamsWithTypes.nonEmpty then pathParamsWithTypes.head.name else "id"
-    val modelLookupColumn = resolveModelLookupColumn(entity, pathParamName)
+    val modelLookupColumn =
+      EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name))
 
     val (kernelSig, dafnyArgs) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
 
@@ -714,12 +575,6 @@ object EmitPython:
       endpoint.queryParams.map(_.name) ++
       (if endpoint.bodyParams.nonEmpty then List("body") else Nil)
     parts.mkString(", ")
-
-  private def resolveModelLookupColumn(entity: ProfiledEntity, pathParamName: String): String =
-    if entity.fields.exists(_.columnName == pathParamName) then pathParamName
-    else
-      val entitySnake = Naming.toSnakeCase(entity.entityName)
-      if pathParamName == s"${entitySnake}_id" then "id" else "id"
 
   private def mergeStdlibImport(
       byModule: mutable.Map[String, mutable.Set[String]],

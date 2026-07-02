@@ -3,19 +3,15 @@ package specrest.testgen
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
-import java.io.ByteArrayOutputStream
-import java.nio.charset.StandardCharsets
-
-@SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.Null"))
 object Templates:
 
   private val Root = "testgen-templates/python/fastapi"
 
-  lazy val conftest: String       = loadResource("tests/conftest.py")
-  lazy val pytestIni: String      = loadResource("tests/pytest.ini")
-  lazy val redaction: String      = loadResource("tests/redaction.py")
-  lazy val runConformance: String = loadResource("tests/run_conformance.py")
-  lazy val strategiesUser: String = loadResource("tests/strategies_user.py")
+  lazy val conftest: String       = TemplateResources.load(Root, "tests/conftest.py")
+  lazy val pytestIni: String      = TemplateResources.load(Root, "tests/pytest.ini")
+  lazy val redaction: String      = TemplateResources.load(Root, "tests/redaction.py")
+  lazy val runConformance: String = TemplateResources.load(Root, "tests/run_conformance.py")
+  lazy val strategiesUser: String = TemplateResources.load(Root, "tests/strategies_user.py")
 
   private val PredicatesHeader: String =
     """|import datetime
@@ -35,18 +31,7 @@ object Templates:
        |""".stripMargin
 
   def predicates(ir: ServiceIRFull): String =
-    PredicatesHeader + "\n" + renderUserDefinitions(ir)
-
-  private def renderUserDefinitions(ir: ServiceIRFull): String =
-    val parts = svcFunctions(ir).map(renderFunction(_, ir)) ++
-      svcPredicates(ir).map(renderPredicate(_, ir))
-    parts.mkString("")
-
-  private def renderFunction(fn: function_decl, ir: ServiceIRFull): String =
-    renderUserDef(fncName(fn), fncParams(fn).map(prmName), fncBody(fn), ir)
-
-  private def renderPredicate(pr: predicate_decl, ir: ServiceIRFull): String =
-    renderUserDef(prdName(pr), prdParams(pr).map(prmName), prdBody(pr), ir)
+    PredicatesHeader + "\n" + UserDefs.renderAll(ir)((n, ps, b) => renderUserDef(n, ps, b, ir))
 
   private def renderUserDef(
       specName: String,
@@ -70,38 +55,10 @@ object Templates:
           s"def $safePyName($sigParams):\n" +
             s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: parameter '$p' of '$specName' is a Python-reserved name")})\n\n"
         case None =>
-          val ctx = predicateBodyCtx(paramNames.toSet, ir)
+          val ctx = TestCtx.forPredicateBody(paramNames.toSet, ir)
           ExprToPython.translate(body, ctx) match
             case Translated.Emit(text) =>
               s"def $safePyName($sigParams):\n    return $text\n\n"
             case Translated.Skip(reason, _) =>
               s"def $safePyName($sigParams):\n" +
                 s"    raise NotImplementedError(${ExprToPython.pyString(s"testgen: cannot translate body of '$specName': $reason")})\n\n"
-
-  private def predicateBodyCtx(params: Set[String], ir: ServiceIRFull): TestCtx =
-    TestCtx(
-      inputs = params,
-      outputs = Set.empty,
-      stateFields = Set.empty,
-      mapStateFields = Set.empty,
-      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
-      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
-      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
-      boundVars = Set.empty,
-      capture = CaptureMode.PostState
-    )
-
-  private def loadResource(relPath: String): String =
-    val resourcePath = s"$Root/$relPath"
-    val is           = getClass.getClassLoader.getResourceAsStream(resourcePath)
-    if is eq null then
-      throw new RuntimeException(s"testgen template resource missing: $resourcePath")
-    try
-      val out    = new ByteArrayOutputStream()
-      val buffer = new Array[Byte](8192)
-      var read   = is.read(buffer)
-      while read != -1 do
-        out.write(buffer, 0, read)
-        read = is.read(buffer)
-      new String(out.toByteArray, StandardCharsets.UTF_8)
-    finally is.close()

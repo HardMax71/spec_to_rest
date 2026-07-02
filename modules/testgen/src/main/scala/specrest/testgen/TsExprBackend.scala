@@ -152,4 +152,4 @@ object TsExprBackend extends ExprBackendBase:
   def lambdaExpr(param: String, body: String): String = s"(($param) => ($body))"
 
   def matchesExpr(target: String, pattern: String): String =
-    s"(new RegExp(${TsLit.str(s"^(?:$pattern)$$")}).test($target))"
+    s"(new RegExp(${TsLit.str(Strategies.fullMatchPattern(pattern))}).test($target))"

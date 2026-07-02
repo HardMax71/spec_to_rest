@@ -123,6 +123,13 @@ private[z3] trait ExpressionEncoder:
         s"expression kind '${other.getClass.getSimpleName}' is not yet supported by the verifier"
       )
 
+  // A refinement constraint is a predicate over the distinguished name `value`;
+  // translate it against a single-binding environment.
+  private[z3] def translateRefinement(ctx: TranslateCtx, constraint: expr, value: Z3Expr): Z3Expr =
+    val env = mutable.Map.empty[String, Z3Expr]
+    env("value") = value
+    translateDeclarationExpr(ctx, constraint, env)
+
   private[z3] def translateBinaryOp(
       ctx: TranslateCtx,
       op: bin_op,
@@ -150,8 +157,7 @@ private[z3] trait ExpressionEncoder:
       case BAnd()     => Z3Expr.And(List(left, right))
       case BOr()      => Z3Expr.Or(List(left, right))
       case BImplies() => Z3Expr.Implies(left, right)
-      case BIff() =>
-        Z3Expr.And(List(Z3Expr.Implies(left, right), Z3Expr.Implies(right, left)))
+      case BIff()     => iff(left, right)
       case BEq() | BNeq() =>
         val (l2, r2) = coerceOptionalEquality(ctx, left, right)
         Z3Expr.Cmp(if isEq then CmpOp.Eq else CmpOp.Neq, l2, r2)
@@ -397,10 +403,8 @@ private[z3] trait ExpressionEncoder:
         ctx.typeAliases.get(name).map(a => BindingResolution(a.sort, None))
       .orElse:
         ctx.primitiveAliases.get(name).map: pa =>
-          val gFn: String => Z3Expr = vn =>
-            val env = mutable.Map.empty[String, Z3Expr]
-            env("value") = Z3Expr.Var(vn, pa.underlyingSort)
-            translateDeclarationExpr(ctx, pa.constraint, env)
+          val gFn: String => Z3Expr =
+            vn => translateRefinement(ctx, pa.constraint, Z3Expr.Var(vn, pa.underlyingSort))
           BindingResolution(pa.underlyingSort, Some(gFn))
       .orElse:
         ctx.enums.get(name).map(e => BindingResolution(e.sort, None))
@@ -469,8 +473,7 @@ private[z3] trait ExpressionEncoder:
           args.map(a => inferSortOfZ3Expr(ctx, a).getOrElse(Z3Sort.Uninterp("Any")))
         val resultSort = callReturnSort(name, ctx)
         val funcName   = s"${name}_${argSortsMangled(argSorts)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, argSorts, resultSort))
+        ctx.declareFunc(Z3FunctionDecl(funcName, argSorts, resultSort))
         Z3Expr.App(funcName, args)
       case _ =>
         fail(ctx, "higher-order call (non-identifier callee) is not supported by the verifier")
@@ -488,16 +491,8 @@ private[z3] trait ExpressionEncoder:
       expr: MatchesF,
       env: mutable.Map[String, Z3Expr]
   ): Z3Expr =
-    val arg     = translateDeclarationExpr(ctx, expr.a, env)
-    val argSort = inferSort(ctx, expr.a, env, Some(arg))
-    (argSort, RegexParser.parse(expr.b)) match
-      case (Some(Z3Sort.Str), Some(re)) => Z3Expr.InRe(arg, re)
-      case _ =>
-        val s        = argSort.getOrElse(Z3Sort.Str)
-        val funcName = s"${ctx.matchesNameFor(expr.b)}_${sortNameOf(s)}"
-        if !ctx.funcs.contains(funcName) then
-          ctx.declareFunc(Z3FunctionDecl(funcName, List(s), Z3Sort.Bool))
-        Z3Expr.App(funcName, List(arg))
+    val arg = translateDeclarationExpr(ctx, expr.a, env)
+    encodeMatches(ctx, arg, inferSort(ctx, expr.a, env, Some(arg)), expr.b)
 
   private[z3] def translateLet(
       ctx: TranslateCtx,
@@ -584,13 +579,7 @@ private[z3] trait ExpressionEncoder:
 
   private[z3] def translateEnumAccess(ctx: TranslateCtx, expr: EnumAccessF): Z3Expr =
     expr.a match
-      case IdentifierF(enumName, _) =>
-        val memberName = expr.b
-        val funcName   = s"${enumName}_$memberName"
-        if !ctx.funcs.contains(funcName) then
-          val resultSort = ctx.enums.get(enumName).map(_.sort).getOrElse(Z3Sort.Uninterp(enumName))
-          ctx.declareFunc(Z3FunctionDecl(funcName, Nil, resultSort))
-        Z3Expr.App(funcName, Nil)
+      case IdentifierF(enumName, _) => enumMemberApp(ctx, enumName, expr.b)
       case _ =>
         fail(ctx, "enum access base must be an identifier")
 
@@ -649,10 +638,7 @@ private[z3] trait ExpressionEncoder:
       val keyVar  = Z3Expr.Var(varName, leftDom._1.keySort)
       val lhsMem  = Z3Expr.App(domFuncFor(leftDom._1, leftDom._2), List(keyVar))
       val rhsMem  = Z3Expr.App(domFuncFor(rightDom._1, rightDom._2), List(keyVar))
-      val body = Z3Expr.And(List(
-        Z3Expr.Implies(lhsMem, rhsMem),
-        Z3Expr.Implies(rhsMem, lhsMem)
-      ))
+      val body    = iff(lhsMem, rhsMem)
       val forall = Z3Expr.Quantifier(
         QKind.ForAll,
         List(Z3Binding(varName, leftDom._1.keySort)),
@@ -717,8 +703,8 @@ private[z3] trait ExpressionEncoder:
       case None      => predicate
       case Some(gFn) => Z3Expr.And(List(gFn(freshName), predicate))
     val memberInSet = Z3Expr.SetMember(varZ, setZ)
-    val iff = Z3Expr.And(List(
-      Z3Expr.Implies(memberInSet, domAndPred),
-      Z3Expr.Implies(domAndPred, memberInSet)
-    ))
-    Z3Expr.Quantifier(QKind.ForAll, List(Z3Binding(freshName, elemSort)), iff)
+    Z3Expr.Quantifier(
+      QKind.ForAll,
+      List(Z3Binding(freshName, elemSort)),
+      iff(memberInSet, domAndPred)
+    )

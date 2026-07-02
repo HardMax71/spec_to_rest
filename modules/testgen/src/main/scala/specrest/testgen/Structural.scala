@@ -1,6 +1,5 @@
 package specrest.testgen
 
-import specrest.codegen.AdminModel
 import specrest.codegen.SensitiveFields
 import specrest.ir.HttpMethods
 import specrest.ir.Naming
@@ -57,7 +56,7 @@ object Structural:
       idx: Int,
       ir: ServiceIRFull
   ): Option[StructuralCheck] =
-    val ctx = invariantCtx(ir)
+    val ctx = TestCtx.forInvariants(ir)
     ExprToPython.translate(invBody(inv), ctx) match
       case Translated.Skip(_, _) => None
       case Translated.Emit(text) =>
@@ -81,29 +80,12 @@ object Structural:
       idx: Int,
       ir: ServiceIRFull
   ): Option[TestSkip] =
-    val ctx  = invariantCtx(ir)
+    val ctx  = TestCtx.forInvariants(ir)
     val name = invName(inv).getOrElse(s"anon_$idx")
     ExprToPython.translate(invBody(inv), ctx) match
       case Translated.Skip(reason, _) =>
         Some(TestSkip("<invariants>", s"structural_invariant[$name]", reason))
       case _ => None
-
-  private def invariantCtx(ir: ServiceIRFull): TestCtx =
-    TestCtx(
-      inputs = Set.empty,
-      outputs = Set.empty,
-      stateFields = irStateFieldNames(ir).toSet,
-      mapStateFields = irStateFields(ir)
-        .filter(f => stfType(f).isInstanceOf[MapTypeF])
-        .map(stfName)
-        .toSet,
-      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
-      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
-      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
-      boundVars = Set.empty,
-      capture = CaptureMode.PostState,
-      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
-    )
 
   // -- Pure-output ensures (Create operations) -------------------------------
 
