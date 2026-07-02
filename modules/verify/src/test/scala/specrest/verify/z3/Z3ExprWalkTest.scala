@@ -84,3 +84,12 @@ class Z3ExprWalkTest extends CatsEffectSuite:
         And(List(App("p", List(Var("x", Z3Sort.IntS))), App("q", List(k))))
       )
       assertEquals(q.freeVars, Set("k"))
+
+  test("substitute leaves a clashing binder alone when the name is not free in the body"):
+    IO:
+      val q = Quantifier(
+        QKind.ForAll,
+        List(Z3Binding("y", Z3Sort.IntS)),
+        App("p", List(Var("z", Z3Sort.IntS)))
+      )
+      assertEquals(q.substitute("x", Var("y", Z3Sort.IntS)), q)

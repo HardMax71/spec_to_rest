@@ -186,11 +186,14 @@ enum Z3Expr derives CanEqual:
     case other                      => other.children.foldLeft(Set.empty[String])(_ ++ _.freeVars)
 
   def substitute(varName: String, replacement: Z3Expr): Z3Expr = this match
-    case Var(n, _, _) if n == varName                                                            => replacement
-    case q @ Quantifier(_, bindings, _, _) if bindings.exists(_.name == varName)                 => q
-    case Quantifier(k, bindings, body, sp) if bindings.exists(b => replacement.freeVars(b.name)) =>
+    case Var(n, _, _) if n == varName                                            => replacement
+    case q @ Quantifier(_, bindings, _, _) if bindings.exists(_.name == varName) => q
+    case Quantifier(k, bindings, body, sp)
+        if body.freeVars(varName) && bindings.exists(b => replacement.freeVars(b.name)) =>
       // Capture avoidance: a binder that also occurs free in the replacement is
-      // renamed apart before substituting under it.
+      // renamed apart before substituting under it. Only when the substituted
+      // name is actually free in the body; otherwise the plain descent below is
+      // already capture-safe and renaming would churn binder names for nothing.
       val replFree     = replacement.freeVars
       val initialTaken = replFree ++ body.freeVars ++ bindings.map(_.name) + varName
       val (renamedBindings, renamedBody, _) =
