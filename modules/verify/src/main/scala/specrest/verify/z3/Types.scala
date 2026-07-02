@@ -117,6 +117,74 @@ enum Z3Expr derives CanEqual:
       span: Option[span_t] = None
   )
 
+  // Exhaustive on purpose (no wildcard): a new constructor must decide its
+  // child list here, or trigger inference and substitution silently treat it
+  // as a leaf.
+  def children: List[Z3Expr] = this match
+    case Var(_, _, _)           => Nil
+    case App(_, args, _)        => args
+    case IntLit(_, _)           => Nil
+    case RealLit(_, _, _)       => Nil
+    case BoolLit(_, _)          => Nil
+    case And(args, _)           => args
+    case Or(args, _)            => args
+    case Not(a, _)              => List(a)
+    case Implies(l, r, _)       => List(l, r)
+    case Cmp(_, l, r, _)        => List(l, r)
+    case StrCmp(_, l, r, _)     => List(l, r)
+    case StrConcat(l, r, _)     => List(l, r)
+    case SeqConcat(l, r, _)     => List(l, r)
+    case SeqContains(s, e, _)   => List(s, e)
+    case Arith(_, args, _)      => args
+    case Quantifier(_, _, b, _) => List(b)
+    case EmptySet(_, _)         => Nil
+    case SetLit(_, ms, _)       => ms
+    case SetMember(el, s, _)    => List(el, s)
+    case SetBinOp(_, l, r, _)   => List(l, r)
+    case Ite(c, t, el, _)       => List(c, t, el)
+    case OptNone(_, _)          => Nil
+    case OptSome(v, _)          => List(v)
+    case OptGet(v, _)           => List(v)
+    case StrLit(_, _)           => Nil
+    case InRe(s, _, _)          => List(s)
+    case SeqLit(_, ms, _)       => ms
+    case MapLit(_, _, es, _)    => es.flatMap((k, v) => List(k, v))
+
+  def mapChildren(f: Z3Expr => Z3Expr): Z3Expr = this match
+    case e: Var                         => e
+    case App(fn, args, sp)              => App(fn, args.map(f), sp)
+    case e: IntLit                      => e
+    case e: RealLit                     => e
+    case e: BoolLit                     => e
+    case And(args, sp)                  => And(args.map(f), sp)
+    case Or(args, sp)                   => Or(args.map(f), sp)
+    case Not(a, sp)                     => Not(f(a), sp)
+    case Implies(l, r, sp)              => Implies(f(l), f(r), sp)
+    case Cmp(op, l, r, sp)              => Cmp(op, f(l), f(r), sp)
+    case StrCmp(op, l, r, sp)           => StrCmp(op, f(l), f(r), sp)
+    case StrConcat(l, r, sp)            => StrConcat(f(l), f(r), sp)
+    case SeqConcat(l, r, sp)            => SeqConcat(f(l), f(r), sp)
+    case SeqContains(s, e, sp)          => SeqContains(f(s), f(e), sp)
+    case Arith(op, args, sp)            => Arith(op, args.map(f), sp)
+    case Quantifier(q, bindings, b, sp) => Quantifier(q, bindings, f(b), sp)
+    case e: EmptySet                    => e
+    case SetLit(es, ms, sp)             => SetLit(es, ms.map(f), sp)
+    case SetMember(el, s, sp)           => SetMember(f(el), f(s), sp)
+    case SetBinOp(op, l, r, sp)         => SetBinOp(op, f(l), f(r), sp)
+    case Ite(c, t, el, sp)              => Ite(f(c), f(t), f(el), sp)
+    case e: OptNone                     => e
+    case OptSome(v, sp)                 => OptSome(f(v), sp)
+    case OptGet(v, sp)                  => OptGet(f(v), sp)
+    case e: StrLit                      => e
+    case InRe(s, re, sp)                => InRe(f(s), re, sp)
+    case SeqLit(es, ms, sp)             => SeqLit(es, ms.map(f), sp)
+    case MapLit(ks, vs, es, sp)         => MapLit(ks, vs, es.map((k, v) => (f(k), f(v))), sp)
+
+  def substitute(varName: String, replacement: Z3Expr): Z3Expr = this match
+    case Var(n, _, _) if n == varName                                            => replacement
+    case q @ Quantifier(_, bindings, _, _) if bindings.exists(_.name == varName) => q
+    case other                                                                   => other.mapChildren(_.substitute(varName, replacement))
+
   def spanOpt: Option[span_t] = this match
     case e: Var         => e.span
     case e: App         => e.span
