@@ -19,17 +19,10 @@ datatype (plugins only: code size) ir_value =
 type_synonym env = "(String.literal \<times> ir_value) list"
 
 record schema =
-  sch_enums    :: "schema_enum_decl list"
-  sch_entities :: "schema_entity_decl list"
-
-definition schema_empty :: schema where
-  "schema_empty \<equiv> \<lparr> sch_enums = [], sch_entities = [] \<rparr>"
+  sch_enums :: "schema_enum_decl list"
 
 definition schema_lookup_enum :: "schema \<Rightarrow> String.literal \<Rightarrow> schema_enum_decl option" where
   "schema_lookup_enum s name \<equiv> find (\<lambda>d. enm_name d = name) (sch_enums s)"
-
-definition schema_lookup_entity :: "schema \<Rightarrow> String.literal \<Rightarrow> schema_entity_decl option" where
-  "schema_lookup_entity s name \<equiv> find (\<lambda>d. ed_name d = name) (sch_entities s)"
 
 record state =
   rt_scalars       :: "(String.literal \<times> ir_value) list"

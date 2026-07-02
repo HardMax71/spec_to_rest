@@ -138,26 +138,16 @@ text \<open>\<open>str_length s\<close> is the length of string \<open>s\<close>
   affecting soundness.\<close>
 consts str_length :: "String.literal \<Rightarrow> int"
 
-record schema_field_decl =
-  fd_name :: "String.literal"
-  fd_ty   :: "schema_type"
-  fd_span :: "option_span"
-
-record schema_entity_decl =
-  ed_name   :: "String.literal"
-  ed_fields :: "schema_field_decl list"
-  ed_span   :: "option_span"
-
 record schema_enum_decl =
   enm_name    :: "String.literal"
   enm_members :: "String.literal list"
   enm_span    :: "option_span"
 
 text \<open>Issue #202: full input-language IR (canonical for Scala consumers).
-  Coexists with the verified-subset above. The verified-subset stays as records
-  (proof-internal); the full-language IR uses datatypes — Code_Target_Scala
-  emits flat case classes (positional fields), no \<open>_ext[A]\<close> polymorphism.
-  See research/10_translator_soundness.md \<section>17.\<close>
+  Reference-semantics records (\<open>schema_enum_decl\<close> above, \<open>schema\<close>/\<open>state\<close>/
+  \<open>smt_model\<close> in Semantics) stay proof-internal; the IR itself is datatypes,
+  which Code_Target_Scala emits as flat case classes (positional fields), no
+  \<open>_ext[A]\<close> polymorphism. See research/10_translator_soundness.md \<section>17.\<close>
 
 datatype (plugins only: code size) multiplicity = MultOne | MultLone | MultSome | MultSet
 
@@ -368,7 +358,7 @@ text \<open>\<^bold>\<open>Generic tree-walk: \<open>allSubexprs\<close>\<close>
   mutual \<open>fun\<close> recursion. Defined alongside \<open>subexprs\<close> (one-step
   children) so every binder-insensitive query / collector across IR /
   IR_Analysis / IR_Helpers / LintAnalysis can compose on it instead of
-  re-enumerating the 28 constructors per walker.\<close>
+  re-enumerating the 27 constructors per walker.\<close>
 
 fun allSubexprs :: "expr \<Rightarrow> expr list"
 and allSubexprs_list :: "expr list \<Rightarrow> expr list"
