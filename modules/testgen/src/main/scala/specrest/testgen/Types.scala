@@ -121,3 +121,40 @@ object TestCtx:
       bareBodyOutput = bareBodyOutput,
       unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
     )
+
+  def forInvariants(ir: ServiceIRFull): TestCtx =
+    val stateFieldsAll = irStateFields(ir)
+    TestCtx(
+      inputs = Set.empty,
+      outputs = Set.empty,
+      stateFields = stateFieldsAll.map(stfName).toSet,
+      mapStateFields = stateFieldsAll.filter(f => isMapType(stfType(f))).map(stfName).toSet,
+      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
+      boundVars = Set.empty,
+      capture = CaptureMode.PostState,
+      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
+    )
+
+  def forPredicateBody(params: Set[String], ir: ServiceIRFull): TestCtx =
+    TestCtx(
+      inputs = params,
+      outputs = Set.empty,
+      stateFields = Set.empty,
+      mapStateFields = Set.empty,
+      enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,
+      userFunctions = svcFunctions(ir).map(f => fncName(f) -> f).toMap,
+      userPredicates = svcPredicates(ir).map(p => prdName(p) -> p).toMap,
+      boundVars = Set.empty,
+      capture = CaptureMode.PostState
+    )
+
+// The declaration walk every predicates-file renderer shares: hand each user
+// function's and predicate's (name, params, body) to the language's renderer.
+private[testgen] object UserDefs:
+  def renderAll(ir: ServiceIRFull)(renderOne: (String, List[String], expr) => String): String =
+    val parts =
+      svcFunctions(ir).map(f => renderOne(fncName(f), fncParams(f).map(prmName), fncBody(f))) ++
+        svcPredicates(ir).map(p => renderOne(prdName(p), prdParams(p).map(prmName), prdBody(p)))
+    parts.mkString("")

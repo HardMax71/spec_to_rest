@@ -12,18 +12,23 @@ object TestEmit:
     else if profiled.profile.framework == "chi" then emitGo(profiled)
     else emitPython(profiled)
 
-  // Native Go conformance (go test + rapid). Structural fuzzing is not yet
-  // ported (#175) — honest-skipped; structural invariants are exercised by the
-  // stateful suite. Behavioral/stateful are the Go emitters; the bearer-guarded
-  // /admin router is emitted by codegen and present in every build.
-  private def emitGo(profiled: ProfiledService): List[EmittedFile] =
-    val ir            = profiled.ir
-    val serviceSnake  = Naming.toSnakeCase(svcName(ir))
-    val harness       = GoTestHarness
-    val stratSpecs    = Strategies.forIR(ir, GoRapidStrategy)
-    val behavioralOut = GoBehavioral.emitFor(profiled)
-    val statefulOut   = GoStateful.emitFor(profiled)
-    val structuralOut = GoStructural.emitFor(profiled)
+  // One wiring skeleton for both native suites: strategies file, the three
+  // test modules, and the skips JSON, in the harness's path layout. The
+  // per-language suite outputs and module renderers arrive as values.
+  private def emitNative(
+      profiled: ProfiledService,
+      harness: HarnessTemplates,
+      strategy: StrategyBackend,
+      renderStrategies: List[StrategySpec] => String,
+      behavioralOut: BehavioralOutput,
+      renderBehavioral: List[GeneratedTest] => String,
+      statefulOut: StatefulOutput,
+      structuralOut: BehavioralOutput,
+      renderStructural: List[GeneratedTest] => String
+  ): List[EmittedFile] =
+    val ir           = profiled.ir
+    val serviceSnake = Naming.toSnakeCase(svcName(ir))
+    val stratSpecs   = Strategies.forIR(ir, strategy)
     val skipsJson = renderSkipsJson(
       svcName(ir),
       stratSpecs,
@@ -32,18 +37,32 @@ object TestEmit:
     )
     harness.scaffoldFiles(ir) ++
       List(
-        EmittedFile(harness.strategiesPath, renderGoStrategiesFile(stratSpecs)),
+        EmittedFile(harness.strategiesPath, renderStrategies(stratSpecs)),
         EmittedFile(
           harness.behavioralTestPath(serviceSnake),
-          GoBehavioral.renderModule(ir, behavioralOut.tests)
+          renderBehavioral(behavioralOut.tests)
         ),
         EmittedFile(harness.statefulTestPath(serviceSnake), statefulOut.file),
         EmittedFile(
           harness.structuralTestPath(serviceSnake),
-          GoStructural.renderModule(ir, structuralOut.tests)
+          renderStructural(structuralOut.tests)
         ),
         EmittedFile(harness.skipsPath, skipsJson)
       )
+
+  private def emitGo(profiled: ProfiledService): List[EmittedFile] =
+    val ir = profiled.ir
+    emitNative(
+      profiled,
+      GoTestHarness,
+      GoRapidStrategy,
+      renderGoStrategiesFile,
+      GoBehavioral.emitFor(profiled),
+      GoBehavioral.renderModule(ir, _),
+      GoStateful.emitFor(profiled),
+      GoStructural.emitFor(profiled),
+      GoStructural.renderModule(ir, _)
+    )
 
   private def renderGoStrategiesFile(specs: List[StrategySpec]): String =
     val sb = new StringBuilder
@@ -60,37 +79,19 @@ object TestEmit:
         sb.append(s"\treturn ${spec.body}\n}\n\n")
     sb.toString.stripTrailing + "\n"
 
-  // Native TypeScript conformance (vitest + fast-check). Structural fuzzing is
-  // not yet ported (#175) — it is honest-skipped; structural invariants are
-  // exercised by the stateful suite. Behavioral/stateful are the TS emitters.
   private def emitTs(profiled: ProfiledService): List[EmittedFile] =
-    val ir            = profiled.ir
-    val serviceSnake  = Naming.toSnakeCase(svcName(ir))
-    val harness       = TsVitestHarness
-    val stratSpecs    = Strategies.forIR(ir, TsFastCheckStrategy)
-    val behavioralOut = TsBehavioral.emitFor(profiled)
-    val statefulOut   = TsStateful.emitFor(profiled)
-    val structuralOut = TsStructural.emitFor(profiled)
-    val skipsJson = renderSkipsJson(
-      svcName(ir),
-      stratSpecs,
-      behavioralOut.skips ++ statefulOut.skips,
-      structuralOut.skips
+    val ir = profiled.ir
+    emitNative(
+      profiled,
+      TsVitestHarness,
+      TsFastCheckStrategy,
+      renderTsStrategiesFile,
+      TsBehavioral.emitFor(profiled),
+      TsBehavioral.renderModule(ir, _),
+      TsStateful.emitFor(profiled),
+      TsStructural.emitFor(profiled),
+      TsStructural.renderModule(ir, _)
     )
-    harness.scaffoldFiles(ir) ++
-      List(
-        EmittedFile(harness.strategiesPath, renderTsStrategiesFile(stratSpecs)),
-        EmittedFile(
-          harness.behavioralTestPath(serviceSnake),
-          TsBehavioral.renderModule(ir, behavioralOut.tests)
-        ),
-        EmittedFile(harness.statefulTestPath(serviceSnake), statefulOut.file),
-        EmittedFile(
-          harness.structuralTestPath(serviceSnake),
-          TsStructural.renderModule(ir, structuralOut.tests)
-        ),
-        EmittedFile(harness.skipsPath, skipsJson)
-      )
 
   private def renderTsStrategiesFile(specs: List[StrategySpec]): String =
     val bodies = specs.map(_.body).mkString
