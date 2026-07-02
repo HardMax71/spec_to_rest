@@ -282,7 +282,7 @@ object Compile:
       verifiedRoot: Path,
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitStatus, Map[String, String]]] =
+  ): IO[Either[ExitStatus, Map[String, FileAssembly.MethodPart]]] =
     val cacheRoot =
       opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
     val skeletonsRoot      = Cache.skeletonsRoot(cacheRoot)
@@ -326,34 +326,35 @@ object Compile:
       skeletonCache: Option[Cache],
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitStatus, Map[String, String]]] =
-    synthOps.foldLeft[IO[Either[ExitStatus, Map[String, String]]]](IO.pure(Right(Map.empty))):
-      (accIO, c) =>
-        accIO.flatMap:
-          case Left(code) => IO.pure(Left(code))
-          case Right(acc) =>
-            val opName = classificationOperationName(c)
-            methods.find(_.name == opName) match
-              case None =>
-                IO.delay(
-                  log.error(
-                    s"$specFile: Dafny header missing for synthesised op '$opName'"
-                  )
-                ).as(Left(ExitStatus.Translator))
-              case Some(header) =>
-                val key = Cache.keyFor(header, opts.synthesisModel, opts.synthesisTemperature)
-                lookupOpBody(
-                  specFile,
-                  opName,
-                  key,
-                  verifiedCache,
-                  skeletonCache,
-                  opts,
-                  log
-                ).map:
-                  case Right(Some(body)) => Right(acc + (opName -> body))
-                  case Right(None)       => Right(acc)
-                  case Left(code)        => Left(code)
+  ): IO[Either[ExitStatus, Map[String, FileAssembly.MethodPart]]] =
+    synthOps.foldLeft[IO[Either[ExitStatus, Map[String, FileAssembly.MethodPart]]]](
+      IO.pure(Right(Map.empty))
+    ): (accIO, c) =>
+      accIO.flatMap:
+        case Left(code) => IO.pure(Left(code))
+        case Right(acc) =>
+          val opName = classificationOperationName(c)
+          methods.find(_.name == opName) match
+            case None =>
+              IO.delay(
+                log.error(
+                  s"$specFile: Dafny header missing for synthesised op '$opName'"
+                )
+              ).as(Left(ExitStatus.Translator))
+            case Some(header) =>
+              val key = Cache.keyFor(header, opts.synthesisModel, opts.synthesisTemperature)
+              lookupOpBody(
+                specFile,
+                opName,
+                key,
+                verifiedCache,
+                skeletonCache,
+                opts,
+                log
+              ).map:
+                case Right(Some(part)) => Right(acc + (opName -> part))
+                case Right(None)       => Right(acc)
+                case Left(code)        => Left(code)
 
   private def lookupOpBody(
       specFile: String,
@@ -363,11 +364,11 @@ object Compile:
       skeletonCache: Option[Cache],
       opts: CompileOptions,
       log: Logger
-  ): IO[Either[ExitStatus, Option[String]]] =
+  ): IO[Either[ExitStatus, Option[FileAssembly.MethodPart]]] =
     val verifiedLookup = verifiedCache match
       case Some(c) => c.lookup(key)
       case None    => IO.pure(None)
-    def partialOrError: IO[Either[ExitStatus, Option[String]]] =
+    def partialOrError: IO[Either[ExitStatus, Option[FileAssembly.MethodPart]]] =
       if opts.synthesisPartial then
         IO.delay(
           log.warn(
@@ -380,7 +381,7 @@ object Compile:
           .as(Left(ExitStatus.Violations))
     verifiedLookup.flatMap:
       case Some(entry) if entry.outcome == specrest.synth.CacheOutcome.Verified =>
-        IO.pure(Right(Some(entry.body)))
+        IO.pure(Right(Some(methodPartOf(entry, opName))))
       case _ =>
         if !opts.allowSkeletons then partialOrError
         else
@@ -395,8 +396,20 @@ object Compile:
                     "(--allow-skeletons set); the generated handler will halt at runtime " +
                     "with a Dafny HaltException when invoked"
                 )
-              ).as(Right(Some(entry.body)))
+              ).as(Right(Some(methodPartOf(entry, opName))))
             case None => partialOrError
+
+  // The verifier checked body and helper declarations spliced together, so the
+  // kernel assembly must splice the same pair; the helpers live only in the
+  // cached candidate block.
+  private def methodPartOf(
+      entry: specrest.synth.CacheEntry,
+      opName: String
+  ): FileAssembly.MethodPart =
+    FileAssembly.MethodPart(
+      entry.body,
+      specrest.synth.ResponseParser.helperSection(entry.candidate, opName)
+    )
 
   private def missingVerifiedBodyError(
       specFile: String,

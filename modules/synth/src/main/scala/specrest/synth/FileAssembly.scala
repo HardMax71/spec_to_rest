@@ -8,13 +8,19 @@ object FileAssembly:
 
   final case class SpliceFailure(message: String) derives CanEqual
 
+  // A verified method body plus the helper functions/lemmas the candidate
+  // declared before it. The CEGIS verifier checks body and helpers spliced
+  // together, so consumers must splice the same pair or the body's helper
+  // references dangle (unresolved identifiers at dafny translate).
+  final case class MethodPart(body: String, helpers: String = "") derives CanEqual
+
   def spliceAll(
       skeleton: String,
-      bodies: Map[String, String]
+      parts: Map[String, MethodPart]
   ): Either[SpliceFailure, String] =
-    bodies.toList.foldLeft[Either[SpliceFailure, String]](Right(skeleton)):
+    parts.toList.foldLeft[Either[SpliceFailure, String]](Right(skeleton)):
       case (Left(e), _)             => Left(e)
-      case (Right(current), (n, b)) => splice(current, n, b)
+      case (Right(current), (n, p)) => splice(current, n, p.body, p.helpers)
 
   def splice(
       skeleton: String,

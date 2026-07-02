@@ -57,10 +57,16 @@ final class CegisLoop(
       case None    => IO.pure(None)
 
   private def onCacheHit(req: SynthRequest, entry: CacheEntry): IO[CegisOutcome] =
-    val cost = Pricing.costOrZero(entry.usage, entry.model)
+    val cost   = Pricing.costOrZero(entry.usage, entry.model)
+    val opName = classificationOperationName(req.classification)
     val fullDfy =
       FileAssembly
-        .splice(req.skeleton, classificationOperationName(req.classification), entry.body)
+        .splice(
+          req.skeleton,
+          opName,
+          entry.body,
+          ResponseParser.helperSection(entry.candidate, opName)
+        )
         .toOption
         .getOrElse(entry.candidate)
     val rec = IterationRecord(0, entry.body, fullDfy, Nil, entry.usage, cost)
