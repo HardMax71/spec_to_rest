@@ -89,7 +89,10 @@ object Fastapi extends Framework:
         DependencySpec("alembic", ">=1.14"),
         DependencySpec("pydantic-settings", ">=2.0"),
         DependencySpec("structlog", ">=24,<26"),
-        DependencySpec("prometheus-client", ">=0.21")
+        DependencySpec("prometheus-client", ">=0.21"),
+        DependencySpec("opentelemetry-sdk", ">=1.43"),
+        DependencySpec("opentelemetry-exporter-otlp-proto-http", ">=1.43"),
+        DependencySpec("opentelemetry-instrumentation-fastapi", ">=0.64b0")
       ),
       devDependencies = List(
         DependencySpec("pytest", ">=8.0"),
@@ -153,7 +156,14 @@ object Chi extends Framework:
         DependencySpec("github.com/shopspring/decimal", "v1.4.0"),
         DependencySpec("github.com/caarlos0/env/v11", "v11.2.0"),
         DependencySpec("github.com/go-playground/validator/v10", "v10.22.1"),
-        DependencySpec("github.com/prometheus/client_golang", "v1.20.5")
+        DependencySpec("github.com/prometheus/client_golang", "v1.20.5"),
+        DependencySpec("go.opentelemetry.io/otel", "v1.44.0"),
+        DependencySpec("go.opentelemetry.io/otel/sdk", "v1.44.0"),
+        DependencySpec(
+          "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp",
+          "v1.44.0"
+        ),
+        DependencySpec("go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp", "v0.69.0")
       ),
       devDependencies = List(
         DependencySpec("github.com/stretchr/testify", "v1.9.0")
@@ -206,7 +216,11 @@ object Express extends Framework:
         DependencySpec("@prisma/client", "^6.2.0"),
         DependencySpec("zod", "^3.23.8"),
         DependencySpec("dotenv", "^16.4.7"),
-        DependencySpec("prom-client", "^15.1.3")
+        DependencySpec("prom-client", "^15.1.3"),
+        DependencySpec("@opentelemetry/sdk-node", "^0.219.0"),
+        DependencySpec("@opentelemetry/exporter-trace-otlp-http", "^0.219.0"),
+        DependencySpec("@opentelemetry/instrumentation-http", "^0.219.0"),
+        DependencySpec("@opentelemetry/instrumentation-express", "^0.67.0")
       ),
       devDependencies = List(
         DependencySpec("typescript", "^5.6.3"),

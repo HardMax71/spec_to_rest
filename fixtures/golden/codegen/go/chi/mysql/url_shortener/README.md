@@ -12,6 +12,11 @@ curl http://localhost:8080/ready
 curl http://localhost:8080/metrics
 ```
 
+Traces are opt-in: set `OTEL_EXPORTER_OTLP_ENDPOINT` (for example
+`http://localhost:4318`) to export OTLP spans for every request; leave it
+unset and tracing stays off. `OTEL_SERVICE_NAME` overrides the default
+service name.
+
 ## Local dev
 
 ```bash

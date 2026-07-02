@@ -1,0 +1,21 @@
+// Loaded before anything that imports express (first import in index.ts) so
+// the http and express patches are in place. Tracing is opt-in: without
+// OTEL_EXPORTER_OTLP_ENDPOINT this module is inert and no exporter dials out.
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
+import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+import { NodeSDK } from '@opentelemetry/sdk-node';
+
+const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? '';
+
+if (endpoint !== '') {
+  const sdk = new NodeSDK({
+    serviceName: process.env.OTEL_SERVICE_NAME ?? 'url_shortener',
+    traceExporter: new OTLPTraceExporter(),
+    instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
+  });
+  sdk.start();
+  process.on('SIGTERM', () => {
+    void sdk.shutdown();
+  });
+}

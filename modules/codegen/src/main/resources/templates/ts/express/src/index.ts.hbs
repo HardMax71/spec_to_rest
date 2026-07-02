@@ -1,3 +1,5 @@
+import './tracing.js';
+
 import { app } from './app.js';
 import { config } from './config.js';
 import { prisma } from './prisma.js';
