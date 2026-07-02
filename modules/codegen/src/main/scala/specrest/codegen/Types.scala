@@ -38,6 +38,30 @@ final case class RenderProfile(
 
 final case class ServiceNames(name: String, snakeName: String, kebabName: String)
 
+// The pinned GitHub Action SHAs (and the zizmor version) the generated ci.yml
+// workflows reference. One place to bump; before this existed the python and
+// go/ts templates had drifted to different checkout pins (v6.0.3 vs v4.2.2).
+final case class ActionPins(
+    checkout: String,
+    setupUv: String,
+    setupPython: String,
+    setupGo: String,
+    setupNode: String,
+    uploadArtifact: String,
+    zizmor: String
+)
+
+object ActionPins:
+  val Current: ActionPins = ActionPins(
+    checkout = "df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3",
+    setupUv = "fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0",
+    setupPython = "a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0",
+    setupGo = "d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0",
+    setupNode = "39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0",
+    uploadArtifact = "ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+    zizmor = "1.25.2"
+  )
+
 final case class RenderContext(
     service: ServiceNames,
     profile: RenderProfile,
@@ -51,7 +75,8 @@ final case class RenderContext(
     hasScalarOps: Boolean = false,
     routerImport: String = "admin",
     authSettingLines: List[String] = Nil,
-    needsJwt: Boolean = false
+    needsJwt: Boolean = false,
+    pins: ActionPins = ActionPins.Current
 )
 
 final case class RenderResult(fileName: String, content: String)

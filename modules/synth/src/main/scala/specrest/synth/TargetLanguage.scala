@@ -12,9 +12,3 @@ object TargetLanguage:
       case "go" | "golang"            => Some(Go)
       case "js" | "javascript" | "ts" => Some(JavaScript)
       case _                          => None
-
-  def forCompileTarget(target: String): TargetLanguage =
-    target.split("-").headOption match
-      case Some("go") => Go
-      case Some("ts") => JavaScript
-      case _          => Python

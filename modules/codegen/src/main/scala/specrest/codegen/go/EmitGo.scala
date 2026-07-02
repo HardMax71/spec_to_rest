@@ -487,7 +487,8 @@ object EmitGo:
       "hasScalarOps"      -> ctx.hasScalarOps,
       "needsJwt"          -> ctx.needsJwt,
       "authConfigLines"   -> proj.authConfigLines,
-      "pagination"        -> Pagination.view
+      "pagination"        -> Pagination.view,
+      "pins"              -> ctx.pins
     )
     currentEntity match
       case Some(e) =>
