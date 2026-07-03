@@ -24,13 +24,22 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-{{/if}}{{#if routeThroughKernel}}	result, err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
+{{#if bodyValidates}}	if err := body.Validate(); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+{{/if}}{{/if}}{{#if routeThroughKernel}}	result, err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
 	if err != nil {
+		if errors.Is(err, services.ErrKernelPrecondition) {
+			writeError(w, {{kernelGuardStatus}}, "{{kernelGuardDetail}}")
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, {{successStatus}}, result)
-{{else}}{{#if (eq routeKind "create")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{#if kernelRedirect}}	http.Redirect(w, r, result, {{successStatus}})
+{{else}}	writeJSON(w, {{successStatus}}, result)
+{{/if}}{{else}}{{#if (eq routeKind "create")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

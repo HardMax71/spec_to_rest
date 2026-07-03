@@ -233,6 +233,19 @@ class EmitTest extends CatsEffectSuite:
         s"resolve kernel call should pass the converted code — got:\n$service"
       )
 
+  test("go validators use package-unique pattern names across entities"):
+    SpecFixtures.loadIR("auth_service").map: ir =>
+      val profiled = Annotate.buildProfiledService(ir, "go-chi-sqlite")
+      val files    = Emit.emitProject(profiled)
+      val declared = files
+        .filter(f => f.path.startsWith("internal/models/"))
+        .flatMap(_.content.linesIterator.filter(_.startsWith("var ")).map(_.split(" ")(1)))
+      assertEquals(
+        declared.diff(declared.distinct),
+        List.empty[String],
+        s"duplicate package-level var names across model files: $declared"
+      )
+
   test("Go kernel-routed service marshals scalar in/out via the dafnykernel adapter"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "go-chi-postgres")
@@ -251,12 +264,27 @@ class EmitTest extends CatsEffectSuite:
       val byPath = files.map(f => f.path -> f.content).toMap
       val service =
         byPath.getOrElse("internal/services/url_mapping.go", fail("no go service emitted"))
-      // Shorten: body op with a two-value (code, short_url) return -> map[string]any.
+      // Shorten: body op with a two-value (code, short_url) return -> map[string]any,
+      // hydrated, guarded, and persisted inside one transaction.
       assert(
         service.contains(
           "outCode, outShortURL := dafnykernel.Companion_Default___.Shorten(state, dafnykernel.StringToDafny(body.URL))"
         ),
         s"Shorten should marshal body.URL and capture both outputs — got:\n$service"
+      )
+      assert(
+        service.contains("state, err := hydrateState(ctx, tx)"),
+        s"kernel ops must hydrate state inside the transaction — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "dafnykernel.Companion_Default___.RequiresShorten(state, dafnykernel.StringToDafny(body.URL))"
+        ),
+        s"kernel ops must check the compiled requires twin — got:\n$service"
+      )
+      assert(
+        service.contains("persistState(ctx, tx, state)"),
+        s"kernel ops must persist the mutated state — got:\n$service"
       )
       assert(
         service.contains("\"code\":") && service.contains(

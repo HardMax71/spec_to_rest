@@ -1,12 +1,6 @@
 package models
 
-import (
-{{#if entity.needsTime}}	"time"
-
-{{/if}}{{#if entity.needsUuid}}	"github.com/google/uuid"
-{{/if}}{{#if entity.needsDecimal}}	"github.com/shopspring/decimal"
-{{/if}}	"github.com/uptrace/bun"
-)
+{{{entity.modelImports}}}
 
 type {{entity.entity.modelClassName}} struct {
 {{#each entity.modelStructLines}}	{{{this}}}
@@ -19,4 +13,6 @@ type {{entity.entity.createSchemaName}} struct {
 type {{this.name}} struct {
 {{#each this.structLines}}	{{{this}}}
 {{/each}}{{! }}}
-{{/each}}
+{{/each}}{{#if entity.validationBlock}}
+{{{entity.validationBlock}}}
+{{/if}}

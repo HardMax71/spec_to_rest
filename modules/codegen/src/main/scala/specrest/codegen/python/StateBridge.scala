@@ -1,8 +1,6 @@
 package specrest.codegen.python
 
-import specrest.codegen.AdminModel
 import specrest.ir.Naming
-import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledService
@@ -16,86 +14,21 @@ object StateBridge:
 
   private val ScalarPyTypes = Set("str", "int", "bool", "datetime")
 
-  final private case class RelationPlan(
-      stateField: String,
-      entity: ProfiledEntity,
-      keyField: ProfiledField,
-      valueField: Option[ProfiledField]
-  ):
-    def isEntityRow: Boolean = valueField.isEmpty
-
-  final private case class ScalarPlan(stateField: String, columnName: String)
-
-  final case class Plan private[StateBridge] (
-      private[StateBridge] val relations: List[RelationPlan],
-      private[StateBridge] val scalars: List[ScalarPlan]
-  ):
-    private[StateBridge] def entityRowRelations: List[RelationPlan] =
-      relations.filter(_.isEntityRow).distinctBy(_.entity.entityName)
+  export specrest.codegen.StatePlan.Plan
 
   def dafnyName(specName: String): String = specName.replace("_", "__")
 
   private def baseType(domainType: String): String =
     domainType.replaceAll("\\s*\\|\\s*None$", "").trim
 
-  private def fieldSupported(f: ProfiledField): Boolean =
-    ScalarPyTypes.contains(baseType(f.domainType))
-
-  // None when the spec's state cannot round-trip through the bridge; the
-  // reason keeps the eligibility decision explainable in logs and tests.
   def plan(profiled: ProfiledService): Either[String, Plan] =
-    val ir        = profiled.ir
-    val byName    = profiled.entities.map(e => e.entityName -> e).toMap
-    val relations = List.newBuilder[RelationPlan]
-    val scalars   = List.newBuilder[ScalarPlan]
-    val problems  = List.newBuilder[String]
+    specrest.codegen.StatePlan.analyze(
+      profiled,
+      fieldSupported = f => ScalarPyTypes.contains(baseType(f.domainType)),
+      keySupported = k => Set("str", "int").contains(baseType(k.domainType)) && !k.nullable
+    )
 
-    for sf <- irStateFields(ir) do
-      val name = stfName(sf)
-      AdminModel.projectionFor(sf, ir) match
-        case None => () // unbacked: hydrates to the Dafny zero value, like /admin/state's null
-        case Some(p) =>
-          p.valueShape match
-            case AdminModel.ProjectionValue.ScalarStateColumn(col) =>
-              scalars += ScalarPlan(name, col)
-            case shape =>
-              byName.get(p.entityName) match
-                case None =>
-                  problems += s"state field '$name' projects onto unknown entity '${p.entityName}'"
-                case Some(entity) =>
-                  entity.fields.find(_.fieldName == p.keyFieldName) match
-                    case None =>
-                      problems += s"state field '$name': key field '${p.keyFieldName}' not on '${p.entityName}'"
-                    case Some(key) =>
-                      val unsupported = entity.fields.filterNot(fieldSupported)
-                      if unsupported.nonEmpty then
-                        problems += s"state field '$name': entity '${p.entityName}' has field types the bridge cannot marshal (${unsupported.map(_.domainType).distinct.mkString(", ")})"
-                      else if !Set("str", "int").contains(baseType(key.domainType)) || key.nullable
-                      then
-                        problems += s"state field '$name': key '${p.keyFieldName}' must be a non-optional str or int"
-                      else
-                        val valueField = shape match
-                          case AdminModel.ProjectionValue.PrimitiveField(vf) =>
-                            entity.fields.find(_.fieldName == vf)
-                          case _ => None
-                        shape match
-                          case AdminModel.ProjectionValue.PrimitiveField(vf)
-                              if valueField.isEmpty =>
-                            problems += s"state field '$name': value field '$vf' not on '${p.entityName}'"
-                          case _ =>
-                            relations += RelationPlan(name, entity, key, valueField)
-
-    val built       = Plan(relations.result(), scalars.result())
-    val persistable = built.entityRowRelations.map(_.entity.entityName).toSet
-    for r <- built.relations if !r.isEntityRow do
-      if !persistable.contains(r.entity.entityName) then
-        problems += s"state field '${r.stateField}' projects a single column of '${r.entity.entityName}', which no entity-valued state field covers; mutations could not be written back"
-
-    problems.result() match
-      case first :: _ => Left(first)
-      case Nil        => Right(built)
-
-  def hasState(plan: Plan): Boolean = plan.relations.nonEmpty || plan.scalars.nonEmpty
+  def hasState(plan: Plan): Boolean = plan.hasState
 
   private def toDafnyFieldExpr(f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${f.columnName}"
@@ -132,7 +65,7 @@ object StateBridge:
   def emit(profiled: ProfiledService): String =
     val planned = plan(profiled) match
       case Right(p) => p
-      case Left(_)  => Plan(Nil, Nil)
+      case Left(_)  => specrest.codegen.StatePlan.Plan(Nil, Nil)
 
     val entityImports = planned.relations
       .map(_.entity)

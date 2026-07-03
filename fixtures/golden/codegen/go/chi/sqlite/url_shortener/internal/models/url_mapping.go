@@ -1,7 +1,10 @@
 package models
 
 import (
+	"fmt"
+	"regexp"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uptrace/bun"
 )
@@ -23,4 +26,16 @@ type UrlMappingCreate struct {
 }
 type ShortenRequest struct {
 	URL string `json:"url" validate:"required"`
+}
+
+var urlMappingValidationPattern1 = regexp.MustCompile(`^(?:^https?://[^\s\x00-\x1f\x7f]+)$`)
+
+func (b ShortenRequest) Validate() error {
+	if utf8.RuneCountInString(b.URL) < 1 {
+		return fmt.Errorf("url: shorter than minimum length 1")
+	}
+	if !urlMappingValidationPattern1.MatchString(b.URL) {
+		return fmt.Errorf("url: does not match the required pattern")
+	}
+	return nil
 }

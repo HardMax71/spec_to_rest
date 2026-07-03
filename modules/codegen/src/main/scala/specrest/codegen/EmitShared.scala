@@ -6,6 +6,22 @@ import specrest.profile.ProfiledService
 
 private[codegen] object EmitShared:
 
+  // A field's boundary-enforceable string refinement: the entity declaration's
+  // alias type plus its inline where clause, reduced by StringRefinements.
+  def entityFieldRefinement(
+      profiled: specrest.profile.ProfiledService,
+      entity: specrest.profile.ProfiledEntity,
+      f: specrest.profile.ProfiledField
+  ): specrest.convention.StringRefinements.Reduced =
+    import specrest.ir.generated.SpecRestGenerated.*
+    svcEntities(profiled.ir)
+      .find(d => entName(d) == entity.entityName)
+      .flatMap(d => entFields(d).find(fd => fldName(fd) == f.fieldName))
+      .map(fd =>
+        specrest.convention.StringRefinements.reduceField(fldType(fd), fldDefault(fd), profiled.ir)
+      )
+      .getOrElse(specrest.convention.StringRefinements.Reduced(None, None, Nil))
+
   def routeKindName(rk: route_kind): String = rk match
     case _: RkCreate   => "create"
     case _: RkRead     => "read"
