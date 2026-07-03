@@ -1,15 +1,6 @@
 package models
 
-import (
-{{#if entity.needsFmt}}	"fmt"
-{{/if}}{{#if entity.needsRegexp}}	"regexp"
-{{/if}}{{#if entity.needsTime}}	"time"
-{{/if}}{{#if entity.needsUtf8}}	"unicode/utf8"
-
-{{/if}}{{#if entity.needsUuid}}	"github.com/google/uuid"
-{{/if}}{{#if entity.needsDecimal}}	"github.com/shopspring/decimal"
-{{/if}}	"github.com/uptrace/bun"
-)
+{{{entity.modelImports}}}
 
 type {{entity.entity.modelClassName}} struct {
 {{#each entity.modelStructLines}}	{{{this}}}

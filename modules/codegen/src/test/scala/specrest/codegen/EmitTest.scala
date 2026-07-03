@@ -233,6 +233,19 @@ class EmitTest extends CatsEffectSuite:
         s"resolve kernel call should pass the converted code — got:\n$service"
       )
 
+  test("go validators use package-unique pattern names across entities"):
+    SpecFixtures.loadIR("auth_service").map: ir =>
+      val profiled = Annotate.buildProfiledService(ir, "go-chi-sqlite")
+      val files    = Emit.emitProject(profiled)
+      val declared = files
+        .filter(f => f.path.startsWith("internal/models/"))
+        .flatMap(_.content.linesIterator.filter(_.startsWith("var ")).map(_.split(" ")(1)))
+      assertEquals(
+        declared.diff(declared.distinct),
+        List.empty[String],
+        s"duplicate package-level var names across model files: $declared"
+      )
+
   test("Go kernel-routed service marshals scalar in/out via the dafnykernel adapter"):
     SpecFixtures.loadIR("url_shortener").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "go-chi-postgres")

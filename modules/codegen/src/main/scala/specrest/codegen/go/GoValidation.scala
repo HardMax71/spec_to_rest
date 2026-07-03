@@ -30,11 +30,16 @@ object GoValidation:
     Naming.toPascalCase(name, Naming.PascalStrategy.Go)
 
   // One compiled var per distinct pattern text, shared across structs and
-  // fields, so identical refinements cannot drift apart when edited.
-  def forStructs(structs: List[(String, List[FieldRule])]): FileValidations =
+  // fields, so identical refinements cannot drift apart when edited. The
+  // prefix must be unique per file: every entity's models file shares the one
+  // go package, so bare names would collide across entities.
+  def forStructs(prefix: String, structs: List[(String, List[FieldRule])]): FileValidations =
     val pool = scala.collection.mutable.LinkedHashMap.empty[String, String]
     def poolVar(anchored: String): String =
-      pool.getOrElseUpdate(anchored, s"validationPattern${pool.size + 1}")
+      pool.getOrElseUpdate(
+        anchored,
+        s"${Naming.toCamelCase(prefix, Naming.CamelStrategy.Plain)}ValidationPattern${pool.size + 1}"
+      )
     val validations = structs.flatMap { (structName, rules) =>
       val active = rules.filter(r => !r.reduced.isEmpty && r.field.domainType == "string")
       Option.when(active.nonEmpty):

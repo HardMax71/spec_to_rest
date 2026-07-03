@@ -115,9 +115,8 @@ final private case class GoEntityCtx(
     usesModels: Boolean,
     customSchemas: List[GoCustomSchema],
     validationBlock: String,
-    needsRegexp: Boolean,
-    needsFmt: Boolean,
-    needsUtf8: Boolean,
+    modelImports: String,
+    hasStdlibImports: Boolean,
     modelStructLines: List[String],
     createStructLines: List[String],
     handlerImports: String
@@ -608,7 +607,7 @@ object EmitGo:
         operations
           .filter(o => o.customRequestSchemaName.isDefined && o.customRules.nonEmpty)
           .map(o => o.requestBodyType -> o.customRules)).distinctBy(_._1)
-    val fileValidations = GoValidation.forStructs(structRules)
+    val fileValidations = GoValidation.forStructs(entity.entityName, structRules)
     val validatedNames  = fileValidations.structs.map(_.structName).toSet
     val opsWithValidation = operations.map: o =>
       o.copy(bodyValidates = o.hasRequestBody && validatedNames.contains(o.requestBodyType))
@@ -644,9 +643,22 @@ object EmitGo:
           "\n" + (fileValidations.patternVars.mkString("\n") ::
             fileValidations.structs.map(_.funcText)).filter(_.nonEmpty).mkString("\n\n")
       ,
-      needsRegexp = fileValidations.needsRegexp,
-      needsFmt = !fileValidations.isEmpty,
-      needsUtf8 = fileValidations.needsUtf8,
+      modelImports = {
+        val stdlib = List(
+          Option.when(!fileValidations.isEmpty)("\"fmt\""),
+          Option.when(fileValidations.needsRegexp)("\"regexp\""),
+          Option.when(needsTime)("\"time\""),
+          Option.when(fileValidations.needsUtf8)("\"unicode/utf8\"")
+        ).flatten
+        val third =
+          Option.when(needsUuid)("\"github.com/google/uuid\"").toList :::
+            Option.when(needsDecimal)("\"github.com/shopspring/decimal\"").toList :::
+            List("\"github.com/uptrace/bun\"")
+        val groups = List(stdlib, third).filter(_.nonEmpty)
+        groups.map(_.map("\t" + _).mkString("\n")).mkString("import (\n", "\n\n", "\n)")
+      },
+      hasStdlibImports = !fileValidations.isEmpty || fileValidations.needsRegexp ||
+        fileValidations.needsUtf8 || needsTime,
       modelStructLines = padCells(
         List(
           "bun.BaseModel",
