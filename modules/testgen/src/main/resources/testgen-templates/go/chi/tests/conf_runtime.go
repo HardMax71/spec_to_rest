@@ -83,6 +83,25 @@ func _slice(x any) []any {
 	}
 }
 
+// Spec quantifiers over a relation range over its domain: `all c in store`
+// binds keys, and the body indexes store[c]. _slice keeps value semantics for
+// comprehension-style consumers; quantifier lowering routes through this.
+func _quantDomain(x any) []any {
+	if m, ok := x.(map[string]any); ok {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		out := make([]any, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, k)
+		}
+		return out
+	}
+	return _slice(x)
+}
+
 func _dedupe(xs []any) []any {
 	out := make([]any, 0, len(xs))
 	for _, x := range xs {

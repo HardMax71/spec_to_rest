@@ -178,13 +178,13 @@ object GoExprBackend extends ExprBackendBase:
       case _      => "_any"
     val nested = bound.foldRight(s"_truthy($body)"): (pair, acc) =>
       val (v, d) = pair
-      s"$helper($d, func($v any) bool { return $acc })"
+      s"$helper(_quantDomain($d), func($v any) bool { return $acc })"
     kind match
       case QNo() => s"(!($nested))"
       case _     => nested
 
   def theExpr(v: String, dom: String, body: String): String =
-    s"_find($dom, func($v any) bool { return _truthy($body) })"
+    s"_find(_quantDomain($dom), func($v any) bool { return _truthy($body) })"
 
   def lambdaExpr(param: String, body: String): String =
     s"func($param any) any { return $body }"
