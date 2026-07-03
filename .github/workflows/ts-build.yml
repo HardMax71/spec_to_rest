@@ -198,9 +198,11 @@ jobs:
           - fixture: url_shortener
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: url_shortener
             dialect: sqlite
             db_url: file:./app.db
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: todo_list
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
@@ -253,10 +255,16 @@ jobs:
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
 
+      - name: Setup Dafny (synthesis emit runs dafny translate)
+        if: matrix.synthesis != ''
+        uses: dafny-lang/setup-dafny-action@be023fc606339d46ed6b077dcb8614d0279ded31 # v1.9.1
+        with:
+          dafny-version: "4.11.0"
+
       - name: Emit TS project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework express --db ${{ matrix.dialect }} --out out --ignore-verify ${{ matrix.synthesis }}"
 
       - name: npm install
         working-directory: out

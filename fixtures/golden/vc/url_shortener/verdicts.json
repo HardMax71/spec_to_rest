@@ -1,95 +1,79 @@
 {
   "schemaVersion" : 1,
   "specFile" : "fixtures/spec/url_shortener.spec",
-  "totalMs" : 572.141391,
+  "totalMs" : 575.211596,
   "ok" : true,
   "entries" : [
-    {
-      "id" : "ListAll.preserves.clickCountNonNegative",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "unsat",
-      "durationMs" : 33.925688,
-      "file" : "ListAll.preserves.clickCountNonNegative.smt2"
-    },
     {
       "id" : "Resolve.preserves.clickCountNonNegative",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 32.916921,
+      "durationMs" : 32.804158,
       "file" : "Resolve.preserves.clickCountNonNegative.smt2"
-    },
-    {
-      "id" : "Delete.preserves.metadataConsistent",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "unsat",
-      "durationMs" : 38.623853,
-      "file" : "Delete.preserves.metadataConsistent.smt2"
-    },
-    {
-      "id" : "Resolve.preserves.allURLsValid",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "unsat",
-      "durationMs" : 37.87535,
-      "file" : "Resolve.preserves.allURLsValid.smt2"
     },
     {
       "id" : "ListAll.preserves.allURLsValid",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 29.774744,
+      "durationMs" : 33.53023,
       "file" : "ListAll.preserves.allURLsValid.smt2"
     },
     {
-      "id" : "ListAll.requires",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "sat",
-      "durationMs" : 45.779673,
-      "file" : "ListAll.requires.smt2"
-    },
-    {
-      "id" : "Delete.preserves.clickCountNonNegative",
+      "id" : "Resolve.preserves.allURLsValid",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 33.827122,
-      "file" : "Delete.preserves.clickCountNonNegative.smt2"
-    },
-    {
-      "id" : "Delete.preserves.allURLsValid",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "unsat",
-      "durationMs" : 46.800104,
-      "file" : "Delete.preserves.allURLsValid.smt2"
+      "durationMs" : 39.285739,
+      "file" : "Resolve.preserves.allURLsValid.smt2"
     },
     {
       "id" : "ListAll.preserves.metadataConsistent",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 34.372799,
+      "durationMs" : 42.794468,
       "file" : "ListAll.preserves.metadataConsistent.smt2"
     },
     {
-      "id" : "ListAll.enabled",
+      "id" : "ListAll.preserves.clickCountNonNegative",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "unsat",
+      "durationMs" : 31.332983,
+      "file" : "ListAll.preserves.clickCountNonNegative.smt2"
+    },
+    {
+      "id" : "Delete.preserves.metadataConsistent",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "unsat",
+      "durationMs" : 40.563906,
+      "file" : "Delete.preserves.metadataConsistent.smt2"
+    },
+    {
+      "id" : "Delete.preserves.clickCountNonNegative",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "unsat",
+      "durationMs" : 28.649101,
+      "file" : "Delete.preserves.clickCountNonNegative.smt2"
+    },
+    {
+      "id" : "ListAll.requires",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 62.086775,
-      "file" : "ListAll.enabled.smt2"
+      "durationMs" : 57.053437,
+      "file" : "ListAll.requires.smt2"
     },
     {
       "id" : "Resolve.preserves.metadataConsistent",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 40.899563,
+      "durationMs" : 58.727806,
       "file" : "Resolve.preserves.metadataConsistent.smt2"
     },
     {
@@ -97,39 +81,63 @@
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 59.990599,
+      "durationMs" : 65.035051,
       "file" : "global.smt2"
     },
     {
-      "id" : "Shorten.preserves.allURLsValid",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "unsat",
-      "durationMs" : 26.836457,
-      "file" : "Shorten.preserves.allURLsValid.smt2"
-    },
-    {
-      "id" : "Shorten.requires",
+      "id" : "ListAll.enabled",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 24.867193,
-      "file" : "Shorten.requires.smt2"
+      "durationMs" : 69.795972,
+      "file" : "ListAll.enabled.smt2"
+    },
+    {
+      "id" : "Delete.preserves.allURLsValid",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "unsat",
+      "durationMs" : 23.161375,
+      "file" : "Delete.preserves.allURLsValid.smt2"
     },
     {
       "id" : "Shorten.preserves.clickCountNonNegative",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 14.256712,
+      "durationMs" : 14.808444,
       "file" : "Shorten.preserves.clickCountNonNegative.smt2"
+    },
+    {
+      "id" : "Shorten.requires",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "sat",
+      "durationMs" : 16.294617,
+      "file" : "Shorten.requires.smt2"
+    },
+    {
+      "id" : "Shorten.preserves.allURLsValid",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "unsat",
+      "durationMs" : 22.609924,
+      "file" : "Shorten.preserves.allURLsValid.smt2"
+    },
+    {
+      "id" : "Delete.requires",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "sat",
+      "durationMs" : 139.550718,
+      "file" : "Delete.requires.smt2"
     },
     {
       "id" : "Shorten.preserves.metadataConsistent",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "unsat",
-      "durationMs" : 31.178324,
+      "durationMs" : 37.831309,
       "file" : "Shorten.preserves.metadataConsistent.smt2"
     },
     {
@@ -137,15 +145,23 @@
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 174.170946,
+      "durationMs" : 154.278964,
       "file" : "Delete.enabled.smt2"
+    },
+    {
+      "id" : "Resolve.enabled",
+      "tool" : "z3",
+      "outcome" : "sat",
+      "rawStatus" : "sat",
+      "durationMs" : 153.218141,
+      "file" : "Resolve.enabled.smt2"
     },
     {
       "id" : "Resolve.requires",
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 161.555244,
+      "durationMs" : 176.724052,
       "file" : "Resolve.requires.smt2"
     },
     {
@@ -153,24 +169,8 @@
       "tool" : "z3",
       "outcome" : "sat",
       "rawStatus" : "sat",
-      "durationMs" : 96.9247,
+      "durationMs" : 79.733454,
       "file" : "Shorten.enabled.smt2"
-    },
-    {
-      "id" : "Resolve.enabled",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "sat",
-      "durationMs" : 189.855223,
-      "file" : "Resolve.enabled.smt2"
-    },
-    {
-      "id" : "Delete.requires",
-      "tool" : "z3",
-      "outcome" : "sat",
-      "rawStatus" : "sat",
-      "durationMs" : 168.315009,
-      "file" : "Delete.requires.smt2"
     }
   ]
 }

@@ -196,10 +196,12 @@ jobs:
             dialect: postgres
             migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
             db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: url_shortener
             dialect: sqlite
             migrate_url: sqlite://app.db
             db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: todo_list
             dialect: postgres
             migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
@@ -256,10 +258,16 @@ jobs:
         with:
           go-version: "1.25"
 
+      - name: Setup Dafny (synthesis emit runs dafny translate)
+        if: matrix.synthesis != ''
+        uses: dafny-lang/setup-dafny-action@be023fc606339d46ed6b077dcb8614d0279ded31 # v1.9.1
+        with:
+          dafny-version: "4.11.0"
+
       - name: Emit Go project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework chi --db ${{ matrix.dialect }} --out out --ignore-verify ${{ matrix.synthesis }}"
 
       - name: go mod tidy + add rapid
         working-directory: out
@@ -268,9 +276,9 @@ jobs:
           go get pgregory.net/rapid@v1.3.0
           go mod tidy
 
-      - name: go vet -tags conformance
+      - name: go vet -tags conformance (dafny-translated runtime excluded)
         working-directory: out
-        run: go vet -tags conformance ./...
+        run: go list ./... | grep -v dafnykernel | xargs go vet -tags conformance
 
       - name: build server
         working-directory: out
