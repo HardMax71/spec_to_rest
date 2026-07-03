@@ -152,7 +152,7 @@ class BackendTest extends CatsEffectSuite:
     assert(pyText(q, c).startsWith("all("), pyText(q, c))
     assertEquals(
       tsText(q, c),
-      "Array.from(post_state[\"s\"]).every((e) => (true))".replace("post_state", "postState")
+      "quantDomain(post_state[\"s\"]).every((e) => (true))".replace("post_state", "postState")
     )
 
   test("unbacked-state skip is shared scoping logic — both backends skip"):

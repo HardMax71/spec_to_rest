@@ -9,6 +9,20 @@ import { createHash } from "node:crypto";
 
 type Anything = unknown;
 
+// Spec quantifiers over a relation range over its domain: `all c in store`
+// binds keys, and the body indexes store[c]. Plain objects are the JSON shape
+// relations arrive in from /admin/state; everything else quantifies over its
+// elements. Array.from on a plain object would yield [] and make every
+// quantified invariant vacuously true.
+export function quantDomain(x: Anything): Anything[] {
+  if (x instanceof Map) return Array.from(x.keys());
+  if (x instanceof Set || Array.isArray(x) || typeof x === "string") {
+    return Array.from(x as Iterable<Anything>);
+  }
+  if (x && typeof x === "object") return Object.keys(x as object).sort();
+  return [];
+}
+
 function asArray(x: Anything): Anything[] {
   if (x instanceof Set || x instanceof Map) return Array.from(x.values());
   if (Array.isArray(x)) return x;

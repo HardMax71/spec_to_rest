@@ -16,6 +16,15 @@ export const companion = kernel._module.__default as Record<
 
 export const makeState = (): unknown => new kernel._module.ServiceState();
 
+// The generated state bridge builds relation maps and entity values through
+// these; everything else goes through the typed converters below.
+export const dafnyModule = kernel._module as Record<
+  string,
+  { [ctor: string]: (...args: unknown[]) => unknown }
+>;
+
+export const emptyDafnyMap = (): unknown => kernel._dafny.Map.Empty;
+
 export const stringToDafny = (s: string): unknown =>
   kernel._dafny.Seq.UnicodeFromString(s);
 

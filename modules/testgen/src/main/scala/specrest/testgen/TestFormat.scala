@@ -21,6 +21,7 @@ private[testgen] object TestFormat:
   // Names must match the exports of testgen-templates/typescript/express/tests/_runtime.ts.
   val TsRuntimeHelpers: List[String] =
     List(
+      "quantDomain",
       "_diff",
       "_eq",
       "_in",
