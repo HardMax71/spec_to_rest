@@ -2,7 +2,7 @@ service UrlShortener {
 
   // --- Type Definitions ---
 
-  type ShortCode = String where len(value) >= 6 and len(value) <= 10
+  type ShortCode = String where len(value) >= 6
                               and value matches /^[a-zA-Z0-9]+$/
 
   type LongURL = String where len(value) > 0 and isValidURI(value)

@@ -48,7 +48,6 @@
         ],
         "checks" : [
           "length(code) >= 6",
-          "length(code) <= 10",
           "code ~ '^[a-zA-Z0-9]+$'",
           "length(url) > 0",
           "click_count >= 0"

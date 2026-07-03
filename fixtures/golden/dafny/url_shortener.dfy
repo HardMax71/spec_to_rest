@@ -14,7 +14,7 @@ ghost function TheBy<K, V>(m: map<K, V>, p: K -> bool): K
 type ShortCode = string
 predicate ShortCodeWhere(value: string)
 {
-  ((|value| >= 6 && |value| <= 10) && matches___a_zA_Z0_9___(value))
+  (|value| >= 6 && matches___a_zA_Z0_9___(value))
 }
 type LongURL = string
 predicate LongURLWhere(value: string)
