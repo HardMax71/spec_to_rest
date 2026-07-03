@@ -234,19 +234,19 @@
             "endCol" : 37
           }
         },
-        "pattern" : "^https?:..[^\\s]+",
+        "pattern" : "^https?://[^\\s]+",
         "span" : {
           "startLine" : 3,
           "startCol" : 36,
           "endLine" : 3,
-          "endCol" : 64
+          "endCol" : 66
         }
       },
       "span" : {
         "startLine" : 3,
         "startCol" : 2,
         "endLine" : 3,
-        "endCol" : 64
+        "endCol" : 66
       }
     },
     {

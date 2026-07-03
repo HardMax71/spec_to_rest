@@ -45,7 +45,10 @@ private def unquote(raw: String): String =
       i += 1
   sb.toString
 
-private def unslashRegex(raw: String): String = raw.substring(1, raw.length - 1)
+// The lexer admits `\/` so patterns can contain a literal slash; every
+// downstream regex engine receives the unescaped character.
+private def unslashRegex(raw: String): String =
+  raw.substring(1, raw.length - 1).replace("\\/", "/")
 
 extension [A](list: List[BuildResult[A]])
   private def sequenceB: BuildResult[List[A]] =
