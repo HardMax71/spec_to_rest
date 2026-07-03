@@ -22,6 +22,7 @@ import specrest.codegen.migration.SchemaDiff
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.migration.SqlRenderer
 import specrest.codegen.openapi.OpenApi
+import specrest.convention.StringRefinements
 import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
@@ -103,6 +104,7 @@ final private case class TsEntityCtx(
     needsResultCast: Boolean,
     hasListRoute: Boolean,
     usesKernel: Boolean,
+    kernelImports: String,
     customSchemas: List[TsCustomSchema]
 )
 
@@ -155,6 +157,13 @@ object EmitTs:
     val service     = ctx.service
 
     val typeLookup = EmitShared.aliasResolvedDomainLookup(profiled)
+    val bridgePlan = StateBridgeTs.plan(profiled)
+    val kernelCtx = TsKernelCtx(
+      stateReady = irStateFields(profiled.ir).isEmpty || bridgePlan.isRight,
+      hasState = bridgePlan.toOption.exists(_.hasState),
+      hasInv = irStateFields(profiled.ir).nonEmpty,
+      ir = profiled.ir
+    )
 
     val triggerMaintainedByTable: Map[String, Set[String]] =
       schemaTriggers(profiled.schema)
@@ -170,11 +179,12 @@ object EmitTs:
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs))
+        .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs, kernelCtx))
         .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
       val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
       buildEntityCtx(
         packageName,
+        profiled,
         entity,
         entityOps,
         maintained,
@@ -291,6 +301,8 @@ object EmitTs:
 
     emitPrismaMigrations(profiled, opts, templates, engine, projectCtx.db, files)
 
+    if entities.exists(_.usesKernel) && kernelCtx.hasState then
+      files += EmittedFile("src/services/stateBridge.ts", StateBridgeTs.emit(profiled))
     opts.dafnyKernel.foreach: kernel =>
       val pkg = kernel.packagePath.stripSuffix("/")
       DafnyKernel.rewriteJsKernel(kernel.files).toList.sortBy(_._1).foreach: (rel, content) =>
@@ -559,6 +571,7 @@ object EmitTs:
 
   private def buildEntityCtx(
       packageName: String,
+      profiled: ProfiledService,
       entity: ProfiledEntity,
       operations: List[TsOperation],
       triggerMaintainedColumns: Set[String],
@@ -574,7 +587,7 @@ object EmitTs:
     val entityPluralKebab = Naming.toKebabCase(entityPlural)
 
     def mkField(f: ProfiledField): TsFieldView =
-      val base = toTsField(f, nativeAttrs)
+      val base = toTsField(f, nativeAttrs, EmitShared.entityFieldRefinement(profiled, entity, f))
       if triggerMaintainedColumns.contains(f.columnName)
         && NumericPrismaTypes.contains(base.prismaType)
       then
@@ -654,10 +667,35 @@ object EmitTs:
       needsResultCast = needsResultCast,
       hasListRoute = operations.exists(_.routeKind == "list"),
       usesKernel = operations.exists(_.routeThroughKernel),
+      kernelImports = {
+        val fns = operations.filter(_.routeThroughKernel).map(_.kernelServiceFn).mkString("\n")
+        val adapterNames = List(
+          "companion",
+          "intFromDafny",
+          "intToDafny",
+          "makeState",
+          "stringFromDafny",
+          "stringToDafny"
+        ).filter(n => fns.contains(n + "(") || fns.contains(n + "."))
+        val lines = List.newBuilder[String]
+        if fns.contains("HttpError(") then
+          lines += "import { HttpError } from '../middleware/error.js';"
+        if adapterNames.nonEmpty then
+          lines += adapterNames
+            .map(n => s"  $n,")
+            .mkString("import {\n", "\n", "\n} from '../dafnyKernel/adapter.js';")
+        if fns.contains("hydrateState(") then
+          lines += "import { hydrateState, persistState } from './stateBridge.js';"
+        lines.result().mkString("\n")
+      },
       customSchemas = customSchemas
     )
 
-  private def toTsField(f: ProfiledField, nativeAttrs: Boolean): TsFieldView =
+  private def toTsField(
+      f: ProfiledField,
+      nativeAttrs: Boolean,
+      reduced: StringRefinements.Reduced = StringRefinements.Reduced(None, None, Nil)
+  ): TsFieldView =
     val tsName = toCamelCase(f.fieldName)
     val attrs  = prismaAttrs(f, tsName, nativeAttrs)
     TsFieldView(
@@ -667,7 +705,7 @@ object EmitTs:
       domainType = f.domainType,
       prismaType = prismaTypeFor(f.ormColumnType),
       prismaAttrs = attrs,
-      zodSchema = zodSchemaFor(f),
+      zodSchema = zodSchemaFor(f, reduced),
       nullable = f.nullable,
       isPrimaryKey = false
     )
@@ -709,8 +747,21 @@ object EmitTs:
   private def nativePrismaAttr(sqlColumnType: String): String =
     PrismaSqlTypes.get(sqlColumnType.toUpperCase(Locale.ROOT)).map(_.dbAttr).getOrElse("")
 
-  private def zodSchemaFor(f: ProfiledField): String =
-    val base = baseZod(f.domainType)
+  // Request schemas carry the spec's string refinements as zod constraints,
+  // the same reduction the python and go boundaries enforce; the JS regex
+  // literal escapes its slashes.
+  private def zodSchemaFor(f: ProfiledField, reduced: StringRefinements.Reduced): String =
+    val base0 = baseZod(f.domainType)
+    val base =
+      if f.domainType == "string" && !reduced.isEmpty then
+        val minS = reduced.minLen.map(n => s".min($n)").getOrElse("")
+        val maxS = reduced.maxLen.map(n => s".max($n)").getOrElse("")
+        val reS = StringRefinements
+          .combinedPattern(reduced.patterns)
+          .map(p => s".regex(/${p.replace("/", "\\/")}/)")
+          .getOrElse("")
+        s"$base0$minS$maxS$reS"
+      else base0
     if f.nullable then s"$base.nullable()" else base
 
   private def baseZod(domainType: String): String =
@@ -732,11 +783,19 @@ object EmitTs:
   private def toPascalCase(name: String): String =
     Naming.toPascalCase(name, Naming.PascalStrategy.Plain)
 
+  final private case class TsKernelCtx(
+      stateReady: Boolean,
+      hasState: Boolean,
+      hasInv: Boolean,
+      ir: ServiceIRFull
+  )
+
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
       typeLookup: Map[String, String],
-      nativeAttrs: Boolean
+      nativeAttrs: Boolean,
+      kernelCtx: TsKernelCtx
   ): TsOperation =
     val endpoint = op.endpoint
     // The synthesized PK is BIGSERIAL -> Prisma `BigInt`, so a path param that resolves to the
@@ -787,7 +846,14 @@ object EmitTs:
           case None =>
             (entity.createSchemaName, List.empty[TsFieldView])
           case Some(name) =>
-            (name, OperationContext.customRequestBodyFields(op).map(toTsField(_, nativeAttrs)))
+            val byName = endpoint.bodyParams.map(p => p.name -> p.typeExpr).toMap
+            val views = OperationContext.customRequestBodyFields(op).map { f =>
+              val reduced = byName.get(f.fieldName) match
+                case Some(t) => StringRefinements.reduceField(t, None, kernelCtx.ir)
+                case None    => StringRefinements.Reduced(None, None, Nil)
+              toTsField(f, nativeAttrs, reduced)
+            }
+            (name, views)
 
     val readSchemaName = entity.readSchemaName
     val pathArgsCsv    = pathParams.map(_.tsName).mkString(", ")
@@ -874,7 +940,8 @@ object EmitTs:
         EmitShared.routeKindName(routeKind),
         hasRequestBody,
         requestBodyType,
-        typeLookup
+        typeLookup,
+        kernelCtx
       )
 
     TsOperation(
@@ -933,10 +1000,12 @@ object EmitTs:
       routeKind: String,
       hasRequestBody: Boolean,
       requestBodyType: String,
-      typeLookup: Map[String, String]
+      typeLookup: Map[String, String],
+      kernelCtx: TsKernelCtx
   ): Option[(String, String)] =
     val endpoint = op.endpoint
-    op.dafnyMethod.filter(_ => endpoint.queryParams.isEmpty).flatMap: dafnyName =>
+    val eligible = endpoint.queryParams.isEmpty && kernelCtx.stateReady
+    op.dafnyMethod.filter(_ => eligible).flatMap: dafnyName =>
       val inputs =
         endpoint.pathParams.map(p =>
           toCamelCase(p.name) -> tsTypeForParam(p.typeExpr, typeLookup)
@@ -986,9 +1055,39 @@ object EmitTs:
                   s"  return { ${retFields.mkString(", ")} };"
                 )
               )
+        val guardStatus = routeKind match
+          case "read" | "redirect" | "delete" => 404
+          case _                              => 409
+        val guardDetail = if guardStatus == 404 then "not found" else "precondition failed"
+        val invCheck =
+          if kernelCtx.hasInv then
+            List(
+              "  if (!(companion.ServiceStateInv(state) as boolean)) {",
+              "    throw new HttpError(500, 'service state invariant violated');",
+              "  }"
+            )
+          else Nil
+        val guardCheck = List(
+          s"  if (!(companion.Requires$dafnyName($callArgs) as boolean)) {",
+          s"    throw new HttpError($guardStatus, '$guardDetail');",
+          "  }"
+        )
         val header = s"export const $handlerName = async ($sig): Promise<$returnType> => {"
         val fn =
-          (header :: "  const state = makeState();" :: bodyLines ::: List("};")).mkString("\n")
+          if kernelCtx.hasState then
+            val steps =
+              "const state = await hydrateState(tx);" ::
+                (invCheck ::: guardCheck).map(_.stripPrefix("  ")) :::
+                bodyLines.dropRight(1).map(_.stripPrefix("  ")) :::
+                "await persistState(tx, state);" ::
+                bodyLines.last.stripPrefix("  ") :: Nil
+            (header ::
+              "  return prisma.$transaction(async (tx) => {" ::
+              steps.map("    " + _) :::
+              List("  });", "};")).mkString("\n")
+          else
+            (header :: "  const state = makeState();" ::
+              invCheck ::: guardCheck ::: bodyLines ::: List("};")).mkString("\n")
         val routeArgs =
           (endpoint.pathParams.map(p => toCamelCase(p.name)) ++ Option.when(hasRequestBody)("body"))
             .mkString(", ")

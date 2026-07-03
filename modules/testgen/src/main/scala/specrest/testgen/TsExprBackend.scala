@@ -141,13 +141,13 @@ object TsExprBackend extends ExprBackendBase:
       case _      => "some"
     val nested = bound.foldRight(body): (pair, acc) =>
       val (v, d) = pair
-      s"Array.from($d).$method(($v) => ($acc))"
+      s"quantDomain($d).$method(($v) => ($acc))"
     kind match
       case QNo() => s"(!($nested))"
       case _     => nested
 
   def theExpr(v: String, dom: String, body: String): String =
-    s"(Array.from($dom).find(($v) => ($body)) ?? null)"
+    s"(quantDomain($dom).find(($v) => ($body)) ?? null)"
 
   def lambdaExpr(param: String, body: String): String = s"(($param) => ($body))"
 
