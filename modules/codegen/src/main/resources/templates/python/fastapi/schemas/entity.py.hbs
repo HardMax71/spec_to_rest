@@ -4,12 +4,12 @@ from {{this.module}} import {{join this.names ", "}}
 {{#if stdlibImports.length}}
 
 {{/if}}
-from pydantic import BaseModel, ConfigDict{{#if needsSecretStr}}, SecretStr{{/if}}
+from pydantic import BaseModel, ConfigDict{{#if needsField}}, Field{{/if}}{{#if needsSecretStr}}, SecretStr{{/if}}
 
 
 class {{entity.createSchemaName}}(BaseModel):
 {{#each nonIdFields}}
-    {{this.columnName}}: {{this.validationType}}{{#if this.nullable}} = None{{/if}}
+    {{this.columnName}}: {{this.validationType}}{{{this.fieldSuffix}}}
 {{else}}
     pass
 {{/each}}
@@ -27,9 +27,9 @@ class {{entity.readSchemaName}}(BaseModel):
 class {{entity.updateSchemaName}}(BaseModel):
 {{#each nonIdFields}}
 {{#if this.nullable}}
-    {{this.columnName}}: {{this.validationType}} = None
+    {{this.columnName}}: {{this.validationType}}{{{this.updateSuffix}}}
 {{else}}
-    {{this.columnName}}: {{this.validationType}} | None = None
+    {{this.columnName}}: {{this.validationType}} | None{{{this.updateSuffix}}}
 {{/if}}
 {{else}}
     pass
@@ -39,7 +39,7 @@ class {{entity.updateSchemaName}}(BaseModel):
 
 class {{this.schemaName}}(BaseModel):
 {{#each this.fields}}
-    {{this.columnName}}: {{this.validationType}}{{#if this.nullable}} = None{{/if}}
+    {{this.columnName}}: {{this.validationType}}{{{this.fieldSuffix}}}
 {{else}}
     pass
 {{/each}}

@@ -27,6 +27,7 @@ import specrest.codegen.migration.SchemaCodec
 import specrest.codegen.migration.SchemaSnapshot
 import specrest.codegen.openapi.OpenApi
 import specrest.convention.EndpointSpec
+import specrest.convention.StringRefinements
 import specrest.ir.HttpMethods
 import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
@@ -78,7 +79,9 @@ final private case class SchemaFieldView(
     columnName: String,
     validationType: String,
     domainType: String,
-    nullable: Boolean
+    nullable: Boolean,
+    fieldSuffix: String,
+    updateSuffix: String
 )
 
 final private case class ModelInitFieldView(columnName: String, bodyAccessor: String)
@@ -166,7 +169,8 @@ object EmitPython:
     val kernelCtx = KernelCtx(
       stateReady = irStateFields(profiled.ir).isEmpty || bridgePlan.isRight,
       hasState = bridgePlan.toOption.exists(StateBridge.hasState),
-      hasInv = irStateFields(profiled.ir).nonEmpty
+      hasInv = irStateFields(profiled.ir).nonEmpty,
+      ir = profiled.ir
     )
     val templates = Templates.pythonFastapiPostgres
     val dialect   = Dialect.forDatabase(profiled.profile.database)
@@ -237,7 +241,8 @@ object EmitPython:
         nonIdFields.map(f => f.copy(ormColumnType = modelColumnType(f.ormColumnType, dialect)))
       val readFieldsRaw =
         nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
-      val nonIdFieldViews      = nonIdFields.map(schemaInputField)
+      val nonIdFieldViews =
+        nonIdFields.map(f => schemaInputField(f, entityFieldRefinement(profiled, entity, f)))
       val readFieldViews       = readFieldsRaw.map(schemaReadField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
@@ -256,7 +261,9 @@ object EmitPython:
         ("readFields"           -> readFieldViews) +
         ("customRequestSchemas" -> customRequestSchemas) +
         ("needsSecretStr"       -> needsSecretStr) +
-        ("stdlibImports"        -> schemaStdlib)
+        ("needsField" -> (nonIdFieldViews ++ customRequestSchemas.flatMap(_.fields))
+          .exists(v => v.fieldSuffix.contains("Field(") || v.updateSuffix.contains("Field("))) +
+        ("stdlibImports" -> schemaStdlib)
       val routerCtx  = base + ("routerImports"  -> routerImports)
       val serviceCtx = base + ("serviceImports" -> serviceImports)
 
@@ -416,13 +423,44 @@ object EmitPython:
       ("table"            -> table) +
       ("entityOperations" -> entityOps)
 
-  private def schemaInputField(f: ProfiledField): SchemaFieldView =
-    val ptype =
-      if SensitiveFields.isSensitive(f.columnName) then "SecretStr" else f.validationType
-    SchemaFieldView(f.columnName, ptype, f.domainType, f.nullable)
+  // Refinements the reduction can express become pydantic constraints, so the
+  // boundary rejects what the spec's types reject; the compiled Dafny guards
+  // cannot check regex predicates (they are proof-level stubs) and the
+  // database CHECKs cannot either, so this is the only enforcement point.
+  private def schemaInputField(
+      f: ProfiledField,
+      reduced: StringRefinements.Reduced
+  ): SchemaFieldView =
+    val sensitive = SensitiveFields.isSensitive(f.columnName)
+    val ptype     = if sensitive then "SecretStr" else f.validationType
+    val args =
+      if sensitive || f.domainType != "str" then Nil
+      else
+        reduced.minLen.map(n => s"min_length=$n").toList ++
+          reduced.maxLen.map(n => s"max_length=$n").toList ++
+          StringRefinements.combinedPattern(reduced.patterns).map(p => s"pattern=r\"$p\"").toList
+    val fieldSuffix =
+      if args.isEmpty then if f.nullable then " = None" else ""
+      else if f.nullable then s" = Field(default=None, ${args.mkString(", ")})"
+      else s" = Field(${args.mkString(", ")})"
+    val updateSuffix =
+      if args.isEmpty then " = None"
+      else s" = Field(default=None, ${args.mkString(", ")})"
+    SchemaFieldView(f.columnName, ptype, f.domainType, f.nullable, fieldSuffix, updateSuffix)
+
+  private def entityFieldRefinement(
+      profiled: ProfiledService,
+      entity: ProfiledEntity,
+      f: ProfiledField
+  ): StringRefinements.Reduced =
+    svcEntities(profiled.ir)
+      .find(d => entName(d) == entity.entityName)
+      .flatMap(d => entFields(d).find(fd => fldName(fd) == f.fieldName))
+      .map(fd => StringRefinements.reduceField(fldType(fd), fldDefault(fd), profiled.ir))
+      .getOrElse(StringRefinements.Reduced(None, None, Nil))
 
   private def schemaReadField(f: ProfiledField): SchemaFieldView =
-    SchemaFieldView(f.columnName, f.validationType, f.domainType, f.nullable)
+    SchemaFieldView(f.columnName, f.validationType, f.domainType, f.nullable, "", "")
 
   private def modelInitField(f: ProfiledField): ModelInitFieldView =
     val accessor =
@@ -442,7 +480,8 @@ object EmitPython:
   final private case class KernelCtx(
       stateReady: Boolean,
       hasState: Boolean,
-      hasInv: Boolean
+      hasInv: Boolean,
+      ir: ServiceIRFull
   )
 
   // Python types the kernel boundary can convert (matching the Go/TS gates);
@@ -482,7 +521,14 @@ object EmitPython:
             (entity.createSchemaName, Option.empty[CustomRequestSchema])
           case Some(name) =>
             val fields = OperationContext.customRequestBodyFields(op)
-            (name, Some(CustomRequestSchema(name, fields.map(schemaInputField))))
+            val byName = endpoint.bodyParams.map(p => p.name -> p.typeExpr).toMap
+            val views = fields.map { f =>
+              val reduced = byName.get(f.fieldName) match
+                case Some(t) => StringRefinements.reduceField(t, None, kernelCtx.ir)
+                case None    => StringRefinements.Reduced(None, None, Nil)
+              schemaInputField(f, reduced)
+            }
+            (name, Some(CustomRequestSchema(name, views)))
 
     val (
       responseAnnotation,

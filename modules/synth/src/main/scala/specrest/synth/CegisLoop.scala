@@ -176,7 +176,7 @@ final class CegisLoop(
     val err = VerifierError(
       category = "malformed_response",
       message = s"the previous response was rejected before verification: $message. " +
-        s"Reply with one fenced Dafny code block containing the complete " +
+        "Reply with one fenced Dafny code block containing the complete " +
         s"method '${classificationOperationName(req.classification)}' with its contracts unchanged."
     )
     val record =

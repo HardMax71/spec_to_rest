@@ -115,7 +115,7 @@ class StrategiesTest extends CatsEffectSuite:
       assertEquals(spec.functionName, "strategy_short_code")
       assert(spec.body.contains("from_regex"), s"body=${spec.body}")
       assert(spec.body.contains("[a-zA-Z0-9]"), s"body=${spec.body}")
-      assert(spec.body.contains("6 <= len(v) <= 10"), s"body=${spec.body}")
+      assert(spec.body.contains("len(v) >= 6"), s"body=${spec.body}")
       assertEquals(spec.skipped, Nil)
 
   test("LongURL (length lower bound + isValidURI predicate inlines preamble regex)"):

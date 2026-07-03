@@ -96,7 +96,10 @@ class BehavioralTest extends BehavioralTestSupport:
       val resolveNeg = out.tests
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail("missing"))
-      assert(resolveNeg.body.contains("client.get(f\"/{code}\")"), resolveNeg.body)
+      assert(
+        resolveNeg.body.contains("client.get(f\"/{code}\", follow_redirects=False)"),
+        resolveNeg.body
+      )
 
   test("Operation with no inputs has no @given decorator"):
     loadProfiled("fixtures/spec/edge_cases.spec").map: profiled =>

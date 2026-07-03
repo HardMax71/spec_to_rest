@@ -428,8 +428,8 @@ class EmitTest extends CatsEffectSuite:
       val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val schema = files("app/schemas/user.py")
       assert(
-        schema.contains("from pydantic import BaseModel, ConfigDict, SecretStr"),
-        s"user schema should import SecretStr; got:\n$schema"
+        schema.contains("from pydantic import BaseModel, ConfigDict, Field, SecretStr"),
+        s"user schema should import Field and SecretStr; got:\n$schema"
       )
       assert(
         schema.contains("password_hash: SecretStr"),
