@@ -63,6 +63,10 @@ class {{entity.entityName}}Service:
         {{this.kernelResultBind}} = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}})
 {{#if this.kernelHasState}}
         await persist_state(self._session, state)
+        # The request session otherwise commits in dependency teardown, which
+        # can run after the response is sent; a conformance client reading
+        # /admin/state immediately would race the write.
+        await self._session.commit()
 {{/if}}
         return {{this.kernelResultExpr}}
 {{else if (eq this.routeKind "create")}}
