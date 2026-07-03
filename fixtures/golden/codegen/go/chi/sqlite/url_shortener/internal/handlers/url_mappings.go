@@ -24,6 +24,10 @@ func (h *UrlMappingHandler) Shorten(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	if err := body.Validate(); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
 	if err := h.svc.Shorten(r.Context(), body); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

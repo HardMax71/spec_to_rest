@@ -251,12 +251,27 @@ class EmitTest extends CatsEffectSuite:
       val byPath = files.map(f => f.path -> f.content).toMap
       val service =
         byPath.getOrElse("internal/services/url_mapping.go", fail("no go service emitted"))
-      // Shorten: body op with a two-value (code, short_url) return -> map[string]any.
+      // Shorten: body op with a two-value (code, short_url) return -> map[string]any,
+      // hydrated, guarded, and persisted inside one transaction.
       assert(
         service.contains(
           "outCode, outShortURL := dafnykernel.Companion_Default___.Shorten(state, dafnykernel.StringToDafny(body.URL))"
         ),
         s"Shorten should marshal body.URL and capture both outputs — got:\n$service"
+      )
+      assert(
+        service.contains("state, err := hydrateState(ctx, tx)"),
+        s"kernel ops must hydrate state inside the transaction — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "dafnykernel.Companion_Default___.RequiresShorten(state, dafnykernel.StringToDafny(body.URL))"
+        ),
+        s"kernel ops must check the compiled requires twin — got:\n$service"
+      )
+      assert(
+        service.contains("persistState(ctx, tx, state)"),
+        s"kernel ops must persist the mutated state — got:\n$service"
       )
       assert(
         service.contains("\"code\":") && service.contains(

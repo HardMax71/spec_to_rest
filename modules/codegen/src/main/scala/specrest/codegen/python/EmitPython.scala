@@ -242,7 +242,9 @@ object EmitPython:
       val readFieldsRaw =
         nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val nonIdFieldViews =
-        nonIdFields.map(f => schemaInputField(f, entityFieldRefinement(profiled, entity, f)))
+        nonIdFields.map(f =>
+          schemaInputField(f, EmitShared.entityFieldRefinement(profiled, entity, f))
+        )
       val readFieldViews       = readFieldsRaw.map(schemaReadField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
       val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
@@ -447,17 +449,6 @@ object EmitPython:
       if args.isEmpty then " = None"
       else s" = Field(default=None, ${args.mkString(", ")})"
     SchemaFieldView(f.columnName, ptype, f.domainType, f.nullable, fieldSuffix, updateSuffix)
-
-  private def entityFieldRefinement(
-      profiled: ProfiledService,
-      entity: ProfiledEntity,
-      f: ProfiledField
-  ): StringRefinements.Reduced =
-    svcEntities(profiled.ir)
-      .find(d => entName(d) == entity.entityName)
-      .flatMap(d => entFields(d).find(fd => fldName(fd) == f.fieldName))
-      .map(fd => StringRefinements.reduceField(fldType(fd), fldDefault(fd), profiled.ir))
-      .getOrElse(StringRefinements.Reduced(None, None, Nil))
 
   private def schemaReadField(f: ProfiledField): SchemaFieldView =
     SchemaFieldView(f.columnName, f.validationType, f.domainType, f.nullable, "", "")
