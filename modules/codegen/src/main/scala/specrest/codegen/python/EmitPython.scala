@@ -799,12 +799,14 @@ object EmitPython:
     val typingNames =
       (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any")).toList
     val stdlib =
-      Option
-        .when(typingNames.nonEmpty)(s"from typing import ${typingNames.mkString(", ")}")
+      (Option
+        .when(typingNames.nonEmpty)(
+          "typing" -> s"from typing import ${typingNames.mkString(", ")}"
+        )
         .toList :::
         finalizeStdlibImports(stdlibByModule).map(i =>
-          s"from ${i.module} import ${i.names.mkString(", ")}"
-        )
+          i.module -> s"from ${i.module} import ${i.names.mkString(", ")}"
+        )).sortBy(_._1).map(_._2)
 
     val fastapiNames = List(
       Some("APIRouter"),
