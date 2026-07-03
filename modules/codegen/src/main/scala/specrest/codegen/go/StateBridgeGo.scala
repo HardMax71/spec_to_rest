@@ -66,6 +66,9 @@ object StateBridgeGo:
     val entities   = planned.relations.map(_.entity).distinctBy(_.entityName)
     val needsTime  = entities.exists(_.fields.exists(_.domainType == "time.Time"))
     val timeImport = if needsTime then "\n\t\"time\"" else ""
+    val scalarImports =
+      if planned.scalars.isEmpty then ""
+      else "\n\t\"database/sql\"\n\t\"errors\""
 
     val hydrate = new StringBuilder
     for e <- entities do
@@ -108,12 +111,16 @@ object StateBridgeGo:
       persist ++= s"\t\tvalue := (*pair.IndexInt(1)).(dafnykernel.${e.entityName})\n"
       persist ++= "\t\tseen[key] = true\n"
       persist ++= s"\t\trow, exists := $existing[key]\n"
-      for f <- e.fields do
+      // The key column stays immutable on updates (the row was fetched by it,
+      // and rewriting it from the Dafny value could desync row identity from
+      // the map key); inserts set it from the value like every other field.
+      for f <- e.fields if f.fieldName != r.keyField.fieldName do
         persist ++= s"\t\trow.${pascal(f.fieldName)} = ${fromDafnyExpr(f, "value")}\n"
       persist ++= "\t\tif exists {\n"
       persist ++= "\t\t\tif _, err := db.NewUpdate().Model(&row).WherePK().Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t} else {\n"
+      persist ++= s"\t\t\trow.${pascal(r.keyField.fieldName)} = ${fromDafnyExpr(r.keyField, "value")}\n"
       persist ++= "\t\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t}\n"
@@ -136,7 +143,10 @@ object StateBridgeGo:
     val scalarHydrate = new StringBuilder
     if planned.scalars.nonEmpty then
       scalarHydrate ++= "\tscalarRow := new(models.ServiceState)\n"
-      scalarHydrate ++= "\tif err := db.NewSelect().Model(scalarRow).Where(\"id = 1\").Limit(1).Scan(ctx); err == nil {\n"
+      scalarHydrate ++= "\tif err := db.NewSelect().Model(scalarRow).Where(\"id = 1\").Limit(1).Scan(ctx); err != nil {\n"
+      scalarHydrate ++= "\t\tif !errors.Is(err, sql.ErrNoRows) {\n"
+      scalarHydrate ++= "\t\t\treturn nil, err\n\t\t}\n"
+      scalarHydrate ++= "\t} else {\n"
       for sc <- planned.scalars do
         scalarHydrate ++= s"\t\tst.${stateFieldName(sc.stateField)} = dafnykernel.IntToDafny(scalarRow.${pascal(sc.columnName)})\n"
       scalarHydrate ++= "\t}\n"
@@ -144,7 +154,7 @@ object StateBridgeGo:
     s"""package services
        |
        |import (
-       |\t"context"$timeImport
+       |\t"context"$scalarImports$timeImport
        |
        |\t"github.com/uptrace/bun"
        |

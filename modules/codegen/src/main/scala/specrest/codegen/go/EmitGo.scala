@@ -69,7 +69,7 @@ final private case class GoOperation(
     requestBodyType: String,
     customRequestSchemaName: Option[String],
     customRequestFields: List[GoFieldView],
-    customValidation: Option[GoValidation.StructValidation],
+    customRules: List[GoValidation.FieldRule],
     bodyValidates: Boolean,
     responseType: String,
     serviceMethod: String,
@@ -593,18 +593,23 @@ object EmitGo:
         GoCustomSchema(name, op.customRequestFields, schemaStructLines(op.customRequestFields))
       )
 
-    val createValidation =
-      GoValidation.forStruct(
-        entity.createSchemaName,
-        entity.fields
-          .filterNot(_.fieldName == "id")
-          .map(f =>
-            GoValidation.FieldRule(f, EmitShared.entityFieldRefinement(profiled, entity, f))
-          )
-      )
-    val customValidations = operations.flatMap(_.customValidation).distinctBy(_.structName)
-    val allValidations    = createValidation.toList ++ customValidations
-    val validatedNames    = allValidations.map(_.structName).toSet
+    // Validators emit only for request types some handler actually decodes;
+    // an unused create schema would otherwise carry dead validation code.
+    val usedBodyTypes = operations.filter(_.hasRequestBody).map(_.requestBodyType).toSet
+    val createRules = entity.fields
+      .filterNot(_.fieldName == "id")
+      .map(f => GoValidation.FieldRule(f, EmitShared.entityFieldRefinement(profiled, entity, f)))
+    val structRules =
+      (Option
+        .when(usedBodyTypes.contains(entity.createSchemaName))(
+          entity.createSchemaName -> createRules
+        )
+        .toList :::
+        operations
+          .filter(o => o.customRequestSchemaName.isDefined && o.customRules.nonEmpty)
+          .map(o => o.requestBodyType -> o.customRules)).distinctBy(_._1)
+    val fileValidations = GoValidation.forStructs(structRules)
+    val validatedNames  = fileValidations.structs.map(_.structName).toSet
     val opsWithValidation = operations.map: o =>
       o.copy(bodyValidates = o.hasRequestBody && validatedNames.contains(o.requestBodyType))
 
@@ -633,18 +638,15 @@ object EmitGo:
       usesKernel = usesKernel,
       usesModels = usesModels,
       customSchemas = customSchemas,
-      validationBlock = allValidations
-        .map(v =>
-          (v.patternVars.mkString("\n") :: v.funcText :: Nil)
-            .filter(_.nonEmpty)
-            .mkString("\n\n")
-        )
-        .mkString("\n\n") match
-        case ""    => ""
-        case block => "\n" + block,
-      needsRegexp = allValidations.exists(_.patternVars.nonEmpty),
-      needsFmt = allValidations.nonEmpty,
-      needsUtf8 = allValidations.exists(_.needsUtf8),
+      validationBlock =
+        if fileValidations.isEmpty then ""
+        else
+          "\n" + (fileValidations.patternVars.mkString("\n") ::
+            fileValidations.structs.map(_.funcText)).filter(_.nonEmpty).mkString("\n\n")
+      ,
+      needsRegexp = fileValidations.needsRegexp,
+      needsFmt = !fileValidations.isEmpty,
+      needsUtf8 = fileValidations.needsUtf8,
       modelStructLines = padCells(
         List(
           "bun.BaseModel",
@@ -738,12 +740,12 @@ object EmitGo:
     val hasRequestBody          = ctx.hasRequestBody
     val routeKind               = ctx.routeKind
 
-    val (requestBodyType, customRequestFields, customValidation) =
-      if !hasRequestBody then ("", List.empty[GoFieldView], None)
+    val (requestBodyType, customRequestFields, customRules) =
+      if !hasRequestBody then ("", List.empty[GoFieldView], List.empty[GoValidation.FieldRule])
       else
         customRequestSchemaName match
           case None =>
-            (entity.createSchemaName, List.empty[GoFieldView], None)
+            (entity.createSchemaName, List.empty[GoFieldView], List.empty[GoValidation.FieldRule])
           case Some(name) =>
             val fields = OperationContext.customRequestBodyFields(op)
             val byName = endpoint.bodyParams.map(p => p.name -> p.typeExpr).toMap
@@ -753,7 +755,7 @@ object EmitGo:
                 case None    => StringRefinements.Reduced(None, None, Nil)
               GoValidation.FieldRule(f, reduced)
             }
-            (name, fields.map(toGoField), GoValidation.forStruct(name, rules))
+            (name, fields.map(toGoField), rules)
 
     val pathParamCallArgs  = pathParams.map(_.goName).mkString(", ")
     val pathParamSignature = pathParams.map(p => s"${p.goName} ${p.domainType}").mkString(", ")
@@ -848,7 +850,7 @@ object EmitGo:
       requestBodyType = requestBodyType,
       customRequestSchemaName = customRequestSchemaName,
       customRequestFields = customRequestFields,
-      customValidation = customValidation,
+      customRules = customRules,
       bodyValidates = false,
       responseType = responseType,
       serviceMethod = serviceMethodName,
