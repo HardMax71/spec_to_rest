@@ -584,15 +584,17 @@ object EmitPython:
     // The kernel boundary converts scalars only; state must round-trip through
     // the bridge; every output must convert back. Anything else keeps today's
     // fail-loud stub instead of silently running on wrong values.
+    // Query-parameter ops are a stated v1 non-goal (#510): the router emits no
+    // query variables, so routing them through the kernel would NameError.
     val kernelArgSources: List[(String, String)] =
       endpoint.pathParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
-        endpoint.queryParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
         endpoint.bodyParams.map(p =>
           s"body.${p.name}" -> pythonTypeForParam(p.typeExpr, typeLookup)
         )
     val kernelOuts = op.responseFields
     val kernelEligible =
       op.dafnyMethod.isDefined &&
+        endpoint.queryParams.isEmpty &&
         kernelCtx.stateReady &&
         kernelArgSources.forall((_, t) => KernelScalarTypes.contains(t)) &&
         kernelOuts.nonEmpty &&

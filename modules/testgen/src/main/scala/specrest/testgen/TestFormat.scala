@@ -69,12 +69,11 @@ private[testgen] object TestFormat:
           queryParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
         s", params={$pairs}"
     // Redirect routes answer with an external Location; a conformance client
-    // must assert it, never fetch it (and starlette's in-process TestClient
-    // follows by default).
-    val redirectExpr =
-      if ep.successStatus >= 300 && ep.successStatus < 400 then ", follow_redirects=False"
-      else ""
-    s"client.$method($pathExpr$bodyExpr$queryExpr$redirectExpr)"
+    // must assert it, never fetch it. The conftest helper also discards
+    // examples whose stored URL httpx cannot represent at all.
+    if ep.successStatus >= 300 && ep.successStatus < 400 then
+      s"request_without_redirects(client.$method, $pathExpr$bodyExpr$queryExpr)"
+    else s"client.$method($pathExpr$bodyExpr$queryExpr)"
 
   def pythonPathLiteral(ep: EndpointSpec): String =
     if ep.pathParams.isEmpty then ExprToPython.pyString(ep.path)

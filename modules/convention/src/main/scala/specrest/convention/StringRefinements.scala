@@ -55,6 +55,7 @@ object StringRefinements:
   // inline where-clause on the field itself.
   def reduceField(t: type_expr, inlineWhere: Option[expr], ir: ServiceIRFull): Reduced =
     val aliasPart = t match
+      case OptionTypeF(inner, _) => reduceField(inner, None, ir)
       case NamedTypeF(name, _) =>
         svcTypeAliases(ir).find(a => talName(a) == name) match
           case Some(alias) => reduce(talConstraint(alias), ir)

@@ -29,7 +29,6 @@ object SeedVerifiedCacheMain extends IOApp:
       val spec  = args.head
       val root  = Paths.get(args(1)).resolve("verified")
       val model = args(2)
-      val temp  = args(3).toDouble
       val pairs = args
         .drop(4)
         .grouped(2)
@@ -39,6 +38,9 @@ object SeedVerifiedCacheMain extends IOApp:
 
       val program =
         for
+          temp <- IO.fromOption(args(3).toDoubleOption)(
+                    new RuntimeException(s"temperature '${args(3)}' is not a number")
+                  )
           src    <- IO.blocking(Files.readString(Paths.get(spec)))
           parsed <- Parse.parseSpec(src)
           tree   <- IO.fromEither(parsed.left.map(e => new RuntimeException(s"parse: $e")))

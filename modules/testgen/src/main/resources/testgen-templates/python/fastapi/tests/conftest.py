@@ -32,6 +32,25 @@ if ADMIN_TOKEN:
     client.headers["Authorization"] = f"Bearer {ADMIN_TOKEN}"
 
 
+def request_without_redirects(request_fn, *args, **kwargs):
+    """Issue a redirect-route request without following the Location.
+
+    httpx eagerly parses the Location header even with following disabled, and
+    a spec-valid URL is not always representable by its URL model (e.g. a
+    literal ``http://:A`` port). The response never materializes in that case,
+    so the example is discarded rather than failed: the service echoed exactly
+    what the spec stored, and only the client library cannot exercise it.
+    """
+    from hypothesis import assume
+
+    try:
+        return request_fn(*args, follow_redirects=False, **kwargs)
+    except httpx.RemoteProtocolError:
+        assume(False)
+    except httpx.InvalidURL:
+        assume(False)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _admin_endpoint_available():
     """Fail-fast guard: tests need the /admin router reachable with ADMIN_TOKEN.

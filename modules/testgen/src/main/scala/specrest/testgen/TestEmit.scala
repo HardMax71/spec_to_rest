@@ -218,7 +218,7 @@ object TestEmit:
          |from hypothesis import HealthCheck, assume, given, settings
          |from hypothesis import strategies as st
          |
-         |from tests.conftest import client
+         |from tests.conftest import client, request_without_redirects
          |from tests.predicates import is_valid_email, is_valid_uri
          |from tests.redaction import redact
          |

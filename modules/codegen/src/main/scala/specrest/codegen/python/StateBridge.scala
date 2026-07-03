@@ -203,9 +203,11 @@ object StateBridge:
       persistLines += "    scalar_row = ("
       persistLines += "        await session.execute(select(_ServiceStateRow))"
       persistLines += "    ).scalar_one_or_none()"
-      persistLines += "    if scalar_row is not None:"
+      persistLines += "    if scalar_row is None:"
+      persistLines += "        scalar_row = _ServiceStateRow()"
+      persistLines += "        session.add(scalar_row)"
       for sc <- planned.scalars do
-        persistLines += s"        scalar_row.${sc.columnName} = int(st.${dafnyName(sc.stateField)})"
+        persistLines += s"    scalar_row.${sc.columnName} = int(st.${dafnyName(sc.stateField)})"
     persistLines += "    await session.flush()"
 
     val datetimeHelpers =
@@ -223,14 +225,14 @@ object StateBridge:
            |def _from_epoch(value: Any) -> datetime:
            |    return datetime.fromtimestamp(int(value), tz=timezone.utc)""".stripMargin
 
-    val datetimeImport = if needsDatetime then "\nfrom datetime import datetime, timezone" else ""
+    val datetimeImport =
+      if needsDatetime then "\nfrom datetime import datetime, timezone\nfrom typing import Any\n"
+      else "\n"
     val adapterNames =
       List("from_dafny_map", "from_dafny_str", "make_state", "to_dafny_map", "to_dafny_str")
 
     s"""from __future__ import annotations
        |${datetimeImport}
-       |from typing import Any
-       |
        |from sqlalchemy import select
        |from sqlalchemy.ext.asyncio import AsyncSession
        |

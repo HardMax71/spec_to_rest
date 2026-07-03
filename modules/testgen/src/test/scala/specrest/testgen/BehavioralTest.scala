@@ -97,7 +97,7 @@ class BehavioralTest extends BehavioralTestSupport:
         .find(_.name == "test_resolve_negative_code_not_in_store")
         .getOrElse(fail("missing"))
       assert(
-        resolveNeg.body.contains("client.get(f\"/{code}\", follow_redirects=False)"),
+        resolveNeg.body.contains("request_without_redirects(client.get, f\"/{code}\")"),
         resolveNeg.body
       )
 

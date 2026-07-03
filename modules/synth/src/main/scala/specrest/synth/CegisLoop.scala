@@ -186,7 +186,10 @@ final class CegisLoop(
       case Some(reason) =>
         IO.pure(CegisOutcome.Aborted(reason, history.lastBody, nextHistory): CegisOutcome)
       case None =>
-        iterate(req, key, i + 1, nextHistory, Some(err))
+        // With no real prior body the repair prompt would wrap an empty
+        // attempt; a fresh initial-prompt sample converges better.
+        val nextError = if history.lastBody.exists(_.nonEmpty) then Some(err) else None
+        iterate(req, key, i + 1, nextHistory, nextError)
 
   private def verifyAndContinue(
       req: SynthRequest,
