@@ -320,7 +320,10 @@ private[z3] trait RelationFrames:
       hasUnclassifiedMention = hasUnclassifiedMention
     )
 
-  private[z3] def keyIdentity(expr: expr): String = expr.toString
+  // Spans differ between mentions of the same key, so identity must ignore
+  // them or two ensures over metadata'[code] count as two distinct keys and
+  // the frame emits duplicated (and for singleton field sets, wrong) clauses.
+  private[z3] def keyIdentity(expr: expr): String = stripSpans(expr).toString
 
   private[z3] def matchesFullReplacement(expr: expr, stateName: String): Boolean = expr match
     case BinaryOpF(BEq(), l, r, _) =>
@@ -426,18 +429,25 @@ private[z3] trait RelationFrames:
   ): Z3Expr =
     val pieces = mutable.ArrayBuffer.empty[Z3Expr]
     isFieldUpdated.foreach(fu => pieces += Z3Expr.Implies(fu, domPost))
+    // A field-updated key may be fresh (an insert whose ensures pin fields),
+    // so the post-domain bound is pre plus the updated keys; asserting
+    // post-subset-of-pre alongside freshness is contradictory and made every
+    // such preserves-VC vacuously unsat.
+    val domPreOrUpdated = isFieldUpdated match
+      case Some(fu) => Z3Expr.Or(List(domPre, fu))
+      case None     => domPre
     isRemoved match
       case Some(rm) =>
         val notRemoved = Z3Expr.Not(rm)
         pieces += Z3Expr.Implies(Z3Expr.And(List(notRemoved, domPre)), domPost)
         pieces += Z3Expr.Implies(
-          Z3Expr.And(List(notRemoved, Z3Expr.Not(domPre))),
+          Z3Expr.And(List(notRemoved, Z3Expr.Not(domPreOrUpdated))),
           Z3Expr.Not(domPost)
         )
         pieces += Z3Expr.Implies(rm, Z3Expr.Not(domPost))
       case None =>
         pieces += Z3Expr.Implies(domPre, domPost)
-        pieces += Z3Expr.Implies(domPost, domPre)
+        pieces += Z3Expr.Implies(domPost, domPreOrUpdated)
     if pieces.length == 1 then pieces.head else Z3Expr.And(pieces.toList)
 
   private[z3] def buildMapClause(
