@@ -115,14 +115,15 @@ object StateBridgeTs:
       persist ++= "    }\n"
       persist ++= "  }\n"
     if planned.scalars.nonEmpty then
-      persist ++= "  const scalarRow = await tx.serviceState.findUnique({ where: { id: 1 } });\n"
-      persist ++= "  if (scalarRow) {\n"
-      persist ++= "    await tx.serviceState.update({\n"
-      persist ++= "      where: { id: 1 },\n"
-      persist ++= "      data: {\n"
+      persist ++= "  const scalarData = {\n"
       for sc <- planned.scalars do
-        persist ++= s"        ${camel(sc.columnName)}: intFromDafny(st['${dafnyName(sc.stateField)}']),\n"
-      persist ++= "      },\n    });\n  }\n"
+        persist ++= s"    ${camel(sc.columnName)}: intFromDafny(st['${dafnyName(sc.stateField)}']),\n"
+      persist ++= "  };\n"
+      persist ++= "  await tx.serviceState.upsert({\n"
+      persist ++= "    where: { id: 1 },\n"
+      persist ++= "    update: scalarData,\n"
+      persist ++= "    create: { id: 1, ...scalarData },\n"
+      persist ++= "  });\n"
 
     s"""import type { Prisma } from '@prisma/client';
        |
