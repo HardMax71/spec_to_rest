@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UrlMappingCreate(BaseModel):
-    code: str
-    url: str
+    code: str = Field(min_length=6, pattern=r"^(?:^[a-zA-Z0-9]+$)$")
+    url: str = Field(min_length=1, pattern=r"^(?:^https?://[^\s]+)$")
     created_at: datetime
     click_count: int
 
@@ -21,11 +21,11 @@ class UrlMappingRead(BaseModel):
 
 
 class UrlMappingUpdate(BaseModel):
-    code: str | None = None
-    url: str | None = None
+    code: str | None = Field(default=None, min_length=6, pattern=r"^(?:^[a-zA-Z0-9]+$)$")
+    url: str | None = Field(default=None, min_length=1, pattern=r"^(?:^https?://[^\s]+)$")
     created_at: datetime | None = None
     click_count: int | None = None
 
 
 class ShortenRequest(BaseModel):
-    url: str
+    url: str = Field(min_length=1, pattern=r"^(?:^https?://[^\s]+)$")

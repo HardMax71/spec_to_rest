@@ -185,114 +185,53 @@
         "op" : "and",
         "left" : {
           "kind" : "BinaryOp",
-          "op" : "and",
+          "op" : ">=",
           "left" : {
-            "kind" : "BinaryOp",
-            "op" : ">=",
-            "left" : {
-              "kind" : "Call",
-              "callee" : {
-                "kind" : "Identifier",
-                "name" : "len",
-                "span" : {
-                  "startLine" : 5,
-                  "startCol" : 32,
-                  "endLine" : 5,
-                  "endCol" : 35
-                }
-              },
-              "args" : [
-                {
-                  "kind" : "Identifier",
-                  "name" : "value",
-                  "span" : {
-                    "startLine" : 5,
-                    "startCol" : 36,
-                    "endLine" : 5,
-                    "endCol" : 41
-                  }
-                }
-              ],
+            "kind" : "Call",
+            "callee" : {
+              "kind" : "Identifier",
+              "name" : "len",
               "span" : {
                 "startLine" : 5,
                 "startCol" : 32,
                 "endLine" : 5,
-                "endCol" : 42
+                "endCol" : 35
               }
             },
-            "right" : {
-              "kind" : "IntLit",
-              "value" : 6,
-              "span" : {
-                "startLine" : 5,
-                "startCol" : 46,
-                "endLine" : 5,
-                "endCol" : 47
+            "args" : [
+              {
+                "kind" : "Identifier",
+                "name" : "value",
+                "span" : {
+                  "startLine" : 5,
+                  "startCol" : 36,
+                  "endLine" : 5,
+                  "endCol" : 41
+                }
               }
-            },
+            ],
             "span" : {
               "startLine" : 5,
               "startCol" : 32,
               "endLine" : 5,
-              "endCol" : 47
+              "endCol" : 42
             }
           },
           "right" : {
-            "kind" : "BinaryOp",
-            "op" : "<=",
-            "left" : {
-              "kind" : "Call",
-              "callee" : {
-                "kind" : "Identifier",
-                "name" : "len",
-                "span" : {
-                  "startLine" : 5,
-                  "startCol" : 52,
-                  "endLine" : 5,
-                  "endCol" : 55
-                }
-              },
-              "args" : [
-                {
-                  "kind" : "Identifier",
-                  "name" : "value",
-                  "span" : {
-                    "startLine" : 5,
-                    "startCol" : 56,
-                    "endLine" : 5,
-                    "endCol" : 61
-                  }
-                }
-              ],
-              "span" : {
-                "startLine" : 5,
-                "startCol" : 52,
-                "endLine" : 5,
-                "endCol" : 62
-              }
-            },
-            "right" : {
-              "kind" : "IntLit",
-              "value" : 10,
-              "span" : {
-                "startLine" : 5,
-                "startCol" : 66,
-                "endLine" : 5,
-                "endCol" : 68
-              }
-            },
+            "kind" : "IntLit",
+            "value" : 6,
             "span" : {
               "startLine" : 5,
-              "startCol" : 52,
+              "startCol" : 46,
               "endLine" : 5,
-              "endCol" : 68
+              "endCol" : 47
             }
           },
           "span" : {
             "startLine" : 5,
             "startCol" : 32,
             "endLine" : 5,
-            "endCol" : 68
+            "endCol" : 47
           }
         },
         "right" : {
@@ -2150,19 +2089,19 @@
             "endCol" : 37
           }
         },
-        "pattern" : "^https?:..[^\\s]+",
+        "pattern" : "^https?://[^\\s]+",
         "span" : {
           "startLine" : 3,
           "startCol" : 36,
           "endLine" : 3,
-          "endCol" : 64
+          "endCol" : 66
         }
       },
       "span" : {
         "startLine" : 3,
         "startCol" : 2,
         "endLine" : 3,
-        "endCol" : 64
+        "endCol" : 66
       }
     },
     {

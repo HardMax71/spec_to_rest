@@ -1,6 +1,12 @@
 {{#if serviceImports.needsTypingCast}}
 from typing import Any, cast
 
+{{else if serviceImports.needsAny}}
+from typing import Any
+
+{{/if}}
+{{#if serviceImports.needsDafnyKernel}}
+from fastapi import HTTPException
 {{/if}}
 {{#if serviceImports.sqlalchemyPlainImports.length}}
 from sqlalchemy import {{join serviceImports.sqlalchemyPlainImports ", "}}
@@ -14,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 {{/if}}
 {{#if serviceImports.needsDafnyKernel}}
 from app.dafny_kernel.module_ import default__ as _dafny_kernel
-from app.services._dafny_adapter import make_state
 {{/if}}
 {{#if serviceImports.needsModelImport}}
 from app.models.{{snake_case entity.entityName}} import {{entity.modelClassName}}
@@ -25,6 +30,12 @@ from app.schemas.{{snake_case entity.entityName}} import (
     {{this}},
 {{/each}}
 )
+{{/if}}
+{{#if serviceImports.adapterImports.length}}
+from app.services._dafny_adapter import {{join serviceImports.adapterImports ", "}}
+{{/if}}
+{{#if serviceImports.needsStateBridge}}
+from app.services._state_bridge import hydrate_state, persist_state
 {{/if}}
 
 
@@ -38,9 +49,22 @@ class {{entity.entityName}}Service:
 {{/unless}}
 {{#if this.dafnyMethod}}
     async def {{this.handlerName}}(self{{#if this.kernelHandlerSignature}}, {{this.kernelHandlerSignature}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
+{{#if this.kernelHasState}}
+        state = await hydrate_state(self._session)
+{{else}}
         state = make_state()
-        result = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.dafnyCallArgs}}, {{this}}{{/each}})
-        return result  # type: ignore[no-any-return]
+{{/if}}
+{{#if this.kernelHasInv}}
+        if not _dafny_kernel.ServiceStateInv(state):
+            raise HTTPException(status_code=500, detail="state invariant violated")
+{{/if}}
+        if not _dafny_kernel.{{this.kernelGuardName}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}}):
+            raise HTTPException(status_code={{this.kernelGuardStatus}}, detail="{{this.kernelGuardDetail}}")
+        {{this.kernelResultBind}} = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}})
+{{#if this.kernelHasState}}
+        await persist_state(self._session, state)
+{{/if}}
+        return {{this.kernelResultExpr}}
 {{else if (eq this.routeKind "create")}}
     async def {{this.handlerName}}(self, body: {{../entity.createSchemaName}}) -> {{../entity.readSchemaName}}:
         row = {{../entity.modelClassName}}(

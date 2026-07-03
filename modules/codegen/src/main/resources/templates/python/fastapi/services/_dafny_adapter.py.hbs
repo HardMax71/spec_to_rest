@@ -8,16 +8,29 @@
   follow-up to issue #27 in this repo.
 --}}from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from app.dafny_kernel import module_
+from app.dafny_kernel._dafny import CodePoint as _DafnyCodePoint
 from app.dafny_kernel._dafny import Map as _DafnyMap
 from app.dafny_kernel._dafny import Seq as _DafnySeq
+from app.dafny_kernel._dafny import SeqWithoutIsStrInference as _DafnyStrSeq
 from app.dafny_kernel._dafny import Set as _DafnySet
 
 
 def make_state() -> module_.ServiceState:
     return module_.ServiceState()
+
+
+# Dafny strings are CodePoint sequences, not ``str``; every string crossing the
+# kernel boundary must convert or map lookups miss and equalities are false.
+def to_dafny_str(s: str) -> Any:
+    return _DafnyStrSeq(map(_DafnyCodePoint, s))
+
+
+def from_dafny_str(s: Any) -> str:
+    return str(s.VerbatimString(False))
 
 
 def to_dafny_seq(xs: Iterable[Any]) -> Any:

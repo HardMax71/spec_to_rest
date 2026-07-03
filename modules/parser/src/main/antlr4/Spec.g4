@@ -498,7 +498,7 @@ RBRACK      : ']' ;
 // ensures `/pattern/` is only lexed as REGEX_LIT in that context;
 // otherwise `/` is lexed as SLASH (division).
 REGEX_LIT
-    : {lastNonWsType == MATCHES}? '/' ~[/\r\n]+ '/'
+    : {lastNonWsType == MATCHES}? '/' ('\\/' | ~[/\r\n])+ '/'
     ;
 
 FLOAT_LIT

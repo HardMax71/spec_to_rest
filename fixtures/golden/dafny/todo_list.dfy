@@ -38,10 +38,17 @@ predicate ServiceStateInv(st: ServiceState)
   && (st.next_id > 0)
   && (forall id :: (id in st.todos) ==> (id < st.next_id))
   && (forall id :: (id in st.todos) ==> ((st.todos[id].status == DONE <==> st.todos[id].completed_at != None)))
+  && (forall k :: k in st.todos ==> TodoInv(st.todos[k]))
 }
 
 function now(): int
 
+predicate RequiresCreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (|title| >= 1)
+}
 method CreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -61,6 +68,12 @@ method CreateTodo(st: ServiceState, title: string, description: Option<string>, 
   // YOUR CODE HERE
 }
 
+predicate RequiresGetTodo(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+}
 method GetTodo(st: ServiceState, id: int) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -72,6 +85,11 @@ method GetTodo(st: ServiceState, id: int) returns (todo: Todo)
   // YOUR CODE HERE
 }
 
+predicate RequiresListTodos(st: ServiceState, status_filter: Option<Status>, priority_filter: Option<Priority>, tag_filter: Option<string>)
+  reads st
+{
+  (ServiceStateInv(st))
+}
 method ListTodos(st: ServiceState, status_filter: Option<Status>, priority_filter: Option<Priority>, tag_filter: Option<string>) returns (results: seq<Todo>)
   modifies st
   requires ServiceStateInv(st)
@@ -82,6 +100,12 @@ method ListTodos(st: ServiceState, status_filter: Option<Status>, priority_filte
   // YOUR CODE HERE
 }
 
+predicate RequiresUpdateTodo(st: ServiceState, id: int, title: Option<string>, description: Option<string>, priority: Option<Priority>, tags: Option<set<string>>)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+}
 method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description: Option<string>, priority: Option<Priority>, tags: Option<set<string>>) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -100,6 +124,13 @@ method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description:
   // YOUR CODE HERE
 }
 
+predicate RequiresStartWork(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+  && (st.todos[id].status == TODO)
+}
 method StartWork(st: ServiceState, id: int) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -112,6 +143,13 @@ method StartWork(st: ServiceState, id: int) returns (todo: Todo)
   // YOUR CODE HERE
 }
 
+predicate RequiresComplete(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+  && (st.todos[id].status == IN_PROGRESS)
+}
 method Complete(st: ServiceState, id: int) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -124,6 +162,13 @@ method Complete(st: ServiceState, id: int) returns (todo: Todo)
   // YOUR CODE HERE
 }
 
+predicate RequiresReopen(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+  && (st.todos[id].status == DONE)
+}
 method Reopen(st: ServiceState, id: int) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
@@ -136,6 +181,13 @@ method Reopen(st: ServiceState, id: int) returns (todo: Todo)
   // YOUR CODE HERE
 }
 
+predicate RequiresArchive(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+  && (st.todos[id].status in {TODO, DONE})
+}
 method Archive(st: ServiceState, id: int)
   modifies st
   requires ServiceStateInv(st)
@@ -148,6 +200,12 @@ method Archive(st: ServiceState, id: int)
   // YOUR CODE HERE
 }
 
+predicate RequiresDeleteTodo(st: ServiceState, id: int)
+  reads st
+{
+  (ServiceStateInv(st))
+  && (id in st.todos)
+}
 method DeleteTodo(st: ServiceState, id: int)
   modifies st
   requires ServiceStateInv(st)

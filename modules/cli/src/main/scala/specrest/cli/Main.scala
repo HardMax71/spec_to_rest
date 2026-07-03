@@ -342,6 +342,15 @@ object Main
       .mapValidated: x =>
         if x > 0.0 then cats.data.Validated.valid(x)
         else cats.data.Validated.invalidNel(s"--cost-cap-usd must be > 0 (got $x)")
+    val maxOutputTokens = Opts
+      .option[Long](
+        "max-output-tokens",
+        "abort if cumulative LLM output tokens for the op exceed this"
+      )
+      .withDefault(50_000L)
+      .mapValidated: n =>
+        if n > 0 then cats.data.Validated.valid(n)
+        else cats.data.Validated.invalidNel(s"--max-output-tokens must be > 0 (got $n)")
     val tryCmd: Opts[IO[ExitStatus]] =
       Opts.subcommand("try", "Generate one Dafny body candidate via LLM"):
         (
@@ -405,16 +414,17 @@ object Main
           dafnyTimeout,
           maxIter,
           maxCost,
+          maxOutputTokens,
           fallbackFlag,
           escalateTo,
           hintsTriState,
           verbose,
           quiet,
           colorMode
-        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints, v, q, c) =>
+        ).mapN: (spec, op, m, t, mt, nc, cd, db, dt, mi, mc, mot, fb, esc, hints, v, q, c) =>
           Synth.runVerify(
             spec,
-            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, fb, esc, hints),
+            SynthVerifyOptions(op, m, t, mt, nc, cd, db, dt, mi, mc, mot, fb, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
     val verifyAllCmd: Opts[IO[ExitStatus]] =
@@ -433,15 +443,16 @@ object Main
           dafnyTimeout,
           maxIter,
           maxCost,
+          maxOutputTokens,
           escalateTo,
           hintsTriState,
           verbose,
           quiet,
           colorMode
-        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, esc, hints, v, q, c) =>
+        ).mapN: (spec, m, t, mt, nc, cd, db, dt, mi, mc, mot, esc, hints, v, q, c) =>
           Synth.runVerifyAll(
             spec,
-            SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, esc, hints),
+            SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, mot, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):

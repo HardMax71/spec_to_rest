@@ -128,7 +128,7 @@ class EmitTest extends CatsEffectSuite:
     // Non-JS artifacts must pass through verbatim (no rename, no appended exports).
     assertEquals(out("runtime.txt"), "raw\n")
 
-  test("kernel-routed Create handler still receives `body` parameter (#27 review)"):
+  test("kernel routing falls back to the route-kind body for non-scalar inputs"):
     SpecFixtures.loadIR("todo_list").map: ir =>
       val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("CreateTodo" -> "CreateTodo"))
@@ -142,13 +142,12 @@ class EmitTest extends CatsEffectSuite:
         .find(_.path == "app/services/todo.py")
         .map(_.content)
         .getOrElse(fail("no todo service emitted"))
+      // CreateTodo's body carries Option- and enum-typed fields the kernel
+      // boundary cannot convert, so the scalar gate must fall it back to the
+      // route-kind body instead of calling the kernel with wrong-typed values.
       assert(
-        todoService.contains("async def create_todo(self, body: CreateTodoRequest)"),
-        s"kernel-routed Create handler should accept `body: CreateTodoRequest` — got:\n$todoService"
-      )
-      assert(
-        todoService.contains("_dafny_kernel.CreateTodo(state, body."),
-        s"kernel call should reference body fields — got:\n$todoService"
+        !todoService.contains("_dafny_kernel.CreateTodo("),
+        s"non-scalar inputs must not be kernel-routed — got:\n$todoService"
       )
 
   test("kernel-routed router call args match kernel handler signature (#27 review)"):
@@ -201,23 +200,37 @@ class EmitTest extends CatsEffectSuite:
         .find(_.path == "app/services/url_mapping.py")
         .map(_.content)
         .getOrElse(fail("no url_mapping service emitted"))
-      // Shorten: body-only op (Other route). Signature must include body, call must reference body.url.
+      // Shorten: body-only op. Signature must include body; the call converts
+      // the string across the Dafny boundary and is preceded by the compiled
+      // requires guard on the hydrated state.
       assert(
         service.contains("async def shorten(self, body: ShortenRequest)"),
         s"shorten handler should accept body: ShortenRequest — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.Shorten(state, body.url)"),
-        s"shorten kernel call should pass body.url — got:\n$service"
+        service.contains("_dafny_kernel.RequiresShorten(state, to_dafny_str(body.url))"),
+        s"shorten must guard with RequiresShorten on converted args — got:\n$service"
       )
-      // Resolve: path param `code: str`. Signature must include `code: str`, call must reference `code`.
+      assert(
+        service.contains("_dafny_kernel.Shorten(state, to_dafny_str(body.url))"),
+        s"shorten kernel call should pass the converted body.url — got:\n$service"
+      )
+      assert(
+        service.contains("state = await hydrate_state(self._session)"),
+        s"kernel ops must hydrate state from the session — got:\n$service"
+      )
+      assert(
+        service.contains("await persist_state(self._session, state)"),
+        s"kernel ops must persist the mutated state — got:\n$service"
+      )
+      // Resolve: path param `code: str`, converted at the boundary.
       assert(
         service.contains("async def resolve(self, code: str)"),
         s"resolve handler should accept code: str — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.Resolve(state, code)"),
-        s"resolve kernel call should pass code — got:\n$service"
+        service.contains("_dafny_kernel.Resolve(state, to_dafny_str(code))"),
+        s"resolve kernel call should pass the converted code — got:\n$service"
       )
 
   test("Go kernel-routed service marshals scalar in/out via the dafnykernel adapter"):
@@ -415,8 +428,8 @@ class EmitTest extends CatsEffectSuite:
       val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
       val schema = files("app/schemas/user.py")
       assert(
-        schema.contains("from pydantic import BaseModel, ConfigDict, SecretStr"),
-        s"user schema should import SecretStr; got:\n$schema"
+        schema.contains("from pydantic import BaseModel, ConfigDict, Field, SecretStr"),
+        s"user schema should import Field and SecretStr; got:\n$schema"
       )
       assert(
         schema.contains("password_hash: SecretStr"),

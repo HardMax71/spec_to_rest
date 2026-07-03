@@ -70,11 +70,12 @@ object Generator:
       sb ++= optionDatatype()
       sb ++= theByFunction()
 
-      val enumDecls    = renderEnums(svcEnums(ir))
-      val typeAliases  = renderTypeAliases(ctx, svcTypeAliases(ir))
-      val entityDecls  = renderEntities(ctx, svcEntities(ir))
-      val stateClass   = renderStateClass(ctx)
-      val invPredicate = renderInvariantPredicate(ctx, svcInvariants(ir))
+      val enumDecls                      = renderEnums(svcEnums(ir))
+      val typeAliases                    = renderTypeAliases(ctx, svcTypeAliases(ir))
+      val (entityDecls, entitiesWithInv) = renderEntities(ctx, svcEntities(ir))
+      val stateClass                     = renderStateClass(ctx)
+      val derived                        = derivedStateClauses(ctx, entitiesWithInv)
+      val invPredicate                   = renderInvariantPredicate(ctx, svcInvariants(ir), derived)
 
       val methods = svcOperations(ir).map(op => renderMethod(ctx, op))
 
@@ -152,8 +153,12 @@ object Generator:
         sb ++= "}\n"
     sb.toString
 
-  private def renderEntities(ctx: Ctx, decls: List[entity_decl])(using DafnyLabel): String =
-    val sb = new StringBuilder
+  private def renderEntities(
+      ctx: Ctx,
+      decls: List[entity_decl]
+  )(using DafnyLabel): (String, Set[String]) =
+    val sb      = new StringBuilder
+    val withInv = Set.newBuilder[String]
     decls.foreach: d =>
       val name       = entName(d)
       val fields     = entFields(d)
@@ -172,18 +177,26 @@ object Generator:
         }
       }
 
+      // Alias-typed fields carry their type's Where; the database enforces the
+      // same refinement as a CHECK constraint, so it must be part of the
+      // entity's invariant or verified state mutations could fail at persist.
+      val aliasFieldClauses = fields.flatMap { f =>
+        aliasWhereCall(ctx, s"x.${fldName(f)}", fldType(f)).map(c => s"($c)")
+      }
+
       val invClauses =
         if invariants.nonEmpty then
           val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
           invariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
         else Nil
 
-      val allClauses = fieldWhereClauses ++ invClauses
+      val allClauses = (fieldWhereClauses ++ aliasFieldClauses ++ invClauses).distinct
       if allClauses.nonEmpty then
+        withInv += name
         sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
         sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
-    sb.toString
+    (sb.toString, withInv.result())
 
   private def renderEntityInvariant(ctx: Ctx, expr: expr, entityName: String)(using
       DafnyLabel
@@ -203,14 +216,60 @@ object Generator:
       sb ++= "}\n"
       Some(sb.toString)
 
-  private def renderInvariantPredicate(ctx: Ctx, invs: List[invariant_decl])(using
+  // Refinements the database also enforces (key/value aliases, entity field
+  // aliases via <Entity>Inv). Making them part of ServiceStateInv means a
+  // state hydrated from valid rows satisfies the methods' preconditions, and
+  // invariant preservation forbids mutations the schema's CHECK constraints
+  // would reject at persist time.
+  private def derivedStateClauses(ctx: Ctx, entitiesWithInv: Set[String])(using
       DafnyLabel
-  ): Option[String] =
-    if invs.isEmpty || ctx.stateFields.isEmpty then None
+  ): List[String] =
+    ctx.stateFields.toList.flatMap: (name, t) =>
+      t match
+        case _: NamedTypeF =>
+          aliasWhereCall(ctx, s"st.$name", t).map(c => s"($c)").toList
+        case RelationTypeF(k, m, v, _) =>
+          // set/some relations render as map<K, set<V>>, so their value
+          // clauses quantify over the element set instead of the map image.
+          val elementValued = m match
+            case MultSet() | MultSome() => true
+            case _                      => false
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued)
+        case MapTypeF(k, v, _) =>
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued = false)
+        case _ => Nil
+
+  private def relationClauses(
+      ctx: Ctx,
+      name: String,
+      k: type_expr,
+      v: type_expr,
+      entitiesWithInv: Set[String],
+      elementValued: Boolean
+  )(using DafnyLabel): List[String] =
+    val keyClause =
+      aliasWhereCall(ctx, "k", k).map(w => s"(forall k :: k in st.$name ==> $w)")
+    val (valueRef, wrap) =
+      if elementValued then
+        ("v", (c: String) => s"(forall k :: k in st.$name ==> forall v :: v in st.$name[k] ==> $c)")
+      else (s"st.$name[k]", (c: String) => s"(forall k :: k in st.$name ==> $c)")
+    val valueClause = v match
+      case NamedTypeF(vn, _) if entitiesWithInv.contains(vn) =>
+        Some(wrap(s"${vn}Inv($valueRef)"))
+      case _ =>
+        aliasWhereCall(ctx, valueRef, v).map(wrap)
+    keyClause.toList ++ valueClause.toList
+
+  private def renderInvariantPredicate(
+      ctx: Ctx,
+      invs: List[invariant_decl],
+      derived: List[String]
+  )(using DafnyLabel): Option[String] =
+    if ctx.stateFields.isEmpty then None
     else
       val invCtx = ctx.copy(stateMode = StateMode.Direct)
-      val parts  = invs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})")
-      val body   = parts.mkString("\n  && ")
+      val parts  = invs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})") ++ derived
+      val body   = if parts.isEmpty then "true" else parts.mkString("\n  && ")
       Some(
         "predicate ServiceStateInv(st: ServiceState)\n" +
           "  reads st\n" +
@@ -254,7 +313,7 @@ object Generator:
       if mutates then List("st") else Nil
 
     val invariantClauses =
-      if ctx.stateFields.nonEmpty && svcInvariants(ctx.ir).nonEmpty then List("ServiceStateInv(st)")
+      if ctx.stateFields.nonEmpty then List("ServiceStateInv(st)")
       else Nil
 
     val aliasInputClauses = inputs.flatMap { p =>
@@ -282,6 +341,19 @@ object Generator:
     val ensuresClauses = rawEnsures ++ invariantClauses
 
     val sb = new StringBuilder
+    // A compiled twin of the method's contract, rendered from the same clause
+    // list, so the runtime guard the generated services call before the kernel
+    // method can never drift from what was verified. Compiled Dafny does not
+    // check `requires`, so without this a violating request corrupts or halts.
+    sb ++= s"predicate Requires${operName(op)}($sigParams)\n"
+    if ctx.stateFields.nonEmpty then sb ++= "  reads st\n"
+    sb ++= "{\n"
+    if requiresClauses.isEmpty then sb ++= "  true\n"
+    else
+      sb ++= s"  (${requiresClauses.head})\n"
+      requiresClauses.tail.foreach: r =>
+        sb ++= s"  && ($r)\n"
+    sb ++= "}\n"
     sb ++= signature
     sb ++= "\n"
     modifiesClauses.foreach: m =>

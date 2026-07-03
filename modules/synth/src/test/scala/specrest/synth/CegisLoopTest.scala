@@ -187,7 +187,7 @@ class CegisLoopTest extends CatsEffectSuite:
             assert(perr.message.contains("connection reset"))
           case other => fail(s"expected ProviderFailed, got $other")
 
-  test("aborts when LLM body weakens contracts (DiffViolation)"):
+  test("contract-weakening responses retry and stop on the repeated-error threshold"):
     Fixtures.loadHeader("safe_counter", "Increment").flatMap:
       case (c, h, skel) =>
         val weakened =
@@ -201,17 +201,20 @@ class CegisLoopTest extends CatsEffectSuite:
             |  st.count := st.count + 1;
             |}
             |```""".stripMargin
+        val resp = LlmResponse(weakened, TokenUsage(100, 200), "claude-sonnet-4-6")
         for
-          provider <- MockProvider.succeeding(weakened, model = "claude-sonnet-4-6")
+          provider <- MockProvider.of(List.fill(4)(Right(resp)))
           verifier <-
             MockDafnyVerifier.of(List(Right(correctRun(classificationOperationName(c)))))
           tracker <- Tracker.empty
           loop     = new CegisLoop(provider, verifier, None, tracker, CegisBudget.Default)
           out     <- loop.run(SynthRequest(c, h, skel, "claude-sonnet-4-6"))
         yield out match
-          case CegisOutcome.Aborted(AbortReason.DiffViolation(_, atIter), _, _) =>
-            assertEquals(atIter, 1)
-          case other => fail(s"expected DiffViolation, got $other")
+          case CegisOutcome.Aborted(AbortReason.StuckOnSameError(err, seen), _, history) =>
+            assertEquals(err.category, "malformed_response")
+            assertEquals(seen, CegisBudget.Default.repeatedErrorThreshold)
+            assertEquals(history.records.length, CegisBudget.Default.repeatedErrorThreshold)
+          case other => fail(s"expected StuckOnSameError on malformed responses, got $other")
 
   test("verifier backend failure (e.g. dafny crash) propagates as VerifierBackendFailure"):
     Fixtures.loadHeader("safe_counter", "Increment").flatMap:

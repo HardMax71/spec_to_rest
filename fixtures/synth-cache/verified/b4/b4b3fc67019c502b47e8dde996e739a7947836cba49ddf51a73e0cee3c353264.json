@@ -1,0 +1,11 @@
+{
+  "candidate" : "method ListAll(st: ServiceState) returns (entries: set<UrlMapping>)\n  requires ServiceStateInv(st)\n  ensures entries == (set m | m in old(st.metadata) && true :: old(st.metadata)[m])\n  ensures st.store == old(st.store)\n  ensures ServiceStateInv(st)\n  modifies st\n{\n  // Do not modify st; just collect the metadata values currently present.\n  entries := set m | m in st.metadata && true :: st.metadata[m];\n\n  // The state has not been changed, so the invariant still holds.\n  assert ServiceStateInv(st);\n}",
+  "body" : "  // Do not modify st; just collect the metadata values currently present.\n  entries := set m | m in st.metadata && true :: st.metadata[m];\n\n  // The state has not been changed, so the invariant still holds.\n  assert ServiceStateInv(st);",
+  "usage" : {
+    "inputTokens" : 1045,
+    "outputTokens" : 1737
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

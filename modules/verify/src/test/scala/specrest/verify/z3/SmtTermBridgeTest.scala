@@ -45,7 +45,7 @@ class SmtTermBridgeTest extends CatsEffectSuite:
 
   test("encodes set union membership from an smt_term"):
     val out = render(TSetMember(int(1), TSetUnion(intSet(1), intSet(2))))
-    assert(out.contains("(union "), out)
+    assert(out.contains("((_ map or) "), out)
     assert(out.contains("(select "), out)
 
   test("encodes option some from an smt_term"):
@@ -67,11 +67,11 @@ class SmtTermBridgeTest extends CatsEffectSuite:
 
   test("encodes set cardinality from an smt_term"):
     val out = render(TEq(TCard(intSet(1, 2)), int(2)))
-    assert(out.contains("(declare-fun setCard_Int ((Set Int)) Int)"), out)
+    assert(out.contains("(declare-fun setCard_Int ((Array Int Bool)) Int)"), out)
     assert(out.contains("(>= (setCard_Int setcard_s) 0)"), out)
     assert(out.contains("(setCard_Int "), out)
 
   test("encodes sum aggregate from an smt_term"):
     val out = render(TEq(TSum(intSet(1, 2), TAdd(TVar("i"), int(1))), int(3)))
-    assert(out.contains("(declare-fun aggsum_b0_Set_Int ((Set Int)) Int)"), out)
+    assert(out.contains("(declare-fun aggsum_b0_Set_Int ((Array Int Bool)) Int)"), out)
     assert(out.contains("(aggsum_b0_Set_Int "), out)

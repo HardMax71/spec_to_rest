@@ -1,7 +1,7 @@
 """Initial schema for UrlShortener.
 
 Revision ID: 001
-Create Date: 2026-07-02
+Create Date: 2026-07-03
 """
 from collections.abc import Sequence
 
@@ -25,9 +25,8 @@ def upgrade() -> None:
         sa.Column("click_count", sa.Integer(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.CheckConstraint('length(code) >= 6', name="ck_url_mappings_0"),
-        sa.CheckConstraint('length(code) <= 10', name="ck_url_mappings_1"),
-        sa.CheckConstraint('length(url) > 0', name="ck_url_mappings_3"),
-        sa.CheckConstraint('click_count >= 0', name="ck_url_mappings_4"),
+        sa.CheckConstraint('length(url) > 0', name="ck_url_mappings_2"),
+        sa.CheckConstraint('click_count >= 0', name="ck_url_mappings_3"),
     )
 
 

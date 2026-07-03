@@ -16,23 +16,31 @@ import java.nio.file.Paths
 
 object SeedVerifiedCacheMain extends IOApp:
 
+  // Seeds cache entries without running CEGIS. The caller is responsible for
+  // having dafny-verified each body against the current skeleton first; the
+  // key must use the model/temperature the consuming compile will pass.
   def run(args: List[String]): IO[ExitCode] =
-    if args.length < 4 || args.length % 2 != 0 then
+    if args.length < 6 || args.length % 2 != 0 then
       IO.println(
-        "usage: SeedVerifiedCacheMain <spec> <cache-root> <op1> <body1> [<op2> <body2> ...]"
+        "usage: SeedVerifiedCacheMain <spec> <cache-root> <model> <temperature> " +
+          "<op1> <body-file1> [<op2> <body-file2> ...]"
       ).as(ExitCode.Error)
     else
-      val spec = args.head
-      val root = Paths.get(args(1)).resolve("verified")
+      val spec  = args.head
+      val root  = Paths.get(args(1)).resolve("verified")
+      val model = args(2)
       val pairs = args
-        .drop(2)
+        .drop(4)
         .grouped(2)
         .collect:
-          case List(op, body) => op -> body
+          case List(op, bodyFile) => op -> bodyFile
         .toList
 
       val program =
         for
+          temp <- IO.fromOption(args(3).toDoubleOption)(
+                    new RuntimeException(s"temperature '${args(3)}' is not a number")
+                  )
           src    <- IO.blocking(Files.readString(Paths.get(spec)))
           parsed <- Parse.parseSpec(src)
           tree   <- IO.fromEither(parsed.left.map(e => new RuntimeException(s"parse: $e")))
@@ -46,20 +54,25 @@ object SeedVerifiedCacheMain extends IOApp:
                    )
           cache <- Cache.make(root)
           _ <- pairs.foldLeft(IO.unit): (acc, kv) =>
-                 val (op, body) = kv
+                 val (op, bodyFile) = kv
                  dafny.methods.find(_.name == op) match
                    case None =>
                      acc *> IO.raiseError(new RuntimeException(s"no Dafny method '$op'"))
                    case Some(header) =>
-                     val key = Cache.keyFor(header, "claude-sonnet-4-6", 1.0)
-                     val entry = CacheEntry(
-                       candidate = "stub",
-                       body = body,
-                       usage = TokenUsage(0, 0),
-                       model = "claude-sonnet-4-6",
-                       promptVersion = SynthPromptVersion
-                     )
-                     acc *> cache.store(key, entry) *> IO.println(s"seeded $op")
+                     for
+                       _    <- acc
+                       body <- IO.blocking(Files.readString(Paths.get(bodyFile)))
+                       key   = Cache.keyFor(header, model, temp)
+                       entry = CacheEntry(
+                                 candidate = body,
+                                 body = body,
+                                 usage = TokenUsage(0, 0),
+                                 model = model,
+                                 promptVersion = SynthPromptVersion
+                               )
+                       _ <- cache.store(key, entry)
+                       _ <- IO.println(s"seeded $op from $bodyFile")
+                     yield ()
         yield ExitCode.Success
       program.handleErrorWith: t =>
         IO.println(s"seed failed: ${t.getMessage}").as(ExitCode.Error)
