@@ -43,8 +43,9 @@ def request_without_redirects(request_fn, *args, **kwargs):
     """
     from hypothesis import assume
 
+    kwargs["follow_redirects"] = False
     try:
-        return request_fn(*args, follow_redirects=False, **kwargs)
+        return request_fn(*args, **kwargs)
     except httpx.RemoteProtocolError:
         assume(False)
     except httpx.InvalidURL:

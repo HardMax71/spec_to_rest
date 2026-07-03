@@ -229,14 +229,14 @@ object Generator:
         case _: NamedTypeF =>
           aliasWhereCall(ctx, s"st.$name", t).map(c => s"($c)").toList
         case RelationTypeF(k, m, v, _) =>
-          // set/some relations render as map<K, set<V>>; element-shaped value
-          // clauses would be ill-typed there, so only the key clause applies.
-          val valueApplies = m match
-            case MultOne() | MultLone() => true
+          // set/some relations render as map<K, set<V>>, so their value
+          // clauses quantify over the element set instead of the map image.
+          val elementValued = m match
+            case MultSet() | MultSome() => true
             case _                      => false
-          relationClauses(ctx, name, k, v, entitiesWithInv, valueApplies)
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued)
         case MapTypeF(k, v, _) =>
-          relationClauses(ctx, name, k, v, entitiesWithInv, valueApplies = true)
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued = false)
         case _ => Nil
 
   private def relationClauses(
@@ -245,19 +245,19 @@ object Generator:
       k: type_expr,
       v: type_expr,
       entitiesWithInv: Set[String],
-      valueApplies: Boolean
+      elementValued: Boolean
   )(using DafnyLabel): List[String] =
     val keyClause =
       aliasWhereCall(ctx, "k", k).map(w => s"(forall k :: k in st.$name ==> $w)")
-    val valueClause =
-      if !valueApplies then None
-      else
-        v match
-          case NamedTypeF(vn, _) if entitiesWithInv.contains(vn) =>
-            Some(s"(forall k :: k in st.$name ==> ${vn}Inv(st.$name[k]))")
-          case _ =>
-            aliasWhereCall(ctx, s"st.$name[k]", v)
-              .map(w => s"(forall k :: k in st.$name ==> $w)")
+    val (valueRef, wrap) =
+      if elementValued then
+        ("v", (c: String) => s"(forall k :: k in st.$name ==> forall v :: v in st.$name[k] ==> $c)")
+      else (s"st.$name[k]", (c: String) => s"(forall k :: k in st.$name ==> $c)")
+    val valueClause = v match
+      case NamedTypeF(vn, _) if entitiesWithInv.contains(vn) =>
+        Some(wrap(s"${vn}Inv($valueRef)"))
+      case _ =>
+        aliasWhereCall(ctx, valueRef, v).map(wrap)
     keyClause.toList ++ valueClause.toList
 
   private def renderInvariantPredicate(

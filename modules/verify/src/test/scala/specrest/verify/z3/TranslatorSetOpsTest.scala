@@ -64,33 +64,33 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
         s"should not wrap singleton in or; got line:\n$membershipLine"
       )
 
-  test("`a union b` — set-typed state and invariant emits (union ...)"):
+  test("`a union b` — set-typed state and invariant emits the array map-or"):
     smtOf(
       specWithInvariant(
         "a: Set[Int]\n    b: Set[Int]\n    x: Int",
         "x in (a union b) implies x in a or x in b"
       )
     ).map: out =>
-      assert(out.contains("(union "), s"expected (union ...); got:\n$out")
+      assert(out.contains("((_ map or) "), s"expected ((_ map or) ...); got:\n$out")
       assert(out.contains("(select "), s"expected (select ...) membership; got:\n$out")
 
-  test("`a intersect b` emits (intersection ...)"):
+  test("`a intersect b` emits the array map-and"):
     smtOf(
       specWithInvariant(
         "a: Set[Int]\n    b: Set[Int]\n    x: Int",
         "x in (a intersect b) implies x in a"
       )
     ).map: out =>
-      assert(out.contains("(intersection "), s"expected (intersection ...); got:\n$out")
+      assert(out.contains("((_ map and) "), s"expected ((_ map and) ...); got:\n$out")
 
-  test("`a minus b` emits (setminus ...)"):
+  test("`a minus b` emits map-and of the complement"):
     smtOf(
       specWithInvariant(
         "a: Set[Int]\n    b: Set[Int]\n    x: Int",
         "x in (a minus b) implies x in a"
       )
     ).map: out =>
-      assert(out.contains("(setminus "), s"expected (setminus ...); got:\n$out")
+      assert(out.contains("((_ map and) "), s"expected difference via map combinators; got:\n$out")
 
   test("`a subset b` desugars to set-difference emptiness"):
     smtOf(
@@ -99,13 +99,13 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
         "a subset b implies b subset a or not (a subset b)"
       )
     ).map: out =>
-      assert(out.contains("(setminus "), s"expected set-difference desugar; got:\n$out")
+      assert(out.contains("((_ map not) "), s"expected set-difference desugar; got:\n$out")
 
-  test("`Set[Int]`-typed state field declares a (Set Int)-valued function"):
+  test("`Set[Int]`-typed state field declares an (Array Int Bool)-valued function"):
     smtOf(specWithInvariant("a: Set[Int]", "true")).map: out =>
       assert(
-        out.contains("(declare-fun state_a () (Set Int))"),
-        s"expected (Set Int)-typed state decl; got:\n$out"
+        out.contains("(declare-fun state_a () (Array Int Bool))"),
+        s"expected (Array Int Bool)-typed state decl; got:\n$out"
       )
 
   test("membership against a set-sorted expression falls through to (select)"):
@@ -117,10 +117,10 @@ class TranslatorSetOpsTest extends CatsEffectSuite:
     ).map: out =>
       assert(out.contains("(select "), s"expected (select ...) membership; got:\n$out")
 
-  test("nested set sort — Set[Set[Int]] renders as (Set (Set Int))"):
+  test("nested set sort — Set[Set[Int]] renders as nested Bool arrays"):
     smtOf(specWithInvariant("ss: Set[Set[Int]]", "true")).map: out =>
       assert(
-        out.contains("(declare-fun state_ss () (Set (Set Int)))"),
+        out.contains("(declare-fun state_ss () (Array (Array Int Bool) Bool))"),
         s"expected nested set sort; got:\n$out"
       )
 

@@ -34,7 +34,10 @@ object SmtLib:
     case Z3Sort.Real        => "Real"
     case Z3Sort.Bool        => "Bool"
     case Z3Sort.Uninterp(n) => n
-    case Z3Sort.SetOf(e)    => s"(Set ${renderSort(e)})"
+    // Rendered as its array encoding: z3's Set IS (Array T Bool), and cvc5's
+    // parser accepts array select/store/const where the Set spelling is
+    // z3-dialect only. Keeps --dump-vc output cross-checkable by both solvers.
+    case Z3Sort.SetOf(e)    => s"(Array ${renderSort(e)} Bool)"
     case Z3Sort.OptionOf(e) => s"(Option ${renderSort(e)})"
     case Z3Sort.SeqOf(e)    => s"(Seq ${renderSort(e)})"
     case Z3Sort.MapOf(k, v) => s"(Seq (Pair ${renderSort(k)} ${renderSort(v)}))"
@@ -123,7 +126,13 @@ object SmtLib:
     case Z3Expr.SetMember(elem, set, _) =>
       s"(select ${renderExpr(set)} ${renderExpr(elem)})"
     case Z3Expr.SetBinOp(op, l, r, _) =>
-      s"(${SetOpKind.token(op)} ${renderExpr(l)} ${renderExpr(r)})"
+      val lt = renderExpr(l)
+      val rt = renderExpr(r)
+      op match
+        case SetOpKind.Union     => s"((_ map or) $lt $rt)"
+        case SetOpKind.Intersect => s"((_ map and) $lt $rt)"
+        case SetOpKind.Diff      => s"((_ map and) $lt ((_ map not) $rt))"
+        case SetOpKind.Subset    => s"(= ((_ map and) $lt $rt) $lt)"
     case Z3Expr.Ite(c, t, e, _) =>
       s"(ite ${renderExpr(c)} ${renderExpr(t)} ${renderExpr(e)})"
     case Z3Expr.OptNone(elemSort, _) =>
@@ -161,4 +170,4 @@ object SmtLib:
       case Z3Regex.Inter(rs)     => s"(re.inter ${rs.map(renderRe).mkString(" ")})"
 
   private def emptySetLit(elemSort: Z3Sort): String =
-    s"((as const (Set ${renderSort(elemSort)})) false)"
+    s"((as const (Array ${renderSort(elemSort)} Bool)) false)"

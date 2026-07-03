@@ -13,7 +13,7 @@
 (declare-fun metadata_dom_post (String) Bool)
 (declare-fun metadata_map (String) UrlMapping)
 (declare-fun metadata_map_post (String) UrlMapping)
-(declare-fun output_ListAll_entries () (Set UrlMapping))
+(declare-fun output_ListAll_entries () (Array UrlMapping Bool))
 (declare-fun state_base_url () String)
 (declare-fun state_base_url_post () String)
 (declare-fun store_dom (String) Bool)

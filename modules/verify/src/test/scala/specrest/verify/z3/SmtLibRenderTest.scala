@@ -83,7 +83,7 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
     assertEquals(SmtLib.renderExpr(App("foo", Nil)), "foo")
     assertEquals(SmtLib.renderExpr(App("foo", List(IntLit(BigInt(5))))), "(foo 5)")
 
-  test("renderSort(SetOf) nests and renders (Set T)"):
+  test("renderSort(SetOf) nests and renders the Bool-array encoding"):
     val intSet    = Z3Sort.SetOf(Z3Sort.Int)
     val intSetSet = Z3Sort.SetOf(intSet)
     val script = Z3Script(
@@ -96,37 +96,37 @@ class SmtLibRenderTest extends munit.CatsEffectSuite:
       artifact = TranslatorArtifact(Nil, Nil, Nil, Nil, Nil, false)
     )
     val out = SmtLib.renderSmtLib(script)
-    assert(out.contains("(declare-fun s () (Set Int))"), out)
-    assert(out.contains("(declare-fun ss () (Set (Set Int)))"), out)
+    assert(out.contains("(declare-fun s () (Array Int Bool))"), out)
+    assert(out.contains("(declare-fun ss () (Array (Array Int Bool) Bool))"), out)
 
   test("renderExpr covers empty set, set literal, membership, binary set ops"):
     import Z3Expr.*
     assertEquals(
       SmtLib.renderExpr(EmptySet(Z3Sort.Int)),
-      "((as const (Set Int)) false)"
+      "((as const (Array Int Bool)) false)"
     )
     assertEquals(
       SmtLib.renderExpr(SetLit(Z3Sort.Int, List(IntLit(BigInt(1)), IntLit(BigInt(2))))),
-      "(store (store ((as const (Set Int)) false) 1 true) 2 true)"
+      "(store (store ((as const (Array Int Bool)) false) 1 true) 2 true)"
     )
     val s = App("s", Nil)
     val t = App("t", Nil)
     assertEquals(SmtLib.renderExpr(SetMember(IntLit(BigInt(3)), s)), "(select s 3)")
     assertEquals(
       SmtLib.renderExpr(SetBinOp(SetOpKind.Union, s, t)),
-      "(union s t)"
+      "((_ map or) s t)"
     )
     assertEquals(
       SmtLib.renderExpr(SetBinOp(SetOpKind.Intersect, s, t)),
-      "(intersection s t)"
+      "((_ map and) s t)"
     )
     assertEquals(
       SmtLib.renderExpr(SetBinOp(SetOpKind.Diff, s, t)),
-      "(setminus s t)"
+      "((_ map and) s ((_ map not) t))"
     )
     assertEquals(
       SmtLib.renderExpr(SetBinOp(SetOpKind.Subset, s, t)),
-      "(subset s t)"
+      "(= ((_ map and) s t) s)"
     )
 
   test("map sort declares Pair datatype and renders (Seq (Pair K V))"):
