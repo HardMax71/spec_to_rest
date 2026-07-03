@@ -124,6 +124,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Dafny (synthesis emit runs dafny translate)
+        if: matrix.synthesis != ''
+        uses: dafny-lang/setup-dafny-action@be023fc606339d46ed6b077dcb8614d0279ded31 # v1.9.1
+        with:
+          dafny-version: "4.11.0"
+
       - uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287 # v5.3.0
         with:
           distribution: temurin
@@ -134,12 +140,6 @@ jobs:
       - uses: sbt/setup-sbt@3afe9cf056c5d139bfc46579af1192d77a2f0821 # v1.4.0
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-
-      - name: Setup Dafny (synthesis emit runs dafny translate)
-        if: matrix.synthesis != ''
-        uses: dafny-lang/setup-dafny-action@be023fc606339d46ed6b077dcb8614d0279ded31 # v1.9.1
-        with:
-          dafny-version: "4.11.0"
 
       - name: Emit FastAPI project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
