@@ -487,13 +487,23 @@ object EmitPython:
     val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map { p =>
       val t = pythonTypeForParam(p.typeExpr, typeLookup)
-      // An int path param binds against a BIGINT column; FastAPI's int is
-      // unbounded, so an out-of-range id must fail at the router boundary
-      // (422) instead of overflowing the driver into a 500. Services keep
-      // the plain type.
+      // FastAPI's int is unbounded, so an out-of-range id must fail at the
+      // router boundary (422) instead of reaching the driver as a 500; the
+      // bounds come from the column the param binds against (asyncpg rejects
+      // out-of-int32 values for INTEGER columns outright). Services keep the
+      // plain type.
       val routerType =
         if t == "int" then
-          "Annotated[int, Path(ge=-9223372036854775808, le=9223372036854775807)]"
+          val col = EmitShared.lookupColumn(entity, Some(p.name))
+          val int32 = entity.fields
+            .find(_.columnName == col)
+            .exists(f =>
+              Set("INTEGER", "SERIAL", "SMALLINT").contains(
+                f.ormColumnType.toUpperCase(java.util.Locale.ROOT)
+              )
+            )
+          if int32 then "Annotated[int, Path(ge=-2147483648, le=2147483647)]"
+          else "Annotated[int, Path(ge=-9223372036854775808, le=9223372036854775807)]"
         else t
       EnrichedPathParam(p.name, t, routerType)
     }

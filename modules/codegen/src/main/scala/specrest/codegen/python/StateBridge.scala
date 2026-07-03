@@ -156,7 +156,9 @@ object StateBridge:
            |
            |
            |def _from_epoch(value: Any) -> datetime:
-           |    return datetime.fromtimestamp(int(value), tz=timezone.utc)""".stripMargin
+           |    # Columns are naive TIMESTAMPs; asyncpg and aiomysql reject aware
+           |    # values, so persist writes naive UTC.
+           |    return datetime.fromtimestamp(int(value), tz=timezone.utc).replace(tzinfo=None)""".stripMargin
 
     val datetimeImport =
       if needsDatetime then "\nfrom datetime import datetime, timezone\nfrom typing import Any\n"
