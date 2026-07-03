@@ -116,7 +116,6 @@ final private case class GoEntityCtx(
     customSchemas: List[GoCustomSchema],
     validationBlock: String,
     modelImports: String,
-    hasStdlibImports: Boolean,
     modelStructLines: List[String],
     createStructLines: List[String],
     handlerImports: String
@@ -657,8 +656,6 @@ object EmitGo:
         val groups = List(stdlib, third).filter(_.nonEmpty)
         groups.map(_.map("\t" + _).mkString("\n")).mkString("import (\n", "\n\n", "\n)")
       },
-      hasStdlibImports = !fileValidations.isEmpty || fileValidations.needsRegexp ||
-        fileValidations.needsUtf8 || needsTime,
       modelStructLines = padCells(
         List(
           "bun.BaseModel",
