@@ -90,6 +90,12 @@ final private case class SchemaFieldView(
 
 final private case class ModelInitFieldView(columnName: String, bodyAccessor: String)
 
+final private case class KernelCandidateView(
+    name: String,
+    sampleArgs: String,
+    charset: String
+)
+
 final private case class EnrichedOperation(
     operationName: String,
     handlerName: String,
@@ -112,6 +118,7 @@ final private case class EnrichedOperation(
     dafnyMethod: Option[String],
     kernelHandlerSignature: String,
     kernelCallArgs: List[String],
+    kernelCandidates: List[KernelCandidateView],
     kernelGuardName: String,
     kernelGuardStatus: Int,
     kernelGuardDetail: String,
@@ -139,8 +146,11 @@ final private case class ServiceTemplateImports(
     needsAny: Boolean,
     adapterImports: List[String],
     hasAppImports: Boolean,
-    needsTypingCast: Boolean
+    needsTypingCast: Boolean,
+    candidateConsts: List[CandidateConstView]
 )
+
+final private case class CandidateConstView(name: String, charset: String)
 
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object EmitPython:
@@ -610,6 +620,16 @@ object EmitPython:
 
     val kernelCallArgs = kernelArgSources.map: (arg, t) =>
       if t == "str" then s"to_dafny_str($arg)" else arg
+    // Candidates ride after the declared inputs, matching the lowered Dafny
+    // signature; each is sampled fresh per guard attempt and converted at the
+    // sample site, so call args stay short bare names.
+    val kernelCandidates = op.dafnyCandidates.map: c =>
+      KernelCandidateView(
+        name = c.param,
+        sampleArgs = s"${c.sampleLength}, ${candidateCharsetConst(c.param)}",
+        charset = c.sampleCharset
+      )
+    val kernelAllArgs = kernelCallArgs ++ kernelCandidates.map(_.name)
     val isRedirectKind = routeKind match
       case _: RkRedirect => true
       case _             => false
@@ -684,7 +704,8 @@ object EmitPython:
       customRequestSchema = customRequestSchema,
       dafnyMethod = dafnyMethodFinal,
       kernelHandlerSignature = kernelSig,
-      kernelCallArgs = kernelCallArgs,
+      kernelCallArgs = kernelAllArgs,
+      kernelCandidates = kernelCandidates,
       kernelGuardName = s"Requires${op.operationName}",
       kernelGuardStatus = kernelGuardStatus,
       kernelGuardDetail = kernelGuardDetail,
@@ -696,6 +717,9 @@ object EmitPython:
       authDependency =
         Option.when(op.requiresAuth.nonEmpty)(SecurityPython.dependencyName(op.requiresAuth))
     )
+
+  private def candidateCharsetConst(param: String): String =
+    "_CAND_" + param.stripPrefix("cand_").toUpperCase(java.util.Locale.ROOT) + "_CHARSET"
 
   private def kernelSignatureAndArgs(
       endpoint: EndpointSpec,
@@ -898,6 +922,7 @@ object EmitPython:
     val adapterImports = List(
       Option.when(kernelText.contains("from_dafny_str("))("from_dafny_str"),
       Option.when(kernelOps.exists(!_.kernelHasState))("make_state"),
+      Option.when(kernelOps.exists(_.kernelCandidates.nonEmpty))("sample_candidate"),
       Option.when(kernelText.contains("to_dafny_str("))("to_dafny_str")
     ).flatten
     ServiceTemplateImports(
@@ -910,5 +935,14 @@ object EmitPython:
       needsAny = kernelOps.exists(_.serviceReturnAnnotation == "dict[str, Any]"),
       adapterImports = adapterImports,
       hasAppImports = needsDafnyKernel || needsModelImport || schemaSet.nonEmpty,
-      needsTypingCast = needsSaDelete
+      needsTypingCast = needsSaDelete,
+      candidateConsts = kernelOps
+        .flatMap(_.kernelCandidates)
+        .map(c =>
+          CandidateConstView(
+            candidateCharsetConst(c.name),
+            EmitShared.doubleQuoted(c.charset)
+          )
+        )
+        .distinctBy(_.name)
     )

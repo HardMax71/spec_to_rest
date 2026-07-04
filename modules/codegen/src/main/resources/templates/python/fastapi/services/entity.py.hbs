@@ -38,6 +38,12 @@ from app.services._dafny_adapter import {{join serviceImports.adapterImports ", 
 from app.services._state_bridge import hydrate_state, persist_state
 {{/if}}
 
+{{#each serviceImports.candidateConsts}}
+{{this.name}} = {{{this.charset}}}
+{{/each}}
+{{#if serviceImports.candidateConsts.length}}
+
+{{/if}}
 
 class {{entity.entityName}}Service:
     def __init__(self, session: AsyncSession) -> None:
@@ -58,9 +64,33 @@ class {{entity.entityName}}Service:
         if not _dafny_kernel.ServiceStateInv(state):
             raise HTTPException(status_code=500, detail="state invariant violated")
 {{/if}}
+{{#if this.kernelCandidates.length}}
+        # Sampled candidates: exhaustion means a real precondition failure,
+        # not sampling bad luck (collision odds are negligible per draw).
+        for _attempt in range(8):
+{{#each this.kernelCandidates}}
+            {{this.name}} = to_dafny_str(sample_candidate({{this.sampleArgs}}))
+{{/each}}
+            if _dafny_kernel.{{this.kernelGuardName}}(
+                state,
+{{#each this.kernelCallArgs}}
+                {{this}},
+{{/each}}
+            ):
+                break
+        else:
+            raise HTTPException(status_code={{this.kernelGuardStatus}}, detail="{{this.kernelGuardDetail}}")
+        {{this.kernelResultBind}} = _dafny_kernel.{{this.dafnyMethod}}(
+            state,
+{{#each this.kernelCallArgs}}
+            {{this}},
+{{/each}}
+        )
+{{else}}
         if not _dafny_kernel.{{this.kernelGuardName}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}}):
             raise HTTPException(status_code={{this.kernelGuardStatus}}, detail="{{this.kernelGuardDetail}}")
         {{this.kernelResultBind}} = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}})
+{{/if}}
 {{#if this.kernelHasState}}
         await persist_state(self._session, state)
         # The request session otherwise commits in dependency teardown, which

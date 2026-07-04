@@ -1,0 +1,11 @@
+{
+  "candidate" : "  code := cand_code;\n  short_url := st.base_url + \"/\" + code;\n  st.store := st.store[code := url];\n  st.metadata := st.metadata[code := UrlMapping(code, url, 0, 0)];\n",
+  "body" : "  code := cand_code;\n  short_url := st.base_url + \"/\" + code;\n  st.store := st.store[code := url];\n  st.metadata := st.metadata[code := UrlMapping(code, url, 0, 0)];\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

@@ -6,6 +6,9 @@ import specrest.profile.ProfiledService
 
 private[codegen] object EmitShared:
 
+  def doubleQuoted(s: String): String =
+    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
   // A field's boundary-enforceable string refinement: the entity declaration's
   // alias type plus its inline where clause, reduced by StringRefinements.
   def entityFieldRefinement(
