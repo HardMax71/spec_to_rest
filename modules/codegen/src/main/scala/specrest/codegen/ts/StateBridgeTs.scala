@@ -17,10 +17,14 @@ object StateBridgeTs:
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
       profiled,
-      fieldSupported = f => ScalarTsTypes.contains(f.domainType),
+      // Nullable ts fields carry the union spelling in domainType.
+      fieldSupported = f => ScalarTsTypes.contains(baseTs(f.domainType)),
       keySupported = k => Set("string", "number").contains(k.domainType) && !k.nullable,
       seqSupported = true
     )
+
+  private def baseTs(domainType: String): String =
+    domainType.replaceAll("\\s*\\|\\s*null$", "").trim
 
   private def camel(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
@@ -30,7 +34,7 @@ object StateBridgeTs:
   private def toDafnyExpr(f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${camel(f.fieldName)}"
     if f.nullable then
-      f.domainType match
+      baseTs(f.domainType) match
         case "string" => s"someOrNone($access, (v) => stringToDafny(v as string))"
         case "number" => s"someOrNone($access, (v) => intToDafny(v as number))"
         case "Date" =>
@@ -43,14 +47,15 @@ object StateBridgeTs:
         case "Date"   => s"intToDafny(Math.floor($access.getTime() / 1000))"
         case _        => access
 
-  private def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
+  private[codegen] def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef['dtor_${dafnyName(f.fieldName)}']"
     if f.nullable then
-      f.domainType match
-        case "string" => s"valueOrNull($access, (v) => stringFromDafny(v))"
-        case "number" => s"valueOrNull($access, (v) => intFromDafny(v))"
-        case "Date"   => s"valueOrNull($access, (v) => new Date(intFromDafny(v) * 1000))"
-        case _        => s"valueOrNull($access, (v) => v)"
+      baseTs(f.domainType) match
+        case "string" => s"(valueOrNull($access, (v) => stringFromDafny(v)) as string | null)"
+        case "number" => s"(valueOrNull($access, (v) => intFromDafny(v)) as number | null)"
+        case "Date" =>
+          s"(valueOrNull($access, (v) => new Date(intFromDafny(v) * 1000)) as Date | null)"
+        case _ => s"(valueOrNull($access, (v) => v) as boolean | null)"
     else
       f.domainType match
         case "string" => s"stringFromDafny($access)"
@@ -106,7 +111,8 @@ object StateBridgeTs:
       hydrate ++= "  const scalarRow = await tx.serviceState.findUnique({ where: { id: 1 } });\n"
       hydrate ++= "  if (scalarRow) {\n"
       for sc <- planned.scalars do
-        hydrate ++= s"    st['${dafnyName(sc.stateField)}'] = intToDafny(scalarRow.${camel(sc.columnName)});\n"
+        // Prisma types BIGINT columns as bigint; the adapter takes number.
+        hydrate ++= s"    st['${dafnyName(sc.stateField)}'] = intToDafny(Number(scalarRow.${camel(sc.columnName)}));\n"
       hydrate ++= "  }\n"
 
     val persist = new StringBuilder
@@ -127,12 +133,17 @@ object StateBridgeTs:
       val e      = r.entity
       val client = camel(e.entityName)
       persist ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
-      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [r.${camel(rKey.fieldName)}, r]));\n"
-      persist ++= s"  const seen = new Set<${rKey.domainType}>();\n"
+      // Prisma BigInt pks come back as bigint while the dafny-side keys are
+      // numbers, so numeric lookup keys coerce; string keys pass through.
+      val mapKey =
+        if rKey.domainType == "string" then s"r.${camel(rKey.fieldName)}"
+        else s"Number(r.${camel(rKey.fieldName)})"
+      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [$mapKey, r]));\n"
+      persist ++= s"  const ${client}Seen = new Set<${rKey.domainType}>();\n"
       persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
       persist ++= s"    const key = ${keyFromDafny(rKey)};\n"
       persist ++= "    const value = v as Record<string, unknown>;\n"
-      persist ++= "    seen.add(key);\n"
+      persist ++= s"    ${client}Seen.add(key);\n"
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
       persist ++= "    const data = {\n"
       for f <- nonKey do
@@ -148,7 +159,7 @@ object StateBridgeTs:
       persist ++= "    }\n"
       persist ++= "  }\n"
       persist ++= s"  for (const [key, row] of ${client}Existing) {\n"
-      persist ++= "    if (!seen.has(key)) {\n"
+      persist ++= s"    if (!${client}Seen.has(key)) {\n"
       persist ++= s"      await tx.$client.delete({ where: { id: row.id } });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
@@ -163,16 +174,22 @@ object StateBridgeTs:
       persist ++= "    create: { id: 1, ...scalarData },\n"
       persist ++= "  });\n"
 
+    val adapterNames = (List(
+      "dafnyModule",
+      "emptyDafnyMap",
+      "intFromDafny",
+      "intToDafny",
+      "makeState",
+      "stringFromDafny",
+      "stringToDafny"
+    ) ::: (if seqRelations.nonEmpty then List("dafnySeqOf") else Nil)
+      ::: (if planned.relations.exists(_.entity.fields.exists(_.nullable)) then
+             List("someOrNone", "valueOrNull")
+           else Nil)).sorted
     s"""import type { Prisma } from '@prisma/client';
        |
        |import {
-       |  dafnyModule,
-       |  emptyDafnyMap,
-       |  intFromDafny,
-       |  intToDafny,
-       |  makeState,
-       |  stringFromDafny,
-       |  stringToDafny,
+       |${adapterNames.map(n => s"  $n,").mkString("\n")}
        |} from '../dafnyKernel/adapter.js';
        |
        |type DafnyMap = { update(k: unknown, v: unknown): DafnyMap } & Iterable<[unknown, unknown]>;

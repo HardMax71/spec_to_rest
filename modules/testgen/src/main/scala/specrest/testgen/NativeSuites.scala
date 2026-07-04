@@ -297,4 +297,14 @@ private[testgen] object TsRender:
     val names =
       Strategies.forIR(ir, TsFastCheckStrategy).map(_.functionName).distinct.sorted
         .filter(n => scanText.contains(s"$n("))
-    Option.when(names.nonEmpty)(s"import { ${names.mkString(", ")} } from \"./_strategies.js\";\n")
+    val strategyLine =
+      Option.when(names.nonEmpty)(
+        s"import { ${names.mkString(", ")} } from \"./_strategies.js\";\n"
+      )
+    val redactLine =
+      Option.when(scanText.contains("redact("))(
+        "import { redact } from \"./_redaction.js\";\n"
+      )
+    (strategyLine, redactLine) match
+      case (None, None) => None
+      case (a, b)       => Some(a.getOrElse("") + b.getOrElse(""))

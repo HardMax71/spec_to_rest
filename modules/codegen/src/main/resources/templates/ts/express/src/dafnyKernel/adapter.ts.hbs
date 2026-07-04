@@ -32,7 +32,8 @@ export const stringToDafny = (s: string): unknown =>
 export const stringFromDafny = (s: unknown): string =>
   (s as DafnySeq).toVerbatimString(false);
 
-export const intToDafny = (n: number): unknown => new BigNumber(n);
+export const intToDafny = (n: number | bigint): unknown =>
+  new BigNumber(typeof n === 'bigint' ? n.toString() : n);
 
 export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
 

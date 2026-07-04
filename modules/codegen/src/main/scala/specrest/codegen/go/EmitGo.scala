@@ -5,7 +5,6 @@ import specrest.codegen.Compose
 import specrest.codegen.DafnyKernel
 import specrest.codegen.EmitOptions
 import specrest.codegen.EmitShared
-import specrest.codegen.SensitiveFields
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
@@ -16,6 +15,7 @@ import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
+import specrest.codegen.SensitiveFields
 import specrest.codegen.TemplateEngine
 import specrest.codegen.migration.MigrationPlan
 import specrest.codegen.migration.SchemaCodec
