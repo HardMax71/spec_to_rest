@@ -1,0 +1,11 @@
+{
+  "candidate" : "var base := st.todos[id];\n  var newTitle := if title != None then title.value else base.title;\n  var newDescription := if description != None then description else base.description;\n  var newPriority := if priority != None then priority.value else base.priority;\n  var newTags := if tags != None then tags.value else base.tags;\n  var newUpdated := if now() >= base.updated_at then now() else base.updated_at;\n  todo := Todo(id, newTitle, newDescription, base.status, newPriority, base.created_at, newUpdated, base.completed_at, newTags);\n  st.todos := st.todos[id := todo];",
+  "body" : "var base := st.todos[id];\n  var newTitle := if title != None then title.value else base.title;\n  var newDescription := if description != None then description else base.description;\n  var newPriority := if priority != None then priority.value else base.priority;\n  var newTags := if tags != None then tags.value else base.tags;\n  var newUpdated := if now() >= base.updated_at then now() else base.updated_at;\n  todo := Todo(id, newTitle, newDescription, base.status, newPriority, base.created_at, newUpdated, base.completed_at, newTags);\n  st.todos := st.todos[id := todo];",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

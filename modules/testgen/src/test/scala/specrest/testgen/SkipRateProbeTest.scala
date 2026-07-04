@@ -77,7 +77,7 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "todo_list",
-      50,
+      52,
       2,
       "next_id is scalar-backed now (its freshness universal is vacuous at the empty seed) but only kernel-routed ops maintain it; this probe emits without a kernel, so the two counter ensures still skip here and check under --with-synthesis"
     ),

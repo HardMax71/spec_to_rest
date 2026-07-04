@@ -64,6 +64,9 @@ service TodoList {
 
     requires:
       len(title) >= 1
+      // Realizability: Todo's invariant caps titles at 200, so the operation
+      // must reject longer ones rather than promise the impossible.
+      len(title) <= 200
 
     ensures:
       todo.id = pre(next_id)
@@ -116,6 +119,8 @@ service TodoList {
 
     requires:
       id in todos
+      // Realizability: a provided title must satisfy Todo's length bounds.
+      title != none implies (len(title) >= 1 and len(title) <= 200)
 
     ensures:
       todo.id = id

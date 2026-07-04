@@ -121,54 +121,157 @@ definition eqNoneName :: "expr \<Rightarrow> String.literal option" where
 definition substValue :: "String.literal \<Rightarrow> expr \<Rightarrow> expr" where
   "substValue p body = subst p (FieldAccessF (IdentifierF p None) (STR ''value'') None) body"
 
-function (sequential) desugarGo :: "nat \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr"
-  and desugarBindings ::
-    "nat \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
+text \<open>Whether an expression already denotes an option-typed position: another
+  guarded option input, or a field access whose field name the caller knows
+  to be option-typed. Comparing a guarded option input against such a
+  position must NOT unwrap it (both sides are options); everywhere else the
+  bare mention stands for the payload and unwraps to \<open>p.value\<close>.\<close>
+
+definition isOptionPosition ::
+  "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> bool" where
+  "isOptionPosition opts optFields x =
+     (case x of
+        IdentifierF n _ \<Rightarrow> string_in_list n opts
+      | FieldAccessF _ f _ \<Rightarrow> string_in_list f optFields
+      | _ \<Rightarrow> False)"
+
+fun substValueOpt ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr"
+and substValueOpt_list ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr list \<Rightarrow> expr list"
+and substValueOpt_fields ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> field_assign list \<Rightarrow> field_assign list"
+and substValueOpt_entries ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> map_entry list \<Rightarrow> map_entry list"
+and substValueOpt_bindings ::
+  "String.literal \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
 where
-  "desugarGo 0 _ e = e"
-| "desugarGo (Suc fuel) opts e =
+  "substValueOpt p opts optFields (BinaryOpF op l r sp) =
+     (if op = BEq \<and> (case l of IdentifierF n _ \<Rightarrow> n = p | _ \<Rightarrow> False)
+         \<and> isOptionPosition opts optFields r
+      then BinaryOpF op l (substValueOpt p opts optFields r) sp
+      else if op = BEq \<and> (case r of IdentifierF n _ \<Rightarrow> n = p | _ \<Rightarrow> False)
+         \<and> isOptionPosition opts optFields l
+      then BinaryOpF op (substValueOpt p opts optFields l) r sp
+      else BinaryOpF op (substValueOpt p opts optFields l) (substValueOpt p opts optFields r) sp)"
+| "substValueOpt p opts optFields (IdentifierF n sp) =
+     (if n = p then FieldAccessF (IdentifierF p None) (STR ''value'') None
+      else IdentifierF n sp)"
+| "substValueOpt p opts optFields (UnaryOpF op x sp) =
+     UnaryOpF op (substValueOpt p opts optFields x) sp"
+| "substValueOpt p opts optFields (FieldAccessF b f sp) =
+     FieldAccessF (substValueOpt p opts optFields b) f sp"
+| "substValueOpt p opts optFields (EnumAccessF b m sp) =
+     EnumAccessF (substValueOpt p opts optFields b) m sp"
+| "substValueOpt p opts optFields (IndexF b i sp) =
+     IndexF (substValueOpt p opts optFields b) (substValueOpt p opts optFields i) sp"
+| "substValueOpt p opts optFields (CallF c args sp) =
+     CallF c (substValueOpt_list p opts optFields args) sp"
+| "substValueOpt p opts optFields (PrimeF x sp) = PrimeF (substValueOpt p opts optFields x) sp"
+| "substValueOpt p opts optFields (PreF x sp) = PreF (substValueOpt p opts optFields x) sp"
+| "substValueOpt p opts optFields (WithF b upds sp) =
+     WithF (substValueOpt p opts optFields b) (substValueOpt_fields p opts optFields upds) sp"
+| "substValueOpt p opts optFields (IfF c t e2 sp) =
+     IfF (substValueOpt p opts optFields c) (substValueOpt p opts optFields t)
+         (substValueOpt p opts optFields e2) sp"
+| "substValueOpt p opts optFields (LetF v vl body sp) =
+     LetF v (substValueOpt p opts optFields vl)
+          (if v = p then body else substValueOpt p opts optFields body) sp"
+| "substValueOpt p opts optFields (LambdaF q b sp) =
+     LambdaF q (if q = p then b else substValueOpt p opts optFields b) sp"
+| "substValueOpt p opts optFields (ConstructorF n fs sp) =
+     ConstructorF n (substValueOpt_fields p opts optFields fs) sp"
+| "substValueOpt p opts optFields (SetLiteralF xs sp) =
+     SetLiteralF (substValueOpt_list p opts optFields xs) sp"
+| "substValueOpt p opts optFields (MapLiteralF es sp) =
+     MapLiteralF (substValueOpt_entries p opts optFields es) sp"
+| "substValueOpt p opts optFields (SetComprehensionF v d pr sp) =
+     SetComprehensionF v (substValueOpt p opts optFields d)
+                         (if v = p then pr else substValueOpt p opts optFields pr) sp"
+| "substValueOpt p opts optFields (SeqLiteralF xs sp) =
+     SeqLiteralF (substValueOpt_list p opts optFields xs) sp"
+| "substValueOpt p opts optFields (MatchesF x pat sp) =
+     MatchesF (substValueOpt p opts optFields x) pat sp"
+| "substValueOpt p opts optFields (SomeWrapF x sp) =
+     SomeWrapF (substValueOpt p opts optFields x) sp"
+| "substValueOpt p opts optFields (TheF v d b sp) =
+     TheF v (substValueOpt p opts optFields d)
+          (if v = p then b else substValueOpt p opts optFields b) sp"
+| "substValueOpt p opts optFields (QuantifierF q bs body sp) =
+     QuantifierF q (substValueOpt_bindings p opts optFields bs)
+                   (if string_in_list p (qb_names bs) then body
+                    else substValueOpt p opts optFields body) sp"
+| "substValueOpt _ _ _ (IntLitF n sp)    = IntLitF n sp"
+| "substValueOpt _ _ _ (FloatLitF n sp)  = FloatLitF n sp"
+| "substValueOpt _ _ _ (StringLitF n sp) = StringLitF n sp"
+| "substValueOpt _ _ _ (BoolLitF v sp)   = BoolLitF v sp"
+| "substValueOpt _ _ _ (NoneLitF sp)     = NoneLitF sp"
+| "substValueOpt_list _ _ _ [] = []"
+| "substValueOpt_list p opts optFields (x # xs) =
+     substValueOpt p opts optFields x # substValueOpt_list p opts optFields xs"
+| "substValueOpt_fields _ _ _ [] = []"
+| "substValueOpt_fields p opts optFields (FieldAssignFull f v sp # fs) =
+     FieldAssignFull f (substValueOpt p opts optFields v) sp
+       # substValueOpt_fields p opts optFields fs"
+| "substValueOpt_entries _ _ _ [] = []"
+| "substValueOpt_entries p opts optFields (MapEntryFull k v sp # es) =
+     MapEntryFull (substValueOpt p opts optFields k) (substValueOpt p opts optFields v) sp
+       # substValueOpt_entries p opts optFields es"
+| "substValueOpt_bindings _ _ _ [] = []"
+| "substValueOpt_bindings p opts optFields (QuantifierBindingFull n d kk sp # bs) =
+     QuantifierBindingFull n (substValueOpt p opts optFields d) kk sp
+       # substValueOpt_bindings p opts optFields bs"
+
+function (sequential) desugarGo :: "nat \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr"
+  and desugarBindings ::
+    "nat \<Rightarrow> String.literal list \<Rightarrow> String.literal list \<Rightarrow> quantifier_binding list \<Rightarrow> quantifier_binding list"
+where
+  "desugarGo 0 _ _ e = e"
+| "desugarGo (Suc fuel) opts optFields e =
      (case e of
         BinaryOpF op l r sp \<Rightarrow>
           (if op = BImplies then
              (case neqNoneName l of
                 Some p \<Rightarrow> (if string_in_list p opts
-                             then BinaryOpF BImplies l (desugarGo fuel opts (substValue p r)) sp
-                             else BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp)
-              | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp)
+                             then BinaryOpF BImplies l (desugarGo fuel opts optFields (substValueOpt p opts optFields r)) sp
+                             else BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp)
+              | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp)
            else if op = BOr then
              (case eqNoneName l of
                 Some p \<Rightarrow> (if string_in_list p opts
-                             then BinaryOpF BOr l (desugarGo fuel opts (substValue p r)) sp
+                             then BinaryOpF BOr l (desugarGo fuel opts optFields (substValueOpt p opts optFields r)) sp
                              else
                                (case eqNoneName r of
                                   Some q \<Rightarrow> (if string_in_list q opts
-                                               then BinaryOpF BOr (desugarGo fuel opts (substValue q l)) r sp
-                                               else BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp)
-                                | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp))
+                                               then BinaryOpF BOr (desugarGo fuel opts optFields (substValueOpt q opts optFields l)) r sp
+                                               else BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp)
+                                | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp))
               | None \<Rightarrow>
                   (case eqNoneName r of
                      Some q \<Rightarrow> (if string_in_list q opts
-                                  then BinaryOpF BOr (desugarGo fuel opts (substValue q l)) r sp
-                                  else BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp)
-                   | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp))
-           else BinaryOpF op (desugarGo fuel opts l) (desugarGo fuel opts r) sp)
-      | UnaryOpF op x sp \<Rightarrow> UnaryOpF op (desugarGo fuel opts x) sp
+                                  then BinaryOpF BOr (desugarGo fuel opts optFields (substValueOpt q opts optFields l)) r sp
+                                  else BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp)
+                   | None \<Rightarrow> BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp))
+           else BinaryOpF op (desugarGo fuel opts optFields l) (desugarGo fuel opts optFields r) sp)
+      | UnaryOpF op x sp \<Rightarrow> UnaryOpF op (desugarGo fuel opts optFields x) sp
       | QuantifierF q bs body sp \<Rightarrow>
-          QuantifierF q (desugarBindings fuel opts bs) (desugarGo fuel opts body) sp
+          QuantifierF q (desugarBindings fuel opts optFields bs) (desugarGo fuel opts optFields body) sp
       | _ \<Rightarrow> e)"
-| "desugarBindings 0 _ bs = bs"
-| "desugarBindings (Suc fuel) opts bs =
+| "desugarBindings 0 _ _ bs = bs"
+| "desugarBindings (Suc fuel) opts optFields bs =
      (case bs of
         [] \<Rightarrow> []
       | QuantifierBindingFull a d kind bsp # rest \<Rightarrow>
-          QuantifierBindingFull a (desugarGo fuel opts d) kind bsp # desugarBindings fuel opts rest)"
+          QuantifierBindingFull a (desugarGo fuel opts optFields d) kind bsp # desugarBindings fuel opts optFields rest)"
   by pat_completeness auto
 
 termination
-  by (relation "measure (\<lambda>p. case p of Inl (fuel, _, _) \<Rightarrow> fuel | Inr (fuel, _, _) \<Rightarrow> fuel)") auto
+  by (relation "measure (\<lambda>p. case p of Inl (fuel, _, _, _) \<Rightarrow> fuel | Inr (fuel, _, _, _) \<Rightarrow> fuel)") auto
 
-definition desugarOptionGuards :: "String.literal list \<Rightarrow> expr \<Rightarrow> expr" where
-  "desugarOptionGuards opts e = desugarGo (length (allSubexprs e) + 100) opts e"
+definition desugarOptionGuards ::
+  "String.literal list \<Rightarrow> String.literal list \<Rightarrow> expr \<Rightarrow> expr" where
+  "desugarOptionGuards opts optFields e =
+     desugarGo (length (allSubexprs e) + 100) opts optFields e"
 
 lemmas neqNoneName_code [code]         = neqNoneName_def
 lemmas eqNoneName_code [code]          = eqNoneName_def

@@ -1,0 +1,11 @@
+{
+  "candidate" : "st.todos := st.todos - {id};",
+  "body" : "st.todos := st.todos - {id};",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

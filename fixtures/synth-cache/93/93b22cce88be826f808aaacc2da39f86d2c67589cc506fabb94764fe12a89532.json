@@ -1,0 +1,11 @@
+{
+  "candidate" : "// Archiving clears completed_at: the invariant ties a non-None stamp to\n  // DONE exactly, and the contract leaves the field free.\n  st.todos := st.todos[id := st.todos[id].(status := ARCHIVED, completed_at := None)];",
+  "body" : "// Archiving clears completed_at: the invariant ties a non-None stamp to\n  // DONE exactly, and the contract leaves the field free.\n  st.todos := st.todos[id := st.todos[id].(status := ARCHIVED, completed_at := None)];",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}
