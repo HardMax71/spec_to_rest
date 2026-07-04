@@ -15,7 +15,8 @@ def require_admin(
     # No token configured (the production default): the surface does not exist.
     if not token:
         raise HTTPException(status_code=404, detail="Not Found")
-    if credentials is None or not hmac.compare_digest(credentials.credentials, token):
+    supplied = credentials.credentials.encode("utf-8") if credentials else b""
+    if not hmac.compare_digest(supplied, token.encode("utf-8")):
         raise HTTPException(
             status_code=401,
             detail="Unauthorized",

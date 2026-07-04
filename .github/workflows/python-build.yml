@@ -55,12 +55,15 @@ jobs:
           - fixture: url_shortener
             dialect: postgres
             db_url: postgresql+asyncpg://app:app@localhost:5432/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: url_shortener
             dialect: sqlite
             db_url: sqlite+aiosqlite:///./test.db
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: url_shortener
             dialect: mysql
             db_url: mysql+aiomysql://app:app@127.0.0.1:3306/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: todo_list
             dialect: postgres
             db_url: postgresql+asyncpg://app:app@localhost:5432/app
@@ -121,6 +124,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Dafny (synthesis emit runs dafny translate)
+        if: matrix.synthesis != ''
+        uses: dafny-lang/setup-dafny-action@be023fc606339d46ed6b077dcb8614d0279ded31 # v1.9.1
+        with:
+          dafny-version: "4.11.0"
+
       - uses: actions/setup-java@ad2b38190b15e4d6bdf0c97fb4fca8412226d287 # v5.3.0
         with:
           distribution: temurin
@@ -135,7 +144,7 @@ jobs:
       - name: Emit FastAPI project (${{ matrix.fixture }} / ${{ matrix.dialect }})
         run: |
           mkdir -p out
-          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework fastapi --db ${{ matrix.dialect }} --out out --ignore-verify"
+          sbt -batch "cli/run compile fixtures/spec/${{ matrix.fixture }}.spec --framework fastapi --db ${{ matrix.dialect }} --out out --ignore-verify ${{ matrix.synthesis }}"
 
       - name: Validate compose overlays parse (prod + staging)
         working-directory: out
@@ -161,3 +170,45 @@ jobs:
           uv run alembic upgrade head
           uv run alembic downgrade base
           uv run alembic upgrade head
+
+      - name: Mint per-run admin token
+        run: echo "ADMIN_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Boot fastapi server
+        working-directory: out
+        env:
+          DATABASE_URL: ${{ matrix.db_url }}
+        run: |
+          nohup uv run uvicorn app.main:app --port 8080 > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/health > /dev/null 2>&1; then
+              echo "server is up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to become healthy" >&2
+          cat server.log >&2
+          exit 1
+
+      - name: Run native conformance suite (smoke profile)
+        working-directory: out
+        env:
+          SPEC_TEST_BASE_URL: http://localhost:8080
+          SPEC_TEST_PROFILE: smoke
+        run: uv run pytest tests/ -q
+
+      - name: Server log (on failure)
+        if: failure()
+        working-directory: out
+        run: |
+          echo "::group::server.log"
+          cat server.log || true
+          echo "::endgroup::"
+
+      - name: Stop server
+        if: always()
+        working-directory: out
+        run: |
+          if [ -f server.pid ]; then kill "$(cat server.pid)" 2>/dev/null || true; fi

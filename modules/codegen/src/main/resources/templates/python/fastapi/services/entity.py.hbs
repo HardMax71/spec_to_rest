@@ -63,6 +63,10 @@ class {{entity.entityName}}Service:
         {{this.kernelResultBind}} = _dafny_kernel.{{this.dafnyMethod}}(state{{#each this.kernelCallArgs}}, {{this}}{{/each}})
 {{#if this.kernelHasState}}
         await persist_state(self._session, state)
+        # The request session otherwise commits in dependency teardown, which
+        # can run after the response is sent; a conformance client reading
+        # /admin/state immediately would race the write.
+        await self._session.commit()
 {{/if}}
         return {{this.kernelResultExpr}}
 {{else if (eq this.routeKind "create")}}
@@ -73,7 +77,10 @@ class {{entity.entityName}}Service:
 {{/each}}
         )
         self._session.add(row)
-        await self._session.flush()
+        # Commit before responding: the teardown commit can land after the
+        # response, racing a client's immediate read-back.
+        await self._session.commit()
+        await self._session.refresh(row)
         return {{../entity.readSchemaName}}.model_validate(row)
 {{else if (eq this.routeKind "read")}}
     async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> {{../entity.readSchemaName}} | None:
@@ -94,6 +101,7 @@ class {{entity.entityName}}Service:
         result = await self._session.execute(
             sa_delete({{../entity.modelClassName}}).where({{../entity.modelClassName}}.{{this.modelLookupColumn}} == {{this.pathParamName}})
         )
+        await self._session.commit()
         return cast("CursorResult[Any]", result).rowcount > 0
 {{else if (eq this.routeKind "redirect")}}
     async def {{this.handlerName}}(self{{#if this.pathParamSignature}}, {{this.pathParamSignature}}{{/if}}) -> str:

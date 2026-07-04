@@ -107,6 +107,9 @@ object AdminRouter:
        |@router.post("/reset", status_code=204)
        |async def reset(session: AsyncSession = Depends(get_session)) -> Response:
        |$deleteStatements
+       |    # Committing in dependency teardown can land after the response,
+       |    # racing a client's next request against the deletes.
+       |    await session.commit()
        |    return Response(status_code=204)
        |
        |

@@ -32,6 +32,9 @@ def _parse_iso(value: Any) -> Any:
 @router.post("/reset", status_code=204)
 async def reset(session: AsyncSession = Depends(get_session)) -> Response:
     await session.execute(delete(UrlMapping))
+    # Committing in dependency teardown can land after the response,
+    # racing a client's next request against the deletes.
+    await session.commit()
     return Response(status_code=204)
 
 

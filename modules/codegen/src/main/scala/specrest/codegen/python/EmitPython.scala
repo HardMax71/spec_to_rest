@@ -71,7 +71,11 @@ final case class StateOpsCtx(
 
 final private case class StdlibImport(module: String, names: List[String])
 
-final private case class EnrichedPathParam(name: String, domainType: String)
+final private case class EnrichedPathParam(
+    name: String,
+    domainType: String,
+    routerType: String
+)
 
 final private case class CustomRequestSchema(schemaName: String, fields: List[SchemaFieldView])
 
@@ -123,17 +127,6 @@ final private case class EntityImports(
     sqlalchemyImports: List[String],
     postgresImports: List[String],
     stdlibImports: List[StdlibImport]
-)
-
-final private case class RouterTemplateImports(
-    needsHttpException: Boolean,
-    needsResponse: Boolean,
-    needsRedirectResponse: Boolean,
-    needsPagination: Boolean,
-    needsAny: Boolean,
-    schemas: List[String],
-    stdlibImports: List[StdlibImport],
-    authDeps: List[String]
 )
 
 final private case class ServiceTemplateImports(
@@ -493,7 +486,30 @@ object EmitPython:
   ): EnrichedOperation =
     val endpoint = op.endpoint
     val pathParamsWithTypes = endpoint.pathParams.map { p =>
-      EnrichedPathParam(p.name, pythonTypeForParam(p.typeExpr, typeLookup))
+      val t = pythonTypeForParam(p.typeExpr, typeLookup)
+      // FastAPI's int is unbounded, so an out-of-range id must fail at the
+      // router boundary (422) instead of reaching the driver as a 500; the
+      // bounds come from the column the param binds against (asyncpg rejects
+      // out-of-int32 values for INTEGER columns outright). Services keep the
+      // plain type.
+      val routerType =
+        if t == "int" then
+          val col = EmitShared.lookupColumn(entity, Some(p.name))
+          val colType = entity.fields
+            .find(_.columnName == col)
+            .map(_.ormColumnType.toUpperCase(java.util.Locale.ROOT))
+            .getOrElse("BIGINT")
+          // The python profile carries SQLAlchemy type names (Integer,
+          // SmallInteger, BigInteger); spec-level typeMap overrides may carry
+          // raw SQL strings. Both vocabularies match explicitly so the bounds
+          // never depend on a casing coincidence.
+          val (lo, hi) = colType match
+            case "SMALLINT" | "SMALLINTEGER"  => ("-32768", "32767")
+            case "INTEGER" | "INT" | "SERIAL" => ("-2147483648", "2147483647")
+            case _                            => ("-9223372036854775808", "9223372036854775807")
+          s"Annotated[int, Path(ge=$lo, le=$hi)]"
+        else t
+      EnrichedPathParam(p.name, t, routerType)
     }
 
     val method = HttpMethods.lower(endpoint.method)
@@ -774,39 +790,79 @@ object EmitPython:
       mergeStdlibImport(stdlibByModule, view.domainType)
     finalizeStdlibImports(stdlibByModule)
 
+  // The router's whole import header assembles here as one rendered block
+  // (isort groups: stdlib, third-party, first-party), so the template carries
+  // no per-import conditionals.
   private def collectRouterImports(
       entity: ProfiledEntity,
       operations: List[EnrichedOperation]
-  ): RouterTemplateImports =
-    var needsHttpException    = false
-    var needsResponse         = false
-    var needsRedirectResponse = false
-    var needsPagination       = false
-    val schemaSet             = mutable.Set.empty[String]
-    val stdlibByModule        = mutable.Map.empty[String, mutable.Set[String]]
+  ): String =
+    val kinds          = operations.map(_.routeKind).toSet
+    val schemaSet      = mutable.Set.empty[String]
+    val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
 
     for op <- operations do
-      op.routeKind match
-        case "read"     => needsHttpException = true
-        case "delete"   => needsHttpException = true; needsResponse = true
-        case "redirect" => needsRedirectResponse = true
-        case "list"     => needsPagination = true
-        case _          => ()
       if op.hasRequestBody && op.requestBodyType.nonEmpty then schemaSet += op.requestBodyType
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
         schemaSet += entity.readSchemaName
       op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
 
-    RouterTemplateImports(
-      needsHttpException = needsHttpException,
-      needsResponse = needsResponse,
-      needsRedirectResponse = needsRedirectResponse,
-      needsPagination = needsPagination,
-      needsAny = operations.exists(_.responseAnnotation.contains("Any")),
-      schemas = schemaSet.toList.sorted,
-      stdlibImports = finalizeStdlibImports(stdlibByModule),
-      authDeps = operations.flatMap(_.authDependency).distinct.sorted
-    )
+    val needsAnnotated =
+      operations.exists(_.pathParamsWithTypes.exists(p => p.routerType != p.domainType))
+    val needsAny = operations.exists(_.responseAnnotation.contains("Any"))
+    val typingNames =
+      (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any")).toList
+    val stdlib =
+      (Option
+        .when(typingNames.nonEmpty)(
+          "typing" -> s"from typing import ${typingNames.mkString(", ")}"
+        )
+        .toList :::
+        finalizeStdlibImports(stdlibByModule).map(i =>
+          i.module -> s"from ${i.module} import ${i.names.mkString(", ")}"
+        )).sortBy(_._1).map(_._2)
+
+    val fastapiNames = List(
+      Some("APIRouter"),
+      Option.when(operations.nonEmpty)("Depends"),
+      Option.when(kinds.contains("read") || kinds.contains("delete"))("HTTPException"),
+      Option.when(needsAnnotated)("Path"),
+      Option.when(kinds.contains("delete"))("Response")
+    ).flatten
+    val thirdParty =
+      s"from fastapi import ${fastapiNames.mkString(", ")}" ::
+        Option
+          .when(kinds.contains("redirect"))("from fastapi.responses import RedirectResponse")
+          .toList :::
+        Option
+          .when(operations.nonEmpty)("from sqlalchemy.ext.asyncio import AsyncSession")
+          .toList
+
+    val authDeps = operations.flatMap(_.authDependency).distinct.sorted
+    val snake    = Naming.toSnakeCase(entity.entityName)
+    val firstParty =
+      Option.when(operations.nonEmpty)("from app.database import get_session").toList :::
+        Option.when(kinds.contains("list"))("from app.pagination import Pagination").toList :::
+        (if schemaSet.nonEmpty then
+           List(
+             schemaSet.toList.sorted
+               .map(n => s"    $n,")
+               .mkString(s"from app.schemas.$snake import (\n", "\n", "\n)")
+           )
+         else Nil) :::
+        Option
+          .when(authDeps.nonEmpty)(s"from app.security import ${authDeps.mkString(", ")}")
+          .toList :::
+        Option
+          .when(operations.nonEmpty)(
+            s"from app.services.$snake import ${entity.entityName}Service"
+          )
+          .toList
+
+    List(stdlib, thirdParty, firstParty)
+      .filter(_.nonEmpty)
+      .map(_.mkString("\n"))
+      .mkString("\n\n")
 
   private def collectServiceImports(
       entity: ProfiledEntity,

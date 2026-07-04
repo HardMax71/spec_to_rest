@@ -77,7 +77,8 @@ object SecurityPython:
        |    # No token configured (the production default): the surface does not exist.
        |    if not token:
        |        raise HTTPException(status_code=404, detail="Not Found")
-       |    if credentials is None or not hmac.compare_digest(credentials.credentials, token):
+       |    supplied = credentials.credentials.encode("utf-8") if credentials else b""
+       |    if not hmac.compare_digest(supplied, token.encode("utf-8")):
        |        raise HTTPException(
        |            status_code=401,
        |            detail="Unauthorized",
@@ -125,7 +126,7 @@ object SecurityPython:
               |    return (
               |        credentials is not None
               |        and expected is not None
-              |        and hmac.compare_digest(credentials.credentials, expected.get_secret_value())
+              |        and hmac.compare_digest(credentials.credentials.encode("utf-8"), expected.get_secret_value().encode("utf-8"))
               |    )""".stripMargin
         )
       case SsApiKey(location, paramName) =>
@@ -136,7 +137,7 @@ object SecurityPython:
               |    return (
               |        value is not None
               |        and expected is not None
-              |        and hmac.compare_digest(value, expected.get_secret_value())
+              |        and hmac.compare_digest(value.encode("utf-8"), expected.get_secret_value().encode("utf-8"))
               |    )""".stripMargin
         )
       case SsBasic() =>
@@ -149,8 +150,8 @@ object SecurityPython:
               |        credentials is not None
               |        and username is not None
               |        and password is not None
-              |        and hmac.compare_digest(credentials.username, username)
-              |        and hmac.compare_digest(credentials.password, password.get_secret_value())
+              |        and hmac.compare_digest(credentials.username.encode("utf-8"), username.encode("utf-8"))
+              |        and hmac.compare_digest(credentials.password.encode("utf-8"), password.get_secret_value().encode("utf-8"))
               |    )""".stripMargin
         )
     val param = credentialParam(List(decl), n)
