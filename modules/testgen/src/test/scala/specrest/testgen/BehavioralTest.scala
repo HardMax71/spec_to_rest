@@ -173,7 +173,9 @@ class BehavioralTest extends BehavioralTestSupport:
       val out           = Behavioral.emitFor(profiled)
       val registerTests = out.tests.filter(_.name.startsWith("test_register"))
       assert(
-        registerTests.exists(t => t.body.contains("password=st.text()")),
+        registerTests.exists(t =>
+          t.body.contains("password=st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+        ),
         s"expected bare st.text() under live override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
       )
       assert(

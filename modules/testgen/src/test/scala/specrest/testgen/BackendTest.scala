@@ -41,7 +41,12 @@ class BackendTest extends CatsEffectSuite:
     )
 
   List(
-    ("string", (b: StrategyBackend) => b.string, "st.text()", "fc.string()"),
+    (
+      "string",
+      (b: StrategyBackend) => b.string,
+      "st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))",
+      "fc.string()"
+    ),
     ("int", (b: StrategyBackend) => b.int, "st.integers()", "fc.integer()"),
     ("bool", (b: StrategyBackend) => b.bool, "st.booleans()", "fc.boolean()"),
     ("id", (b: StrategyBackend) => b.id, "st.uuids().map(str)", "fc.uuid()"),

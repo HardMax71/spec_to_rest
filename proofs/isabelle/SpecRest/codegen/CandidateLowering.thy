@@ -467,20 +467,36 @@ and fieldCandidatesOf ::
         Some r \<Rightarrow> r # fieldCandidatesOf samplable taken op outName fs
       | None \<Rightarrow> fieldCandidatesOf samplable taken op outName fs)"
 
+text \<open>Two candidates of the same alias in one operation must be pairwise
+  distinct: entity invariants routinely demand it of the fields they feed
+  (a session's access and refresh tokens), and the requires is free to
+  demand it of internal sampled inputs; the runtime resamples on a guard
+  miss either way.\<close>
+
+fun pairwiseDistinct :: "candidate list \<Rightarrow> expr list" where
+  "pairwiseDistinct [] = []"
+| "pairwiseDistinct (c # cs) =
+     map (\<lambda>c2. BinaryOpF BNeq (IdentifierF (candParam c) None)
+                               (IdentifierF (candParam c2) None) None)
+       (filter (\<lambda>c2. candAlias c2 = candAlias c) cs)
+     @ pairwiseDistinct cs"
+
 definition lowerFreshOutputs ::
   "String.literal list \<Rightarrow> entity_decl list \<Rightarrow> operation_decl
      \<Rightarrow> operation_decl \<times> candidate list" where
   "lowerFreshOutputs samplable ents op =
      (let taken = map prmName (operInputs op) @ map prmName (operOutputs op);
-          found = outputCandidates samplable ents taken op (operOutputs op)
+          found = outputCandidates samplable ents taken op (operOutputs op);
+          cands = map (\<lambda>(_, _, _, c). c) found
       in (OperationDeclFull (operName op)
             (operInputs op @ map (\<lambda>(p, _, _, _). p) found)
             (operOutputs op)
-            (operRequires op @ concat (map (\<lambda>(_, rs, _, _). rs) found))
+            (operRequires op @ concat (map (\<lambda>(_, rs, _, _). rs) found)
+               @ pairwiseDistinct cands)
             (operEnsures op @ map (\<lambda>(_, _, g, _). g) found)
             (operRequiresAuth op)
             (operSpan op),
-          map (\<lambda>(_, _, _, c). c) found))"
+          cands))"
 
 lemmas samplerFor_code [code]        = samplerFor.simps
 lemmas lowerFreshOutputs_code [code] = lowerFreshOutputs_def

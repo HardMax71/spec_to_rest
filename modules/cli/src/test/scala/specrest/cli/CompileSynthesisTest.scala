@@ -254,9 +254,8 @@ class CompileSynthesisTest extends CatsEffectSuite:
               "kernel.cjs should re-export the module + runtime"
             )
             assert(
-              Files.readString(service).contains(
-                "companion.Shorten(state, stringToDafny(body.url))"
-              ),
+              Files.readString(service).contains("companion.Shorten(state, ") &&
+                Files.readString(service).contains("stringToDafny(candCode)"),
               s"service should route Shorten through the kernel — got:\n${Files.readString(service)}"
             )
           }
