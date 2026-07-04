@@ -495,15 +495,15 @@ object EmitPython:
       val routerType =
         if t == "int" then
           val col = EmitShared.lookupColumn(entity, Some(p.name))
-          val int32 = entity.fields
+          val colType = entity.fields
             .find(_.columnName == col)
-            .exists(f =>
-              Set("INTEGER", "SERIAL", "SMALLINT").contains(
-                f.ormColumnType.toUpperCase(java.util.Locale.ROOT)
-              )
-            )
-          if int32 then "Annotated[int, Path(ge=-2147483648, le=2147483647)]"
-          else "Annotated[int, Path(ge=-9223372036854775808, le=9223372036854775807)]"
+            .map(_.ormColumnType.toUpperCase(java.util.Locale.ROOT))
+            .getOrElse("BIGINT")
+          val (lo, hi) = colType match
+            case "SMALLINT"                   => ("-32768", "32767")
+            case "INTEGER" | "INT" | "SERIAL" => ("-2147483648", "2147483647")
+            case _                            => ("-9223372036854775808", "9223372036854775807")
+          s"Annotated[int, Path(ge=$lo, le=$hi)]"
         else t
       EnrichedPathParam(p.name, t, routerType)
     }

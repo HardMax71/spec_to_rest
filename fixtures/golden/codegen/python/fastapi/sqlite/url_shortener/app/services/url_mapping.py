@@ -36,4 +36,5 @@ class UrlMappingService:
         result = await self._session.execute(
             sa_delete(UrlMapping).where(UrlMapping.code == code)
         )
+        await self._session.commit()
         return cast("CursorResult[Any]", result).rowcount > 0
