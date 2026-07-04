@@ -37,6 +37,11 @@ export const intToDafny = (n: number | bigint): unknown =>
 
 export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
 
+// Lossless decimal rendering of a Dafny integer: toNumber() rounds past
+// 2^53, so identity keys stringify straight from the BigNumber.
+export const intKeyFromDafny = (n: unknown): string =>
+  (n as DafnyInt & { toFixed(dp: number): string }).toFixed(0);
+
 interface DafnyOption {
   is_Some: boolean;
   value: unknown;

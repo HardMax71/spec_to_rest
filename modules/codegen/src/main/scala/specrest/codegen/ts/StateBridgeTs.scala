@@ -68,11 +68,6 @@ object StateBridgeTs:
       case "string" => s"stringToDafny($rowRef.${camel(key.fieldName)})"
       case _        => s"intToDafny($rowRef.${camel(key.fieldName)})"
 
-  private def keyFromDafny(key: ProfiledField): String =
-    key.domainType match
-      case "string" => "stringFromDafny(k)"
-      case _        => "intFromDafny(k)"
-
   def emit(profiled: ProfiledService): String =
     val planned = plan(profiled) match
       case Right(p) => p
@@ -139,7 +134,9 @@ object StateBridgeTs:
       persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
       persist ++= s"  const ${client}Seen = new Set<string>();\n"
       persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
-      persist ++= s"    const key = String(${keyFromDafny(rKey)});\n"
+      val dafnyKeyString =
+        if rKey.domainType == "string" then "stringFromDafny(k)" else "intKeyFromDafny(k)"
+      persist ++= s"    const key = $dafnyKeyString;\n"
       persist ++= "    const value = v as Record<string, unknown>;\n"
       persist ++= s"    ${client}Seen.add(key);\n"
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
@@ -181,6 +178,9 @@ object StateBridgeTs:
       "stringFromDafny",
       "stringToDafny"
     ) ::: (if seqRelations.nonEmpty then List("dafnySeqOf") else Nil)
+      ::: (if planned.entityRowRelations.exists(_.keyField.exists(_.domainType != "string")) then
+             List("intKeyFromDafny")
+           else Nil)
       ::: (if planned.relations.exists(_.entity.fields.exists(_.nullable)) then
              List("someOrNone", "valueOrNull")
            else Nil)).sorted
