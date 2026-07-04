@@ -111,8 +111,7 @@ object StateBridgeTs:
       hydrate ++= "  const scalarRow = await tx.serviceState.findUnique({ where: { id: 1 } });\n"
       hydrate ++= "  if (scalarRow) {\n"
       for sc <- planned.scalars do
-        // Prisma types BIGINT columns as bigint; the adapter takes number.
-        hydrate ++= s"    st['${dafnyName(sc.stateField)}'] = intToDafny(Number(scalarRow.${camel(sc.columnName)}));\n"
+        hydrate ++= s"    st['${dafnyName(sc.stateField)}'] = intToDafny(scalarRow.${camel(sc.columnName)});\n"
       hydrate ++= "  }\n"
 
     val persist = new StringBuilder
@@ -133,15 +132,14 @@ object StateBridgeTs:
       val e      = r.entity
       val client = camel(e.entityName)
       persist ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
-      // Prisma BigInt pks come back as bigint while the dafny-side keys are
-      // numbers, so numeric lookup keys coerce; string keys pass through.
-      val mapKey =
-        if rKey.domainType == "string" then s"r.${camel(rKey.fieldName)}"
-        else s"Number(r.${camel(rKey.fieldName)})"
-      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [$mapKey, r]));\n"
-      persist ++= s"  const ${client}Seen = new Set<${rKey.domainType}>();\n"
+      // String-typed lookup keys are exact for every magnitude: prisma pks
+      // arrive as bigint and dafny keys convert through number, so comparing
+      // their canonical string forms avoids both bigint mismatch and float
+      // precision loss on large ids.
+      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
+      persist ++= s"  const ${client}Seen = new Set<string>();\n"
       persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
-      persist ++= s"    const key = ${keyFromDafny(rKey)};\n"
+      persist ++= s"    const key = String(${keyFromDafny(rKey)});\n"
       persist ++= "    const value = v as Record<string, unknown>;\n"
       persist ++= s"    ${client}Seen.add(key);\n"
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)

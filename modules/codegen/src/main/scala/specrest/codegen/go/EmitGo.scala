@@ -1173,7 +1173,8 @@ func sampleCandidate(length int, charset string) (string, error) {
           val (returnType, zero, resultAssign) =
             if noResult then ("error", "", List(s"\t\t$call"))
             else if entityOutput.isDefined then
-              val keyTokens = entityOutputFields.map(f => s"\"${f.fieldName}\":")
+              // Keys match the entity read shape's json tags (column names).
+              val keyTokens = entityOutputFields.map(f => s"\"${f.columnName}\":")
               val keyWidth  = keyTokens.map(_.length).max
               val entries = entityOutputFields.zip(keyTokens).map: (f, key) =>
                 s"\t\t\t${key.padTo(keyWidth, ' ')} ${StateBridgeGo.fromDafnyExpr(f, "out")},"

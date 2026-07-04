@@ -231,7 +231,10 @@ func _in(x, c any) bool {
 }
 
 // Digit strings from JSON object keys compare numerically against numbers,
-// matching _eq's coercion (Int-keyed relations stringify their keys).
+// matching _eq's coercion (Int-keyed relations stringify their keys). The
+// float64 domain is the ceiling of the whole comparison anyway: encoding/json
+// decodes every number to float64 before these helpers ever see it, so a
+// ParseInt path would imply precision the decoded values no longer carry.
 func _num(x any) (float64, bool) {
 	if f, ok := _toF(x); ok {
 		return f, true

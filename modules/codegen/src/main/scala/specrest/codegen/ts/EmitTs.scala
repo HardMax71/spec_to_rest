@@ -76,6 +76,7 @@ final private case class TsOperation(
     dafnyMethod: Option[String],
     routeThroughKernel: Boolean,
     kernelServiceFn: String,
+    kernelNoResult: Boolean,
     kernelCandidateConsts: List[(String, String)],
     kernelRouteCallArgs: String,
     authMiddleware: Option[String],
@@ -980,6 +981,7 @@ object EmitTs:
       dafnyMethod = op.dafnyMethod,
       routeThroughKernel = kernelFn.isDefined,
       kernelServiceFn = kernelFn.map(_._1).getOrElse(""),
+      kernelNoResult = kernelFn.exists(_._1.contains("): Promise<void>")),
       kernelCandidateConsts = kernelFn
         .map(_ =>
           op.dafnyCandidates.map(c => tsCandidateCharsetConst(c.param) -> c.sampleCharset)
@@ -1020,8 +1022,10 @@ object EmitTs:
   private def tsCandidateCharsetConst(param: String): String =
     toCamelCase(param) + "Charset"
 
+  // Kernel entity projections must key exactly like the read DTOs, including
+  // the TS reserved-identifier escaping.
   private def camelName(name: String): String =
-    Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
+    Naming.toCamelCase(name, Naming.CamelStrategy.Ts)
 
   private def tsKernelServiceFn(
       op: ProfiledOperation,

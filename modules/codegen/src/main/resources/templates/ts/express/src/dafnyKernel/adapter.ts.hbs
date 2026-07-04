@@ -57,8 +57,19 @@ export const valueOrNull = (opt: unknown, conv: (v: unknown) => unknown): unknow
   return o.is_Some ? conv(o.value) : null;
 };
 
-export const dafnySeqOf = (values: unknown[]): unknown =>
-  (kernel._dafny.Seq as { of(...xs: unknown[]): unknown }).of(...values);
+export const dafnySeqOf = (values: unknown[]): unknown => {
+  // Chunked concatenation: spreading every element into one variadic call
+  // hits engine argument limits on large hydrations.
+  const S = kernel._dafny.Seq as {
+    of(...xs: unknown[]): unknown;
+    Concat(a: unknown, b: unknown): unknown;
+  };
+  let out = S.of();
+  for (let i = 0; i < values.length; i += 512) {
+    out = S.Concat(out, S.of(...values.slice(i, i + 512)));
+  }
+  return out;
+};
 
 // Fresh secrets come from the CSPRNG, never from the verified (hence
 // deterministic) kernel; the compiled Requires twin validates each sample
