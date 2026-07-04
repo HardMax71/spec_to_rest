@@ -85,11 +85,17 @@ object StatePlan:
                             case _ =>
                               relations += RelationPlan(name, entity, Some(key), valueField)
 
-    // A seq projection rewrites its entity's whole table on persist, so a
-    // second projection over the same entity would be clobbered; fail closed.
+    // A seq projection rewrites its entity's whole table on persist, so any
+    // second projection over the same entity, seq or keyed, would be
+    // clobbered; fail closed on both shapes.
     val seqEntities = relations.result().filter(_.isSeq).map(_.entity.entityName)
     for r <- relations.result() if !r.isSeq && seqEntities.contains(r.entity.entityName) do
       problems += s"state field '${r.stateField}' shares entity '${r.entity.entityName}' with a seq projection; persists would clobber each other"
+    for
+      (entityName, rs) <- relations.result().filter(_.isSeq).groupBy(_.entity.entityName)
+      if rs.sizeIs > 1
+    do
+      problems += s"state fields ${rs.map(_.stateField).sorted.mkString(", ")} are seq projections over the same entity '$entityName'; persists would clobber each other"
 
     val built       = Plan(relations.result(), scalars.result())
     val persistable = built.entityRowRelations.map(_.entity.entityName).toSet
