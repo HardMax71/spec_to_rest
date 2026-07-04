@@ -499,8 +499,12 @@ object EmitPython:
             .find(_.columnName == col)
             .map(_.ormColumnType.toUpperCase(java.util.Locale.ROOT))
             .getOrElse("BIGINT")
+          // The python profile carries SQLAlchemy type names (Integer,
+          // SmallInteger, BigInteger); spec-level typeMap overrides may carry
+          // raw SQL strings. Both vocabularies match explicitly so the bounds
+          // never depend on a casing coincidence.
           val (lo, hi) = colType match
-            case "SMALLINT"                   => ("-32768", "32767")
+            case "SMALLINT" | "SMALLINTEGER"  => ("-32768", "32767")
             case "INTEGER" | "INT" | "SERIAL" => ("-2147483648", "2147483647")
             case _                            => ("-9223372036854775808", "9223372036854775807")
           s"Annotated[int, Path(ge=$lo, le=$hi)]"
