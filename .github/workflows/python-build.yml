@@ -85,12 +85,15 @@ jobs:
           - fixture: auth_service
             dialect: postgres
             db_url: postgresql+asyncpg://app:app@localhost:5432/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: auth_service
             dialect: sqlite
             db_url: sqlite+aiosqlite:///./test.db
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: auth_service
             dialect: mysql
             db_url: mysql+aiomysql://app:app@127.0.0.1:3306/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
     services:
       postgres:
         image: postgres:17-alpine

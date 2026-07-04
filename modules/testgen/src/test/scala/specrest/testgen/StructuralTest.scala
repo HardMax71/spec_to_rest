@@ -189,13 +189,9 @@ class StructuralTest extends CatsEffectSuite:
         s"ValueError message should name the env-var:\n${out.file}"
       )
 
-  test("M5.8: auth_service emits Schemathesis sensitive-body redaction hook"):
+  test("M5.8: auth_service wires sensitive body fields into output sanitization"):
     loadProfiled("fixtures/spec/auth_service.spec").map: profiled =>
       val out = Structural.emitFor(profiled)
-      assert(
-        out.file.contains("from tests.redaction import _RedactedStr"),
-        s"missing _RedactedStr import:\n${out.file}"
-      )
       assert(
         out.file.contains("_SENSITIVE_BODY_FIELDS = frozenset({"),
         s"missing sensitive frozenset:\n${out.file}"
@@ -209,12 +205,8 @@ class StructuralTest extends CatsEffectSuite:
         s"expected 'refresh_token' in sensitive set:\n${out.file}"
       )
       assert(
-        out.file.contains("@schemathesis.hook"),
-        s"missing schemathesis hook decorator:\n${out.file}"
-      )
-      assert(
-        out.file.contains("def before_call(context, case, kwargs):"),
-        s"missing before_call hook:\n${out.file}"
+        out.file.contains("schema.config.output.sanitization.keys_to_sanitize"),
+        s"missing sanitizer key wiring:\n${out.file}"
       )
 
   test("M5.8: non-sensitive specs emit no redaction hook"):

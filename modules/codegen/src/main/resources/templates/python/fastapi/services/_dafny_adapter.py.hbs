@@ -8,7 +8,9 @@
   follow-up to issue #27 in this repo.
 --}}from __future__ import annotations
 
+import secrets
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from typing import Any
 
 from app.dafny_kernel import module_
@@ -21,6 +23,13 @@ from app.dafny_kernel._dafny import Set as _DafnySet
 
 def make_state() -> module_.ServiceState:
     return module_.ServiceState()
+
+
+# Fresh secrets must come from the CSPRNG, never from the verified (hence
+# deterministic) kernel; the compiled Requires twin validates each sample
+# against live state before the kernel accepts it.
+def sample_candidate(length: int, charset: str) -> str:
+    return "".join(secrets.choice(charset) for _ in range(length))
 
 
 # Dafny strings are CodePoint sequences, not ``str``; every string crossing the
@@ -43,6 +52,14 @@ def from_dafny_seq(seq: Any) -> list[Any]:
 
 def to_dafny_map(d: dict[Any, Any]) -> Any:
     return _DafnyMap(d)
+
+
+def epoch_to_datetime(value: Any) -> datetime:
+    return datetime.fromtimestamp(int(value), tz=timezone.utc)
+
+
+def value_or_none(value: Any, conv: Any) -> Any:
+    return conv(value.value) if isinstance(value, module_.Option_Some) else None
 
 
 def from_dafny_map(m: Any) -> dict[Any, Any]:

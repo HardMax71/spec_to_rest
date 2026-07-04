@@ -91,7 +91,7 @@ class StatefulTest extends CatsEffectSuite:
       assert(out.file.contains("@invariant()"))
       assert(out.file.contains("def invariant_all_ur_ls_valid(self):"))
       assert(out.file.contains("def invariant_metadata_consistent(self):"))
-      assert(out.file.contains("post_state = client.get(\"/admin/state\").json()"))
+      assert(out.file.contains("post_state = state_snapshot(_INT_KEYED_STATE)"))
 
   test("file emits TestCase alias and settings"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

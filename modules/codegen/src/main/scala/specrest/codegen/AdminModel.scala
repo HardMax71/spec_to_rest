@@ -14,6 +14,7 @@ object AdminModel:
   enum ProjectionValue derives CanEqual:
     case PrimitiveField(fieldName: String)
     case EntityRow
+    case SeqRows
     case ScalarStateColumn(columnName: String)
 
   // Entities whose transitions make them seedable through /admin/seed. The
@@ -59,6 +60,12 @@ object AdminModel:
           .flatMap(e =>
             primaryKeyField(e).map(pk => Projection(name, pk, ProjectionValue.EntityRow))
           )
+      // A seq of entities projects onto the entity's table ordered by its
+      // synthesized serial pk: insertion order is append order.
+      case SeqTypeF(NamedTypeF(name, _), _) =>
+        svcEntities(ir)
+          .find(e => entName(e) == name)
+          .map(_ => Projection(name, "id", ProjectionValue.SeqRows))
       case _ => None
 
   private def inferRelationProjection(

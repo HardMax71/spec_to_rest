@@ -156,7 +156,7 @@ object Compile:
       case Right(maybeKernel) =>
         val profiled =
           maybeKernel match
-            case Some(b) => Annotate.attachDafnyMethods(profiledBase, b.bindings)
+            case Some(b) => Annotate.attachDafnyMethods(profiledBase, b.bindings, b.candidates)
             case None    => profiledBase
         IO.blocking {
           val outRoot          = Paths.get(opts.outDir)
@@ -208,7 +208,8 @@ object Compile:
 
   final private case class KernelBundle(
       kernel: DafnyKernel,
-      bindings: Map[String, String]
+      bindings: Map[String, String],
+      candidates: Map[String, List[specrest.profile.CandidateInput]]
   )
 
   private def buildKernel(
@@ -262,10 +263,12 @@ object Compile:
                         case TargetLanguage.JavaScript =>
                           (DafnyKernel.JsDefaultPackagePath, translated.files)
                         case TargetLanguage.Python =>
-                          (
-                            DafnyKernel.PythonDefaultPackagePath,
-                            DafnyKernel.rewritePythonImports(translated.files)
-                          )
+                          val rewritten = DafnyKernel.rewritePythonImports(translated.files)
+                          val withShim =
+                            if rewritten.values.exists(_.contains("_externs import ")) then
+                              rewritten + ("_externs.py" -> DafnyKernel.PythonExternShim)
+                            else rewritten
+                          (DafnyKernel.PythonDefaultPackagePath, withShim)
                       val kernel = DafnyKernel(
                         packagePath = packagePath,
                         files = files,
@@ -273,7 +276,20 @@ object Compile:
                           .sortBy(_._1)
                           .map((n, p) => OperationBinding(n, p))
                       )
-                      Some(KernelBundle(kernel, bindings))
+                      val candidates = dafny.methods
+                        .filter(m => bindings.contains(m.name))
+                        .map: m =>
+                          m.name -> m.candidates.map(c =>
+                            specrest.profile.CandidateInput(
+                              c.param,
+                              c.output,
+                              c.field,
+                              c.sampleLength,
+                              c.sampleCharset
+                            )
+                          )
+                        .toMap
+                      Some(KernelBundle(kernel, bindings, candidates))
 
   private def loadVerifiedBodies(
       specFile: String,

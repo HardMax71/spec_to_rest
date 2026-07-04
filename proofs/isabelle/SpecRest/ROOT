@@ -51,6 +51,7 @@ session SpecRest_Codegen in codegen = SpecRest_Semantics +
     ParsePath
     ParseTemporal
     Strategies
+    CandidateLowering
     LintAnalysis
     Classify
     VerifierDispatch

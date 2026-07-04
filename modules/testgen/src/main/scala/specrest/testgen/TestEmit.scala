@@ -134,7 +134,8 @@ object TestEmit:
     val statefulOut   = Stateful.emitFor(profiled)
     val structuralOut = Structural.emitFor(profiled)
     val strategiesPy  = renderStrategiesFile(strategySpecs)
-    val behavioralPy  = renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs)
+    val behavioralPy =
+      renderBehavioralFile(behavioralOut.tests, svcName(ir), strategySpecs, StateKeys.intKeyed(ir))
     val skipsJson =
       renderSkipsJson(
         svcName(ir),
@@ -190,8 +191,10 @@ object TestEmit:
   private def renderBehavioralFile(
       tests: List[GeneratedTest],
       serviceName: String,
-      strategies: List[StrategySpec]
+      strategies: List[StrategySpec],
+      intKeyedFields: List[String]
   ): String =
+    val intKeyedLiteral = intKeyedFields.map(n => s"\"$n\"").mkString(", ")
     val strategyImport =
       if strategies.isEmpty then ""
       else
@@ -218,9 +221,11 @@ object TestEmit:
          |from hypothesis import HealthCheck, assume, given, settings
          |from hypothesis import strategies as st
          |
-         |from tests.conftest import client, request_without_redirects
+         |from tests.conftest import client, request_without_redirects, state_snapshot
          |from tests.predicates import is_valid_email, is_valid_uri
          |from tests.redaction import redact
+         |
+         |_INT_KEYED_STATE = frozenset({$intKeyedLiteral})
          |
          |""".stripMargin.replace("\\\"", "\"")
 

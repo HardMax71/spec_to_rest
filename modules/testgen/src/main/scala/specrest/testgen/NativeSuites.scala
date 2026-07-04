@@ -102,7 +102,8 @@ private[testgen] object NativeBehavioral:
             opDecl,
             ir,
             CaptureMode.PreState,
-            StubOps.bareBodyOutput(pop, opDecl)
+            StubOps.bareBodyOutput(pop, opDecl),
+            kernelRouted = pop.dafnyMethod.isDefined
           )
           operEnsures(opDecl).zipWithIndex.map: (clause, idx) =>
             if Behavioral.isAggregateEqualityOverState(clause, opDecl) then

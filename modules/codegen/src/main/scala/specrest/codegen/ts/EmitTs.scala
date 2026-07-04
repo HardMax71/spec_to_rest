@@ -75,6 +75,7 @@ final private case class TsOperation(
     dafnyMethod: Option[String],
     routeThroughKernel: Boolean,
     kernelServiceFn: String,
+    kernelCandidateConsts: List[(String, String)],
     kernelRouteCallArgs: String,
     authMiddleware: Option[String],
     prismaCall: String,
@@ -674,6 +675,7 @@ object EmitTs:
           "intFromDafny",
           "intToDafny",
           "makeState",
+          "sampleCandidate",
           "stringFromDafny",
           "stringToDafny"
         ).filter(n => fns.contains(n + "(") || fns.contains(n + "."))
@@ -686,6 +688,12 @@ object EmitTs:
             .mkString("import {\n", "\n", "\n} from '../dafnyKernel/adapter.js';")
         if fns.contains("hydrateState(") then
           lines += "import { hydrateState, persistState } from './stateBridge.js';"
+        val charsets = operations
+          .filter(_.routeThroughKernel)
+          .flatMap(_.kernelCandidateConsts)
+          .distinctBy(_._1)
+        charsets.foreach: (name, charset) =>
+          lines += s"const $name = ${tsSingleQuoted(charset)};"
         lines.result().mkString("\n")
       },
       customSchemas = customSchemas
@@ -965,6 +973,11 @@ object EmitTs:
       dafnyMethod = op.dafnyMethod,
       routeThroughKernel = kernelFn.isDefined,
       kernelServiceFn = kernelFn.map(_._1).getOrElse(""),
+      kernelCandidateConsts = kernelFn
+        .map(_ =>
+          op.dafnyCandidates.map(c => tsCandidateCharsetConst(c.param) -> c.sampleCharset)
+        )
+        .getOrElse(Nil),
       kernelRouteCallArgs = kernelFn.map(_._2).getOrElse(""),
       authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
         SecurityTs.middlewareName(op.requiresAuth)
@@ -994,6 +1007,12 @@ object EmitTs:
   // falls back to the route-kind stub) unless the op is kernel-bound and every input/output is a
   // supported scalar; query-param inputs and collection/datatype results are deferred follow-ups.
   // The second tuple element is the route-handler call-arg list (idiomatic, pre-marshalling).
+  private def tsSingleQuoted(s: String): String =
+    "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+  private def tsCandidateCharsetConst(param: String): String =
+    toCamelCase(param) + "Charset"
+
   private def tsKernelServiceFn(
       op: ProfiledOperation,
       handlerName: String,
@@ -1024,7 +1043,10 @@ object EmitTs:
       val redirectOk =
         routeKind != "redirect" || (outputs.sizeIs == 1 && outputs.head.domainType == "string")
       Option.when(convertedArgs.forall(_.isDefined) && outputsOk && redirectOk):
-        val callArgs = ("state" :: convertedArgs.flatten).mkString(", ")
+        val candidates = op.dafnyCandidates.map: c =>
+          (toCamelCase(c.param), c.sampleLength, tsCandidateCharsetConst(c.param))
+        val candArgs = candidates.map((v, _, _) => s"stringToDafny($v)")
+        val callArgs = ("state" :: convertedArgs.flatten ::: candArgs).mkString(", ")
         val call     = s"companion.$dafnyName($callArgs)"
         val sig =
           (endpoint.pathParams.map(p =>
@@ -1067,11 +1089,29 @@ object EmitTs:
               "  }"
             )
           else Nil
-        val guardCheck = List(
-          s"  if (!(companion.Requires$dafnyName($callArgs) as boolean)) {",
-          s"    throw new HttpError($guardStatus, '$guardDetail');",
-          "  }"
-        )
+        val guardCheck =
+          if candidates.isEmpty then
+            List(
+              s"  if (!(companion.Requires$dafnyName($callArgs) as boolean)) {",
+              s"    throw new HttpError($guardStatus, '$guardDetail');",
+              "  }"
+            )
+          else
+            // Sampled candidates: exhaustion means a real precondition
+            // failure, not sampling bad luck.
+            candidates.map((v, _, _) => s"  let $v = '';") :::
+              List("  let okCand = false;", "  for (let attempt = 0; attempt < 8; attempt++) {") :::
+              candidates.map((v, len, const) => s"    $v = sampleCandidate($len, $const);") :::
+              List(
+                s"    if (companion.Requires$dafnyName($callArgs) as boolean) {",
+                "      okCand = true;",
+                "      break;",
+                "    }",
+                "  }",
+                "  if (!okCand) {",
+                s"    throw new HttpError($guardStatus, '$guardDetail');",
+                "  }"
+              )
         val header = s"export const $handlerName = async ($sig): Promise<$returnType> => {"
         val fn =
           if kernelCtx.hasState then

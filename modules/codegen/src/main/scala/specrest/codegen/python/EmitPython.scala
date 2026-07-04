@@ -90,6 +90,12 @@ final private case class SchemaFieldView(
 
 final private case class ModelInitFieldView(columnName: String, bodyAccessor: String)
 
+final private case class KernelCandidateView(
+    name: String,
+    sampleArgs: String,
+    charset: String
+)
+
 final private case class EnrichedOperation(
     operationName: String,
     handlerName: String,
@@ -112,6 +118,7 @@ final private case class EnrichedOperation(
     dafnyMethod: Option[String],
     kernelHandlerSignature: String,
     kernelCallArgs: List[String],
+    kernelCandidates: List[KernelCandidateView],
     kernelGuardName: String,
     kernelGuardStatus: Int,
     kernelGuardDetail: String,
@@ -138,9 +145,13 @@ final private case class ServiceTemplateImports(
     needsStateBridge: Boolean,
     needsAny: Boolean,
     adapterImports: List[String],
+    adapterImportBlock: String,
     hasAppImports: Boolean,
-    needsTypingCast: Boolean
+    needsTypingCast: Boolean,
+    candidateConsts: List[CandidateConstView]
 )
+
+final private case class CandidateConstView(name: String, charset: String)
 
 @SuppressWarnings(Array("org.wartremover.warts.Var"))
 object EmitPython:
@@ -219,7 +230,7 @@ object EmitPython:
       val table = schemaTables(ctx.schema).find(t => tableEntityName(t) == entity.entityName)
       val entityOps = ctx.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup, kernelCtx))
+        .map(op => enrichOperation(op, entity, profiled.entities, typeLookup, kernelCtx))
         .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
 
       val imports        = collectEntityImports(entity, dialect)
@@ -474,13 +485,37 @@ object EmitPython:
   private val KernelScalarTypes = Set("str", "int", "bool")
 
   private def kernelFromDafny(domainType: String, ref: String): String = domainType match
-    case "str"  => s"from_dafny_str($ref)"
-    case "bool" => s"bool($ref)"
-    case _      => s"int($ref)"
+    case "str"      => s"from_dafny_str($ref)"
+    case "bool"     => s"bool($ref)"
+    case "datetime" => s"epoch_to_datetime($ref)"
+    case _          => s"int($ref)"
+
+  private def kernelFromDafnyName(domainType: String): String = domainType match
+    case "str"      => "from_dafny_str"
+    case "bool"     => "bool"
+    case "datetime" => "epoch_to_datetime"
+    case _          => "int"
+
+  // A single entity-valued output projects the response fields off the Dafny
+  // datatype (selector names double their underscores); optional fields go
+  // through value_or_none so the None case never touches a selector.
+  private def kernelEntityProjection(fields: List[ProfiledField]): String =
+    val pairs = fields.map: f =>
+      val selector = s"result.${EmitShared.pyDafnySelector(f.fieldName)}"
+      val value =
+        if f.nullable then
+          s"value_or_none($selector, ${kernelFromDafnyName(baseDomain(f.domainType))})"
+        else kernelFromDafny(baseDomain(f.domainType), selector)
+      s"\"${f.fieldName}\": $value"
+    pairs.mkString("{\n            ", ",\n            ", ",\n        }")
+
+  private def baseDomain(domainType: String): String =
+    domainType.replaceAll("\\s*\\|\\s*None$", "").trim
 
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
+      allEntities: List[ProfiledEntity],
       typeLookup: Map[String, String],
       kernelCtx: KernelCtx
   ): EnrichedOperation =
@@ -593,23 +628,69 @@ object EmitPython:
     // fail-loud stub instead of silently running on wrong values.
     // Query-parameter ops are a stated v1 non-goal (#510): the router emits no
     // query variables, so routing them through the kernel would NameError.
+    val sensitiveBodyFields =
+      op.requestBodyFields
+        .filter(f => SensitiveFields.isSensitive(f.columnName))
+        .map(_.fieldName)
+        .toSet
     val kernelArgSources: List[(String, String)] =
       endpoint.pathParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
-        endpoint.bodyParams.map(p =>
-          s"body.${p.name}" -> pythonTypeForParam(p.typeExpr, typeLookup)
-        )
+        endpoint.bodyParams.map { p =>
+          // Sensitive fields arrive as pydantic SecretStr and must unwrap
+          // before crossing the kernel boundary.
+          val access =
+            if sensitiveBodyFields.contains(p.name) then s"body.${p.name}.get_secret_value()"
+            else s"body.${p.name}"
+          access -> pythonTypeForParam(p.typeExpr, typeLookup)
+        }
     val kernelOuts = op.responseFields
+    val specOutputs = svcOperations(kernelCtx.ir)
+      .find(o => operName(o) == op.operationName)
+      .map(operOutputs)
+      .getOrElse(Nil)
+    // A single entity-valued output marshals by field projection; scalar
+    // outputs unpack positionally; no outputs at all is a plain effect call.
+    val entityOutput = specOutputs match
+      case single :: Nil =>
+        prmType(single) match
+          case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
+          case _                => None
+      case _ => None
+    // The API contract for an entity output is the entity's read shape: flat,
+    // with sensitive fields dropped exactly as the schema layer drops them.
+    val entityOutputFields = entityOutput
+      .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
+      .getOrElse(Nil)
+    val outsMarshalable =
+      if specOutputs.isEmpty then true
+      else if entityOutput.isDefined then
+        entityOutputFields.nonEmpty &&
+        entityOutputFields.forall(f =>
+          (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
+        )
+      else
+        kernelOuts.nonEmpty &&
+        kernelOuts.forall(f => !f.nullable && KernelScalarTypes.contains(f.domainType))
     val kernelEligible =
       op.dafnyMethod.isDefined &&
         endpoint.queryParams.isEmpty &&
         kernelCtx.stateReady &&
         kernelArgSources.forall((_, t) => KernelScalarTypes.contains(t)) &&
-        kernelOuts.nonEmpty &&
-        kernelOuts.forall(f => !f.nullable && KernelScalarTypes.contains(f.domainType))
+        outsMarshalable
     val dafnyMethodFinal = if kernelEligible then op.dafnyMethod else None
 
     val kernelCallArgs = kernelArgSources.map: (arg, t) =>
       if t == "str" then s"to_dafny_str($arg)" else arg
+    // Candidates ride after the declared inputs, matching the lowered Dafny
+    // signature; each is sampled fresh per guard attempt and converted at the
+    // sample site, so call args stay short bare names.
+    val kernelCandidates = op.dafnyCandidates.map: c =>
+      KernelCandidateView(
+        name = c.param,
+        sampleArgs = s"${c.sampleLength}, ${candidateCharsetConst(c.param)}",
+        charset = c.sampleCharset
+      )
+    val kernelAllArgs = kernelCallArgs ++ kernelCandidates.map(_.name)
     val isRedirectKind = routeKind match
       case _: RkRedirect => true
       case _             => false
@@ -617,6 +698,8 @@ object EmitPython:
       if isRedirectKind then
         val out = kernelOuts.headOption
         ("result", out.map(f => kernelFromDafny(f.domainType, "result")).getOrElse("result"))
+      else if specOutputs.isEmpty then ("_", "None")
+      else if entityOutput.isDefined then ("result", kernelEntityProjection(entityOutputFields))
       else
         kernelOuts match
           case Nil => ("result", "result")
@@ -643,7 +726,8 @@ object EmitPython:
       else serviceCallArgs
 
     val (responseAnnotationFinal, serviceReturnAnnoFinal) =
-      if dafnyMethodFinal.isDefined && !isRedirectKind then
+      if dafnyMethodFinal.isDefined && specOutputs.isEmpty then ("None", "None")
+      else if dafnyMethodFinal.isDefined && !isRedirectKind then
         ("dict[str, Any]", "dict[str, Any]")
       else (responseAnnotation, serviceReturnAnno)
 
@@ -684,7 +768,8 @@ object EmitPython:
       customRequestSchema = customRequestSchema,
       dafnyMethod = dafnyMethodFinal,
       kernelHandlerSignature = kernelSig,
-      kernelCallArgs = kernelCallArgs,
+      kernelCallArgs = kernelAllArgs,
+      kernelCandidates = kernelCandidates,
       kernelGuardName = s"Requires${op.operationName}",
       kernelGuardStatus = kernelGuardStatus,
       kernelGuardDetail = kernelGuardDetail,
@@ -696,6 +781,9 @@ object EmitPython:
       authDependency =
         Option.when(op.requiresAuth.nonEmpty)(SecurityPython.dependencyName(op.requiresAuth))
     )
+
+  private def candidateCharsetConst(param: String): String =
+    "_CAND_" + param.stripPrefix("cand_").toUpperCase(java.util.Locale.ROOT) + "_CHARSET"
 
   private def kernelSignatureAndArgs(
       endpoint: EndpointSpec,
@@ -895,10 +983,16 @@ object EmitPython:
     val kernelText = kernelOps
       .flatMap(o => o.kernelResultExpr :: o.kernelCallArgs)
       .mkString(" ")
+    val hasCandidates = kernelOps.exists(_.kernelCandidates.nonEmpty)
     val adapterImports = List(
+      Option.when(kernelText.contains("epoch_to_datetime("))("epoch_to_datetime"),
       Option.when(kernelText.contains("from_dafny_str("))("from_dafny_str"),
       Option.when(kernelOps.exists(!_.kernelHasState))("make_state"),
-      Option.when(kernelText.contains("to_dafny_str("))("to_dafny_str")
+      Option.when(hasCandidates)("sample_candidate"),
+      // The candidate sample lines convert with to_dafny_str in the template,
+      // outside the strings this text scan sees.
+      Option.when(kernelText.contains("to_dafny_str(") || hasCandidates)("to_dafny_str"),
+      Option.when(kernelText.contains("value_or_none("))("value_or_none")
     ).flatten
     ServiceTemplateImports(
       sqlalchemyPlainImports = plainImports.result().sorted,
@@ -909,6 +1003,23 @@ object EmitPython:
       needsStateBridge = kernelOps.exists(_.kernelHasState),
       needsAny = kernelOps.exists(_.serviceReturnAnnotation == "dict[str, Any]"),
       adapterImports = adapterImports,
+      adapterImportBlock =
+        if adapterImports.sizeIs <= 3 then
+          s"from app.services._dafny_adapter import ${adapterImports.mkString(", ")}"
+        else
+          adapterImports
+            .map(n => s"    $n,")
+            .mkString("from app.services._dafny_adapter import (\n", "\n", "\n)")
+      ,
       hasAppImports = needsDafnyKernel || needsModelImport || schemaSet.nonEmpty,
-      needsTypingCast = needsSaDelete
+      needsTypingCast = needsSaDelete,
+      candidateConsts = kernelOps
+        .flatMap(_.kernelCandidates)
+        .map(c =>
+          CandidateConstView(
+            candidateCharsetConst(c.name),
+            EmitShared.doubleQuoted(c.charset)
+          )
+        )
+        .distinctBy(_.name)
     )

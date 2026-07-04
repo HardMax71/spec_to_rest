@@ -1,0 +1,11 @@
+{
+  "candidate" : "  assert forall s1, s2 :: (s1 in old(st.sessions) && s2 in old(st.sessions) && old(st.sessions)[s1].refresh_token == old(st.sessions)[s2].refresh_token) ==> s1 == s2;\n  var old_session :| old_session in st.sessions && st.sessions[old_session].refresh_token == refresh_token && st.sessions[old_session].is_revoked == false && st.sessions[old_session].refresh_expires_at > now();\n  var base := st.sessions[old_session];\n  new_session := Session(st.next_session_id, base.user_id, cand_access_token, cand_refresh_token, now() + 1, now() + 2, now(), false);\n  st.sessions := st.sessions[old_session := base.(is_revoked := true)][new_session.id := new_session];\n  st.next_session_id := st.next_session_id + 1;\n",
+  "body" : "  assert forall s1, s2 :: (s1 in old(st.sessions) && s2 in old(st.sessions) && old(st.sessions)[s1].refresh_token == old(st.sessions)[s2].refresh_token) ==> s1 == s2;\n  var old_session :| old_session in st.sessions && st.sessions[old_session].refresh_token == refresh_token && st.sessions[old_session].is_revoked == false && st.sessions[old_session].refresh_expires_at > now();\n  var base := st.sessions[old_session];\n  new_session := Session(st.next_session_id, base.user_id, cand_access_token, cand_refresh_token, now() + 1, now() + 2, now(), false);\n  st.sessions := st.sessions[old_session := base.(is_revoked := true)][new_session.id := new_session];\n  st.next_session_id := st.next_session_id + 1;\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

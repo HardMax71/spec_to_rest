@@ -1,0 +1,11 @@
+{
+  "candidate" : "  var user_id := st.reset_tokens[reset_token].user_id;\n  var u := st.users[user_id];\n  var updated := u.(password_hash := hash(new_password));\n  st.users := st.users[user_id := updated];\n  st.user_by_email := st.user_by_email[u.email := updated];\n  st.reset_tokens := st.reset_tokens - {reset_token};\n",
+  "body" : "  var user_id := st.reset_tokens[reset_token].user_id;\n  var u := st.users[user_id];\n  var updated := u.(password_hash := hash(new_password));\n  st.users := st.users[user_id := updated];\n  st.user_by_email := st.user_by_email[u.email := updated];\n  st.reset_tokens := st.reset_tokens - {reset_token};\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

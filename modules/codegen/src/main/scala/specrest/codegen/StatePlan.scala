@@ -15,10 +15,11 @@ object StatePlan:
   final case class RelationPlan(
       stateField: String,
       entity: ProfiledEntity,
-      keyField: ProfiledField,
-      valueField: Option[ProfiledField]
+      keyField: Option[ProfiledField],
+      valueField: Option[ProfiledField],
+      isSeq: Boolean = false
   ):
-    def isEntityRow: Boolean = valueField.isEmpty
+    def isEntityRow: Boolean = valueField.isEmpty && !isSeq
 
   final case class ScalarPlan(stateField: String, columnName: String)
 
@@ -33,7 +34,8 @@ object StatePlan:
   def analyze(
       profiled: ProfiledService,
       fieldSupported: ProfiledField => Boolean,
-      keySupported: ProfiledField => Boolean
+      keySupported: ProfiledField => Boolean,
+      seqSupported: Boolean = false
   ): Either[String, Plan] =
     val ir        = profiled.ir
     val byName    = profiled.entities.map(e => e.entityName -> e).toMap
@@ -54,30 +56,50 @@ object StatePlan:
                 case None =>
                   problems += s"state field '$name' projects onto unknown entity '${p.entityName}'"
                 case Some(entity) =>
-                  entity.fields.find(_.fieldName == p.keyFieldName) match
-                    case None =>
-                      problems += s"state field '$name': key field '${p.keyFieldName}' not on '${p.entityName}'"
-                    case Some(key) =>
-                      val unsupported = entity.fields.filterNot(fieldSupported)
-                      if unsupported.nonEmpty then
-                        problems += s"state field '$name': entity '${p.entityName}' has field types the bridge cannot marshal (${unsupported.map(_.domainType).distinct.mkString(", ")})"
-                      else if !keySupported(key) then
-                        problems += s"state field '$name': key '${p.keyFieldName}' must be a non-optional scalar"
-                      else
-                        val valueField = shape match
-                          case AdminModel.ProjectionValue.PrimitiveField(vf) =>
-                            entity.fields.find(_.fieldName == vf)
-                          case _ => None
-                        shape match
-                          case AdminModel.ProjectionValue.PrimitiveField(vf)
-                              if valueField.isEmpty =>
-                            problems += s"state field '$name': value field '$vf' not on '${p.entityName}'"
-                          case _ =>
-                            relations += RelationPlan(name, entity, key, valueField)
+                  val unsupported = entity.fields.filterNot(fieldSupported)
+                  if unsupported.nonEmpty then
+                    problems += s"state field '$name': entity '${p.entityName}' has field types the bridge cannot marshal (${unsupported.map(_.domainType).distinct.mkString(", ")})"
+                  else if shape == AdminModel.ProjectionValue.SeqRows then
+                    if !seqSupported then
+                      problems += s"state field '$name': seq-valued state is not bridgeable on this target"
+                    else
+                      // Ordered by the synthesized serial pk, which is not a
+                      // profiled field; the bridge reinserts in seq order.
+                      relations += RelationPlan(name, entity, None, None, isSeq = true)
+                  else
+                    entity.fields.find(_.fieldName == p.keyFieldName) match
+                      case None =>
+                        problems += s"state field '$name': key field '${p.keyFieldName}' not on '${p.entityName}'"
+                      case Some(key) =>
+                        if !keySupported(key) then
+                          problems += s"state field '$name': key '${p.keyFieldName}' must be a non-optional scalar"
+                        else
+                          val valueField = shape match
+                            case AdminModel.ProjectionValue.PrimitiveField(vf) =>
+                              entity.fields.find(_.fieldName == vf)
+                            case _ => None
+                          shape match
+                            case AdminModel.ProjectionValue.PrimitiveField(vf)
+                                if valueField.isEmpty =>
+                              problems += s"state field '$name': value field '$vf' not on '${p.entityName}'"
+                            case _ =>
+                              relations += RelationPlan(name, entity, Some(key), valueField)
+
+    // A seq projection rewrites its entity's whole table on persist, so any
+    // second projection over the same entity, seq or keyed, would be
+    // clobbered; fail closed on both shapes.
+    val seqEntities = relations.result().filter(_.isSeq).map(_.entity.entityName)
+    for r <- relations.result() if !r.isSeq && seqEntities.contains(r.entity.entityName) do
+      problems += s"state field '${r.stateField}' shares entity '${r.entity.entityName}' with a seq projection; persists would clobber each other"
+    for
+      (entityName, rs) <- relations.result().filter(_.isSeq).groupBy(_.entity.entityName)
+      if rs.sizeIs > 1
+    do
+      problems += s"state fields ${rs.map(_.stateField).sorted.mkString(", ")} are seq projections over the same entity '$entityName'; persists would clobber each other"
 
     val built       = Plan(relations.result(), scalars.result())
     val persistable = built.entityRowRelations.map(_.entity.entityName).toSet
-    for r <- built.relations if !r.isEntityRow do
+    for r <- built.relations if !r.isEntityRow && !r.isSeq do
       if !persistable.contains(r.entity.entityName) then
         problems += s"state field '${r.stateField}' projects a single column of '${r.entity.entityName}', which no entity-valued state field covers; mutations could not be written back"
 

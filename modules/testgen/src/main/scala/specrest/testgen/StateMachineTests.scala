@@ -307,7 +307,7 @@ private[testgen] object StateMachineTests:
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
     sb.append(transitionRequestCall(pop, nonPath))
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
-    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    post_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(
       s"    bucket = post_state.get($stateKey, {})\n"
     )

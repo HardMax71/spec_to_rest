@@ -58,15 +58,20 @@ object Annotate:
 
   def attachDafnyMethods(
       profiled: ProfiledService,
-      bindings: Map[String, String]
+      bindings: Map[String, String],
+      candidates: Map[String, List[CandidateInput]] = Map.empty
   ): ProfiledService =
     if bindings.isEmpty then profiled
     else
       profiled.copy(operations =
         profiled.operations.map: op =>
           bindings.get(op.operationName) match
-            case Some(callable) => op.copy(dafnyMethod = Some(callable))
-            case None           => op
+            case Some(callable) =>
+              op.copy(
+                dafnyMethod = Some(callable),
+                dafnyCandidates = candidates.getOrElse(op.operationName, Nil)
+              )
+            case None => op
       )
 
   private def profileEntity(

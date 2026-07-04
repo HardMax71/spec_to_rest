@@ -122,7 +122,14 @@ trait StrategyBackend:
       predicateHelpers.foldLeft(withExtraRegex)(predicateFilter)
 
 object PythonHypothesisStrategy extends StrategyBackend:
-  def string: String       = "st.text()"
+  // Postgres text rejects NUL outright (CharacterNotInRepertoireError), and
+  // the spec's semantics carry no encoding model, so generated strings must
+  // exclude what the storage layer categorically cannot hold. Same reality
+  // as the preamble's isValidURI control-character bound.
+  private val TextAlphabet =
+    "alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))"
+
+  def string: String       = s"st.text($TextAlphabet)"
   def int: String          = "st.integers()"
   def float: String        = "st.floats(allow_nan=False, allow_infinity=False)"
   def bool: String         = "st.booleans()"
@@ -154,14 +161,16 @@ object PythonHypothesisStrategy extends StrategyBackend:
   // Hypothesis's from_regex/fullmatch already whole-string-matches, so no
   // pattern anchoring here (unlike the JS and Go leaves).
   def regexGen(pattern: String): String =
-    s"st.from_regex(${ExprToPython.pyString(pattern)}, fullmatch=True)"
+    s"st.from_regex(${ExprToPython.pyString(pattern)}, fullmatch=True)" +
+      ".filter(lambda v: \"\\x00\" not in v" +
+      " and not any(\"\\ud800\" <= c <= \"\\udfff\" for c in v))"
 
   def boundedText(min: Option[Int], max: Option[Int]): String =
-    val args = List(
+    val args = (TextAlphabet :: List(
       min.map(n => s"min_size=$n"),
       max.map(n => s"max_size=$n")
-    ).flatten.mkString(", ")
-    if args.isEmpty then "st.text()" else s"st.text($args)"
+    ).flatten).mkString(", ")
+    s"st.text($args)"
 
   def lengthFilter(base: String, min: Option[Int], max: Option[Int]): String =
     (min, max) match

@@ -8,12 +8,21 @@ import scala.util.boundary
 
 final case class DafnyError(message: String, span: Option[span_t])
 
+final case class DafnyCandidate(
+    param: String,
+    output: String,
+    field: Option[String],
+    sampleLength: Int,
+    sampleCharset: String
+)
+
 final case class DafnyMethodHeader(
     name: String,
     signature: String,
     requiresClauses: List[String],
     ensuresClauses: List[String],
-    modifiesClauses: List[String]
+    modifiesClauses: List[String],
+    candidates: List[DafnyCandidate] = Nil
 )
 
 final case class DafnyOutput(text: String, methods: List[DafnyMethodHeader])
@@ -35,6 +44,7 @@ final private case class Ctx(
     ir: ServiceIRFull,
     stateFields: ListMap[String, type_expr],
     aliasesWithWhere: Set[String],
+    samplerSpecs: ListMap[String, (Int, String)],
     externs: ListMap[String, ExternInfo],
     matchPatterns: List[String],
     inputTypes: ListMap[String, type_expr] = ListMap.empty,
@@ -55,11 +65,13 @@ object Generator:
         case None => ListMap.empty[String, type_expr]
       val aliasesWithWhere =
         svcTypeAliases(ir).filter(a => talConstraint(a).isDefined).map(talName).toSet
+      val samplerSpecs             = deriveSamplerSpecs(ir)
       val (externs, matchPatterns) = classifyExterns(ir)
       val ctx = Ctx(
         ir = ir,
         stateFields = stateFields,
         aliasesWithWhere = aliasesWithWhere,
+        samplerSpecs = samplerSpecs,
         externs = externs,
         matchPatterns = matchPatterns
       )
@@ -280,7 +292,21 @@ object Generator:
 
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
-  private def renderMethod(ctx: Ctx, op: operation_decl)(using DafnyLabel): RenderedMethod =
+  // The proven lowering runs against the dafny-scoped view of the operation
+  // only: candidates must never surface in the HTTP contract, so conventions,
+  // OpenAPI, and testgen all keep seeing the unlowered IR.
+  private def renderMethod(ctx: Ctx, op0: operation_decl)(using DafnyLabel): RenderedMethod =
+    val (op, rawCandidates) = specrest.ir.generated.SpecRestGenerated.lowerFreshOutputs(
+      ctx.samplerSpecs.keys.toList,
+      svcEntities(ctx.ir),
+      op0
+    )
+    val candidates = rawCandidates.flatMap { c =>
+      import specrest.ir.generated.SpecRestGenerated.{candAlias, candField, candOutput, candParam}
+      ctx.samplerSpecs.get(candAlias(c)).map { case (len, charset) =>
+        DafnyCandidate(candParam(c), candOutput(c), candField(c), len, charset)
+      }
+    }
     val inputs  = operInputs(op)
     val outputs = operOutputs(op)
     val inputTypes = inputs
@@ -373,9 +399,32 @@ object Generator:
         signature = signature,
         requiresClauses = requiresClauses,
         ensuresClauses = ensuresClauses,
-        modifiesClauses = modifiesClauses
+        modifiesClauses = modifiesClauses,
+        candidates = candidates
       )
     )
+
+  private def deriveSamplerSpecs(ir: ServiceIRFull): ListMap[String, (Int, String)] =
+    import specrest.ir.generated.SpecRestGenerated.{samplerFor, walkStringConstraint, Nata, nat}
+    def codepoints(s: String): List[nat] =
+      s.codePoints().toArray.toList.map(cp => Nata(BigInt(cp)))
+    svcTypeAliases(ir)
+      .flatMap { a =>
+        talConstraint(a).flatMap { c =>
+          val (sc, skips) = walkStringConstraint(c)
+          if skips.nonEmpty then None
+          else
+            val patterns = sc match
+              case specrest.ir.generated.SpecRestGenerated.StringConstraint(_, _, ps, _, _) => ps
+            samplerFor(sc, patterns.map(codepoints)).map { case (len, cs) =>
+              val charset = cs.map { case Nata(v) =>
+                new String(Character.toChars(v.toInt))
+              }.mkString
+              talName(a) -> (len.toInt, charset)
+            }
+        }
+      }
+      .to(ListMap)
 
   private def aliasWhereCall(ctx: Ctx, paramName: String, t: type_expr): Option[String] =
     t match
@@ -660,13 +709,19 @@ object Generator:
     def walk(node: expr): Unit = node match
       case IndexF(m, k, sp) if isStateMapRef(ctx, m) =>
         walk(m); walk(k); add(k, m, sp)
-      case BinaryOpF(_, l, r, _) => walk(l); walk(r)
-      case UnaryOpF(_, x, _)     => walk(x)
-      case FieldAccessF(b, _, _) => walk(b)
-      case IndexF(b, i, _)       => walk(b); walk(i)
-      case PrimeF(x, _)          => walk(x)
-      case PreF(x, _)            => walk(x)
-      case CallF(c, args, _)     => walk(c); args.foreach(walk)
+      // Dafny well-formedness is path-sensitive: the right side of || is
+      // checked under the negated left, and ==> under the left, so guards
+      // hoisted from there would strengthen the contract.
+      case BinaryOpF(BOr(), l, _, _)      => walk(l)
+      case BinaryOpF(BImplies(), l, _, _) => walk(l)
+      case BinaryOpF(BAnd(), l, _, _)     => walk(l)
+      case BinaryOpF(_, l, r, _)          => walk(l); walk(r)
+      case UnaryOpF(_, x, _)              => walk(x)
+      case FieldAccessF(b, _, _)          => walk(b)
+      case IndexF(b, i, _)                => walk(b); walk(i)
+      case PrimeF(x, _)                   => walk(x)
+      case PreF(x, _)                     => walk(x)
+      case CallF(c, args, _)              => walk(c); args.foreach(walk)
       case ConstructorF(_, fs, _) =>
         fs.foreach(fa => walk(fasValue(fa)))
       case WithF(b, fs, _) =>
@@ -676,9 +731,12 @@ object Generator:
         es.foreach { e =>
           walk(mpeKey(e)); walk(mpeValue(e))
         }
-      case SetLiteralF(es, _)   => es.foreach(walk)
-      case SeqLiteralF(es, _)   => es.foreach(walk)
-      case IfF(c, t, e, _)      => walk(c); walk(t); walk(e)
+      case SetLiteralF(es, _) => es.foreach(walk)
+      case SeqLiteralF(es, _) => es.foreach(walk)
+      // If branches are likewise checked under the branch condition
+      // (LoginFailed's fresh-email case became contractually false when the
+      // then-branch guard was hoisted), so only the condition contributes.
+      case IfF(c, _, _, _)      => walk(c)
       case SomeWrapF(x, _)      => walk(x)
       case LetF(_, value, _, _) => walk(value)
       case _                    => ()

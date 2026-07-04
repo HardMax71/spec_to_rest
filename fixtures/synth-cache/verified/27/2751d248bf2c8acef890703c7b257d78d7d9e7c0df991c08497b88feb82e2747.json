@@ -1,0 +1,11 @@
+{
+  "candidate" : "  assert forall s1, s2 :: (s1 in old(st.sessions) && s2 in old(st.sessions) && old(st.sessions)[s1].access_token == old(st.sessions)[s2].access_token) ==> s1 == s2;\n  var s :| s in st.sessions && st.sessions[s].access_token == access_token && st.sessions[s].is_revoked == false;\n  st.sessions := st.sessions[s := st.sessions[s].(is_revoked := true)];\n",
+  "body" : "  assert forall s1, s2 :: (s1 in old(st.sessions) && s2 in old(st.sessions) && old(st.sessions)[s1].access_token == old(st.sessions)[s2].access_token) ==> s1 == s2;\n  var s :| s in st.sessions && st.sessions[s].access_token == access_token && st.sessions[s].is_revoked == false;\n  st.sessions := st.sessions[s := st.sessions[s].(is_revoked := true)];\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

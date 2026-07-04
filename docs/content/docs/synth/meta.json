@@ -1,4 +1,4 @@
 {
   "title": "Synthesis",
-  "pages": ["index", "cli", "examples", "compile-and-fallback"]
+  "pages": ["index", "cli", "examples", "compile-and-fallback", "realizability"]
 }

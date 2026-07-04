@@ -6,6 +6,90 @@ import specrest.profile.ProfiledService
 
 private[codegen] object EmitShared:
 
+  // The Dafny python backend doubles inner underscores and appends a trailing
+  // underscore to python keywords and builtins (`id` compiles to `id_`).
+  private val PyReserved = Set(
+    "id",
+    "type",
+    "str",
+    "int",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "set",
+    "hash",
+    "input",
+    "object",
+    "property",
+    "min",
+    "max",
+    "sum",
+    "len",
+    "filter",
+    "map",
+    "range",
+    "bytes",
+    "print",
+    "vars",
+    "dir",
+    "next",
+    "iter",
+    "super",
+    "format",
+    "hex",
+    "oct",
+    "abs",
+    "round",
+    "pow",
+    "repr",
+    "zip",
+    "all",
+    "any",
+    "class",
+    "def",
+    "from",
+    "import",
+    "return",
+    "pass",
+    "if",
+    "else",
+    "elif",
+    "for",
+    "while",
+    "in",
+    "is",
+    "not",
+    "and",
+    "or",
+    "None",
+    "True",
+    "False",
+    "lambda",
+    "global",
+    "nonlocal",
+    "del",
+    "with",
+    "as",
+    "try",
+    "except",
+    "finally",
+    "raise",
+    "assert",
+    "yield",
+    "async",
+    "await",
+    "break",
+    "continue"
+  )
+
+  def pyDafnySelector(fieldName: String): String =
+    val doubled = fieldName.replace("_", "__")
+    if PyReserved.contains(doubled) then doubled + "_" else doubled
+
+  def doubleQuoted(s: String): String =
+    "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
   // A field's boundary-enforceable string refinement: the entity declaration's
   // alias type plus its inline where clause, reduced by StringRefinements.
   def entityFieldRefinement(

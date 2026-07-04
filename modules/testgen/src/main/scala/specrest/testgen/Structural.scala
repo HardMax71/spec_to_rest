@@ -177,24 +177,21 @@ object Structural:
         .filter(SensitiveFields.isSensitive)
         .distinct
         .sorted
+    val sanitizeKeys =
+      if sensitiveFieldNames.isEmpty then ""
+      else
+        "\nschema.config.output.sanitization.keys_to_sanitize = tuple(" +
+          "\n    set(schema.config.output.sanitization.keys_to_sanitize) | _SENSITIVE_BODY_FIELDS" +
+          "\n)"
+    // Body redaction rides schemathesis's own output sanitizer: mutating
+    // case.body with a str subclass trips its metadata revalidation since
+    // 4.22, and only the failure-report display needs masking anyway.
     val sensitiveBlock =
       if sensitiveFieldNames.isEmpty then ""
       else
         val literal = sensitiveFieldNames.map(n => s"\"$n\"").mkString(", ")
         s"""|
-            |from tests.redaction import _RedactedStr
-            |
             |_SENSITIVE_BODY_FIELDS = frozenset({$literal})
-            |
-            |
-            |@schemathesis.hook
-            |def before_call(context, case, kwargs):
-            |    body = getattr(case, "body", None)
-            |    if isinstance(body, dict):
-            |        for _k, _v in list(body.items()):
-            |            if _k in _SENSITIVE_BODY_FIELDS and isinstance(_v, str) \\
-            |               and not isinstance(_v, _RedactedStr):
-            |                body[_k] = _RedactedStr(_v)
             |""".stripMargin
 
     s"""|${TQ}Auto-generated structural tests for ${svcName(ir)}.
@@ -233,7 +230,7 @@ object Structural:
         |    )
         |_PROFILE = PROFILES[PROFILE]
         |
-        |schema = schemathesis.openapi.from_path("openapi.yaml")$stubExcludes
+        |schema = schemathesis.openapi.from_path("openapi.yaml")$stubExcludes$sanitizeKeys
         |
         |
         |def _path_matches(case, expected_template, expected_method):

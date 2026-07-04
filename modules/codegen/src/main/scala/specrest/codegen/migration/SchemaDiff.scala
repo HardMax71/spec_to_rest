@@ -49,9 +49,18 @@ object SchemaDiff:
   // Rewrite it per dialect (Postgres identity, MySQL REGEXP, SQLite -> dropped).
   private val regexCheckPattern = """^(\w+) ~ '(.*)'$""".r
 
+  // A `len(value)` refinement is emitted canonically as `length(col) op n`.
+  // The spec's len counts characters, and MySQL's length() counts bytes, so
+  // astral-plane input silently violated the check there; char_length is the
+  // character-counting spelling. Postgres and SQLite length() already count
+  // characters for text.
+  private val lengthCheckPattern = """^length\((\w+)\)(.*)$""".r
+
   private[migration] def rewriteCheck(sql: String, dialect: Dialect): Option[String] = sql match
     case regexCheckPattern(col, pat) => dialect.regexCheck(col, pat)
-    case _                           => Some(sql)
+    case lengthCheckPattern(col, rest) if dialect.id == "mysql" =>
+      Some(s"char_length($col)$rest")
+    case _ => Some(sql)
 
   // The PK column that the renderers emit as DB-generated, i.e. only a synthesized serial PK.
   // Derived from the one canonical predicate so raw SQL, Alembic and Prisma cannot disagree:

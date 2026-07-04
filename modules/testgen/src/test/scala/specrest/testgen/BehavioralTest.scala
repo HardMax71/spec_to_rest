@@ -53,8 +53,8 @@ class BehavioralTest extends BehavioralTestSupport:
         .find(_.name == "test_no_input_ensures_0")
         .getOrElse(fail(s"missing test_no_input_ensures_0; got ${out.tests.map(_.name)}"))
       assert(test.body.contains("client.post(\"/admin/reset\")"))
-      assert(test.body.contains("pre_state = client.get(\"/admin/state\")"))
-      assert(test.body.contains("post_state = client.get(\"/admin/state\")"))
+      assert(test.body.contains("pre_state = state_snapshot(_INT_KEYED_STATE)"))
+      assert(test.body.contains("post_state = state_snapshot(_INT_KEYED_STATE)"))
       assert(test.body.contains("response = client."), s"body=${test.body}")
 
   test("url_shortener: Shorten ensures generated, Resolve+Delete state-dep skipped"):
@@ -118,9 +118,9 @@ class BehavioralTest extends BehavioralTestSupport:
       val invariantTest = out.tests
         .find(_.name.startsWith("test_shorten_invariant_"))
         .getOrElse(fail("no invariant test for shorten"))
-      val preIdx  = invariantTest.body.indexOf("pre_state = client.get")
+      val preIdx  = invariantTest.body.indexOf("pre_state = state_snapshot(")
       val reqIdx  = invariantTest.body.indexOf("response = client.")
-      val postIdx = invariantTest.body.indexOf("post_state = client.get")
+      val postIdx = invariantTest.body.indexOf("post_state = state_snapshot(")
       assert(preIdx >= 0 && reqIdx >= 0 && postIdx >= 0, invariantTest.body)
       assert(
         preIdx < reqIdx && reqIdx < postIdx,
@@ -173,8 +173,12 @@ class BehavioralTest extends BehavioralTestSupport:
       val out           = Behavioral.emitFor(profiled)
       val registerTests = out.tests.filter(_.name.startsWith("test_register"))
       assert(
-        registerTests.exists(t => t.body.contains("password=st.text()")),
-        s"expected bare st.text() under live override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
+        registerTests.exists(t =>
+          t.body.contains(
+            "password=st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+          )
+        ),
+        s"expected st.text() with the NUL and surrogate exclusions under live override; tests=\n${registerTests.map(_.body).mkString("\n---\n")}"
       )
       assert(
         registerTests.forall(t => !t.body.contains("password=redact(")),

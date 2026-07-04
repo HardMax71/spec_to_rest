@@ -42,6 +42,20 @@ object ScalarOps:
       val col = ScalarState.columnName(stfName(sf))
       ScalarStateFieldView(stfName(sf), col, specrest.ir.Naming.toCamelCase(col), seed)
 
+  // Mirrors classifyStrategy's scalar branch exactly (same extracted
+  // recognisers + consistency check), so every DirectEmit scalar op gets a
+  // handler and nothing else does. Public because testgen's skip logic must
+  // agree with it on which ops maintain their scalars without a kernel.
+  def directlyImplements(op: operation_decl, ir: ServiceIRFull): Boolean =
+    val scalarNames = ScalarState.fieldNames(ir)
+    if scalarNames.isEmpty then false
+    else
+      val clauses = flattenEnsures(operEnsures(op))
+      val updates = clauses.map(c => scalarUpdateOf(scalarNames, c))
+      val guards  = flattenEnsures(operRequires(op)).map(r => scalarGuardOf(scalarNames, r))
+      clauses.nonEmpty && updates.forall(_.isDefined) && guards.forall(_.isDefined)
+      && operInputs(op).isEmpty && scalarUpdatesConsistent(updates.flatten)
+
   def views(p: ProfiledService): List[ScalarOpView] =
     val scalarNames = ScalarState.fieldNames(p.ir)
     if scalarNames.isEmpty then Nil
@@ -51,11 +65,7 @@ object ScalarOps:
         val clauses = flattenEnsures(operEnsures(op))
         val updates = clauses.map(c => scalarUpdateOf(scalarNames, c))
         val guards  = flattenEnsures(operRequires(op)).map(r => scalarGuardOf(scalarNames, r))
-        // Mirrors classifyStrategy's scalar branch exactly (same extracted
-        // recognisers + consistency check), so every DirectEmit scalar op
-        // gets a handler and nothing else does.
-        if clauses.nonEmpty && updates.forall(_.isDefined) && guards.forall(_.isDefined)
-          && operInputs(op).isEmpty && scalarUpdatesConsistent(updates.flatten)
+        if directlyImplements(op, p.ir)
         then
           profiledByName.get(operName(op)).map: po =>
             // identical repeated assignments collapse to one

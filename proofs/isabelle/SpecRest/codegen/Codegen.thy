@@ -6,6 +6,7 @@ theory Codegen
     SpecRest_Semantics.Translate
     TopoSort
     Schema
+    CandidateLowering
     MigrationOps
     SchemaDiff
     Strategies
@@ -118,6 +119,12 @@ code_printing
 | class_instance Int.int :: equal \<rightharpoonup> (Scala) -
 
 export_code
+    lowerFreshOutputs
+    samplerFor
+    candParam
+    candOutput
+    candField
+    candAlias
     translate
     isLitFull
     isTrueLit

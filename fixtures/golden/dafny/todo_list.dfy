@@ -41,7 +41,7 @@ predicate ServiceStateInv(st: ServiceState)
   && (forall k :: k in st.todos ==> TodoInv(st.todos[k]))
 }
 
-function now(): int
+function {:extern "specrest_externs", "now"} now(): int
 
 predicate RequiresCreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>)
   reads st
@@ -115,7 +115,7 @@ method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description:
   ensures (description != None ==> todo.description == description.value)
   ensures (priority != None ==> todo.priority == priority.value)
   ensures (tags != None ==> todo.tags == tags.value)
-  ensures (id in old(st.todos) && (title == None ==> todo.title == old(st.todos)[id].title))
+  ensures (title == None ==> todo.title == old(st.todos)[id].title)
   ensures (id in old(st.todos) && todo.status == old(st.todos)[id].status)
   ensures (id in old(st.todos) && todo.updated_at >= old(st.todos)[id].updated_at)
   ensures st.todos == old(st.todos)[id := todo]

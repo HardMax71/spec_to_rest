@@ -68,6 +68,14 @@ final case class ProfiledEntity(
     fields: List[ProfiledField]
 )
 
+final case class CandidateInput(
+    param: String,
+    output: String,
+    field: Option[String],
+    sampleLength: Int,
+    sampleCharset: String
+)
+
 final case class ProfiledOperation(
     operationName: String,
     handlerName: String,
@@ -77,6 +85,7 @@ final case class ProfiledOperation(
     requestBodyFields: List[ProfiledField],
     responseFields: List[ProfiledField],
     dafnyMethod: Option[String] = None,
+    dafnyCandidates: List[CandidateInput] = Nil,
     // alternative security scheme names (OpenAPI security-array OR semantics);
     // empty = public
     requiresAuth: List[String] = Nil

@@ -79,18 +79,35 @@ object AdminRouterGo:
                   .find(e => entName(e) == p.entityName)
                   .map(tbl)
                   .getOrElse(Naming.toTableName(p.entityName))
-                s"""\t\t{
-                   |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(s"SELECT * FROM $srcTbl")})
-                   |\t\t\tif err != nil {
-                   |\t\t\t\thttp.Error(w, err.Error(), 500)
-                   |\t\t\t\treturn
-                   |\t\t\t}
-                   |\t\t\tm := map[string]any{}
-                   |\t\t\tfor _, row := range rows {
-                   |\t\t\t\tm[fmt.Sprintf("%v", row[${GoLit.str(keyCol)}])] = $valExpr
-                   |\t\t\t}
-                   |\t\t\tstate[${GoLit.str(stfName(f))}] = m
-                   |\t\t}""".stripMargin
+                shape match
+                  case AdminModel.ProjectionValue.SeqRows =>
+                    s"""\t\t{
+                       |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(
+                        s"SELECT * FROM $srcTbl ORDER BY $keyCol"
+                      )})
+                       |\t\t\tif err != nil {
+                       |\t\t\t\thttp.Error(w, err.Error(), 500)
+                       |\t\t\t\treturn
+                       |\t\t\t}
+                       |\t\t\txs := make([]any, 0, len(rows))
+                       |\t\t\tfor _, row := range rows {
+                       |\t\t\t\txs = append(xs, row)
+                       |\t\t\t}
+                       |\t\t\tstate[${GoLit.str(stfName(f))}] = xs
+                       |\t\t}""".stripMargin
+                  case _ =>
+                    s"""\t\t{
+                       |\t\t\trows, err := queryAll(ctx, db, ${GoLit.str(s"SELECT * FROM $srcTbl")})
+                       |\t\t\tif err != nil {
+                       |\t\t\t\thttp.Error(w, err.Error(), 500)
+                       |\t\t\t\treturn
+                       |\t\t\t}
+                       |\t\t\tm := map[string]any{}
+                       |\t\t\tfor _, row := range rows {
+                       |\t\t\t\tm[fmt.Sprintf("%v", row[${GoLit.str(keyCol)}])] = $valExpr
+                       |\t\t\t}
+                       |\t\t\tstate[${GoLit.str(stfName(f))}] = m
+                       |\t\t}""".stripMargin
           case None =>
             s"\t\tstate[${GoLit.str(stfName(f))}] = nil"
       .mkString("\n")

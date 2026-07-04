@@ -66,24 +66,29 @@ predicate matches___a_zA_Z0_9___(s: string)
   true
 }
 
-predicate RequiresShorten(st: ServiceState, url: LongURL)
+predicate RequiresShorten(st: ServiceState, url: LongURL, cand_code: ShortCode)
   reads st
 {
   (ServiceStateInv(st))
   && (LongURLWhere(url))
+  && (ShortCodeWhere(cand_code))
   && (isValidURI(url))
+  && (cand_code !in st.store)
 }
-method Shorten(st: ServiceState, url: LongURL) returns (code: ShortCode, short_url: string)
+method Shorten(st: ServiceState, url: LongURL, cand_code: ShortCode) returns (code: ShortCode, short_url: string)
   modifies st
   requires ServiceStateInv(st)
   requires LongURLWhere(url)
+  requires ShortCodeWhere(cand_code)
   requires isValidURI(url)
+  requires cand_code !in st.store
   ensures code !in old(st.store)
   ensures st.store == old(st.store)[code := url]
   ensures short_url == old(st.base_url) + "/" + code
   ensures |st.store| == |old(st.store)| + 1
   ensures (code in st.metadata && st.metadata[code].url == url)
   ensures (code in st.metadata && st.metadata[code].click_count == 0)
+  ensures code == cand_code
   ensures ServiceStateInv(st)
 {
   // YOUR CODE HERE

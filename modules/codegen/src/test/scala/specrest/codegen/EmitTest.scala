@@ -208,11 +208,13 @@ class EmitTest extends CatsEffectSuite:
         s"shorten handler should accept body: ShortenRequest — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.RequiresShorten(state, to_dafny_str(body.url))"),
+        service.contains("_dafny_kernel.RequiresShorten(") &&
+          service.contains("to_dafny_str(body.url),"),
         s"shorten must guard with RequiresShorten on converted args — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.Shorten(state, to_dafny_str(body.url))"),
+        service.contains("_dafny_kernel.Shorten(") &&
+          service.contains("to_dafny_str(body.url),"),
         s"shorten kernel call should pass the converted body.url — got:\n$service"
       )
       assert(
@@ -229,7 +231,7 @@ class EmitTest extends CatsEffectSuite:
         s"resolve handler should accept code: str — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.Resolve(state, to_dafny_str(code))"),
+        service.contains("_dafny_kernel.Resolve(") && service.contains("to_dafny_str(code),"),
         s"resolve kernel call should pass the converted code — got:\n$service"
       )
 

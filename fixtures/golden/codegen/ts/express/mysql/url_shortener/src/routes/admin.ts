@@ -9,7 +9,7 @@ import { prisma } from '../prisma.js';
 
 type AnyPrisma = Record<string, {
   deleteMany: () => Promise<unknown>;
-  findMany: () => Promise<Array<Record<string, unknown>>>;
+  findMany: (args?: unknown) => Promise<Array<Record<string, unknown>>>;
   findFirst: () => Promise<Record<string, unknown> | null>;
   create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
   updateMany: (args: { data: Record<string, unknown> }) => Promise<unknown>;

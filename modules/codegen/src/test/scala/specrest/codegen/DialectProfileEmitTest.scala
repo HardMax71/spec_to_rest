@@ -432,10 +432,14 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       assert(myUp.contains("""CHECK (email REGEXP '^[^@]+@[^@]+\.[^@]+$')"""), myUp)
       assert(!sqUp.contains("email ~"), sqUp)
       assert(!sqUp.contains("email REGEXP"), sqUp)
-      // length refinement (Token=128 / PasswordHash=64) is portable -> present in every dialect
-      for up <- List(pgUp, sqUp, myUp) do
+      // length refinement (Token=128 / PasswordHash=64) is portable, but the
+      // spec's len counts characters: MySQL spells that char_length while
+      // Postgres and SQLite length() already count characters for text.
+      for up <- List(pgUp, sqUp) do
         assert(up.contains("CHECK (length(password_hash) = 64)"), up)
         assert(up.contains("CHECK (length(access_token) = 128)"), up)
+      assert(myUp.contains("CHECK (char_length(password_hash) = 64)"), myUp)
+      assert(myUp.contains("CHECK (char_length(access_token) = 128)"), myUp)
 
   // N: url_shortener's ShortCode alias (len + regex) previously produced no CHECK at all.
   test("url_shortener ShortCode alias now yields length + regex CHECKs"):
