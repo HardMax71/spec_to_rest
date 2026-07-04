@@ -75,7 +75,7 @@ object StateBridgeGo:
       hydrate ++= s"\t${rowsVar(e)} := make([]models.${e.modelClassName}, 0)\n"
       hydrate ++= s"\tif err := db.NewSelect().Model(&${rowsVar(e)}).Scan(ctx); err != nil {\n"
       hydrate ++= "\t\treturn nil, err\n\t}\n"
-    for r <- planned.relations do
+    for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
       val builder = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Builder"
       hydrate ++= s"\t$builder := _dafny.NewMapBuilder()\n"
       hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
@@ -84,17 +84,17 @@ object StateBridgeGo:
         case None =>
           val args = r.entity.fields.map(f => s"\t\t\t${toDafnyExpr(f, "r")},").mkString("\n")
           s"dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t)"
-      hydrate ++= s"\t\t$builder.Add(${keyToDafny(r.keyField, "r")}, $value)\n"
+      hydrate ++= s"\t\t$builder.Add(${keyToDafny(rKey, "r")}, $value)\n"
       hydrate ++= "\t}\n"
       hydrate ++= s"\tst.${stateFieldName(r.stateField)} = $builder.ToMap()\n"
 
     val persist = new StringBuilder
-    for r <- planned.entityRowRelations do
+    for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e        = r.entity
       val rows     = rowsVar(e)
-      val keyGo    = pascal(r.keyField.fieldName)
+      val keyGo    = pascal(rKey.fieldName)
       val existing = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Existing"
-      val keyType  = r.keyField.domainType
+      val keyType  = rKey.domainType
       persist ++= s"\t$rows := make([]models.${e.modelClassName}, 0)\n"
       persist ++= s"\tif err := db.NewSelect().Model(&$rows).Scan(ctx); err != nil {\n"
       persist ++= "\t\treturn err\n\t}\n"
@@ -114,13 +114,13 @@ object StateBridgeGo:
       // The key column stays immutable on updates (the row was fetched by it,
       // and rewriting it from the Dafny value could desync row identity from
       // the map key); inserts set it from the value like every other field.
-      for f <- e.fields if f.fieldName != r.keyField.fieldName do
+      for f <- e.fields if f.fieldName != rKey.fieldName do
         persist ++= s"\t\trow.${pascal(f.fieldName)} = ${fromDafnyExpr(f, "value")}\n"
       persist ++= "\t\tif exists {\n"
       persist ++= "\t\t\tif _, err := db.NewUpdate().Model(&row).WherePK().Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t} else {\n"
-      persist ++= s"\t\t\trow.${pascal(r.keyField.fieldName)} = ${fromDafnyExpr(r.keyField, "value")}\n"
+      persist ++= s"\t\t\trow.${pascal(rKey.fieldName)} = ${fromDafnyExpr(rKey, "value")}\n"
       persist ++= "\t\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t}\n"

@@ -73,10 +73,17 @@ object AdminRouterTs:
       if ScalarState.fields(ir).isEmpty then ""
       else
         "      const stateRow = await (prisma as unknown as AnyPrisma).serviceState.findFirst();\n"
+    val seqEntities = stateFields
+      .flatMap(f => AdminModel.projectionFor(f, ir))
+      .collect:
+        case p if p.valueShape == AdminModel.ProjectionValue.SeqRows => p.entityName
+      .toSet
     val rowsDecls = stateRowDecl + neededEntities
       .flatMap(en => entities.find(e => entName(e) == en))
       .map: e =>
-        s"      const rows_${entName(e)} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany();"
+        val order =
+          if seqEntities.contains(entName(e)) then "{ orderBy: { id: 'asc' } }" else ""
+        s"      const rows_${entName(e)} = await (prisma as unknown as AnyPrisma).${accessor(e)}.findMany($order);"
       .mkString("\n")
     val stateProps = stateFields
       .map: f =>
@@ -86,6 +93,10 @@ object AdminRouterTs:
               case AdminModel.ProjectionValue.ScalarStateColumn(col) =>
                 val tsField = Naming.toCamelCase(col)
                 s"        ${tsKey(stfName(f))}: stateRow == null ? null : Number((stateRow as Record<string, unknown>).$tsField)," // prisma BigInt does not JSON-serialize
+              case AdminModel.ProjectionValue.SeqRows =>
+                s"""        ${tsKey(stfName(f))}: rows_${p.entityName}.map(
+                   |          (r: Record<string, unknown>) => rowToDict_${p.entityName}(r),
+                   |        ),""".stripMargin
               case shape =>
                 val keyTs = Naming.toCamelCase(p.keyFieldName)
                 val value = shape match

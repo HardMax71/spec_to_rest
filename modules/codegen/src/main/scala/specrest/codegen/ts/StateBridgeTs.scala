@@ -64,7 +64,7 @@ object StateBridgeTs:
     val hydrate = new StringBuilder
     for e <- entities do
       hydrate ++= s"  const ${camel(e.entityName)}Rows = await tx.${camel(e.entityName)}.findMany();\n"
-    for r <- planned.relations do
+    for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
       val rows    = s"${camel(r.entity.entityName)}Rows"
       val builder = s"${camel(r.stateField)}Map"
       hydrate ++= s"  let $builder = emptyDafnyMap() as DafnyMap;\n"
@@ -74,7 +74,7 @@ object StateBridgeTs:
         case None =>
           val args = r.entity.fields.map(f => s"      ${toDafnyExpr(f, "r")},").mkString("\n")
           s"dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    )"
-      hydrate ++= s"    $builder = $builder.update(${keyToDafny(r.keyField, "r")}, $value);\n"
+      hydrate ++= s"    $builder = $builder.update(${keyToDafny(rKey, "r")}, $value);\n"
       hydrate ++= "  }\n"
       hydrate ++= s"  st['${dafnyName(r.stateField)}'] = $builder;\n"
     if planned.scalars.nonEmpty then
@@ -85,17 +85,17 @@ object StateBridgeTs:
       hydrate ++= "  }\n"
 
     val persist = new StringBuilder
-    for r <- planned.entityRowRelations do
+    for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e      = r.entity
       val client = camel(e.entityName)
       persist ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
-      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [r.${camel(r.keyField.fieldName)}, r]));\n"
-      persist ++= s"  const seen = new Set<${r.keyField.domainType}>();\n"
+      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [r.${camel(rKey.fieldName)}, r]));\n"
+      persist ++= s"  const seen = new Set<${rKey.domainType}>();\n"
       persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
-      persist ++= s"    const key = ${keyFromDafny(r.keyField)};\n"
+      persist ++= s"    const key = ${keyFromDafny(rKey)};\n"
       persist ++= "    const value = v as Record<string, unknown>;\n"
       persist ++= "    seen.add(key);\n"
-      val nonKey = e.fields.filter(_.fieldName != r.keyField.fieldName)
+      val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
       persist ++= "    const data = {\n"
       for f <- nonKey do
         persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(f, "value")},\n"
@@ -105,7 +105,7 @@ object StateBridgeTs:
       persist ++= s"      await tx.$client.update({ where: { id: row.id }, data });\n"
       persist ++= "    } else {\n"
       persist ++= s"      await tx.$client.create({\n"
-      persist ++= s"        data: { ${camel(r.keyField.fieldName)}: ${fromDafnyExpr(r.keyField, "value")}, ...data },\n"
+      persist ++= s"        data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(rKey, "value")}, ...data },\n"
       persist ++= "      });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"

@@ -83,22 +83,38 @@ object StateBridge:
 
     val rowsVar = (e: ProfiledEntity) => s"${Naming.toSnakeCase(e.entityName)}_rows"
 
+    val seqRelations = planned.relations.filter(_.isSeq)
     val hydrateLines = List.newBuilder[String]
-    for e <- planned.relations.map(_.entity).distinctBy(_.entityName) do
+    for e <- planned.relations.filterNot(_.isSeq).map(_.entity).distinctBy(_.entityName) do
       hydrateLines += s"    ${rowsVar(e)} = (await session.execute(select(${e.modelClassName}))).scalars().all()"
     for r <- planned.relations do
       val rows = rowsVar(r.entity)
-      hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_map({"
-      r.valueField match
-        case Some(vf) =>
-          hydrateLines += s"        ${keyToDafny(r.keyField, "r")}: ${toDafnyFieldExpr(vf, "r")}"
-        case None =>
-          hydrateLines += s"        ${keyToDafny(r.keyField, "r")}: module_.${r.entity.entityName}_${r.entity.entityName}("
+      (r.keyField, r.isSeq) match
+        case (_, true) =>
+          // Seq-valued state: rows ordered by the serial pk are the seq.
+          hydrateLines += s"    ${rows}_ordered = ("
+          hydrateLines += s"        await session.execute(select(${r.entity.modelClassName}).order_by(${r.entity.modelClassName}.id))"
+          hydrateLines += "    ).scalars().all()"
+          hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_seq(["
+          hydrateLines += s"        module_.${r.entity.entityName}_${r.entity.entityName}("
           for f <- r.entity.fields do
             hydrateLines += s"            ${toDafnyFieldExpr(f, "r")},"
           hydrateLines += "        )"
-      hydrateLines += s"        for r in $rows"
-      hydrateLines += "    })"
+          hydrateLines += s"        for r in ${rows}_ordered"
+          hydrateLines += "    ])"
+        case (Some(key), _) =>
+          hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_map({"
+          r.valueField match
+            case Some(vf) =>
+              hydrateLines += s"        ${keyToDafny(key, "r")}: ${toDafnyFieldExpr(vf, "r")}"
+            case None =>
+              hydrateLines += s"        ${keyToDafny(key, "r")}: module_.${r.entity.entityName}_${r.entity.entityName}("
+              for f <- r.entity.fields do
+                hydrateLines += s"            ${toDafnyFieldExpr(f, "r")},"
+              hydrateLines += "        )"
+          hydrateLines += s"        for r in $rows"
+          hydrateLines += "    })"
+        case (None, false) => ()
     if planned.scalars.nonEmpty then
       hydrateLines += "    scalar_row = ("
       hydrateLines += "        await session.execute(select(_ServiceStateRow))"
@@ -108,15 +124,15 @@ object StateBridge:
         hydrateLines += s"        st.${dafnyName(sc.stateField)} = int(scalar_row.${sc.columnName})"
 
     val persistLines = List.newBuilder[String]
-    for r <- planned.entityRowRelations do
+    for (r, key) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e     = r.entity
       val snake = Naming.toSnakeCase(e.entityName)
       persistLines += s"    ${snake}_post = {"
-      persistLines += s"        ${keyFromDafny(r.keyField, "k")}: v"
+      persistLines += s"        ${keyFromDafny(key, "k")}: v"
       persistLines += s"        for k, v in from_dafny_map(st.${dafnyName(r.stateField)}).items()"
       persistLines += "    }"
       persistLines += s"    ${snake}_rows = {"
-      persistLines += s"        r.${r.keyField.columnName}: r"
+      persistLines += s"        r.${key.columnName}: r"
       persistLines += s"        for r in (await session.execute(select(${e.modelClassName}))).scalars().all()"
       persistLines += "    }"
       persistLines += s"    for key, value in ${snake}_post.items():"
@@ -127,11 +143,23 @@ object StateBridge:
         persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(f, "value")},"
       persistLines += "            ))"
       persistLines += "        else:"
-      for f <- e.fields if f.fieldName != r.keyField.fieldName do
+      for f <- e.fields if f.fieldName != key.fieldName do
         persistLines += s"            row.${f.columnName} = ${fromDafnyFieldExpr(f, "value")}"
       persistLines += s"    for key, row in ${snake}_rows.items():"
       persistLines += s"        if key not in ${snake}_post:"
       persistLines += "            await session.delete(row)"
+    for r <- seqRelations do
+      val e = r.entity
+      // Reinsert in seq order: the serial pk reassigns, which nothing
+      // observes (the seq projection orders by it and exposes no id).
+      persistLines += s"    for row in (await session.execute(select(${e.modelClassName}))).scalars().all():"
+      persistLines += "        await session.delete(row)"
+      persistLines += "    await session.flush()"
+      persistLines += s"    for value in from_dafny_seq(st.${dafnyName(r.stateField)}):"
+      persistLines += s"        session.add(${e.modelClassName}("
+      for f <- e.fields do
+        persistLines += s"            ${f.columnName}=${fromDafnyFieldExpr(f, "value")},"
+      persistLines += "        ))"
     if planned.scalars.nonEmpty then
       persistLines += "    scalar_row = ("
       persistLines += "        await session.execute(select(_ServiceStateRow))"

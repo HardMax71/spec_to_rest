@@ -42,15 +42,24 @@ object AdminRouter:
         val neededEntityNames = AdminModel.entityBackedProjectionNames(ir)
         val needsRows         = neededEntityNames.nonEmpty
         val rowsLine =
+          val seqEntities = irStateFields(ir)
+            .flatMap(f => AdminModel.projectionFor(f, ir))
+            .collect:
+              case p if p.valueShape == AdminModel.ProjectionValue.SeqRows => p.entityName
+            .toSet
+          def rowsQuery(e: entity_decl): String =
+            val order =
+              if seqEntities.contains(entName(e)) then s".order_by(${entName(e)}.id)" else ""
+            s"(await session.execute(select(${entName(e)})$order)).scalars().all()"
           if entities.size == 1 && needsRows then
             val e = entities.head
-            s"    rows = (await session.execute(select(${entName(e)}))).scalars().all()\n"
+            s"    rows = ${rowsQuery(e)}\n"
           else if entities.size > 1 && needsRows then
             entities
               .filter(e => neededEntityNames.contains(entName(e)))
               .map: e =>
                 val v = s"rows_${Naming.toSnakeCase(entName(e))}"
-                s"    $v = (await session.execute(select(${entName(e)}))).scalars().all()"
+                s"    $v = ${rowsQuery(e)}"
               .mkString("\n") + "\n"
           else ""
         val stateRowLine =
@@ -159,10 +168,13 @@ object AdminRouter:
             val rowsRef =
               if entities.size <= 1 then "rows"
               else s"rows_${Naming.toSnakeCase(p.entityName)}"
-            val valueExpr = other match
-              case AdminModel.ProjectionValue.PrimitiveField(name) => s"row.$name"
-              case _                                               => "_row_to_dict(row)"
-            s"        $key: {row.${p.keyFieldName}: $valueExpr for row in $rowsRef}"
+            other match
+              case AdminModel.ProjectionValue.SeqRows =>
+                s"        $key: [_row_to_dict(row) for row in $rowsRef]"
+              case AdminModel.ProjectionValue.PrimitiveField(name) =>
+                s"        $key: {row.${p.keyFieldName}: row.$name for row in $rowsRef}"
+              case _ =>
+                s"        $key: {row.${p.keyFieldName}: _row_to_dict(row) for row in $rowsRef}"
       case None =>
         val key = pyStringLit(stfName(f))
         s"        # M5.1: state field '${stfName(f)}' not backed by entity table\n        $key: None"

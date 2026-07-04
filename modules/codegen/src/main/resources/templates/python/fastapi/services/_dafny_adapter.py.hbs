@@ -53,6 +53,14 @@ def to_dafny_map(d: dict[Any, Any]) -> Any:
     return _DafnyMap(d)
 
 
+def to_dafny_seq(values: list[Any]) -> Any:
+    return _DafnySeq(values)
+
+
+def from_dafny_seq(s: Any) -> list[Any]:
+    return list(s)
+
+
 def from_dafny_map(m: Any) -> dict[Any, Any]:
     return dict(m)
 

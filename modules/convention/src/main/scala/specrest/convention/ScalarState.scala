@@ -25,12 +25,34 @@ object ScalarState:
       case Some(sd) =>
         val scalars = stdFields(sd)
           .filter: sf =>
-            stfType(sf) match
-              case NamedTypeF("Int", _) => columnName(stfName(sf)) != "id"
-              case _                    => false
-          .flatMap(sf => seedFor(ir, stfName(sf)).map(sf -> _))
+            intAliasBounds(ir, stfType(sf)).isDefined && columnName(stfName(sf)) != "id"
+          .flatMap: sf =>
+            val bounds = intAliasBounds(ir, stfType(sf)).getOrElse((None, None))
+            seedFor(ir, stfName(sf), bounds).map(sf -> _)
         if scalars.isEmpty || entityTableNames(ir).contains(TableName) then Nil
         else scalars
+
+  // Bare Int, or an alias chain ending in Int whose where-refinement reduces
+  // to plain bounds; the bounds join the seed search so the seeded value
+  // satisfies the alias refinement too.
+  private def intAliasBounds(
+      ir: ServiceIRFull,
+      t: type_expr
+  ): Option[(Option[BigInt], Option[BigInt])] =
+    t match
+      case NamedTypeF("Int", _) => Some((None, None))
+      case NamedTypeF(name, _) =>
+        svcTypeAliases(ir)
+          .find(a => talName(a) == name)
+          .flatMap: a =>
+            intAliasBounds(ir, talType(a)).flatMap: _ =>
+              talConstraint(a) match
+                case None => Some((None, None))
+                case Some(c) =>
+                  walkIntConstraint(c) match
+                    case (IntConstraint(mn, mx, Nil), Nil) => Some((mn, mx))
+                    case _                                 => None
+      case _ => None
 
   def fields(ir: ServiceIRFull): List[state_field_decl] = fieldsWithSeeds(ir).map(_._1)
 
@@ -57,13 +79,31 @@ object ScalarState:
         )
       )
 
-  private def seedFor(ir: ServiceIRFull, name: String): Option[BigInt] =
+  private def seedFor(
+      ir: ServiceIRFull,
+      name: String,
+      aliasBounds: (Option[BigInt], Option[BigInt])
+  ): Option[BigInt] =
+    val stateRelNames =
+      svcState(ir).map(sd => stdFields(sd).map(stfName).toSet).getOrElse(Set.empty)
+    // A universal over a state relation holds vacuously in the seeded initial
+    // state (tables start empty), so it cannot constrain the seed. Anything
+    // else that reads state (a cardinality, say) still fails closed.
+    def vacuousAtEmptySeed(a: expr): Boolean = a match
+      case QuantifierF(QAll(), bs, _, _) =>
+        bs.forall:
+          case QuantifierBindingFull(_, dom, _, _) =>
+            identName(dom).exists(stateRelNames.contains)
+      case _ => false
     val atoms    = svcInvariants(ir).flatMap(inv => flattenEnsures(List(invBody(inv))))
-    val relevant = atoms.filter(a => free_vars(a).contains(name))
+    val relevant = atoms.filter(a => free_vars(a).contains(name)).filterNot(vacuousAtEmptySeed)
     val parsed   = relevant.map(a => scalarGuardOf(List(name), a))
     if parsed.exists(_.isEmpty) then None
     else
-      val cmps = parsed.flatten.collect { case SgCmp(_, c, k) => (c, k) }
+      val aliasCmps =
+        aliasBounds._1.map(k => (ScGe(): scalar_cmp, k)).toList :::
+          aliasBounds._2.map(k => (ScLe(): scalar_cmp, k)).toList
+      val cmps = aliasCmps ::: parsed.flatten.collect { case SgCmp(_, c, k) => (c, k) }
       val lowers = cmps.collect:
         case (_: ScGe, k) => k
         case (_: ScGt, k) => k + 1
