@@ -218,6 +218,16 @@ object EmitGo:
         "internal/services/state_bridge.go",
         StateBridgeGo.emit(profiled, module)
       )
+    val routedCandidates =
+      profiled.operations
+        .filter(op => op.dafnyMethod.isDefined)
+        .flatMap(_.dafnyCandidates)
+        .distinctBy(_.param)
+    if kernelRouted && routedCandidates.nonEmpty then
+      files += EmittedFile(
+        "internal/services/sampling.go",
+        goSamplingFile(routedCandidates)
+      )
 
     val projectFiles: List[(String, String)] = List(
       "go.mod"                        -> templates.goMod,
@@ -1022,6 +1032,39 @@ object EmitGo:
 
   // Idiomatic-Go <-> Dafny-runtime converters keyed by the Go domain type. The empty pair marks a
   // type whose Go and Dafny representations coincide (bool), so no conversion call is emitted.
+  // Fresh secrets come from crypto/rand, never from the deterministic kernel;
+  // the compiled Requires twin validates every sample against live state.
+  private def goSamplingFile(candidates: List[specrest.profile.CandidateInput]): String =
+    val consts = candidates
+      .map(c =>
+        s"const ${goCandidateCharsetConst(c.param)} = ${EmitShared.doubleQuoted(c.sampleCharset)}"
+      )
+      .mkString("\n")
+    s"""package services
+
+import (
+	"crypto/rand"
+	"math/big"
+)
+
+$consts
+
+func sampleCandidate(length int, charset string) (string, error) {
+	out := make([]byte, length)
+	for i := range out {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		out[i] = charset[n.Int64()]
+	}
+	return string(out), nil
+}
+"""
+
+  private def goCandidateCharsetConst(param: String): String =
+    toCamelCase(param) + "Charset"
+
   private val goKernelScalarConv: Map[String, (String, String)] = Map(
     "string" -> ("dafnykernel.StringToDafny", "dafnykernel.StringFromDafny"),
     "int64"  -> ("dafnykernel.IntToDafny", "dafnykernel.IntFromDafny"),
@@ -1062,7 +1105,10 @@ object EmitGo:
         val outputsOk =
           outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
         Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
-          val args     = convertedArgs.flatten
+          val candidates = op.dafnyCandidates.map: c =>
+            (toCamelCase(c.param), c.sampleLength, goCandidateCharsetConst(c.param))
+          val candArgs = candidates.map((v, _, _) => s"dafnykernel.StringToDafny($v)")
+          val args     = convertedArgs.flatten ++ candArgs
           val callArgs = ("state" :: args).mkString(", ")
           val call     = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
           val guard    = s"dafnykernel.Companion_Default___.Requires$dafnyName($callArgs)"
@@ -1114,11 +1160,37 @@ object EmitGo:
                 "\t\t}"
               )
             else Nil
-          val guardCheck = List(
-            s"\t\tif !$guard {",
-            "\t\t\treturn ErrKernelPrecondition",
-            "\t\t}"
-          )
+          val guardCheck =
+            if candidates.isEmpty then
+              List(
+                s"\t\tif !$guard {",
+                "\t\t\treturn ErrKernelPrecondition",
+                "\t\t}"
+              )
+            else
+              // Sampled candidates: exhaustion means a real precondition
+              // failure, not sampling bad luck.
+              candidates.map((v, _, _) => s"\t\tvar $v string") :::
+                List("\t\tokCand := false", "\t\tfor attempt := 0; attempt < 8; attempt++ {") :::
+                candidates.flatMap: (v, len, const) =>
+                  List(
+                    s"\t\t\tsampled, err := sampleCandidate($len, $const)",
+                    "\t\t\tif err != nil {",
+                    "\t\t\t\treturn err",
+                    "\t\t\t}",
+                    s"\t\t\t$v = sampled"
+                  )
+                :::
+                List(
+                  s"\t\t\tif $guard {",
+                  "\t\t\t\tokCand = true",
+                  "\t\t\t\tbreak",
+                  "\t\t\t}",
+                  "\t\t}",
+                  "\t\tif !okCand {",
+                  "\t\t\treturn ErrKernelPrecondition",
+                  "\t\t}"
+                )
           val header =
             s"func (s *${entity.modelClassName}Service) $serviceMethod(ctx context.Context$sig) $returnType {"
           val body =

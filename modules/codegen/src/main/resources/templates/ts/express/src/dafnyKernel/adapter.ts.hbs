@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import BigNumber from 'bignumber.js';
 // @ts-expect-error generated Dafny kernel ships without type declarations
 import kernel from './kernel.cjs';
@@ -34,3 +35,14 @@ export const stringFromDafny = (s: unknown): string =>
 export const intToDafny = (n: number): unknown => new BigNumber(n);
 
 export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
+
+// Fresh secrets come from the CSPRNG, never from the verified (hence
+// deterministic) kernel; the compiled Requires twin validates each sample
+// against live state before the kernel accepts it.
+export const sampleCandidate = (length: number, charset: string): string => {
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += charset[randomInt(charset.length)];
+  }
+  return out;
+};
