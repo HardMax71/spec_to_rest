@@ -36,6 +36,29 @@ export const intToDafny = (n: number): unknown => new BigNumber(n);
 
 export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
 
+interface DafnyOption {
+  is_Some: boolean;
+  value: unknown;
+}
+
+const optionCompanion = dafnyModule['Option'] as unknown as {
+  create_Some(value: unknown): unknown;
+  create_None(): unknown;
+};
+
+export const someOrNone = (value: unknown, conv: (v: unknown) => unknown): unknown =>
+  value === null || value === undefined
+    ? optionCompanion.create_None()
+    : optionCompanion.create_Some(conv(value));
+
+export const valueOrNull = (opt: unknown, conv: (v: unknown) => unknown): unknown => {
+  const o = opt as DafnyOption;
+  return o.is_Some ? conv(o.value) : null;
+};
+
+export const dafnySeqOf = (values: unknown[]): unknown =>
+  (kernel._dafny.Seq as { of(...xs: unknown[]): unknown }).of(...values);
+
 // Fresh secrets come from the CSPRNG, never from the verified (hence
 // deterministic) kernel; the compiled Requires twin validates each sample
 // against live state before the kernel accepts it.
