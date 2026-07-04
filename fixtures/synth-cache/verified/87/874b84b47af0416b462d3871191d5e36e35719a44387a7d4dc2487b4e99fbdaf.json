@@ -1,0 +1,11 @@
+{
+  "candidate" : "  var active := email in st.failed_logins && now() - st.failed_logins[email].window_start <= minutes(15);\n  var fl := FailedLogin(email, (if active then st.failed_logins[email].count else 0) + 1, if active then st.failed_logins[email].window_start else now());\n  st.failed_logins := st.failed_logins[email := fl];\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), false)];\n",
+  "body" : "  var active := email in st.failed_logins && now() - st.failed_logins[email].window_start <= minutes(15);\n  var fl := FailedLogin(email, (if active then st.failed_logins[email].count else 0) + 1, if active then st.failed_logins[email].window_start else now());\n  st.failed_logins := st.failed_logins[email := fl];\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), false)];\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

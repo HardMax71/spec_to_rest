@@ -60,11 +60,81 @@ object DafnyKernel:
     if content.contains("module.exports") then content
     else s"$content\nmodule.exports = { _module, _dafny };\n"
 
+  // Extern builtins (now, hash, the time units) compile to bare global
+  // references like `specrest_externs_now()`; the shim defines them and this
+  // injects the import where any are referenced.
+  private val ExternNames = List(
+    "specrest_externs_now",
+    "specrest_externs_days",
+    "specrest_externs_hours",
+    "specrest_externs_minutes",
+    "specrest_externs_seconds",
+    "specrest_externs_hash_hex",
+    "specrest_externs_abs_int"
+  )
+
+  // Runtime implementations of the proof-abstract extern builtins, emitted
+  // into the kernel package. Semantics must match each backend's own builtin
+  // rendering (hash is sha256 hex; time units are integer seconds) so the
+  // kernel and the conformance oracle agree on every value.
+  val PythonExternShim: String =
+    """import hashlib
+      |import time
+      |
+      |from . import _dafny
+      |
+      |
+      |def _plain_str(s):
+      |    return str(s.VerbatimString(False))
+      |
+      |
+      |def _to_dafny_str(s):
+      |    return _dafny.SeqWithoutIsStrInference(map(_dafny.CodePoint, s))
+      |
+      |
+      |def specrest_externs_now():
+      |    return int(time.time())
+      |
+      |
+      |def specrest_externs_days(n):
+      |    return n * 86400
+      |
+      |
+      |def specrest_externs_hours(n):
+      |    return n * 3600
+      |
+      |
+      |def specrest_externs_minutes(n):
+      |    return n * 60
+      |
+      |
+      |def specrest_externs_seconds(n):
+      |    return n
+      |
+      |
+      |def specrest_externs_hash_hex(s):
+      |    return _to_dafny_str(hashlib.sha256(_plain_str(s).encode()).hexdigest())
+      |
+      |
+      |def specrest_externs_abs_int(n):
+      |    return n if n >= 0 else -n
+      |""".stripMargin
+
   def rewritePythonImports(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>
       val subdirDepth = relPath.count(_ == '/')
       val dots        = "." * (subdirDepth + 1)
-      relPath -> rewritePyFile(content, dots)
+      val rewritten   = rewritePyFile(content, dots)
+      val used        = ExternNames.filter(n => rewritten.contains(n + "("))
+      val withExterns =
+        if used.isEmpty then rewritten
+        else
+          val importLine = s"from ${dots}_externs import ${used.mkString(", ")}\n"
+          rewritten.linesWithSeparators.toList match
+            case head :: tail if head.startsWith("import sys") =>
+              (head :: importLine :: tail).mkString
+            case lines => (importLine :: lines).mkString
+      relPath -> withExterns
 
   private def rewritePyFile(content: String, dots: String): String =
     content.linesWithSeparators.map(line => rewriteLine(line, dots)).mkString

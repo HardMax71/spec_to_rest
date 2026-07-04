@@ -1,0 +1,11 @@
+{
+  "candidate" : "  reset_token := cand_reset_token;\n  st.reset_tokens := st.reset_tokens[reset_token := ResetToken(reset_token, st.user_by_email[email].id)];\n",
+  "body" : "  reset_token := cand_reset_token;\n  st.reset_tokens := st.reset_tokens[reset_token := ResetToken(reset_token, st.user_by_email[email].id)];\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

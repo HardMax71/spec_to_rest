@@ -709,13 +709,19 @@ object Generator:
     def walk(node: expr): Unit = node match
       case IndexF(m, k, sp) if isStateMapRef(ctx, m) =>
         walk(m); walk(k); add(k, m, sp)
-      case BinaryOpF(_, l, r, _) => walk(l); walk(r)
-      case UnaryOpF(_, x, _)     => walk(x)
-      case FieldAccessF(b, _, _) => walk(b)
-      case IndexF(b, i, _)       => walk(b); walk(i)
-      case PrimeF(x, _)          => walk(x)
-      case PreF(x, _)            => walk(x)
-      case CallF(c, args, _)     => walk(c); args.foreach(walk)
+      // Dafny well-formedness is path-sensitive: the right side of || is
+      // checked under the negated left, and ==> under the left, so guards
+      // hoisted from there would strengthen the contract.
+      case BinaryOpF(BOr(), l, _, _)      => walk(l)
+      case BinaryOpF(BImplies(), l, _, _) => walk(l)
+      case BinaryOpF(BAnd(), l, _, _)     => walk(l)
+      case BinaryOpF(_, l, r, _)          => walk(l); walk(r)
+      case UnaryOpF(_, x, _)              => walk(x)
+      case FieldAccessF(b, _, _)          => walk(b)
+      case IndexF(b, i, _)                => walk(b); walk(i)
+      case PrimeF(x, _)                   => walk(x)
+      case PreF(x, _)                     => walk(x)
+      case CallF(c, args, _)              => walk(c); args.foreach(walk)
       case ConstructorF(_, fs, _) =>
         fs.foreach(fa => walk(fasValue(fa)))
       case WithF(b, fs, _) =>
@@ -725,9 +731,12 @@ object Generator:
         es.foreach { e =>
           walk(mpeKey(e)); walk(mpeValue(e))
         }
-      case SetLiteralF(es, _)   => es.foreach(walk)
-      case SeqLiteralF(es, _)   => es.foreach(walk)
-      case IfF(c, t, e, _)      => walk(c); walk(t); walk(e)
+      case SetLiteralF(es, _) => es.foreach(walk)
+      case SeqLiteralF(es, _) => es.foreach(walk)
+      // If branches are likewise checked under the branch condition
+      // (LoginFailed's fresh-email case became contractually false when the
+      // then-branch guard was hoisted), so only the condition contributes.
+      case IfF(c, _, _, _)      => walk(c)
       case SomeWrapF(x, _)      => walk(x)
       case LetF(_, value, _, _) => walk(value)
       case _                    => ()

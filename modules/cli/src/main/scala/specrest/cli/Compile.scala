@@ -263,10 +263,12 @@ object Compile:
                         case TargetLanguage.JavaScript =>
                           (DafnyKernel.JsDefaultPackagePath, translated.files)
                         case TargetLanguage.Python =>
-                          (
-                            DafnyKernel.PythonDefaultPackagePath,
-                            DafnyKernel.rewritePythonImports(translated.files)
-                          )
+                          val rewritten = DafnyKernel.rewritePythonImports(translated.files)
+                          val withShim =
+                            if rewritten.values.exists(_.contains("from ._externs import")) then
+                              rewritten + ("_externs.py" -> DafnyKernel.PythonExternShim)
+                            else rewritten
+                          (DafnyKernel.PythonDefaultPackagePath, withShim)
                       val kernel = DafnyKernel(
                         packagePath = packagePath,
                         files = files,

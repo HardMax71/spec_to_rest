@@ -1,0 +1,11 @@
+{
+  "candidate" : "  assert st.next_user_id !in st.users;\n  assert forall u :: u in st.users ==> st.users[u].email != email;\n  user := User(st.next_user_id, email, hash(password), display_name, now(), None, true);\n  st.users := st.users[user.id := user];\n  st.user_by_email := st.user_by_email[email := user];\n  st.next_user_id := st.next_user_id + 1;\n",
+  "body" : "  assert st.next_user_id !in st.users;\n  assert forall u :: u in st.users ==> st.users[u].email != email;\n  user := User(st.next_user_id, email, hash(password), display_name, now(), None, true);\n  st.users := st.users[user.id := user];\n  st.user_by_email := st.user_by_email[email := user];\n  st.next_user_id := st.next_user_id + 1;\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

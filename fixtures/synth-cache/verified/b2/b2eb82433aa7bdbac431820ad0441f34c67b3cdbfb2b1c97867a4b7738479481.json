@@ -1,0 +1,11 @@
+{
+  "candidate" : "  var user := st.user_by_email[email];\n  var updated := user.(last_login := Some(now()));\n  session := Session(st.next_session_id, user.id, cand_access_token, cand_refresh_token, now() + 1, now() + 2, now(), false);\n  st.sessions := st.sessions[session.id := session];\n  st.users := st.users[user.id := updated];\n  st.user_by_email := st.user_by_email[email := updated];\n  st.failed_logins := st.failed_logins - {email};\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), true)];\n  st.next_session_id := st.next_session_id + 1;\n",
+  "body" : "  var user := st.user_by_email[email];\n  var updated := user.(last_login := Some(now()));\n  session := Session(st.next_session_id, user.id, cand_access_token, cand_refresh_token, now() + 1, now() + 2, now(), false);\n  st.sessions := st.sessions[session.id := session];\n  st.users := st.users[user.id := updated];\n  st.user_by_email := st.user_by_email[email := updated];\n  st.failed_logins := st.failed_logins - {email};\n  st.login_attempts := st.login_attempts + [LoginAttempt(email, now(), true)];\n  st.next_session_id := st.next_session_id + 1;\n",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

@@ -15873,6 +15873,33 @@ object SpecRestGenerated {
         }
     }
 
+  def candParam(x0: candidate): String = x0 match {
+    case CandidateFull(x1, x2, x3, x4) => x1
+  }
+
+  def candAlias(x0: candidate): String = x0 match {
+    case CandidateFull(x1, x2, x3, x4) => x4
+  }
+
+  def pairwiseDistinct(x0: List[candidate]): List[expr] = x0 match {
+    case Nil => Nil
+    case c :: cs =>
+      map_filter[candidate, expr](
+        (x: candidate) =>
+          candAlias(x) == candAlias(c) match {
+            case true => Some[expr](BinaryOpF(
+                BNeq(),
+                IdentifierF(candParam(c), None),
+                IdentifierF(candParam(x), None),
+                None
+              ))
+            case false => None
+          },
+        cs
+      ) ++
+        pairwiseDistinct(cs)
+  }
+
   def classificationMatchedRule(x0: operation_classification): String = x0 match {
     case OperationClassification(uu, uv, uw, r, ux, uy, uz) => r
   }
@@ -16353,7 +16380,16 @@ object SpecRestGenerated {
       outputCandidates(samplable, ents, taken, op, operOutputs(op)): List[(
           param_decl,
           (List[expr], (expr, candidate))
-      )];
+      )]
+    val cands =
+      map[(param_decl, (List[expr], (expr, candidate))), candidate](
+        (a: (param_decl, (List[expr], (expr, candidate)))) => {
+          val (_, (_, (_, c))) =
+            a: ((param_decl, (List[expr], (expr, candidate))));
+          c
+        },
+        found
+      ): List[candidate];
     (
       OperationDeclFull(
         operName(op),
@@ -16368,13 +16404,14 @@ object SpecRestGenerated {
           ),
         operOutputs(op),
         operRequires(op) ++
-          maps[(param_decl, (List[expr], (expr, candidate))), expr](
+          (maps[(param_decl, (List[expr], (expr, candidate))), expr](
             (a: (param_decl, (List[expr], (expr, candidate)))) => {
               val (_, (rs, (_, _))) = a: ((param_decl, (List[expr], (expr, candidate))));
               rs
             },
             found
-          ),
+          ) ++
+            pairwiseDistinct(cands)),
         operEnsures(op) ++
           map[(param_decl, (List[expr], (expr, candidate))), expr](
             (a: (param_decl, (List[expr], (expr, candidate)))) => {
@@ -16386,14 +16423,7 @@ object SpecRestGenerated {
         operRequiresAuth(op),
         operSpan(op)
       ),
-      map[(param_decl, (List[expr], (expr, candidate))), candidate](
-        (a: (param_decl, (List[expr], (expr, candidate)))) => {
-          val (_, (_, (_, c))) =
-            a: ((param_decl, (List[expr], (expr, candidate))));
-          c
-        },
-        found
-      )
+      cands
     )
   }
 
@@ -17088,16 +17118,8 @@ object SpecRestGenerated {
       }
   }
 
-  def candAlias(x0: candidate): String = x0 match {
-    case CandidateFull(x1, x2, x3, x4) => x4
-  }
-
   def candField(x0: candidate): Option[String] = x0 match {
     case CandidateFull(x1, x2, x3, x4) => x3
-  }
-
-  def candParam(x0: candidate): String = x0 match {
-    case CandidateFull(x1, x2, x3, x4) => x1
   }
 
   def buildOperationClassification(

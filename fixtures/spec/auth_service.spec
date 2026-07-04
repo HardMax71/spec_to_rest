@@ -92,6 +92,11 @@ service AuthService {
       email not in user_by_email
       len(password) >= 8
       len(display_name) >= 1
+      // Realizability: User's invariants cap display_name at 100 and demand a
+      // nonempty email (the regex is proof-abstract), so the operation must
+      // require both rather than promise the impossible.
+      len(display_name) <= 100
+      len(email) > 0
 
     ensures:
       user.id = pre(next_user_id)
@@ -303,6 +308,12 @@ service AuthService {
 
   invariant nextSessionIdFresh:
     all s in sessions | s < next_session_id
+
+  // Realizability: a fresh session's id must satisfy SessionInv's id > 0, so
+  // the counter itself must stay positive (next_user_id gets this from the
+  // UserId alias; next_session_id is bare Int).
+  invariant nextSessionIdPositive:
+    next_session_id > 0
 
   // NOTE: `revokedSessionsStayRevoked` was a two-state property (`pre(sessions)
   // [s].is_revoked => sessions'[s].is_revoked`) — wrong shape for an invariant
