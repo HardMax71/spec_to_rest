@@ -11,7 +11,9 @@ package tests
 
 import (
 	"math"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"pgregory.net/rapid"
 )
@@ -20,7 +22,17 @@ func mapAny[T any](g *rapid.Generator[T]) *rapid.Generator[any] {
 	return rapid.Map(g, func(x T) any { return any(x) })
 }
 
-func genString() *rapid.Generator[any] { return mapAny(rapid.String()) }
+// Postgres text rejects NUL and MySQL utf8mb4 rejects lone surrogates; the
+// spec's semantics carry no encoding model, so generated strings exclude what
+// the storage layer categorically cannot hold (same policy as the python
+// suite's strategies).
+func storable(s string) bool {
+	return !strings.ContainsRune(s, 0x00) && utf8.ValidString(s)
+}
+
+func genString() *rapid.Generator[any] {
+	return mapAny(rapid.String().Filter(storable))
+}
 func genInt() *rapid.Generator[any]    { return mapAny(rapid.Int64()) }
 func genFloat() *rapid.Generator[any] {
 	return mapAny(rapid.Float64Range(-1e9, 1e9))
@@ -89,7 +101,7 @@ func genDict(kv ...any) *rapid.Generator[any] {
 func genRedact(inner *rapid.Generator[any]) *rapid.Generator[any] { return inner }
 
 func genStringMatching(pat string) *rapid.Generator[any] {
-	return mapAny(rapid.StringMatching(pat))
+	return mapAny(rapid.StringMatching(pat).Filter(storable))
 }
 
 func genStringBounded(minLen, maxLen int) *rapid.Generator[any] {
@@ -101,7 +113,7 @@ func genStringBounded(minLen, maxLen int) *rapid.Generator[any] {
 	if maxLen >= 0 {
 		hi = maxLen
 	}
-	return mapAny(rapid.StringN(lo, hi, -1))
+	return mapAny(rapid.StringN(lo, hi, -1).Filter(storable))
 }
 
 func genFilterLen(g *rapid.Generator[any], lo, hi int) *rapid.Generator[any] {

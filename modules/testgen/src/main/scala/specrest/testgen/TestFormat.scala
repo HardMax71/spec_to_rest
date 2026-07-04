@@ -44,9 +44,16 @@ private[testgen] object TestFormat:
     if params.isEmpty then Right(Nil)
     else
       val overrides = TestStrategyOverrides.from(ir)
+      val atoms = svcOperations(ir)
+        .find(o => operName(o) == pop.operationName)
+        .map(o => flattenEnsures(operRequires(o)))
+        .getOrElse(Nil)
       val pairs = params.map: p =>
         val sctx = StrategyCtx.OperationInput(pop.operationName, p.name)
-        (p.name, Strategies.expressionFor(p.typeExpr, ir, sctx, overrides, backend))
+        (
+          p.name,
+          Strategies.expressionForInput(p.typeExpr, ir, sctx, overrides, p.name, atoms, backend)
+        )
       pairs.collectFirst { case (n, StrategyExpr.Skip(r)) => s"input '$n': $r" } match
         case Some(reason) => Left(reason)
         case None         => Right(pairs.collect { case (n, StrategyExpr.Code(t)) => (n, t) })
