@@ -40,9 +40,12 @@ export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
 // deterministic) kernel; the compiled Requires twin validates each sample
 // against live state before the kernel accepts it.
 export const sampleCandidate = (length: number, charset: string): string => {
+  // Array.from splits by code point, so a charset with non-BMP characters
+  // cannot yield broken surrogate halves.
+  const chars = Array.from(charset);
   let out = '';
   for (let i = 0; i < length; i += 1) {
-    out += charset[randomInt(charset.length)];
+    out += chars[randomInt(chars.length)];
   }
   return out;
 };

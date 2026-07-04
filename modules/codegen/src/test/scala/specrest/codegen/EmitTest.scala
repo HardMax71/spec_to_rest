@@ -213,7 +213,8 @@ class EmitTest extends CatsEffectSuite:
         s"shorten must guard with RequiresShorten on converted args — got:\n$service"
       )
       assert(
-        service.contains("_dafny_kernel.Shorten("),
+        service.contains("_dafny_kernel.Shorten(") &&
+          service.contains("to_dafny_str(body.url),"),
         s"shorten kernel call should pass the converted body.url — got:\n$service"
       )
       assert(

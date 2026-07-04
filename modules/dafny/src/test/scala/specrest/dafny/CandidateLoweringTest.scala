@@ -24,9 +24,10 @@ class CandidateLoweringTest extends CatsEffectSuite:
         List("cand_access_token", "cand_refresh_token")
       )
       assertEquals(byOp("RequestPasswordReset").map(_.param), List("cand_reset_token"))
-      val token = byOp("Login").head
-      assertEquals(token.sampleLength, 128)
-      assertEquals(token.sampleCharset, "0123456789abcdef")
+      val tokenCands = byOp("Login") ::: byOp("RefreshToken") ::: byOp("RequestPasswordReset")
+      tokenCands.foreach: c =>
+        assertEquals(c.sampleLength, 128, c.param)
+        assertEquals(c.sampleCharset, "0123456789abcdef", c.param)
       assertEquals(byOp("Register"), Nil)
       assertEquals(byOp("ResetPassword"), Nil)
 

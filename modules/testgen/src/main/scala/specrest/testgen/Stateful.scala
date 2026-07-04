@@ -364,7 +364,8 @@ object Stateful:
         opDecl = opDecl,
         bindings = bindings,
         role = role,
-        stateFields = stateFields
+        stateFields = stateFields,
+        ir = ir
       )
       (Right(List(ruleBody)), roleSkips)
 
@@ -552,7 +553,8 @@ object Stateful:
       opDecl: operation_decl,
       bindings: List[(String, InputBinding)],
       role: RuleRole,
-      stateFields: Set[String]
+      stateFields: Set[String],
+      ir: ServiceIRFull
   ): String =
     val sb        = new StringBuilder
     val ruleArgs  = ruleDecoratorArgs(bindings, role)
@@ -573,7 +575,8 @@ object Stateful:
           r,
           classicBundleInputNames.toSet,
           stateFields,
-          generatedInputNames
+          generatedInputNames,
+          ir
         )
     val anyBundleBinding = bindings.exists:
       case (
@@ -899,7 +902,8 @@ object Stateful:
       e: expr,
       bundleInputs: Set[String],
       stateFields: Set[String],
-      generatedInputs: Set[String]
+      generatedInputs: Set[String],
+      ir: ServiceIRFull
   ): Boolean =
     e match
       case _ if isTrueLit(e) => true
@@ -907,14 +911,15 @@ object Stateful:
           if keyExistencePair(e)
             .exists((in, st) => bundleInputs.contains(in) && stateFields.contains(st)) =>
         true
-      // A pure length/shape bound on a generated input is satisfied by
-      // construction: the strategy derives from the same requires atoms.
+      // A length/shape bound on a generated input counts as satisfied only
+      // when the strategy builder provably encoded it: same recognizer,
+      // same verdict (an unsupported atom like `x != y` stays tolerant).
       case _
-          if free_vars(e).toSet.subsetOf(generatedInputs) &&
-            !free_vars(e).toSet.exists(stateFields.contains) &&
-            free_vars(e).nonEmpty =>
+          if free_vars(e).distinct.sizeIs == 1 &&
+            generatedInputs.contains(free_vars(e).head) &&
+            Strategies.inputAtomEncodable(e, free_vars(e).head, ir) =>
         true
       case BinaryOpF(BAnd(), l, r, _) =>
-        requiresIsSatisfiedByBundles(l, bundleInputs, stateFields, generatedInputs) &&
-        requiresIsSatisfiedByBundles(r, bundleInputs, stateFields, generatedInputs)
+        requiresIsSatisfiedByBundles(l, bundleInputs, stateFields, generatedInputs, ir) &&
+        requiresIsSatisfiedByBundles(r, bundleInputs, stateFields, generatedInputs, ir)
       case _ => false

@@ -127,7 +127,7 @@ object PythonHypothesisStrategy extends StrategyBackend:
   // exclude what the storage layer categorically cannot hold. Same reality
   // as the preamble's isValidURI control-character bound.
   private val TextAlphabet =
-    "alphabet=st.characters(exclude_characters=\"\\x00\")"
+    "alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))"
 
   def string: String       = s"st.text($TextAlphabet)"
   def int: String          = "st.integers()"
@@ -162,7 +162,8 @@ object PythonHypothesisStrategy extends StrategyBackend:
   // pattern anchoring here (unlike the JS and Go leaves).
   def regexGen(pattern: String): String =
     s"st.from_regex(${ExprToPython.pyString(pattern)}, fullmatch=True)" +
-      ".filter(lambda v: \"\\x00\" not in v)"
+      ".filter(lambda v: \"\\x00\" not in v" +
+      " and not any(\"\\ud800\" <= c <= \"\\udfff\" for c in v))"
 
   def boundedText(min: Option[Int], max: Option[Int]): String =
     val args = (TextAlphabet :: List(

@@ -44,7 +44,7 @@ class BackendTest extends CatsEffectSuite:
     (
       "string",
       (b: StrategyBackend) => b.string,
-      "st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))",
+      "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))",
       "fc.string()"
     ),
     ("int", (b: StrategyBackend) => b.int, "st.integers()", "fc.integer()"),

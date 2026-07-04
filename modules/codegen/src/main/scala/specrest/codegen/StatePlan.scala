@@ -34,7 +34,8 @@ object StatePlan:
   def analyze(
       profiled: ProfiledService,
       fieldSupported: ProfiledField => Boolean,
-      keySupported: ProfiledField => Boolean
+      keySupported: ProfiledField => Boolean,
+      seqSupported: Boolean = false
   ): Either[String, Plan] =
     val ir        = profiled.ir
     val byName    = profiled.entities.map(e => e.entityName -> e).toMap
@@ -59,9 +60,12 @@ object StatePlan:
                   if unsupported.nonEmpty then
                     problems += s"state field '$name': entity '${p.entityName}' has field types the bridge cannot marshal (${unsupported.map(_.domainType).distinct.mkString(", ")})"
                   else if shape == AdminModel.ProjectionValue.SeqRows then
-                    // Ordered by the synthesized serial pk, which is not a
-                    // profiled field; the bridge reinserts in seq order.
-                    relations += RelationPlan(name, entity, None, None, isSeq = true)
+                    if !seqSupported then
+                      problems += s"state field '$name': seq-valued state is not bridgeable on this target"
+                    else
+                      // Ordered by the synthesized serial pk, which is not a
+                      // profiled field; the bridge reinserts in seq order.
+                      relations += RelationPlan(name, entity, None, None, isSeq = true)
                   else
                     entity.fields.find(_.fieldName == p.keyFieldName) match
                       case None =>
@@ -80,6 +84,12 @@ object StatePlan:
                               problems += s"state field '$name': value field '$vf' not on '${p.entityName}'"
                             case _ =>
                               relations += RelationPlan(name, entity, Some(key), valueField)
+
+    // A seq projection rewrites its entity's whole table on persist, so a
+    // second projection over the same entity would be clobbered; fail closed.
+    val seqEntities = relations.result().filter(_.isSeq).map(_.entity.entityName)
+    for r <- relations.result() if !r.isSeq && seqEntities.contains(r.entity.entityName) do
+      problems += s"state field '${r.stateField}' shares entity '${r.entity.entityName}' with a seq projection; persists would clobber each other"
 
     val built       = Plan(relations.result(), scalars.result())
     val persistable = built.entityRowRelations.map(_.entity.entityName).toSet

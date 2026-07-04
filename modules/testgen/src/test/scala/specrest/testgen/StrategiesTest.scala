@@ -148,7 +148,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       Strategies.expressionFor(named("String"), ir),
-      StrategyExpr.Code("st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+      StrategyExpr.Code(
+        "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+      )
     )
     assertEquals(
       Strategies.expressionFor(named("Int"), ir),
@@ -161,13 +163,13 @@ class StrategiesTest extends CatsEffectSuite:
     assertEquals(
       Strategies.expressionFor(OptionTypeF(named("String"), None), ir),
       StrategyExpr.Code(
-        "st.one_of(st.none(), st.text(alphabet=st.characters(exclude_characters=\"\\x00\")))"
+        "st.one_of(st.none(), st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))))"
       )
     )
     assertEquals(
       Strategies.expressionFor(SetTypeF(named("String"), None), ir),
       StrategyExpr.Code(
-        "st.sets(st.text(alphabet=st.characters(exclude_characters=\"\\x00\")), max_size=5)"
+        "st.sets(st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))), max_size=5)"
       )
     )
     assertEquals(
@@ -224,7 +226,10 @@ class StrategiesTest extends CatsEffectSuite:
       typeAliases = List(alias("Weird", named("String"), Some(weird)))
     )
     val spec = Strategies.forIR(ir).head
-    assertEquals(spec.body, "st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+    assertEquals(
+      spec.body,
+      "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+    )
     assert(spec.skipped.nonEmpty)
 
   test("safe_counter has no type aliases or enums; forIR returns empty"):
@@ -302,7 +307,10 @@ class StrategiesTest extends CatsEffectSuite:
       )
     )
     val spec = Strategies.forIR(ir).head
-    assertEquals(spec.body, "st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+    assertEquals(
+      spec.body,
+      "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+    )
     assertEquals(spec.imports, Nil)
 
   test("multiple regex constraints in `And` chain are all applied"):
@@ -339,7 +347,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       expr,
-      StrategyExpr.Code("redact(st.text(alphabet=st.characters(exclude_characters=\"\\x00\")))")
+      StrategyExpr.Code(
+        "redact(st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))))"
+      )
     )
 
   test("non-sensitive operation input is unwrapped"):
@@ -351,7 +361,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       expr,
-      StrategyExpr.Code("st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+      StrategyExpr.Code(
+        "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+      )
     )
 
   test("override 'live' on sensitive input removes redact wrapper"):
@@ -367,7 +379,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       expr,
-      StrategyExpr.Code("st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+      StrategyExpr.Code(
+        "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+      )
     )
 
   test("override 'redacted' replaces strategy with placeholder"):
@@ -450,7 +464,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       exprRegister,
-      StrategyExpr.Code("st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+      StrategyExpr.Code(
+        "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+      )
     )
     val exprLogin = Strategies.expressionFor(
       named("String"),
@@ -464,7 +480,9 @@ class StrategiesTest extends CatsEffectSuite:
     val expr = Strategies.expressionFor(named("String"), emptyIR)
     assertEquals(
       expr,
-      StrategyExpr.Code("st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))")
+      StrategyExpr.Code(
+        "st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
+      )
     )
 
   // ---------- M5.9: entity strategies for transition entities ----------
@@ -600,7 +618,7 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assert(
       user.body.contains(
-        "\"password\": st.text(alphabet=st.characters(exclude_characters=\"\\x00\"))"
+        "\"password\": st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",)))"
       ),
       s"live override should emit bare strategy: ${user.body}"
     )

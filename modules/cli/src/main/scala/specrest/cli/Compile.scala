@@ -265,7 +265,7 @@ object Compile:
                         case TargetLanguage.Python =>
                           val rewritten = DafnyKernel.rewritePythonImports(translated.files)
                           val withShim =
-                            if rewritten.values.exists(_.contains("from ._externs import")) then
+                            if rewritten.values.exists(_.contains("_externs import ")) then
                               rewritten + ("_externs.py" -> DafnyKernel.PythonExternShim)
                             else rewritten
                           (DafnyKernel.PythonDefaultPackagePath, withShim)

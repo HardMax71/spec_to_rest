@@ -115,13 +115,17 @@ object StateKeys:
       .sorted
 
   private def resolvesToInt(name: String, ir: ServiceIRFull): Boolean =
-    svcTypeAliases(ir).find(a => talName(a) == name) match
-      case Some(a) =>
-        talType(a) match
-          case NamedTypeF("Int", _) => true
-          case NamedTypeF(n, _)     => resolvesToInt(n, ir)
-          case _                    => false
-      case None => false
+    def go(n: String, seen: Set[String]): Boolean =
+      if seen.contains(n) then false
+      else
+        svcTypeAliases(ir).find(a => talName(a) == n) match
+          case Some(a) =>
+            talType(a) match
+              case NamedTypeF("Int", _) => true
+              case NamedTypeF(m, _)     => go(m, seen + n)
+              case _                    => false
+          case None => false
+    go(name, Set.empty)
 
 object TestCtx:
   def fromOperation(

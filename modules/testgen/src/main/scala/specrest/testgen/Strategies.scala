@@ -101,6 +101,16 @@ object Strategies:
   // (`len(password) >= 8`); generating outside them makes a stateful rule
   // fire calls the guard rightly rejects. The atoms whose only free variable
   // is the input fold into the same constrained-string build the aliases use.
+  // Only atoms the walker fully recognizes fold into generation; the rest
+  // neither narrow the strategy nor count as satisfied by construction (the
+  // stateful strictness check asks the same question through this method).
+  def inputAtomEncodable(atom: expr, paramName: String, ir: ServiceIRFull): Boolean =
+    free_vars(atom).distinct == List(paramName) && {
+      val substd     = subst(paramName, IdentifierF("value", None), atom)
+      val (_, skips) = collectStringConstraint(Some(substd), ir)
+      skips.isEmpty
+    }
+
   def expressionForInput(
       t: type_expr,
       ir: ServiceIRFull,
@@ -110,15 +120,14 @@ object Strategies:
       requiresAtoms: List[expr],
       b: StrategyBackend = PythonHypothesisStrategy
   ): StrategyExpr =
-    val own = requiresAtoms
-      .filter(a => free_vars(a).distinct == List(paramName))
+    val encoded = requiresAtoms
+      .filter(a => inputAtomEncodable(a, paramName, ir))
       .map(a => subst(paramName, IdentifierF("value", None), a))
-    val raw = (t, own) match
+    val raw = (t, encoded) match
       case (NamedTypeF("String", _), atoms @ (_ :: _)) =>
-        val merged        = atoms.reduceLeft((l, r) => BinaryOpF(BAnd(), l, r, None))
-        val (cs, skipped) = collectStringConstraint(Some(merged), ir)
-        if skipped.nonEmpty then bareExpression(t, ir, b)
-        else StrategyExpr.Code(b.constrainedString(cs))
+        val merged  = atoms.reduceLeft((l, r) => BinaryOpF(BAnd(), l, r, None))
+        val (cs, _) = collectStringConstraint(Some(merged), ir)
+        StrategyExpr.Code(b.constrainedString(cs))
       case _ => bareExpression(t, ir, b)
     applyRedaction(raw, ctx, overrides, b)
 

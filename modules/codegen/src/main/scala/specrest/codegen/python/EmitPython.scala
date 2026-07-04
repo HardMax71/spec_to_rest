@@ -983,12 +983,15 @@ object EmitPython:
     val kernelText = kernelOps
       .flatMap(o => o.kernelResultExpr :: o.kernelCallArgs)
       .mkString(" ")
+    val hasCandidates = kernelOps.exists(_.kernelCandidates.nonEmpty)
     val adapterImports = List(
       Option.when(kernelText.contains("epoch_to_datetime("))("epoch_to_datetime"),
       Option.when(kernelText.contains("from_dafny_str("))("from_dafny_str"),
       Option.when(kernelOps.exists(!_.kernelHasState))("make_state"),
-      Option.when(kernelOps.exists(_.kernelCandidates.nonEmpty))("sample_candidate"),
-      Option.when(kernelText.contains("to_dafny_str("))("to_dafny_str"),
+      Option.when(hasCandidates)("sample_candidate"),
+      // The candidate sample lines convert with to_dafny_str in the template,
+      // outside the strings this text scan sees.
+      Option.when(kernelText.contains("to_dafny_str(") || hasCandidates)("to_dafny_str"),
       Option.when(kernelText.contains("value_or_none("))("value_or_none")
     ).flatten
     ServiceTemplateImports(

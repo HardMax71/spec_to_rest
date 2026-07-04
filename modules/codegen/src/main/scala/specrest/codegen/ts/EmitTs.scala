@@ -693,7 +693,7 @@ object EmitTs:
           .flatMap(_.kernelCandidateConsts)
           .distinctBy(_._1)
         charsets.foreach: (name, charset) =>
-          lines += s"const $name = ${EmitShared.doubleQuoted(charset).replace("\"", "'")};"
+          lines += s"const $name = ${tsSingleQuoted(charset)};"
         lines.result().mkString("\n")
       },
       customSchemas = customSchemas
@@ -1007,6 +1007,9 @@ object EmitTs:
   // falls back to the route-kind stub) unless the op is kernel-bound and every input/output is a
   // supported scalar; query-param inputs and collection/datatype results are deferred follow-ups.
   // The second tuple element is the route-handler call-arg list (idiomatic, pre-marshalling).
+  private def tsSingleQuoted(s: String): String =
+    "'" + s.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
   private def tsCandidateCharsetConst(param: String): String =
     toCamelCase(param) + "Charset"
 

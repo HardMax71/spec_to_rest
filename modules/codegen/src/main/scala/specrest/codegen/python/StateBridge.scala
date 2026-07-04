@@ -25,7 +25,8 @@ object StateBridge:
     specrest.codegen.StatePlan.analyze(
       profiled,
       fieldSupported = f => ScalarPyTypes.contains(baseType(f.domainType)),
-      keySupported = k => Set("str", "int").contains(baseType(k.domainType)) && !k.nullable
+      keySupported = k => Set("str", "int").contains(baseType(k.domainType)) && !k.nullable,
+      seqSupported = true
     )
 
   def hasState(plan: Plan): Boolean = plan.hasState

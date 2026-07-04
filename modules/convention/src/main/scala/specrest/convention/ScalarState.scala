@@ -45,13 +45,18 @@ object ScalarState:
         svcTypeAliases(ir)
           .find(a => talName(a) == name)
           .flatMap: a =>
-            intAliasBounds(ir, talType(a)).flatMap: _ =>
+            // Bounds intersect down the alias chain: an intermediate alias
+            // without its own where must not erase what deeper aliases pin.
+            intAliasBounds(ir, talType(a)).flatMap: (innerLo, innerHi) =>
               talConstraint(a) match
-                case None => Some((None, None))
+                case None => Some((innerLo, innerHi))
                 case Some(c) =>
                   walkIntConstraint(c) match
-                    case (IntConstraint(mn, mx, Nil), Nil) => Some((mn, mx))
-                    case _                                 => None
+                    case (IntConstraint(mn, mx, Nil), Nil) =>
+                      val lo = (innerLo.toList ::: mn.toList).maxOption
+                      val hi = (innerHi.toList ::: mx.toList).minOption
+                      Some((lo, hi))
+                    case _ => None
       case _ => None
 
   def fields(ir: ServiceIRFull): List[state_field_decl] = fieldsWithSeeds(ir).map(_._1)
