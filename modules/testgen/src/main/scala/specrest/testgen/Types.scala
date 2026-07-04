@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.codegen.AdminModel
+import specrest.convention.ScalarState
 import specrest.ir.generated.SpecRestGenerated.*
 import specrest.profile.Registry
 import specrest.profile.TargetKey
@@ -98,12 +99,37 @@ final case class TestCtx(
   def predArities: List[(String, BigInt)] =
     userPredicates.view.mapValues(p => BigInt(prdParams(p).size)).toList
 
+object StateKeys:
+  // State fields whose relation keys are Int-typed in the spec: their
+  // /admin/state JSON keys must coerce back from strings before the oracle
+  // compares or indexes them.
+  def intKeyed(ir: ServiceIRFull): List[String] =
+    irStateFields(ir)
+      .filter(f =>
+        stfType(f) match
+          case RelationTypeF(k, _, _, _) =>
+            typeName(k).exists(n => n == "Int" || resolvesToInt(n, ir))
+          case _ => false
+      )
+      .map(stfName)
+      .sorted
+
+  private def resolvesToInt(name: String, ir: ServiceIRFull): Boolean =
+    svcTypeAliases(ir).find(a => talName(a) == name) match
+      case Some(a) =>
+        talType(a) match
+          case NamedTypeF("Int", _) => true
+          case NamedTypeF(n, _)     => resolvesToInt(n, ir)
+          case _                    => false
+      case None => false
+
 object TestCtx:
   def fromOperation(
       op: operation_decl,
       ir: ServiceIRFull,
       capture: CaptureMode,
-      bareBodyOutput: Option[String] = None
+      bareBodyOutput: Option[String] = None,
+      kernelRouted: Boolean = false
   ): TestCtx =
     val stateNames    = irStateFieldNames(ir).toSet
     val mapStateNames = irStateFields(ir).filter(f => isMapType(stfType(f))).map(stfName).toSet
@@ -119,8 +145,45 @@ object TestCtx:
       boundVars = Set.empty,
       capture = capture,
       bareBodyOutput = bareBodyOutput,
-      unbackedStateFields = AdminModel.unbackedStateFieldNames(ir)
+      unbackedStateFields =
+        AdminModel.unbackedStateFieldNames(ir) ++ kernelOnlyFields(op, ir, kernelRouted)
     )
+
+  // Backed counters and seq projections are maintained by the kernel path
+  // alone; a direct-emit handler leaves them at their seed, so their ensures
+  // only check when this operation actually routes through the kernel. Ops
+  // the direct scalar path implements (#407) keep checking their own fields.
+  private def kernelOnlyFields(
+      op: operation_decl,
+      ir: ServiceIRFull,
+      kernelRouted: Boolean
+  ): Set[String] =
+    if kernelRouted then Set.empty
+    else
+      val scalarNames    = ScalarState.fieldNames(ir).toSet
+      val directScalarOp = specrest.codegen.ScalarOps.directlyImplements(op, ir)
+      val seqNames = irStateFields(ir)
+        .filter(f =>
+          stfType(f) match
+            case SeqTypeF(_, _) => true
+            case _              => false
+        )
+        .map(stfName)
+        .toSet
+      // An identity frame (`s' = s`) holds on a handler that never touches
+      // the column, so a scalar whose every mention in this op is such a
+      // frame keeps checking even without the kernel.
+      def isIdentityFrame(clause: expr, name: String): Boolean = clause match
+        case BinaryOpF(BEq(), PrimeF(IdentifierF(a, _), _), IdentifierF(b, _), _) =>
+          a == name && b == name
+        case BinaryOpF(BEq(), IdentifierF(b, _), PrimeF(IdentifierF(a, _), _), _) =>
+          a == name && b == name
+        case _ => false
+      val clauses = flattenEnsures(operEnsures(op))
+      val liveScalars = scalarNames.filter: name =>
+        val mentions = clauses.filter(c => free_vars(c).contains(name))
+        mentions.nonEmpty && !mentions.forall(isIdentityFrame(_, name))
+      if directScalarOp then seqNames else liveScalars ++ seqNames
 
   def forInvariants(ir: ServiceIRFull): TestCtx =
     val stateFieldsAll = irStateFields(ir)

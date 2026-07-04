@@ -24,7 +24,7 @@ class StateBridgeTest extends CatsEffectSuite:
         s"Dafny field access must double underscores:\n$bridge"
       )
       assert(
-        bridge.contains("await session.delete(row)"),
+        bridge.contains("await session.delete(url_mapping_row)"),
         s"persist must prune rows whose key left the map:\n$bridge"
       )
       assert(

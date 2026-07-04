@@ -90,3 +90,21 @@ def _admin_endpoint_available():
             f"admin /admin/reset returned {r.status_code}; "
             "the admin contract is not behaving (expected 204)"
         )
+
+def state_snapshot(int_keyed=frozenset()):
+    """/admin/state with JSON-stringified keys coerced back per the spec.
+
+    JSON objects stringify every key; relations the spec keys by Int must
+    compare and look up by int again or value-to-key invariants like
+    `users[user_by_email[e].id]` go quietly false. Only the fields the
+    generator names coerce: a digit-looking string key (a short code, say)
+    stays a string.
+    """
+    raw = client.get("/admin/state").json()
+    out = {}
+    for field, value in raw.items():
+        if field in int_keyed and isinstance(value, dict):
+            out[field] = {int(k): v for k, v in value.items()}
+        else:
+            out[field] = value
+    return out

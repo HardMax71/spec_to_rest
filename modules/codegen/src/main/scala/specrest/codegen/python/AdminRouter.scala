@@ -47,19 +47,19 @@ object AdminRouter:
             .collect:
               case p if p.valueShape == AdminModel.ProjectionValue.SeqRows => p.entityName
             .toSet
-          def rowsQuery(e: entity_decl): String =
-            val order =
-              if seqEntities.contains(entName(e)) then s".order_by(${entName(e)}.id)" else ""
-            s"(await session.execute(select(${entName(e)})$order)).scalars().all()"
+          def rowsQuery(v: String, e: entity_decl): String =
+            if seqEntities.contains(entName(e)) then
+              s"""    $v = (
+    |        await session.execute(select(${entName(e)}).order_by(${entName(e)}.id))
+    |    ).scalars().all()""".stripMargin
+            else s"    $v = (await session.execute(select(${entName(e)}))).scalars().all()"
           if entities.size == 1 && needsRows then
             val e = entities.head
-            s"    rows = ${rowsQuery(e)}\n"
+            rowsQuery("rows", e) + "\n"
           else if entities.size > 1 && needsRows then
             entities
               .filter(e => neededEntityNames.contains(entName(e)))
-              .map: e =>
-                val v = s"rows_${Naming.toSnakeCase(entName(e))}"
-                s"    $v = ${rowsQuery(e)}"
+              .map(e => rowsQuery(s"rows_${Naming.toSnakeCase(entName(e))}", e))
               .mkString("\n") + "\n"
           else ""
         val stateRowLine =

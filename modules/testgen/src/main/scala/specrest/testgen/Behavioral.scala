@@ -124,7 +124,8 @@ object Behavioral:
               opDecl,
               ir,
               CaptureMode.PreState,
-              StubOps.bareBodyOutput(pop, opDecl)
+              StubOps.bareBodyOutput(pop, opDecl),
+              kernelRouted = pop.dafnyMethod.isDefined
             )
           operEnsures(opDecl).zipWithIndex.map: (clause, idx) =>
             if isAggregateEqualityOverState(clause, opDecl) then
@@ -216,7 +217,8 @@ object Behavioral:
           opDecl,
           ir,
           CaptureMode.PostState,
-          StubOps.bareBodyOutput(pop, opDecl)
+          StubOps.bareBodyOutput(pop, opDecl),
+          kernelRouted = pop.dafnyMethod.isDefined
         )
       inputArgList(pop, ir) match
         case Left(reason) =>
@@ -271,7 +273,8 @@ object Behavioral:
           opDecl,
           ir,
           CaptureMode.PostState,
-          StubOps.bareBodyOutput(pop, opDecl)
+          StubOps.bareBodyOutput(pop, opDecl),
+          kernelRouted = pop.dafnyMethod.isDefined
         )
       inputArgList(pop, ir) match
         case Left(reason) =>
@@ -347,13 +350,13 @@ object Behavioral:
     sb.append(s"def $name($sig):\n")
     sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    pre_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(s"    response = ${TestFormat.requestCallExpr(pop)}\n")
     if nonTrivialRequires then
       sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append(s"    assert response.status_code == ${pop.endpoint.successStatus}, response.text\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
-    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    post_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(s"    assert $assertion, ${ExprToPython.pyString(s"ensures violated: $docstring")}\n")
     GeneratedTest(name = name, body = sb.toString, skipReason = None)
 
@@ -377,7 +380,7 @@ object Behavioral:
       s"    \"\"\"requires '$inputName in $stateName' (negative): missing key returns 4xx.\"\"\"\n"
     )
     sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    pre_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(
       s"    assume($inputName not in pre_state.get(${ExprToPython.pyString(stateName)}, {}))\n"
     )
@@ -406,11 +409,11 @@ object Behavioral:
     sb.append(s"def $name($sig):\n")
     sb.append(s"    \"\"\"${TestFormat.escapeDocstring(docstring)}\"\"\"\n")
     sb.append("    client.post(\"/admin/reset\")\n")
-    sb.append("    pre_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    pre_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(s"    response = ${TestFormat.requestCallExpr(pop)}\n")
     sb.append(s"    assume(response.status_code == ${pop.endpoint.successStatus})\n")
     sb.append("    response_data = response.json() if response.content else {}\n")
-    sb.append("    post_state = client.get(\"/admin/state\").json()\n")
+    sb.append("    post_state = state_snapshot(_INT_KEYED_STATE)\n")
     sb.append(
       s"    assert $assertion, ${ExprToPython.pyString(s"invariant violated: $docstring")}\n"
     )

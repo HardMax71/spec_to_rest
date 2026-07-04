@@ -539,7 +539,11 @@ object Stateful:
       case None =>
         val ctx       = StrategyCtx.OperationInput(pop.operationName, paramName)
         val overrides = TestStrategyOverrides.from(ir)
-        Strategies.expressionFor(paramType, ir, ctx, overrides) match
+        val atoms = svcOperations(ir)
+          .find(o => operName(o) == pop.operationName)
+          .map(o => flattenEnsures(operRequires(o)))
+          .getOrElse(Nil)
+        Strategies.expressionForInput(paramType, ir, ctx, overrides, paramName, atoms) match
           case StrategyExpr.Code(text) => InputBinding.Generated(text)
           case StrategyExpr.Skip(r)    => InputBinding.Skip(r)
 
@@ -562,9 +566,15 @@ object Stateful:
 
     val classicBundleInputNames = bindings.collect:
       case (n, InputBinding.BundleDraw(_, _) | InputBinding.BundleConsume(_, _)) => n
+    val generatedInputNames = bindings.collect { case (n, InputBinding.Generated(_)) => n }.toSet
     val classicSatisfied =
       operRequires(opDecl).forall: r =>
-        requiresIsSatisfiedByBundles(r, classicBundleInputNames.toSet, stateFields)
+        requiresIsSatisfiedByBundles(
+          r,
+          classicBundleInputNames.toSet,
+          stateFields,
+          generatedInputNames
+        )
     val anyBundleBinding = bindings.exists:
       case (
             _,
@@ -578,10 +588,11 @@ object Stateful:
       case (_, InputBinding.BundleUnion(_, s))   => s
       case _                                     => true
     val recognizedStrict = anyBundleBinding && allBundleBindingsStrict
-    val expectsStrictSuccess =
-      role match
-        case RuleRole.CreateTarget(_, _) => true
-        case RuleRole.Plain              => classicSatisfied || recognizedStrict
+    // A create rule is only strict when its requires are satisfied by
+    // construction: a state-membership guard over a generated input (fresh
+    // email, say) legitimately 4xxes once hypothesis shrinks onto colliding
+    // minimal values, so those rules branch and return an empty bundle draw.
+    val expectsStrictSuccess = classicSatisfied || recognizedStrict
 
     val successCode = pop.endpoint.successStatus
     if expectsStrictSuccess then
@@ -593,15 +604,27 @@ object Stateful:
         case RuleRole.Plain =>
           ()
     else
-      sb.append(
-        s"        if response.status_code == $successCode:\n            pass\n"
-      )
-      sb.append(
-        "        elif 400 <= response.status_code < 500:\n            pass\n"
-      )
-      sb.append(
-        "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
-      )
+      role match
+        case RuleRole.CreateTarget(_, proj) =>
+          sb.append(s"        if response.status_code == $successCode:\n")
+          sb.append("            response_data = response.json() if response.content else {}\n")
+          sb.append(s"            return $proj\n")
+          sb.append(
+            "        elif 400 <= response.status_code < 500:\n            return multiple()\n"
+          )
+          sb.append(
+            "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
+          )
+        case RuleRole.Plain =>
+          sb.append(
+            s"        if response.status_code == $successCode:\n            pass\n"
+          )
+          sb.append(
+            "        elif 400 <= response.status_code < 500:\n            pass\n"
+          )
+          sb.append(
+            "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
+          )
     sb.toString
 
   private def ruleDecoratorArgs(
@@ -642,7 +665,7 @@ object Stateful:
         sb.append(
           s"        ${TQ}invariant $name: ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(invBody(inv)))}$TQ\n"
         )
-        sb.append("        post_state = client.get(\"/admin/state\").json()\n")
+        sb.append("        post_state = state_snapshot(_INT_KEYED_STATE)\n")
         sb.append(
           s"        assert $text, ${ExprToPython.pyString(s"invariant violated: $name")}\n"
         )
@@ -668,7 +691,7 @@ object Stateful:
             sb.append(
               s"        ${TQ}temporal always(${tmpName(decl)}): ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(arg))}$TQ\n"
             )
-            sb.append("        post_state = client.get(\"/admin/state\").json()\n")
+            sb.append("        post_state = state_snapshot(_INT_KEYED_STATE)\n")
             sb.append(
               s"        assert $text, ${ExprToPython.pyString(s"temporal always violated: ${tmpName(decl)}")}\n"
             )
@@ -688,7 +711,7 @@ object Stateful:
             sb.append(
               s"        ${TQ}temporal eventually(${tmpName(decl)}): ${TestFormat.escapeDocstring(TestFormat.prettyOneLine(arg))}$TQ\n"
             )
-            sb.append("        post_state = client.get(\"/admin/state\").json()\n")
+            sb.append("        post_state = state_snapshot(_INT_KEYED_STATE)\n")
             sb.append(s"        if $text:\n")
             sb.append(s"            self.$flagName = True\n")
             TemporalEmission.Eventually(
@@ -835,9 +858,13 @@ object Stateful:
         |$statefulImportLine
         |)
         |
-        |from tests.conftest import client, request_without_redirects
+        |from tests.conftest import client, request_without_redirects, state_snapshot
         |from tests.predicates import is_valid_email, is_valid_uri
         |from tests.redaction import redact
+        |
+        |_INT_KEYED_STATE = frozenset({${StateKeys.intKeyed(ir).map(n => s"\"$n\"").mkString(
+         ", "
+       )}})
         |
         |${strategyImport}class $machineName(RuleBasedStateMachine):
         |
@@ -871,7 +898,8 @@ object Stateful:
   private def requiresIsSatisfiedByBundles(
       e: expr,
       bundleInputs: Set[String],
-      stateFields: Set[String]
+      stateFields: Set[String],
+      generatedInputs: Set[String]
   ): Boolean =
     e match
       case _ if isTrueLit(e) => true
@@ -879,7 +907,14 @@ object Stateful:
           if keyExistencePair(e)
             .exists((in, st) => bundleInputs.contains(in) && stateFields.contains(st)) =>
         true
+      // A pure length/shape bound on a generated input is satisfied by
+      // construction: the strategy derives from the same requires atoms.
+      case _
+          if free_vars(e).toSet.subsetOf(generatedInputs) &&
+            !free_vars(e).toSet.exists(stateFields.contains) &&
+            free_vars(e).nonEmpty =>
+        true
       case BinaryOpF(BAnd(), l, r, _) =>
-        requiresIsSatisfiedByBundles(l, bundleInputs, stateFields) &&
-        requiresIsSatisfiedByBundles(r, bundleInputs, stateFields)
+        requiresIsSatisfiedByBundles(l, bundleInputs, stateFields, generatedInputs) &&
+        requiresIsSatisfiedByBundles(r, bundleInputs, stateFields, generatedInputs)
       case _ => false

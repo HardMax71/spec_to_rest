@@ -79,20 +79,25 @@ class SkipRateProbeTest extends CatsEffectSuite:
       "todo_list",
       50,
       2,
-      "next_id stays unbacked: `next_id not in todos` is invariant-relevant but not a derivable seed bound, so #407 conservatively leaves it on the unbacked path"
+      "next_id is scalar-backed now (its freshness universal is vacuous at the empty seed) but only kernel-routed ops maintain it; this probe emits without a kernel, so the two counter ensures still skip here and check under --with-synthesis"
     ),
     (
       "ecommerce",
       77,
       8,
-      "77 (was 74): three consistency invariants added to make ecommerce fully verify (nextOrderIdFresh, paymentsReferenceExistingOrders, unpaidOrdersHaveNoCapturedPayments). The 8 skips are unchanged - unbacked-scalar ensures on next_order_id + next_payment_id that the test-admin /state endpoint can't project black-box"
+      "next_order_id and next_payment_id are scalar-backed now, but the eight counter ensures only check when the ops route through the kernel; without one (as in this probe) they skip as before"
     ),
-    ("edge_cases", 29, 0, "plain is an Int scalar backed by service_state since #407"),
+    (
+      "edge_cases",
+      29,
+      3,
+      "29/3 (was 29/0): NoOutput and PrimedVars update plain but take inputs, so the direct scalar path (#407, input-free ops only) never implemented them; their plain ensures were latent-untrue and now honestly skip unless kernel-routed"
+    ),
     (
       "auth_service",
-      44,
+      47,
       5,
-      "44 (was 45): rate-limiting moved off the `login_attempts` Seq comprehension onto a `failed_logins: Email -> lone FailedLogin` relation, so Login now lowers fully (fresh-session + value-level user update like RefreshToken/ResetPassword) and LoginFailed's three top-level ensures fold into one let-scoped block; net -1 after adding the failedLoginKeyMatches invariant. The 5 skips are unbacked non-entity state the test-admin /state endpoint projects as null: next_user_id (Register x2), next_session_id (Login bump, RefreshToken), login_attempts (LoginFailed append)"
+      "47 clauses (was 44): Register gains the display_name cap and email length requires and the state gains nextSessionIdPositive, realizability bounds for the synthesized kernels. The counters and login_attempts are backed now, but the five ensures over them check only when kernel-routed; this kernel-less probe still skips them"
     )
   ).foreach: (name, expectedTotal, expectedSkipped, why) =>
     test(s"$name: $expectedTotal clauses, $expectedSkipped skips ($why)"):

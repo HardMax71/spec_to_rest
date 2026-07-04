@@ -41,7 +41,7 @@ predicate ServiceStateInv(st: ServiceState)
   && (forall k :: k in st.todos ==> TodoInv(st.todos[k]))
 }
 
-function now(): int
+function {:extern "specrest_externs", "now"} now(): int
 
 predicate RequiresCreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>)
   reads st

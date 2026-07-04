@@ -97,6 +97,31 @@ object Strategies:
     val raw = bareExpression(t, ir, b)
     applyRedaction(raw, ctx, overrides, b)
 
+  // A plain-String operation input still carries requires-level bounds
+  // (`len(password) >= 8`); generating outside them makes a stateful rule
+  // fire calls the guard rightly rejects. The atoms whose only free variable
+  // is the input fold into the same constrained-string build the aliases use.
+  def expressionForInput(
+      t: type_expr,
+      ir: ServiceIRFull,
+      ctx: StrategyCtx,
+      overrides: TestStrategyOverrides,
+      paramName: String,
+      requiresAtoms: List[expr],
+      b: StrategyBackend = PythonHypothesisStrategy
+  ): StrategyExpr =
+    val own = requiresAtoms
+      .filter(a => free_vars(a).distinct == List(paramName))
+      .map(a => subst(paramName, IdentifierF("value", None), a))
+    val raw = (t, own) match
+      case (NamedTypeF("String", _), atoms @ (_ :: _)) =>
+        val merged        = atoms.reduceLeft((l, r) => BinaryOpF(BAnd(), l, r, None))
+        val (cs, skipped) = collectStringConstraint(Some(merged), ir)
+        if skipped.nonEmpty then bareExpression(t, ir, b)
+        else StrategyExpr.Code(b.constrainedString(cs))
+      case _ => bareExpression(t, ir, b)
+    applyRedaction(raw, ctx, overrides, b)
+
   private def applyRedaction(
       raw: StrategyExpr,
       ctx: StrategyCtx,

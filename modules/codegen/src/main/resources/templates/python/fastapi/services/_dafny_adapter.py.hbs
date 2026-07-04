@@ -10,6 +10,7 @@
 
 import secrets
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from typing import Any
 
 from app.dafny_kernel import module_
@@ -53,12 +54,12 @@ def to_dafny_map(d: dict[Any, Any]) -> Any:
     return _DafnyMap(d)
 
 
-def to_dafny_seq(values: list[Any]) -> Any:
-    return _DafnySeq(values)
+def epoch_to_datetime(value: Any) -> datetime:
+    return datetime.fromtimestamp(int(value), tz=timezone.utc)
 
 
-def from_dafny_seq(s: Any) -> list[Any]:
-    return list(s)
+def value_or_none(value: Any, conv: Any) -> Any:
+    return conv(value.value) if isinstance(value, module_.Option_Some) else None
 
 
 def from_dafny_map(m: Any) -> dict[Any, Any]:
