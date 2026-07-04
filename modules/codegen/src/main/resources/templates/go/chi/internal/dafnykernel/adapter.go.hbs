@@ -1,6 +1,10 @@
 package kernel
 
-import _dafny "{{module}}/internal/dafnykernel/dafny"
+import (
+	"time"
+
+	_dafny "{{module}}/internal/dafnykernel/dafny"
+)
 
 func MakeState() *ServiceState {
 	return New_ServiceState_()
@@ -20,4 +24,64 @@ func IntToDafny(n int64) _dafny.Int {
 
 func IntFromDafny(n _dafny.Int) int64 {
 	return n.Int64()
+}
+
+func OptStringToDafny(p *string) Option {
+	if p == nil {
+		return Companion_Option_.Create_None_()
+	}
+	return Companion_Option_.Create_Some_(StringToDafny(*p))
+}
+
+func OptStringFromDafny(o Option) *string {
+	if !o.Is_Some() {
+		return nil
+	}
+	v := StringFromDafny(o.Dtor_value().(_dafny.Sequence))
+	return &v
+}
+
+func OptIntToDafny(p *int64) Option {
+	if p == nil {
+		return Companion_Option_.Create_None_()
+	}
+	return Companion_Option_.Create_Some_(IntToDafny(*p))
+}
+
+func OptIntFromDafny(o Option) *int64 {
+	if !o.Is_Some() {
+		return nil
+	}
+	v := IntFromDafny(o.Dtor_value().(_dafny.Int))
+	return &v
+}
+
+func OptTimeToDafny(p *time.Time) Option {
+	if p == nil {
+		return Companion_Option_.Create_None_()
+	}
+	return Companion_Option_.Create_Some_(IntToDafny(p.Unix()))
+}
+
+func OptTimeFromDafny(o Option) *time.Time {
+	if !o.Is_Some() {
+		return nil
+	}
+	v := time.Unix(IntFromDafny(o.Dtor_value().(_dafny.Int)), 0).UTC()
+	return &v
+}
+
+func OptBoolToDafny(p *bool) Option {
+	if p == nil {
+		return Companion_Option_.Create_None_()
+	}
+	return Companion_Option_.Create_Some_(*p)
+}
+
+func OptBoolFromDafny(o Option) *bool {
+	if !o.Is_Some() {
+		return nil
+	}
+	v := o.Dtor_value().(bool)
+	return &v
 }

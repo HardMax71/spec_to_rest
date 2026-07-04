@@ -15,6 +15,7 @@ import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
+import specrest.codegen.SensitiveFields
 import specrest.codegen.TemplateEngine
 import specrest.codegen.migration.MigrationPlan
 import specrest.codegen.migration.SchemaCodec
@@ -83,6 +84,7 @@ final private case class GoOperation(
     kernelGuardStatus: Int,
     kernelGuardDetail: String,
     kernelRedirect: Boolean,
+    kernelNoResult: Boolean,
     kernelHandlerArgs: String,
     lookupColumn: String,
     createAssigns: List[String],
@@ -110,6 +112,8 @@ final private case class GoEntityCtx(
     usesPathParams: Boolean,
     usesNotFound: Boolean,
     usesErrors: Boolean,
+    servicesNeedTime: Boolean,
+    serviceStdlibImports: String,
     usesSqlNoRows: Boolean,
     usesKernel: Boolean,
     usesModels: Boolean,
@@ -185,7 +189,7 @@ object EmitGo:
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup, kernelCtx))
+        .map(op => enrichOperation(op, entity, profiled.entities, typeLookup, kernelCtx))
         .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
       buildEntityCtx(module, profiled, entity, entityOps)
 
@@ -642,6 +646,16 @@ object EmitGo:
       usesPathParams = usesPathParams,
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
+      servicesNeedTime = operations.exists(_.kernelServiceMethod.contains("time.Unix(")),
+      serviceStdlibImports = {
+        val lines = List(
+          Option.when(operations.nonEmpty)("\"context\""),
+          Option.when(usesSqlNoRows)("\"database/sql\""),
+          Option.when(usesErrors)("\"errors\""),
+          Option.when(operations.exists(_.kernelServiceMethod.contains("time.Unix(")))("\"time\"")
+        ).flatten
+        if lines.isEmpty then "" else lines.map("\t" + _).mkString("", "\n", "\n\n")
+      },
       usesSqlNoRows = usesSqlNoRows,
       usesKernel = usesKernel,
       usesModels = usesModels,
@@ -738,6 +752,7 @@ object EmitGo:
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
+      allEntities: List[ProfiledEntity],
       typeLookup: Map[String, String],
       kernelCtx: GoKernelCtx
   ): GoOperation =
@@ -846,12 +861,14 @@ object EmitGo:
       goKernelServiceMethod(
         op,
         entity,
+        allEntities,
         serviceMethodName,
         hasRequestBody,
         requestBodyType,
         typeLookup,
         kernelCtx
       )
+    val kernelNoResult = kernelMethod.exists(_._2)
     val kernelHandlerArgs =
       (endpoint.pathParams.map(p => toCamelCase(p.name)) ++
         (if hasRequestBody then List("body") else Nil)).mkString(", ")
@@ -879,10 +896,11 @@ object EmitGo:
       redirectField = redirectField,
       dafnyMethod = op.dafnyMethod,
       routeThroughKernel = kernelMethod.isDefined,
-      kernelServiceMethod = kernelMethod.getOrElse(""),
+      kernelServiceMethod = kernelMethod.map(_._1).getOrElse(""),
       kernelGuardStatus = kernelGuardStatus,
       kernelGuardDetail = if kernelGuardStatus == 404 then "not found" else "precondition failed",
       kernelRedirect = isRedirectKind,
+      kernelNoResult = kernelNoResult,
       kernelHandlerArgs = kernelHandlerArgs,
       lookupColumn = lookupCol,
       createAssigns = createAssigns,
@@ -908,10 +926,14 @@ object EmitGo:
     )
 
   private def goStateModel(fields: List[ScalarStateFieldView]): String =
-    val cols = fields
-      .map: f =>
-        val goField = Naming.toPascalCase(f.columnName, Naming.PascalStrategy.Go)
-        s"""\t$goField int64 `bun:"${f.columnName}" json:"${f.specName}"`"""
+    // gofmt aligns struct field columns, so the emitted names pad to the
+    // widest one (ID included) or a multi-scalar spec fails the fmt gate.
+    val names = "ID" :: fields.map(f => Naming.toPascalCase(f.columnName, Naming.PascalStrategy.Go))
+    val width = names.map(_.length).max
+    val cols = names
+      .zip(("id,pk" -> "id") :: fields.map(f => f.columnName -> f.specName))
+      .map: (goField, tags) =>
+        s"""\t${goField.padTo(width, ' ')} int64 `bun:"${tags._1}" json:"${tags._2}"`"""
       .mkString("\n")
     s"""|package models
         |
@@ -920,7 +942,6 @@ object EmitGo:
         |type ServiceState struct {
         |\tbun.BaseModel `bun:"table:${ScalarOps.TableName}"`
         |
-        |\tID int64 `bun:"id,pk" json:"id"`
         |$cols
         |}
         |""".stripMargin
@@ -1081,12 +1102,13 @@ func sampleCandidate(length int, charset string) (string, error) {
   private def goKernelServiceMethod(
       op: ProfiledOperation,
       entity: ProfiledEntity,
+      allEntities: List[ProfiledEntity],
       serviceMethod: String,
       hasRequestBody: Boolean,
       requestBodyType: String,
       typeLookup: Map[String, String],
       kernelCtx: GoKernelCtx
-  ): Option[String] =
+  ): Option[(String, Boolean)] =
     val endpoint = op.endpoint
     op.dafnyMethod
       .filter(_ => endpoint.queryParams.isEmpty && kernelCtx.stateReady)
@@ -1102,8 +1124,30 @@ func sampleCandidate(length int, charset string) (string, error) {
           goKernelScalarConv.get(goType).map: (toDafny, _) =>
             if toDafny.isEmpty then access else s"$toDafny($access)"
         val outputs = op.responseFields
+        val specOutputs = svcOperations(kernelCtx.ir)
+          .find(o => operName(o) == op.operationName)
+          .map(operOutputs)
+          .getOrElse(Nil)
+        // Mirrors the python marshalling: no outputs is a plain effect call,
+        // a single entity output projects the entity's read shape flat, and
+        // scalar outputs unpack positionally.
+        val entityOutput = specOutputs match
+          case single :: Nil =>
+            prmType(single) match
+              case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
+              case _                => None
+          case _ => None
+        val entityOutputFields = entityOutput
+          .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
+          .getOrElse(Nil)
+        val goEntityTypes = Set("string", "int64", "bool", "time.Time")
         val outputsOk =
-          outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
+          if specOutputs.isEmpty then true
+          else if entityOutput.isDefined then
+            entityOutputFields.nonEmpty && entityOutputFields.forall(f =>
+              goEntityTypes.contains(f.domainType.stripPrefix("*"))
+            )
+          else outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
         Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
           val candidates = op.dafnyCandidates.map: c =>
             (toCamelCase(c.param), c.sampleLength, goCandidateCharsetConst(c.param))
@@ -1125,31 +1169,47 @@ func sampleCandidate(length int, charset string) (string, error) {
             case "int64"  => "0"
             case "bool"   => "false"
             case _        => "nil"
+          val noResult = specOutputs.isEmpty
           val (returnType, zero, resultAssign) =
-            outputs match
-              case single :: Nil =>
-                val v = "out" + toPascalCase(single.fieldName)
-                (
-                  s"(${single.domainType}, error)",
-                  zeroOf(single.domainType),
-                  List(
-                    s"\t\t$v := $call",
-                    s"\t\tresult = ${fromDafny(single, v)}"
+            if noResult then ("error", "", List(s"\t\t$call"))
+            else if entityOutput.isDefined then
+              // Keys match the entity read shape's json tags (column names).
+              val keyTokens = entityOutputFields.map(f => s"\"${f.columnName}\":")
+              val keyWidth  = keyTokens.map(_.length).max
+              val entries = entityOutputFields.zip(keyTokens).map: (f, key) =>
+                s"\t\t\t${key.padTo(keyWidth, ' ')} ${StateBridgeGo.fromDafnyExpr(f, "out")},"
+              (
+                "(map[string]any, error)",
+                "nil",
+                (s"\t\tout := $call" :: "\t\tresult = map[string]any{" :: entries) :::
+                  List("\t\t}")
+              )
+            else
+              outputs match
+                case single :: Nil =>
+                  val v = "out" + toPascalCase(single.fieldName)
+                  (
+                    s"(${single.domainType}, error)",
+                    zeroOf(single.domainType),
+                    List(
+                      s"\t\t$v := $call",
+                      s"\t\tresult = ${fromDafny(single, v)}"
+                    )
                   )
-                )
-              case many =>
-                val vars      = many.map(f => "out" + toPascalCase(f.fieldName))
-                val keyTokens = many.map(f => s"\"${f.columnName}\":")
-                val keyWidth  = keyTokens.map(_.length).max
-                val entries = many.zip(vars).zip(keyTokens).map: (fv, key) =>
-                  s"\t\t\t${key.padTo(keyWidth, ' ')} ${fromDafny(fv._1, fv._2)},"
-                (
-                  "(map[string]any, error)",
-                  "nil",
-                  (s"\t\t${vars.mkString(", ")} := $call" :: "\t\tresult = map[string]any{" :: entries) :::
-                    List("\t\t}")
-                )
+                case many =>
+                  val vars      = many.map(f => "out" + toPascalCase(f.fieldName))
+                  val keyTokens = many.map(f => s"\"${f.columnName}\":")
+                  val keyWidth  = keyTokens.map(_.length).max
+                  val entries = many.zip(vars).zip(keyTokens).map: (fv, key) =>
+                    s"\t\t\t${key.padTo(keyWidth, ' ')} ${fromDafny(fv._1, fv._2)},"
+                  (
+                    "(map[string]any, error)",
+                    "nil",
+                    (s"\t\t${vars.mkString(", ")} := $call" :: "\t\tresult = map[string]any{" :: entries) :::
+                      List("\t\t}")
+                  )
           val resultDecl = returnType match
+            case "error"                   => ""
             case "(map[string]any, error)" => "\tvar result map[string]any"
             case other                     => s"\tvar result ${outputs.head.domainType}"
           val invCheck =
@@ -1172,13 +1232,14 @@ func sampleCandidate(length int, charset string) (string, error) {
               // failure, not sampling bad luck.
               candidates.map((v, _, _) => s"\t\tvar $v string") :::
                 List("\t\tokCand := false", "\t\tfor attempt := 0; attempt < 8; attempt++ {") :::
-                candidates.flatMap: (v, len, const) =>
+                candidates.zipWithIndex.flatMap: (cand, i) =>
+                  val (v, len, const) = cand
                   List(
-                    s"\t\t\tsampled, err := sampleCandidate($len, $const)",
-                    "\t\t\tif err != nil {",
-                    "\t\t\t\treturn err",
+                    s"\t\t\tsampled$i, errSample$i := sampleCandidate($len, $const)",
+                    s"\t\t\tif errSample$i != nil {",
+                    s"\t\t\t\treturn errSample$i",
                     "\t\t\t}",
-                    s"\t\t\t$v = sampled"
+                    s"\t\t\t$v = sampled$i"
                   )
                 :::
                 List(
@@ -1193,6 +1254,8 @@ func sampleCandidate(length int, charset string) (string, error) {
                 )
           val header =
             s"func (s *${entity.modelClassName}Service) $serviceMethod(ctx context.Context$sig) $returnType {"
+          val errReturn = if noResult then "\t\treturn err" else s"\t\treturn $zero, err"
+          val okReturn  = if noResult then "\treturn nil" else "\treturn result, nil"
           val body =
             if kernelCtx.hasState then
               (header :: resultDecl ::
@@ -1206,9 +1269,9 @@ func sampleCandidate(length int, charset string) (string, error) {
                     "\t\t}",
                     "\t\treturn nil",
                     "\t}); err != nil {",
-                    s"\t\treturn $zero, err",
+                    errReturn,
                     "\t}",
-                    "\treturn result, nil",
+                    okReturn,
                     "}"
                   ))): List[String]
             else
@@ -1220,12 +1283,12 @@ func sampleCandidate(length int, charset string) (string, error) {
                     "\t\treturn nil",
                     "\t}()",
                     "\tif err != nil {",
-                    s"\t\treturn $zero, err",
+                    errReturn,
                     "\t}",
-                    "\treturn result, nil",
+                    okReturn,
                     "}"
                   ))): List[String]
-          body.mkString("\n")
+          (body.filter(_.nonEmpty).mkString("\n"), noResult)
 
   private def toCamelCase(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)

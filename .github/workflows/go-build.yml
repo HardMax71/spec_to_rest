@@ -222,10 +222,12 @@ jobs:
             dialect: postgres
             migrate_url: postgres://app:app@localhost:5432/app?sslmode=disable
             db_url: postgres://app:app@localhost:5432/app?sslmode=disable
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: auth_service
             dialect: sqlite
             migrate_url: sqlite://app.db
             db_url: file:app.db?cache=shared&_pragma=foreign_keys(1)
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
     services:
       postgres:
         image: postgres:17-alpine

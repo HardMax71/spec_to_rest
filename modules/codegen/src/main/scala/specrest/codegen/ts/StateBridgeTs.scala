@@ -14,14 +14,17 @@ object StateBridgeTs:
 
   private val ScalarTsTypes = Set("string", "number", "boolean", "Date")
 
-  // Nullable fields would need Option constructors on the Dafny side; the
-  // gate keeps them out until a spec actually needs them in ts.
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
       profiled,
-      fieldSupported = f => ScalarTsTypes.contains(f.domainType) && !f.nullable,
-      keySupported = k => Set("string", "number").contains(k.domainType) && !k.nullable
+      // Nullable ts fields carry the union spelling in domainType.
+      fieldSupported = f => ScalarTsTypes.contains(baseTs(f.domainType)),
+      keySupported = k => Set("string", "number").contains(k.domainType) && !k.nullable,
+      seqSupported = true
     )
+
+  private def baseTs(domainType: String): String =
+    domainType.replaceAll("\\s*\\|\\s*null$", "").trim
 
   private def camel(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Plain)
@@ -30,40 +33,62 @@ object StateBridgeTs:
 
   private def toDafnyExpr(f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${camel(f.fieldName)}"
-    f.domainType match
-      case "string" => s"stringToDafny($access)"
-      case "number" => s"intToDafny($access)"
-      case "Date"   => s"intToDafny(Math.floor($access.getTime() / 1000))"
-      case _        => access
+    if f.nullable then
+      baseTs(f.domainType) match
+        case "string" => s"someOrNone($access, (v) => stringToDafny(v as string))"
+        case "number" => s"someOrNone($access, (v) => intToDafny(v as number))"
+        case "Date" =>
+          s"someOrNone($access, (v) => intToDafny(Math.floor((v as Date).getTime() / 1000)))"
+        case _ => s"someOrNone($access, (v) => v)"
+    else
+      f.domainType match
+        case "string" => s"stringToDafny($access)"
+        case "number" => s"intToDafny($access)"
+        case "Date"   => s"intToDafny(Math.floor($access.getTime() / 1000))"
+        case _        => access
 
-  private def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
+  private[codegen] def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef['dtor_${dafnyName(f.fieldName)}']"
-    f.domainType match
-      case "string" => s"stringFromDafny($access)"
-      case "number" => s"intFromDafny($access)"
-      case "Date"   => s"new Date(intFromDafny($access) * 1000)"
-      case _        => s"($access as boolean)"
+    if f.nullable then
+      baseTs(f.domainType) match
+        case "string" => s"(valueOrNull($access, (v) => stringFromDafny(v)) as string | null)"
+        case "number" => s"(valueOrNull($access, (v) => intFromDafny(v)) as number | null)"
+        case "Date" =>
+          s"(valueOrNull($access, (v) => new Date(intFromDafny(v) * 1000)) as Date | null)"
+        case _ => s"(valueOrNull($access, (v) => v) as boolean | null)"
+    else
+      f.domainType match
+        case "string" => s"stringFromDafny($access)"
+        case "number" => s"intFromDafny($access)"
+        case "Date"   => s"new Date(intFromDafny($access) * 1000)"
+        case _        => s"($access as boolean)"
 
   private def keyToDafny(key: ProfiledField, rowRef: String): String =
     key.domainType match
       case "string" => s"stringToDafny($rowRef.${camel(key.fieldName)})"
       case _        => s"intToDafny($rowRef.${camel(key.fieldName)})"
 
-  private def keyFromDafny(key: ProfiledField): String =
-    key.domainType match
-      case "string" => "stringFromDafny(k)"
-      case _        => "intFromDafny(k)"
-
   def emit(profiled: ProfiledService): String =
     val planned = plan(profiled) match
       case Right(p) => p
       case Left(_)  => StatePlan.Plan(Nil, Nil)
 
-    val entities = planned.relations.map(_.entity).distinctBy(_.entityName)
+    val entities     = planned.relations.map(_.entity).distinctBy(_.entityName)
+    val seqRelations = planned.relations.filter(_.isSeq)
+    val seqEntities  = seqRelations.map(_.entity.entityName).toSet
 
     val hydrate = new StringBuilder
     for e <- entities do
-      hydrate ++= s"  const ${camel(e.entityName)}Rows = await tx.${camel(e.entityName)}.findMany();\n"
+      val order =
+        if seqEntities.contains(e.entityName) then "{ orderBy: { id: 'asc' } }" else ""
+      hydrate ++= s"  const ${camel(e.entityName)}Rows = await tx.${camel(e.entityName)}.findMany($order);\n"
+    for r <- seqRelations do
+      // Rows ordered by the serial pk are the seq, element order preserved.
+      val rows = s"${camel(r.entity.entityName)}Rows"
+      val args = r.entity.fields.map(f => s"      ${toDafnyExpr(f, "r")},").mkString("\n")
+      hydrate ++= s"  st['${dafnyName(r.stateField)}'] = dafnySeqOf(${rows}.map((r) =>\n"
+      hydrate ++= s"    dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    ),\n"
+      hydrate ++= "  ));\n"
     for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
       val rows    = s"${camel(r.entity.entityName)}Rows"
       val builder = s"${camel(r.stateField)}Map"
@@ -85,16 +110,35 @@ object StateBridgeTs:
       hydrate ++= "  }\n"
 
     val persist = new StringBuilder
+    for r <- seqRelations do
+      val e      = r.entity
+      val client = camel(e.entityName)
+      // Reinsert in seq order: the serial pk reassigns, which nothing
+      // observes (the seq projection orders by it and exposes no id).
+      persist ++= s"  await tx.$client.deleteMany();\n"
+      persist ++= s"  for (const v of st['${dafnyName(r.stateField)}'] as Iterable<unknown>) {\n"
+      persist ++= "    const value = v as Record<string, unknown>;\n"
+      persist ++= s"    await tx.$client.create({\n      data: {\n"
+      for f <- e.fields do
+        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(f, "value")},\n"
+      persist ++= "      },\n    });\n"
+      persist ++= "  }\n"
     for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e      = r.entity
       val client = camel(e.entityName)
       persist ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
-      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [r.${camel(rKey.fieldName)}, r]));\n"
-      persist ++= s"  const seen = new Set<${rKey.domainType}>();\n"
+      // String-typed lookup keys are exact for every magnitude: prisma pks
+      // arrive as bigint and dafny keys convert through number, so comparing
+      // their canonical string forms avoids both bigint mismatch and float
+      // precision loss on large ids.
+      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
+      persist ++= s"  const ${client}Seen = new Set<string>();\n"
       persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
-      persist ++= s"    const key = ${keyFromDafny(rKey)};\n"
+      val dafnyKeyString =
+        if rKey.domainType == "string" then "stringFromDafny(k)" else "intKeyFromDafny(k)"
+      persist ++= s"    const key = $dafnyKeyString;\n"
       persist ++= "    const value = v as Record<string, unknown>;\n"
-      persist ++= "    seen.add(key);\n"
+      persist ++= s"    ${client}Seen.add(key);\n"
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
       persist ++= "    const data = {\n"
       for f <- nonKey do
@@ -110,7 +154,7 @@ object StateBridgeTs:
       persist ++= "    }\n"
       persist ++= "  }\n"
       persist ++= s"  for (const [key, row] of ${client}Existing) {\n"
-      persist ++= "    if (!seen.has(key)) {\n"
+      persist ++= s"    if (!${client}Seen.has(key)) {\n"
       persist ++= s"      await tx.$client.delete({ where: { id: row.id } });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
@@ -125,16 +169,25 @@ object StateBridgeTs:
       persist ++= "    create: { id: 1, ...scalarData },\n"
       persist ++= "  });\n"
 
+    val adapterNames = (List(
+      "dafnyModule",
+      "emptyDafnyMap",
+      "intFromDafny",
+      "intToDafny",
+      "makeState",
+      "stringFromDafny",
+      "stringToDafny"
+    ) ::: (if seqRelations.nonEmpty then List("dafnySeqOf") else Nil)
+      ::: (if planned.entityRowRelations.exists(_.keyField.exists(_.domainType != "string")) then
+             List("intKeyFromDafny")
+           else Nil)
+      ::: (if planned.relations.exists(_.entity.fields.exists(_.nullable)) then
+             List("someOrNone", "valueOrNull")
+           else Nil)).sorted
     s"""import type { Prisma } from '@prisma/client';
        |
        |import {
-       |  dafnyModule,
-       |  emptyDafnyMap,
-       |  intFromDafny,
-       |  intToDafny,
-       |  makeState,
-       |  stringFromDafny,
-       |  stringToDafny,
+       |${adapterNames.map(n => s"  $n,").mkString("\n")}
        |} from '../dafnyKernel/adapter.js';
        |
        |type DafnyMap = { update(k: unknown, v: unknown): DafnyMap } & Iterable<[unknown, unknown]>;

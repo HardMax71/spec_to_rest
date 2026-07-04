@@ -13,6 +13,7 @@
 package tests
 
 import (
+	"strconv"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -142,7 +143,22 @@ func _eq(a, b any) bool {
 		if fb, okb := _toF(b); okb {
 			return fa == fb
 		}
+		// JSON object keys stringify, so an Int-keyed relation iterates as
+		// digit strings while ids stay numbers; compare numerically when the
+		// string side parses as a number exactly.
+		if sb, okb := b.(string); okb {
+			if fb, err := strconv.ParseFloat(sb, 64); err == nil {
+				return fa == fb
+			}
+		}
 		return false
+	}
+	if sa, oka := a.(string); oka {
+		if fb, okb := _toF(b); okb {
+			if fa, err := strconv.ParseFloat(sa, 64); err == nil {
+				return fa == fb
+			}
+		}
 	}
 	switch av := a.(type) {
 	case string:
@@ -214,9 +230,26 @@ func _in(x, c any) bool {
 	}
 }
 
+// Digit strings from JSON object keys compare numerically against numbers,
+// matching _eq's coercion (Int-keyed relations stringify their keys). The
+// float64 domain is the ceiling of the whole comparison anyway: encoding/json
+// decodes every number to float64 before these helpers ever see it, so a
+// ParseInt path would imply precision the decoded values no longer carry.
+func _num(x any) (float64, bool) {
+	if f, ok := _toF(x); ok {
+		return f, true
+	}
+	if s, ok := x.(string); ok {
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
 func _cmp(a, b any) (int, bool) {
-	if fa, oka := _toF(a); oka {
-		if fb, okb := _toF(b); okb {
+	if fa, oka := _num(a); oka {
+		if fb, okb := _num(b); okb {
 			switch {
 			case fa < fb:
 				return -1, true

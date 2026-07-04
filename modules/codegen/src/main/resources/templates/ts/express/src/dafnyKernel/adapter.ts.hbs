@@ -32,9 +32,49 @@ export const stringToDafny = (s: string): unknown =>
 export const stringFromDafny = (s: unknown): string =>
   (s as DafnySeq).toVerbatimString(false);
 
-export const intToDafny = (n: number): unknown => new BigNumber(n);
+export const intToDafny = (n: number | bigint): unknown =>
+  new BigNumber(typeof n === 'bigint' ? n.toString() : n);
 
 export const intFromDafny = (n: unknown): number => (n as DafnyInt).toNumber();
+
+// Lossless decimal rendering of a Dafny integer: toNumber() rounds past
+// 2^53, so identity keys stringify straight from the BigNumber.
+export const intKeyFromDafny = (n: unknown): string =>
+  (n as DafnyInt & { toFixed(dp: number): string }).toFixed(0);
+
+interface DafnyOption {
+  is_Some: boolean;
+  value: unknown;
+}
+
+const optionCompanion = dafnyModule['Option'] as unknown as {
+  create_Some(value: unknown): unknown;
+  create_None(): unknown;
+};
+
+export const someOrNone = (value: unknown, conv: (v: unknown) => unknown): unknown =>
+  value === null || value === undefined
+    ? optionCompanion.create_None()
+    : optionCompanion.create_Some(conv(value));
+
+export const valueOrNull = (opt: unknown, conv: (v: unknown) => unknown): unknown => {
+  const o = opt as DafnyOption;
+  return o.is_Some ? conv(o.value) : null;
+};
+
+export const dafnySeqOf = (values: unknown[]): unknown => {
+  // Chunked concatenation: spreading every element into one variadic call
+  // hits engine argument limits on large hydrations.
+  const S = kernel._dafny.Seq as {
+    of(...xs: unknown[]): unknown;
+    Concat(a: unknown, b: unknown): unknown;
+  };
+  let out = S.of();
+  for (let i = 0; i < values.length; i += 512) {
+    out = S.Concat(out, S.of(...values.slice(i, i + 512)));
+  }
+  return out;
+};
 
 // Fresh secrets come from the CSPRNG, never from the verified (hence
 // deterministic) kernel; the compiled Requires twin validates each sample

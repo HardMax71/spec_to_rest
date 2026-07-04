@@ -14,6 +14,7 @@ import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
+import specrest.codegen.SensitiveFields
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
 import specrest.codegen.migration.MigrationPlan
@@ -75,6 +76,7 @@ final private case class TsOperation(
     dafnyMethod: Option[String],
     routeThroughKernel: Boolean,
     kernelServiceFn: String,
+    kernelNoResult: Boolean,
     kernelCandidateConsts: List[(String, String)],
     kernelRouteCallArgs: String,
     authMiddleware: Option[String],
@@ -180,7 +182,9 @@ object EmitTs:
     val entities = profiled.entities.map: entity =>
       val entityOps = profiled.operations
         .filter(_.targetEntity.contains(entity.entityName))
-        .map(op => enrichOperation(op, entity, typeLookup, db.nativeAttrs, kernelCtx))
+        .map(op =>
+          enrichOperation(op, entity, profiled.entities, typeLookup, db.nativeAttrs, kernelCtx)
+        )
         .sortWith((a, b) => EmitShared.byPathSpecificity(a.path, b.path))
       val maintained = triggerMaintainedByTable.getOrElse(entity.tableName, Set.empty)
       buildEntityCtx(
@@ -676,8 +680,10 @@ object EmitTs:
           "intToDafny",
           "makeState",
           "sampleCandidate",
+          "someOrNone",
           "stringFromDafny",
-          "stringToDafny"
+          "stringToDafny",
+          "valueOrNull"
         ).filter(n => fns.contains(n + "(") || fns.contains(n + "."))
         val lines = List.newBuilder[String]
         if fns.contains("HttpError(") then
@@ -801,6 +807,7 @@ object EmitTs:
   private def enrichOperation(
       op: ProfiledOperation,
       entity: ProfiledEntity,
+      allEntities: List[ProfiledEntity],
       typeLookup: Map[String, String],
       nativeAttrs: Boolean,
       kernelCtx: TsKernelCtx
@@ -948,6 +955,7 @@ object EmitTs:
         EmitShared.routeKindName(routeKind),
         hasRequestBody,
         requestBodyType,
+        allEntities,
         typeLookup,
         kernelCtx
       )
@@ -973,6 +981,7 @@ object EmitTs:
       dafnyMethod = op.dafnyMethod,
       routeThroughKernel = kernelFn.isDefined,
       kernelServiceFn = kernelFn.map(_._1).getOrElse(""),
+      kernelNoResult = kernelFn.exists(_._1.contains("): Promise<void>")),
       kernelCandidateConsts = kernelFn
         .map(_ =>
           op.dafnyCandidates.map(c => tsCandidateCharsetConst(c.param) -> c.sampleCharset)
@@ -1013,12 +1022,18 @@ object EmitTs:
   private def tsCandidateCharsetConst(param: String): String =
     toCamelCase(param) + "Charset"
 
+  // Kernel entity projections must key exactly like the read DTOs, including
+  // the TS reserved-identifier escaping.
+  private def camelName(name: String): String =
+    Naming.toCamelCase(name, Naming.CamelStrategy.Ts)
+
   private def tsKernelServiceFn(
       op: ProfiledOperation,
       handlerName: String,
       routeKind: String,
       hasRequestBody: Boolean,
       requestBodyType: String,
+      allEntities: List[ProfiledEntity],
       typeLookup: Map[String, String],
       kernelCtx: TsKernelCtx
   ): Option[(String, String)] =
@@ -1036,8 +1051,31 @@ object EmitTs:
         tsKernelScalarConv.get(tsType).map: (toDafny, _) =>
           if toDafny.isEmpty then access else s"$toDafny($access)"
       val outputs = op.responseFields
+      val specOutputs = svcOperations(kernelCtx.ir)
+        .find(o => operName(o) == op.operationName)
+        .map(operOutputs)
+        .getOrElse(Nil)
+      // Mirrors the python and go marshalling: no outputs is a plain effect
+      // call, a single entity output projects the read shape flat, scalars
+      // unpack positionally.
+      val entityOutput = specOutputs match
+        case single :: Nil =>
+          prmType(single) match
+            case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
+            case _                => None
+        case _ => None
+      val entityOutputFields = entityOutput
+        .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
+        .getOrElse(Nil)
+      val tsEntityTypes = Set("string", "number", "boolean", "Date")
       val outputsOk =
-        outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
+        if specOutputs.isEmpty then true
+        else if entityOutput.isDefined then
+          entityOutputFields.nonEmpty &&
+          entityOutputFields.forall(f =>
+            tsEntityTypes.contains(f.domainType.replaceAll("\\s*\\|\\s*null$", ""))
+          )
+        else outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
       // A redirect op's route issues `res.redirect(status, result)`, so the kernel result must be a
       // single string (the redirect target); otherwise leave it to the redirect route-kind branch.
       val redirectOk =
@@ -1055,28 +1093,41 @@ object EmitTs:
         def fromDafny(f: ProfiledField, v: String): String =
           val conv = tsKernelScalarConv(f.domainType)._2
           if conv.isEmpty then v else s"$conv($v)"
+        // The state wrapper splices persistState before the LAST body line,
+        // so every shape ends on exactly one return statement.
+        val noResult = specOutputs.isEmpty
         val (returnType, bodyLines) =
-          outputs match
-            case single :: Nil =>
-              val v = "out" + toPascalCase(single.fieldName)
-              (
-                single.domainType,
-                List(s"  const $v = $call;", s"  return ${fromDafny(single, v)};")
-              )
-            case many =>
-              val vars = many.map(f => "out" + toPascalCase(f.fieldName))
-              val typeBody =
-                many.map(f => s"${toCamelCase(f.fieldName)}: ${f.domainType}").mkString("; ")
-              val unknowns = List.fill(vars.size)("unknown").mkString(", ")
-              val retFields =
-                many.zip(vars).map((f, v) => s"${toCamelCase(f.fieldName)}: ${fromDafny(f, v)}")
-              (
-                s"{ $typeBody }",
-                List(
-                  s"  const [${vars.mkString(", ")}] = $call as [$unknowns];",
-                  s"  return { ${retFields.mkString(", ")} };"
+          if noResult then ("void", List(s"  $call;", "  return;"))
+          else if entityOutput.isDefined then
+            val pairs = entityOutputFields.map: f =>
+              s"    ${camelName(f.fieldName)}: ${StateBridgeTs.fromDafnyExpr(f, "out")},"
+            (
+              "Record<string, unknown>",
+              (s"  const out = $call as Record<string, unknown>;" ::
+                "  const result = {" :: pairs) ::: List("  };", "  return result;")
+            )
+          else
+            outputs match
+              case single :: Nil =>
+                val v = "out" + toPascalCase(single.fieldName)
+                (
+                  single.domainType,
+                  List(s"  const $v = $call;", s"  return ${fromDafny(single, v)};")
                 )
-              )
+              case many =>
+                val vars = many.map(f => "out" + toPascalCase(f.fieldName))
+                val typeBody =
+                  many.map(f => s"${toCamelCase(f.fieldName)}: ${f.domainType}").mkString("; ")
+                val unknowns = List.fill(vars.size)("unknown").mkString(", ")
+                val retFields =
+                  many.zip(vars).map((f, v) => s"${toCamelCase(f.fieldName)}: ${fromDafny(f, v)}")
+                (
+                  s"{ $typeBody }",
+                  List(
+                    s"  const [${vars.mkString(", ")}] = $call as [$unknowns];",
+                    s"  return { ${retFields.mkString(", ")} };"
+                  )
+                )
         val guardStatus = routeKind match
           case "read" | "redirect" | "delete" => 404
           case _                              => 409
