@@ -20,8 +20,10 @@ object StateBridgeGo:
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
       profiled,
-      fieldSupported = f => ScalarGoTypes.contains(f.domainType) && !f.nullable,
-      keySupported = k => Set("string", "int64").contains(k.domainType) && !k.nullable
+      // Nullable go fields carry the pointer spelling in domainType.
+      fieldSupported = f => ScalarGoTypes.contains(f.domainType.stripPrefix("*")),
+      keySupported = k => Set("string", "int64").contains(k.domainType) && !k.nullable,
+      seqSupported = true
     )
 
   private def pascal(name: String): String =
@@ -40,18 +42,34 @@ object StateBridgeGo:
 
   private def toDafnyExpr(f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${pascal(f.fieldName)}"
-    f.domainType match
-      case "string"    => s"dafnykernel.StringToDafny($access)"
-      case "int64"     => s"dafnykernel.IntToDafny($access)"
-      case "time.Time" => s"dafnykernel.IntToDafny($access.Unix())"
-      case _           => access
+    if f.nullable then
+      f.domainType.stripPrefix("*") match
+        case "string"    => s"dafnykernel.OptStringToDafny($access)"
+        case "int64"     => s"dafnykernel.OptIntToDafny($access)"
+        case "time.Time" => s"dafnykernel.OptTimeToDafny($access)"
+        case "bool"      => s"dafnykernel.OptBoolToDafny($access)"
+        case _           => access
+    else
+      f.domainType match
+        case "string"    => s"dafnykernel.StringToDafny($access)"
+        case "int64"     => s"dafnykernel.IntToDafny($access)"
+        case "time.Time" => s"dafnykernel.IntToDafny($access.Unix())"
+        case _           => access
   private def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef.Dtor_${dafnyName(f.fieldName)}()"
-    f.domainType match
-      case "string"    => s"dafnykernel.StringFromDafny($access)"
-      case "int64"     => s"dafnykernel.IntFromDafny($access)"
-      case "time.Time" => s"time.Unix(dafnykernel.IntFromDafny($access), 0).UTC()"
-      case _           => access
+    if f.nullable then
+      f.domainType.stripPrefix("*") match
+        case "string"    => s"dafnykernel.OptStringFromDafny($access.(dafnykernel.Option))"
+        case "int64"     => s"dafnykernel.OptIntFromDafny($access.(dafnykernel.Option))"
+        case "time.Time" => s"dafnykernel.OptTimeFromDafny($access.(dafnykernel.Option))"
+        case "bool"      => s"dafnykernel.OptBoolFromDafny($access.(dafnykernel.Option))"
+        case _           => access
+    else
+      f.domainType match
+        case "string"    => s"dafnykernel.StringFromDafny($access)"
+        case "int64"     => s"dafnykernel.IntFromDafny($access)"
+        case "time.Time" => s"time.Unix(dafnykernel.IntFromDafny($access), 0).UTC()"
+        case _           => access
 
   private def keyToDafny(key: ProfiledField, rowRef: String): String =
     key.domainType match
@@ -63,18 +81,32 @@ object StateBridgeGo:
       case Right(p) => p
       case Left(_)  => StatePlan.Plan(Nil, Nil)
 
-    val entities   = planned.relations.map(_.entity).distinctBy(_.entityName)
-    val needsTime  = entities.exists(_.fields.exists(_.domainType == "time.Time"))
+    val entities = planned.relations.map(_.entity).distinctBy(_.entityName)
+    val needsTime =
+      entities.exists(_.fields.exists(_.domainType.stripPrefix("*") == "time.Time"))
     val timeImport = if needsTime then "\n\t\"time\"" else ""
     val scalarImports =
       if planned.scalars.isEmpty then ""
       else "\n\t\"database/sql\"\n\t\"errors\""
 
-    val hydrate = new StringBuilder
+    val seqRelations = planned.relations.filter(_.isSeq)
+    val seqEntities  = seqRelations.map(_.entity.entityName).toSet
+    val hydrate      = new StringBuilder
     for e <- entities do
+      val order =
+        if seqEntities.contains(e.entityName) then ".Order(\"id ASC\")" else ""
       hydrate ++= s"\t${rowsVar(e)} := make([]models.${e.modelClassName}, 0)\n"
-      hydrate ++= s"\tif err := db.NewSelect().Model(&${rowsVar(e)}).Scan(ctx); err != nil {\n"
+      hydrate ++= s"\tif err := db.NewSelect().Model(&${rowsVar(e)})$order.Scan(ctx); err != nil {\n"
       hydrate ++= "\t\treturn nil, err\n\t}\n"
+    for r <- seqRelations do
+      // Rows ordered by the serial pk are the seq, element order preserved.
+      val elems = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Elems"
+      hydrate ++= s"\t$elems := make([]interface{}, 0, len(${rowsVar(r.entity)}))\n"
+      hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
+      val args = r.entity.fields.map(f => s"\t\t\t${toDafnyExpr(f, "r")},").mkString("\n")
+      hydrate ++= s"\t\t$elems = append($elems, dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t))\n"
+      hydrate ++= "\t}\n"
+      hydrate ++= s"\tst.${stateFieldName(r.stateField)} = _dafny.SeqOf($elems...)\n"
     for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
       val builder = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Builder"
       hydrate ++= s"\t$builder := _dafny.NewMapBuilder()\n"
@@ -131,6 +163,22 @@ object StateBridgeGo:
       persist ++= "\t\t\tif _, err := db.NewDelete().Model(&row).WherePK().Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t}\n\t}\n"
+    for r <- seqRelations do
+      val e     = r.entity
+      val snake = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain)
+      // Reinsert in seq order: the serial pk reassigns, which nothing
+      // observes (the seq projection orders by it and exposes no id).
+      persist ++= s"\tif _, err := db.NewDelete().Model((*models.${e.modelClassName})(nil)).Where(\"1 = 1\").Exec(ctx); err != nil {\n"
+      persist ++= "\t\treturn err\n\t}\n"
+      persist ++= s"\tit${snake} := _dafny.Iterate(st.${stateFieldName(r.stateField)})\n"
+      persist ++= s"\tfor elem, ok := it${snake}(); ok; elem, ok = it${snake}() {\n"
+      persist ++= s"\t\tvalue := elem.(dafnykernel.${e.entityName})\n"
+      persist ++= s"\t\trow := models.${e.modelClassName}{}\n"
+      for f <- e.fields do
+        persist ++= s"\t\trow.${pascal(f.fieldName)} = ${fromDafnyExpr(f, "value")}\n"
+      persist ++= "\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
+      persist ++= "\t\t\treturn err\n\t\t}\n"
+      persist ++= "\t}\n"
     if planned.scalars.nonEmpty then
       persist ++= "\tscalarRow := new(models.ServiceState)\n"
       persist ++= "\terr := db.NewSelect().Model(scalarRow).Where(\"id = 1\").Limit(1).Scan(ctx)\n"
