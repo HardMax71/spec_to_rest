@@ -1,11 +1,7 @@
 package services
 
 import (
-{{#if entity.hasOperations}}	"context"
-{{/if}}{{#if entity.usesSqlNoRows}}	"database/sql"
-{{/if}}{{#if entity.usesErrors}}	"errors"
-{{/if}}
-	"github.com/uptrace/bun"
+{{{entity.serviceStdlibImports}}}	"github.com/uptrace/bun"
 
 	"{{module}}/internal/config"
 {{#if entity.usesKernel}}	dafnykernel "{{module}}/internal/dafnykernel"

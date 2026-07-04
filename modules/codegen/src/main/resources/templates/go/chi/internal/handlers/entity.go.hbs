@@ -28,7 +28,9 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-{{/if}}{{/if}}{{#if routeThroughKernel}}	result, err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
+{{/if}}{{/if}}{{#if routeThroughKernel}}{{#if kernelNoResult}}	err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
+{{else}}	result, err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
+{{/if}}
 	if err != nil {
 		if errors.Is(err, services.ErrKernelPrecondition) {
 			writeError(w, {{kernelGuardStatus}}, "{{kernelGuardDetail}}")
@@ -37,9 +39,10 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-{{#if kernelRedirect}}	http.Redirect(w, r, result, {{successStatus}})
+{{#if kernelNoResult}}	w.WriteHeader({{successStatus}})
+{{else}}{{#if kernelRedirect}}	http.Redirect(w, r, result, {{successStatus}})
 {{else}}	writeJSON(w, {{successStatus}}, result)
-{{/if}}{{else}}{{#if (eq routeKind "create")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
+{{/if}}{{/if}}{{else}}{{#if (eq routeKind "create")}}	result, err := h.svc.{{serviceMethod}}(r.Context(), {{serviceCallArgs}})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

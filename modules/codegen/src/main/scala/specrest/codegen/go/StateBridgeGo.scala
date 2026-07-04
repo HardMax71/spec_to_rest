@@ -55,14 +55,14 @@ object StateBridgeGo:
         case "int64"     => s"dafnykernel.IntToDafny($access)"
         case "time.Time" => s"dafnykernel.IntToDafny($access.Unix())"
         case _           => access
-  private def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
+  private[codegen] def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef.Dtor_${dafnyName(f.fieldName)}()"
     if f.nullable then
       f.domainType.stripPrefix("*") match
-        case "string"    => s"dafnykernel.OptStringFromDafny($access.(dafnykernel.Option))"
-        case "int64"     => s"dafnykernel.OptIntFromDafny($access.(dafnykernel.Option))"
-        case "time.Time" => s"dafnykernel.OptTimeFromDafny($access.(dafnykernel.Option))"
-        case "bool"      => s"dafnykernel.OptBoolFromDafny($access.(dafnykernel.Option))"
+        case "string"    => s"dafnykernel.OptStringFromDafny($access)"
+        case "int64"     => s"dafnykernel.OptIntFromDafny($access)"
+        case "time.Time" => s"dafnykernel.OptTimeFromDafny($access)"
+        case "bool"      => s"dafnykernel.OptBoolFromDafny($access)"
         case _           => access
     else
       f.domainType match
@@ -132,16 +132,18 @@ object StateBridgeGo:
       persist ++= "\t\treturn err\n\t}\n"
       persist ++= s"\t$existing := make(map[$keyType]models.${e.modelClassName}, len($rows))\n"
       persist ++= s"\tfor _, r := range $rows {\n\t\t$existing[r.$keyGo] = r\n\t}\n"
-      persist ++= s"\tseen := make(map[$keyType]bool)\n"
-      persist ++= s"\tit := st.${stateFieldName(r.stateField)}.Items().Iterator()\n"
-      persist ++= "\tfor tu, ok := it(); ok; tu, ok = it() {\n"
+      val seen = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Seen"
+      val iter = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "It"
+      persist ++= s"\t$seen := make(map[$keyType]bool)\n"
+      persist ++= s"\t$iter := st.${stateFieldName(r.stateField)}.Items().Iterator()\n"
+      persist ++= s"\tfor tu, ok := $iter(); ok; tu, ok = $iter() {\n"
       persist ++= "\t\tpair := tu.(_dafny.Tuple)\n"
       val keyExpr = keyType match
         case "string" => "dafnykernel.StringFromDafny((*pair.IndexInt(0)).(_dafny.Sequence))"
         case _        => "dafnykernel.IntFromDafny((*pair.IndexInt(0)).(_dafny.Int))"
       persist ++= s"\t\tkey := $keyExpr\n"
       persist ++= s"\t\tvalue := (*pair.IndexInt(1)).(dafnykernel.${e.entityName})\n"
-      persist ++= "\t\tseen[key] = true\n"
+      persist ++= s"\t\t$seen[key] = true\n"
       persist ++= s"\t\trow, exists := $existing[key]\n"
       // The key column stays immutable on updates (the row was fetched by it,
       // and rewriting it from the Dafny value could desync row identity from
@@ -158,7 +160,7 @@ object StateBridgeGo:
       persist ++= "\t\t}\n"
       persist ++= "\t}\n"
       persist ++= s"\tfor key := range $existing {\n"
-      persist ++= "\t\tif !seen[key] {\n"
+      persist ++= s"\t\tif !$seen[key] {\n"
       persist ++= s"\t\t\trow := $existing[key]\n"
       persist ++= "\t\t\tif _, err := db.NewDelete().Model(&row).WherePK().Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
