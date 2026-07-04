@@ -1,0 +1,97 @@
+---
+title: Realizability
+description:
+  Why a verified-looking contract can admit no body at all, the five failure shapes found while
+  bringing auth_service under synthesis, and how each one is closed.
+---
+
+Dafny verifies a method as a total contract: the body must succeed on every state the requires
+admits. A contract can therefore be wrong in a way no other pipeline stage reports. The Z3
+consistency checks prove invariant preservation while assuming the ensures, so they are satisfied by
+contracts that no body can implement. The symptom is CEGIS spending its whole budget on candidates
+that keep failing for reasons no prompt can fix. Every shape below was found this way while bringing
+`auth_service` under synthesis, and each has a structural fix in the generator, the proofs, or the
+spec itself.
+
+## Finite freshness
+
+A bounded string refinement makes the value space finite, and a finite space cannot honour an
+unconditional freshness promise. With `type Token = String where len(value) = 128`, the state where
+`reset_tokens` already contains every 128-character string is legal, so
+`ensures token not in pre(reset_tokens)` is unsatisfiable there. Proving your way out needs a
+cardinality bound plus a pigeonhole argument, and any constructive escape has a worse property: a
+compiled, deterministic token derivation is predictable, which is disqualifying for a secret no
+matter what it proves.
+
+The fix is the candidate lowering, a proven transformation (`lowerFreshOutputs` in
+`CandidateLowering.thy`, extracted and applied by the Dafny generator). An output position whose
+value the ensures only observe against pre-state becomes an extra input: the runtime samples a
+candidate from a CSPRNG, the compiled `Requires` twin validates it against live state, and a glue
+conjunct `ensures output == candidate` pins the result. The sampler's length and character set
+derive from the refinement through `samplerFor`, with `charset_exact` proving the set matches the
+class semantics in both directions. Sampling loops retry a handful of times and then surface the
+operation's mapped guard status, since a real collision has negligible odds and exhaustion in
+practice means an ordinary precondition failure.
+
+## Candidates that can collide
+
+Login returns a session whose access and refresh tokens are both sampled. Nothing in the
+per-candidate requires stops the two samples from being equal, but `SessionInv` demands they differ,
+so the contract was unrealizable exactly when the sampler got unlucky. The lowering now emits
+pairwise disequalities for same-alias candidates of one operation. Demanding this of internal
+sampled inputs narrows nothing a client can see; the runtime just resamples.
+
+## Externs need value contracts, and runtimes
+
+`hash`, `now`, and the time units are deliberately opaque in proofs: giving `hash` a stub body once
+made `hash(a) == hash(b)` provable for all inputs. Opacity has a cost, though.
+`PasswordHash = String where len(value) = 64` is unprovable for any body unless the prover knows
+hash's output length. The builtin now carries it as a labelled axiom:
+
+```text
+function {:extern "specrest_externs", "hash_hex"} {:axiom} hash(s: string): string
+  ensures |hash(s)| == 64
+```
+
+That is a runtime commitment, not a proof: every backend renders `hash` as a SHA-256 hex digest,
+which is 64 characters always. The same extern attributes make `dafny translate` emit calls into a
+module the pipeline must provide, one shim per target: `_externs.py` inside the python kernel
+package, `externs.go` in the go kernel package (the go backend expects `m_`-prefixed package-level
+functions), and file-scope definitions ahead of the inlined runtime in the js kernel bundle. Each
+shim's semantics must match the direct-emit builtin renderings, because the conformance oracle
+computes the same values on its own runtime and any drift shows up as a behavioural failure.
+
+## Requires that undershoot the invariants
+
+An operation that constructs an entity must require everything the entity's invariants will demand
+of the constructed value. Register originally required `len(display_name) >= 1` while `User` capped
+it at 100, and required nothing about email length while `User` demanded it be nonempty (the email
+regex is runtime-checked but proof-abstract, so it proves nothing). Both bounds moved into
+Register's requires. The tempting alternative, strengthening the `Email` alias itself with a length
+conjunct, regressed the Z3 side into five solver timeouts by changing how the alias is sorted under
+quantifiers, so realizability bounds belong at the operation unless the alias genuinely owns them.
+The same class covered `next_session_id`: a fresh session must satisfy `SessionInv`'s `id > 0`, so
+the counter needs a positivity invariant of its own.
+
+## Injected guards must respect path sensitivity
+
+Map accesses in ensures need `k in m` to be well-formed, and the generator injects those guards
+where nothing else establishes them. It used to inject them unconditionally, hoisting a guard out of
+an `if` branch and conjoining it at the top level, which strengthened LoginFailed's contract into
+demanding the email already be in `failed_logins`, contractually false on the first failed attempt.
+Dafny checks well-formedness path-sensitively (an if branch under its condition, the right side of
+`||` under the negated left, the right side of `&&` under the left), so the injector now leaves
+those positions alone. A genuinely unguarded access fails loudly at generation time instead of
+silently changing the contract's meaning.
+
+## When the model is the bottleneck
+
+The lowered auth contracts admit four-to-nine-line bodies, and the reference model still burned
+every iteration producing hundred-line assertion soups. Hand-writing the body is a legitimate exit:
+`dafny verify` is the trust gate, not the author, and `SeedVerifiedCacheMain` seeds a verified body
+under the exact cache key `compile --with-synthesis` will look up (spec, operation, model,
+temperature). Two proof habits cover most of what hand-written bodies need. Uniqueness-driven
+ensures like `TheBy(old(st.sessions), ...)` discharge by asserting the uniqueness forall from the
+invariant and letting the ensures' own `TheBy` do the rest; asserting equality against your own
+`TheBy` call is a dead end because lambda values have no extensionality. And Dafny lambdas cannot
+read the heap, so such asserts are phrased over `old(st.field)` rather than a lambda capturing `st`.

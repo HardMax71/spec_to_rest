@@ -28,8 +28,59 @@ object DafnyKernel:
       packagePath: String
   ): Map[String, String] =
     val importBase = s"$moduleName/${packagePath.stripSuffix("/")}"
-    files.map: (relPath, content) =>
+    val rewritten = files.map: (relPath, content) =>
       stripSrcPrefix(relPath) -> rewriteGoFile(content, importBase)
+    val externNames = ExternNames.map("m_" + _)
+    if rewritten.values.exists(c => externNames.exists(n => c.contains(n + "("))) then
+      rewritten + ("externs.go" -> goExternShim(importBase))
+    else rewritten
+
+  // The Go backend calls extern builtins as package-level `m_`-prefixed
+  // functions; this file provides them inside the kernel package with the
+  // same semantics as the direct-emit builtin renderings.
+  private def goExternShim(importBase: String): String =
+    s"""package kernel
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"time"
+
+	_dafny "$importBase/dafny"
+)
+
+func m_specrest_externs_now() _dafny.Int {
+	return _dafny.IntOfInt64(time.Now().Unix())
+}
+
+func m_specrest_externs_days(n _dafny.Int) _dafny.Int {
+	return n.Times(_dafny.IntOfInt64(86400))
+}
+
+func m_specrest_externs_hours(n _dafny.Int) _dafny.Int {
+	return n.Times(_dafny.IntOfInt64(3600))
+}
+
+func m_specrest_externs_minutes(n _dafny.Int) _dafny.Int {
+	return n.Times(_dafny.IntOfInt64(60))
+}
+
+func m_specrest_externs_seconds(n _dafny.Int) _dafny.Int {
+	return n
+}
+
+func m_specrest_externs_hash_hex(s _dafny.Sequence) _dafny.Sequence {
+	sum := sha256.Sum256([]byte(_dafny.SequenceVerbatimString(s, false)))
+	return _dafny.UnicodeSeqOfUtf8Bytes(hex.EncodeToString(sum[:]))
+}
+
+func m_specrest_externs_abs_int(n _dafny.Int) _dafny.Int {
+	if n.Sign() < 0 {
+		return n.Negated()
+	}
+	return n
+}
+"""
 
   private def stripSrcPrefix(relPath: String): String =
     if relPath.startsWith("src/") then relPath.drop("src/".length) else relPath
@@ -49,8 +100,28 @@ object DafnyKernel:
   def rewriteJsKernel(files: Map[String, String]): Map[String, String] =
     files.map: (relPath, content) =>
       if relPath.endsWith(".js") then
-        relPath.dropRight(".js".length) + ".cjs" -> appendJsExports(content)
+        relPath.dropRight(".js".length) + ".cjs" -> appendJsExports(prependJsExterns(content))
       else relPath                               -> content
+
+  // The JS backend calls extern builtins as bare file-scope names inside the
+  // single-file kernel bundle, so their definitions ride at the top of the
+  // same file (the arrow bodies touch _dafny only at call time, after the
+  // inlined runtime has initialized).
+  private val JsExternShim: String =
+    """const { createHash: _sx_createHash } = require('node:crypto');
+      |const specrest_externs_now = () => new _dafny.BigNumber(Math.floor(Date.now() / 1000));
+      |const specrest_externs_days = (n) => n.multipliedBy(86400);
+      |const specrest_externs_hours = (n) => n.multipliedBy(3600);
+      |const specrest_externs_minutes = (n) => n.multipliedBy(60);
+      |const specrest_externs_seconds = (n) => n;
+      |const specrest_externs_hash_hex = (s) =>
+      |  _dafny.Seq.UnicodeFromString(_sx_createHash('sha256').update(s.toVerbatimString(false)).digest('hex'));
+      |const specrest_externs_abs_int = (n) => n.abs();
+      |""".stripMargin
+
+  private def prependJsExterns(content: String): String =
+    if ExternNames.exists(n => content.contains(n + "(")) then JsExternShim + content
+    else content
 
   // Dafny's JS backend wraps each module in a module-private IIFE (`let _module = (function(){...})()`)
   // and emits no `module.exports`, so nothing is reachable via `require`. Re-export the module object
