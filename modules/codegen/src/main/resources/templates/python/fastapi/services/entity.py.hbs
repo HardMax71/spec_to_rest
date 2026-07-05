@@ -54,7 +54,16 @@ class {{entity.entityName}}Service:
 
 {{/unless}}
 {{#if this.dafnyMethod}}
-    async def {{this.handlerName}}(self{{#if this.kernelHandlerSignature}}, {{this.kernelHandlerSignature}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
+{{#if this.kernelHandlerParams.length}}
+    async def {{this.handlerName}}(
+        self,
+{{#each this.kernelHandlerParams}}
+        {{this}},
+{{/each}}
+    ) -> {{this.serviceReturnAnnotation}}:
+{{else}}
+    async def {{this.handlerName}}(self) -> {{this.serviceReturnAnnotation}}:
+{{/if}}
 {{#if this.kernelHasState}}
         state = await hydrate_state(self._session)
 {{else}}

@@ -211,7 +211,8 @@ class EmitTest extends CatsEffectSuite:
       // the string across the Dafny boundary and is preceded by the compiled
       // requires guard on the hydrated state.
       assert(
-        service.contains("async def shorten(self, body: ShortenRequest)"),
+        service.contains("async def shorten(") &&
+          service.contains("        body: ShortenRequest,"),
         s"shorten handler should accept body: ShortenRequest — got:\n$service"
       )
       assert(
@@ -234,7 +235,7 @@ class EmitTest extends CatsEffectSuite:
       )
       // Resolve: path param `code: str`, converted at the boundary.
       assert(
-        service.contains("async def resolve(self, code: str)"),
+        service.contains("async def resolve(") && service.contains("        code: str,"),
         s"resolve handler should accept code: str — got:\n$service"
       )
       assert(

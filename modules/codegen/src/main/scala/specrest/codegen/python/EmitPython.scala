@@ -105,6 +105,7 @@ final private case class EnrichedOperation(
     path: String,
     successStatus: Int,
     pathParamsWithTypes: List[EnrichedPathParam],
+    queryParamsWithTypes: List[EnrichedPathParam],
     hasRequestBody: Boolean,
     requestBodyType: String,
     responseAnnotation: String,
@@ -117,7 +118,7 @@ final private case class EnrichedOperation(
     pathParamName: String,
     customRequestSchema: Option[CustomRequestSchema],
     dafnyMethod: Option[String],
-    kernelHandlerSignature: String,
+    kernelHandlerParams: List[String],
     kernelCallArgs: List[String],
     kernelCandidates: List[KernelCandidateView],
     kernelGuardName: String,
@@ -248,7 +249,14 @@ object EmitPython:
         nonIdFields.filterNot(f => SensitiveFields.isSensitive(f.columnName))
       val nonIdFieldViews =
         nonIdFields.map(f =>
-          schemaInputField(f, EmitShared.entityFieldRefinement(profiled, entity, f))
+          schemaInputField(
+            f,
+            EmitShared.entityFieldRefinement(profiled, entity, f),
+            KernelTypes.fieldKind(profiled.ir, entity.entityName, f.fieldName).collect {
+              case KernelTypes.Kind.EnumK(n)                         => n
+              case KernelTypes.Kind.OptOf(KernelTypes.Kind.EnumK(n)) => n
+            }.flatMap(enumLiteralType(profiled.ir, _))
+          )
         )
       val readFieldViews       = readFieldsRaw.map(schemaReadField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
@@ -434,12 +442,23 @@ object EmitPython:
   // boundary rejects what the spec's types reject; the compiled Dafny guards
   // cannot check regex predicates (they are proof-level stubs) and the
   // database CHECKs cannot either, so this is the only enforcement point.
+  // Enum-typed inputs validate as Literal members at the pydantic boundary:
+  // the kernel conversion constructs the datatype by member name and must
+  // never see an invalid one.
+  private def enumLiteralType(ir: ServiceIRFull, typeName: String): Option[String] =
+    svcEnums(ir)
+      .find(e => enumNameFull(e) == typeName)
+      .map(e => enumValuesFull(e).map(v => s"\"$v\"").mkString("Literal[", ", ", "]"))
+
   private def schemaInputField(
       f: ProfiledField,
-      reduced: StringRefinements.Reduced
+      reduced: StringRefinements.Reduced,
+      enumLiteral: Option[String] = None
   ): SchemaFieldView =
     val sensitive = SensitiveFields.isSensitive(f.columnName)
-    val ptype     = if sensitive then "SecretStr" else f.validationType
+    val ptype =
+      if sensitive then "SecretStr"
+      else enumLiteral.getOrElse(f.validationType)
     val args =
       if sensitive || f.domainType != "str" then Nil
       else
@@ -587,7 +606,15 @@ object EmitPython:
               val reduced = byName.get(f.fieldName) match
                 case Some(t) => StringRefinements.reduceField(t, None, kernelCtx.ir)
                 case None    => StringRefinements.Reduced(None, None, Nil)
-              schemaInputField(f, reduced)
+              val enumLit = byName
+                .get(f.fieldName)
+                .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+                .collect {
+                  case KernelTypes.Kind.EnumK(n)                         => n
+                  case KernelTypes.Kind.OptOf(KernelTypes.Kind.EnumK(n)) => n
+                }
+                .flatMap(enumLiteralType(kernelCtx.ir, _))
+              schemaInputField(f, reduced, enumLit)
             }
             (name, Some(CustomRequestSchema(name, views)))
 
@@ -672,10 +699,12 @@ object EmitPython:
       .find(o => operName(o) == op.operationName)
       .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
       .getOrElse(Map.empty)
+    val nonBodyNames =
+      (endpoint.pathParams ++ endpoint.queryParams).map(_.name).toSet
     val kernelArgConversions: List[Option[String]] =
-      (endpoint.pathParams ++ endpoint.bodyParams).map { p =>
+      (endpoint.pathParams ++ endpoint.queryParams ++ endpoint.bodyParams).map { p =>
         val access =
-          if endpoint.pathParams.exists(_.name == p.name) then p.name
+          if nonBodyNames.contains(p.name) then p.name
           // Sensitive fields arrive as pydantic SecretStr and must unwrap
           // before crossing the kernel boundary.
           else if sensitiveBodyFields.contains(p.name) then s"body.${p.name}.get_secret_value()"
@@ -690,22 +719,30 @@ object EmitPython:
       .find(o => operName(o) == op.operationName)
       .map(operOutputs)
       .getOrElse(Nil)
-    // A single entity-valued output marshals by field projection; scalar
-    // outputs unpack positionally; no outputs at all is a plain effect call.
+    // A single entity-valued output marshals by field projection; a seq of
+    // entities projects per element into a bare JSON array (list routes
+    // return the array itself); scalar outputs unpack positionally; no
+    // outputs at all is a plain effect call.
     val entityOutput = specOutputs match
       case single :: Nil =>
         prmType(single) match
           case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
           case _                => None
       case _ => None
+    val seqEntityOutput = specOutputs match
+      case single :: Nil =>
+        prmType(single) match
+          case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
+          case _                             => None
+      case _ => None
     // The API contract for an entity output is the entity's read shape: flat,
     // with sensitive fields dropped exactly as the schema layer drops them.
-    val entityOutputFields = entityOutput
+    val entityOutputFields = entityOutput.orElse(seqEntityOutput)
       .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
       .getOrElse(Nil)
     // Optionality lives on the profiled nullable flag; the kinds map keeps
     // the payload kind so projection and eligibility read one shape.
-    val entityFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
+    val entityFieldKinds: Map[String, KernelTypes.Kind] = entityOutput.orElse(seqEntityOutput)
       .map(e =>
         e.fields.flatMap { f =>
           KernelTypes
@@ -726,14 +763,13 @@ object EmitPython:
         case None                                                        => (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
     val outsMarshalable =
       if specOutputs.isEmpty then true
-      else if entityOutput.isDefined then
+      else if entityOutput.isDefined || seqEntityOutput.isDefined then
         entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
       else
         kernelOuts.nonEmpty &&
         kernelOuts.forall(f => !f.nullable && KernelScalarTypes.contains(f.domainType))
     val kernelEligible =
       op.dafnyMethod.isDefined &&
-        endpoint.queryParams.isEmpty &&
         kernelCtx.stateReady &&
         kernelArgConversions.forall(_.isDefined) &&
         outsMarshalable
@@ -766,6 +802,10 @@ object EmitPython:
           "result",
           s"{\"$outName\": ${kernelEntityProjection(entityOutputFields, entityFieldKinds)}}"
         )
+      else if seqEntityOutput.isDefined then
+        val proj =
+          kernelEntityProjection(entityOutputFields, entityFieldKinds).replace("result.", "_item.")
+        ("result", s"[$proj for _item in from_dafny_seq(result)]")
       else
         kernelOuts match
           case Nil => ("result", "result")
@@ -781,10 +821,10 @@ object EmitPython:
     val kernelGuardDetail =
       if kernelGuardStatus == 404 then "not found" else "precondition failed"
 
-    val (kernelSig, _) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
+    val (kernelSigParts, _) = kernelSignatureAndArgs(endpoint, requestBodyType, typeLookup)
 
     // When the operation is routed through the Dafny kernel, the service handler's signature
-    // is `kernelHandlerSignature` (path + query + body, in that order). The router must pass
+    // is `kernelHandlerParams` (path + query + body, in that order). The router must pass
     // the same arg list — `serviceCallArgs` is route-kind specific and may omit some of them
     // (e.g. RkCreate's serviceCallArgs is just "body", losing path/query params).
     val effectiveServiceCallArgs =
@@ -793,6 +833,8 @@ object EmitPython:
 
     val (responseAnnotationFinal, serviceReturnAnnoFinal) =
       if dafnyMethodFinal.isDefined && specOutputs.isEmpty then ("None", "None")
+      else if dafnyMethodFinal.isDefined && seqEntityOutput.isDefined then
+        ("list[dict[str, Any]]", "list[dict[str, Any]]")
       else if dafnyMethodFinal.isDefined && !isRedirectKind then
         ("dict[str, Any]", "dict[str, Any]")
       else (responseAnnotation, serviceReturnAnno)
@@ -821,6 +863,17 @@ object EmitPython:
       path = endpoint.path,
       successStatus = endpoint.successStatus,
       pathParamsWithTypes = pathParamsWithTypes,
+      // Kernel-routed ops bind query params on the route (defaulted, so
+      // fastapi reads them from the query string); direct routes keep their
+      // route-kind signatures.
+      queryParamsWithTypes =
+        if dafnyMethodFinal.isDefined then
+          endpoint.queryParams.map { p =>
+            val t          = pythonTypeForParam(p.typeExpr, typeLookup)
+            val routerType = if t.endsWith("| None") then s"$t = None" else t
+            EnrichedPathParam(name = p.name, domainType = t, routerType = routerType)
+          }
+        else Nil,
       hasRequestBody = hasRequestBody,
       requestBodyType = requestBodyType,
       responseAnnotation = responseAnnotationFinal,
@@ -833,7 +886,7 @@ object EmitPython:
       pathParamName = pathParamName,
       customRequestSchema = customRequestSchema,
       dafnyMethod = dafnyMethodFinal,
-      kernelHandlerSignature = kernelSig,
+      kernelHandlerParams = kernelSigParts,
       kernelCallArgs = kernelAllArgs,
       kernelCandidates = kernelCandidates,
       kernelGuardName = s"Requires${op.operationName}",
@@ -855,7 +908,7 @@ object EmitPython:
       endpoint: EndpointSpec,
       requestBodyType: String,
       typeLookup: Map[String, String]
-  ): (String, List[String]) =
+  ): (List[String], List[String]) =
     val pathSig =
       endpoint.pathParams.map(p => s"${p.name}: ${pythonTypeForParam(p.typeExpr, typeLookup)}")
     val querySig =
@@ -867,7 +920,7 @@ object EmitPython:
     val callArgs = endpoint.pathParams.map(_.name) ++
       endpoint.queryParams.map(_.name) ++
       endpoint.bodyParams.map(p => s"body.${p.name}")
-    ((pathSig ++ querySig ++ bodySig).mkString(", "), callArgs)
+    (pathSig ++ querySig ++ bodySig, callArgs)
 
   private def kernelRouterCallArgs(endpoint: EndpointSpec): String =
     val parts = endpoint.pathParams.map(_.name) ++
@@ -944,6 +997,9 @@ object EmitPython:
     for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
     for schema <- customRequestSchemas; view <- schema.fields do
       mergeStdlibImport(stdlibByModule, view.domainType)
+      if view.validationType.startsWith("Literal[") then
+        val existing = stdlibByModule.getOrElseUpdate("typing", mutable.Set.empty)
+        existing += "Literal"
     finalizeStdlibImports(stdlibByModule)
 
   // The router's whole import header assembles here as one rendered block
@@ -1065,7 +1121,8 @@ object EmitPython:
       Option.when(kernelText.contains("enum_to_dafny("))("enum_to_dafny"),
       Option.when(kernelText.contains("enum_from_dafny("))("enum_from_dafny"),
       Option.when(kernelText.contains("to_dafny_set("))("to_dafny_set"),
-      Option.when(kernelText.contains("to_dafny_seq("))("to_dafny_seq")
+      Option.when(kernelText.contains("to_dafny_seq("))("to_dafny_seq"),
+      Option.when(kernelText.contains("from_dafny_seq("))("from_dafny_seq")
     ).flatten.sorted
     ServiceTemplateImports(
       sqlalchemyPlainImports = plainImports.result().sorted,
