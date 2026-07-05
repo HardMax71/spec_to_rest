@@ -23,6 +23,8 @@ session SpecRest_Semantics in semantics = SpecRest_IR +
 
 session SpecRest_Soundness in soundness = SpecRest_Semantics +
   options [document = false, threads = 0]
+  sessions
+    SpecRest_Codegen
   theories
     Soundness_Framework
     Preservation_Wf
@@ -33,6 +35,7 @@ session SpecRest_Soundness in soundness = SpecRest_Semantics +
     DirectTotality
     DirectPreservation
     Semantics_Inlining
+    CandidateLowering_Sound
 
 session SpecRest_Codegen in codegen = SpecRest_Semantics +
   options [document = false, threads = 0]
