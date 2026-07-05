@@ -49,6 +49,10 @@ object Stateful:
 
   private enum RuleRole derives CanEqual:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
+    // A consuming rule that may legitimately 4xx: the id returns to its
+    // bundle on rejection (hypothesis's conditional-consumption idiom), so
+    // the model tracks the SUT in both directions.
+    case RestoreOnReject(bundle: BundleSpec, paramName: String)
     case Plain
 
   final private case class EventuallySpec(
@@ -380,11 +384,15 @@ object Stateful:
                 n -> InputBinding.BundleConsume(b, strictByConstruction = unionStrict)
               case other => other
             }
+            // A tolerant consuming delete restores the id on 4xx, since the
+            // row survives a rejected call.
+            val perBundleRole =
+              if unionStrict then role else RuleRole.RestoreOnReject(b, paramName)
             buildRuleBlock(
               pop = pop,
               opDecl = opDecl,
               bindings = perBundle,
-              role = role,
+              role = perBundleRole,
               stateFields = stateFields,
               ir = ir,
               nameSuffix = b.statusValue.map(v => s"_from_${v.toLowerCase}").getOrElse("")
@@ -641,6 +649,8 @@ object Stateful:
         case RuleRole.CreateTarget(_, proj) =>
           sb.append("        response_data = response.json() if response.content else {}\n")
           sb.append(s"        return $proj\n")
+        case RuleRole.RestoreOnReject(_, _) =>
+          sb.append("        return multiple()\n")
         case RuleRole.Plain =>
           ()
     else
@@ -651,6 +661,16 @@ object Stateful:
           sb.append(s"            return $proj\n")
           sb.append(
             "        elif 400 <= response.status_code < 500:\n            return multiple()\n"
+          )
+          sb.append(
+            "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
+          )
+        case RuleRole.RestoreOnReject(_, param) =>
+          sb.append(
+            s"        if response.status_code == $successCode:\n            return multiple()\n"
+          )
+          sb.append(
+            s"        elif 400 <= response.status_code < 500:\n            return $param\n"
           )
           sb.append(
             "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
@@ -672,8 +692,9 @@ object Stateful:
       role: RuleRole
   ): String =
     val targetArg = role match
-      case RuleRole.CreateTarget(b, _) => List(s"target=${b.pyVarName}")
-      case RuleRole.Plain              => Nil
+      case RuleRole.CreateTarget(b, _)    => List(s"target=${b.pyVarName}")
+      case RuleRole.RestoreOnReject(b, _) => List(s"target=${b.pyVarName}")
+      case RuleRole.Plain                 => Nil
     val paramArgs = bindings.map: (name, b) =>
       val rhs = b match
         case InputBinding.BundleDraw(bundle, _)    => bundle.pyVarName
