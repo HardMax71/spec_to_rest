@@ -206,9 +206,11 @@ jobs:
           - fixture: todo_list
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: todo_list
             dialect: sqlite
             db_url: file:./app.db
+            synthesis: "--with-synthesis --synthesis-model gpt-5-mini-2025-08-07"
           - fixture: ecommerce
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
