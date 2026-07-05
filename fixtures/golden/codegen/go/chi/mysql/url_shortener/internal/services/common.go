@@ -7,3 +7,5 @@ var ErrNotFound = errors.New("not found")
 var ErrKernelPrecondition = errors.New("kernel precondition failed")
 
 var ErrKernelStateInvariant = errors.New("service state invariant violated")
+
+var ErrInvalidInput = errors.New("invalid input value")

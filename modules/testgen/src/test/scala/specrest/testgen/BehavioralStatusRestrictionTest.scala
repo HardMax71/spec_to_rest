@@ -162,9 +162,11 @@ class BehavioralStatusRestrictionTest extends BehavioralTestSupport:
         .find(_.name == "test_promote_transition_low_to_high")
         .getOrElse(fail(s"missing positive; skips=${out.skips}"))
       assert(
-        pos.body.contains("_arg_row=st.integers()") &&
-          pos.body.contains("_arg_seed=st.integers()") &&
-          pos.body.contains("_arg_seeded_id=st.integers()"),
+        pos.body.contains("_arg_row=st.integers(min_value=-2147483648, max_value=2147483647)") &&
+          pos.body.contains("_arg_seed=st.integers(min_value=-2147483648, max_value=2147483647)") &&
+          pos.body.contains(
+            "_arg_seeded_id=st.integers(min_value=-2147483648, max_value=2147483647)"
+          ),
         s"reserved-name inputs must be aliased to _arg_<name>; body=${pos.body}"
       )
       assert(

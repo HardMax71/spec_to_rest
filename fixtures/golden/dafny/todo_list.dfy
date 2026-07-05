@@ -48,11 +48,13 @@ predicate RequiresCreateTodo(st: ServiceState, title: string, description: Optio
 {
   (ServiceStateInv(st))
   && (|title| >= 1)
+  && (|title| <= 200)
 }
 method CreateTodo(st: ServiceState, title: string, description: Option<string>, priority: Priority, tags: set<string>) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
   requires |title| >= 1
+  requires |title| <= 200
   ensures todo.id == old(st.next_id)
   ensures todo.title == title
   ensures todo.description == description
@@ -105,14 +107,16 @@ predicate RequiresUpdateTodo(st: ServiceState, id: int, title: Option<string>, d
 {
   (ServiceStateInv(st))
   && (id in st.todos)
+  && ((title != None ==> (|title.value| >= 1 && |title.value| <= 200)))
 }
 method UpdateTodo(st: ServiceState, id: int, title: Option<string>, description: Option<string>, priority: Option<Priority>, tags: Option<set<string>>) returns (todo: Todo)
   modifies st
   requires ServiceStateInv(st)
   requires id in st.todos
+  requires (title != None ==> (|title.value| >= 1 && |title.value| <= 200))
   ensures todo.id == id
   ensures (title != None ==> todo.title == title.value)
-  ensures (description != None ==> todo.description == description.value)
+  ensures (description != None ==> todo.description == description)
   ensures (priority != None ==> todo.priority == priority.value)
   ensures (tags != None ==> todo.tags == tags.value)
   ensures (title == None ==> todo.title == old(st.todos)[id].title)

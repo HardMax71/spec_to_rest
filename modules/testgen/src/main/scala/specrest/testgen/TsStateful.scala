@@ -42,7 +42,9 @@ object TsStateful:
         s"      if (!($text)) { throw new Error($viol); }"
       .mkString("\n")
 
-    val bodyForScan = stepArbs + dispatchCases + invChecks
+    // The harness's own state fetch uses stateSnapshot, so the scan must see
+    // it even when no invariant references it.
+    val bodyForScan = stepArbs + dispatchCases + invChecks + "stateSnapshot("
 
     val sb = new StringBuilder
     sb.append(TsRender.Header)
@@ -81,7 +83,7 @@ object TsStateful:
     sb.append("        for (const step of steps) {\n")
     sb.append("          await dispatch(step);\n")
     sb.append(
-      "          const postState = (await (await client.get(\"/admin/state\"))" +
+      "          const postState = stateSnapshot(await (await client.get(\"/admin/state\"))" +
         ".json()) as any;\n"
     )
     sb.append(invChecks)

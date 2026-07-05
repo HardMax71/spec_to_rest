@@ -121,6 +121,9 @@ trait StrategyBackend:
       val withExtraRegex = extraRegexes.foldLeft(withLenFilter)(regexFilter)
       predicateHelpers.foldLeft(withExtraRegex)(predicateFilter)
 
+private val Int32Min = BigInt(-2147483648)
+private val Int32Max = BigInt(2147483647)
+
 object PythonHypothesisStrategy extends StrategyBackend:
   // Postgres text rejects NUL outright (CharacterNotInRepertoireError), and
   // the spec's semantics carry no encoding model, so generated strings must
@@ -129,8 +132,10 @@ object PythonHypothesisStrategy extends StrategyBackend:
   private val TextAlphabet =
     "alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))"
 
-  def string: String       = s"st.text($TextAlphabet)"
-  def int: String          = "st.integers()"
+  def string: String = s"st.text($TextAlphabet)"
+  // The python transport validates Int as int32 (pydantic conint), so
+  // generated integers stay inside that window or the route 422s the draw.
+  def int: String          = s"st.integers(min_value=$Int32Min, max_value=$Int32Max)"
   def float: String        = "st.floats(allow_nan=False, allow_infinity=False)"
   def bool: String         = "st.booleans()"
   def datetime: String     = "st.datetimes()"
@@ -187,11 +192,9 @@ object PythonHypothesisStrategy extends StrategyBackend:
 
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
-      val args = List(
-        minOpt.map(n => s"min_value=${n}"),
-        maxOpt.map(n => s"max_value=${n}")
-      ).flatten.mkString(", ")
-      if args.isEmpty then "st.integers()" else s"st.integers($args)"
+      val lo = minOpt.map(n => BigInt(n.toString).max(Int32Min)).getOrElse(Int32Min)
+      val hi = maxOpt.map(n => BigInt(n.toString).min(Int32Max)).getOrElse(Int32Max)
+      s"st.integers(min_value=$lo, max_value=$hi)"
 
   def functionName(typeName: String): String =
     s"strategy_${specrest.ir.Naming.toSnakeCase(typeName)}"

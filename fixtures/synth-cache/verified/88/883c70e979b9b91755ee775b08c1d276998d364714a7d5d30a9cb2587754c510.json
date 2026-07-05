@@ -1,0 +1,11 @@
+{
+  "candidate" : "todo := st.todos[id].(status := IN_PROGRESS);\n  st.todos := st.todos[id := todo];",
+  "body" : "todo := st.todos[id].(status := IN_PROGRESS);\n  st.todos := st.todos[id := todo];",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

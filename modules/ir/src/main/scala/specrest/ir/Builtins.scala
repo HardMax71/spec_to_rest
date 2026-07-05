@@ -62,8 +62,10 @@ object Builtins:
   val Ran: BuiltinSpec = BuiltinSpec(
     name = "ran",
     arity = 1,
-    py = a => s"set(${a(0)}.values())",
-    ts = a => s"new Set(Object.values(${a(0)}))",
+    // The values are row dicts/objects in the oracles: membership must work
+    // elementwise, and hashing a dict throws, so ran stays a list view.
+    py = a => s"list(${a(0)}.values())",
+    ts = a => s"Object.values(${a(0)})",
     go = a => s"_values(${a(0)})",
     description = "value-set of a map"
   )

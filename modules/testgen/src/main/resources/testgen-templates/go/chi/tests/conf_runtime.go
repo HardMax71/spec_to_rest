@@ -247,6 +247,33 @@ func _num(x any) (float64, bool) {
 	return 0, false
 }
 
+// Set equality for set-typed positions: JSON carries sets as arrays that
+// may hold duplicates the set semantics collapse, so compare mutual
+// containment, not multisets.
+func _setEq(a, b any) bool {
+	as := _slice(a)
+	bs := _slice(b)
+	contains := func(xs []any, v any) bool {
+		for _, x := range xs {
+			if _eq(x, v) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, x := range as {
+		if !contains(bs, x) {
+			return false
+		}
+	}
+	for _, y := range bs {
+		if !contains(as, y) {
+			return false
+		}
+	}
+	return true
+}
+
 func _cmp(a, b any) (int, bool) {
 	if fa, oka := _num(a); oka {
 		if fb, okb := _num(b); okb {

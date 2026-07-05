@@ -23,7 +23,15 @@ object StubOps:
     val isList = OperationContext.initialRouteKind(op) match
       case _: RkList => true
       case _         => false
-    if isList && outs.sizeIs == 1 then outs.headOption else None
+    // A single Seq-valued output is the bare response array whatever the
+    // route kind resolves to (filtered list ops classify as custom).
+    val seqOut = operOutputs(opDecl) match
+      case single :: Nil =>
+        prmType(single) match
+          case SeqTypeF(_, _) => true
+          case _              => false
+      case _ => false
+    if (isList || seqOut) && outs.sizeIs == 1 then outs.headOption else None
 
   def authSkipReason(op: ProfiledOperation): String =
     s"operation is protected by requires_auth (${op.requiresAuth.mkString(", ")}); " +

@@ -101,7 +101,18 @@ object AdminRouter:
        |    out: dict[str, Any] = {}
        |    for col in row.__table__.columns:
        |        v = getattr(row, col.name)
-       |        if isinstance(v, (datetime, date)):
+       |        if isinstance(v, datetime):
+       |            # Same canonical wire form as the API's responses; drivers
+       |            # hand back naive datetimes for UTC-stored columns. Dates
+       |            # and non-UTC offsets serialize unchanged.
+       |            iso = v.isoformat()
+       |            if iso.endswith("+00:00"):
+       |                v = iso.replace("+00:00", "Z")
+       |            elif v.tzinfo is None:
+       |                v = f"{iso}Z"
+       |            else:
+       |                v = iso
+       |        elif isinstance(v, date):
        |            v = v.isoformat()
        |        out[col.name] = v
        |    return out
@@ -140,6 +151,27 @@ object AdminRouter:
           val k = pyStringLit(n)
           s"    if $k in payload and payload[$k] is not None:\n        payload[$k] = _parse_iso(payload[$k])"
         lines.mkString("", "\n", "\n")
+    // Freshness counters (forall k in rel: k < counter) must move past a
+    // seeded key or every guarded call on the seeded state 409s.
+    val backingFields = svcState(ir)
+      .map(stdFields)
+      .getOrElse(Nil)
+      .filter(f => AdminModel.projectionFor(f, ir).exists(_.entityName == entName(entity)))
+    val counters = backingFields
+      .flatMap(f => specrest.convention.ScalarState.freshnessCounters(ir, stfName(f)))
+      .distinct
+    val counterBumps =
+      if counters.isEmpty then ""
+      else
+        val body = counters
+          .map { c =>
+            val col = specrest.convention.ScalarState.columnName(c)
+            s"    if state_row is not None and obj.$pkName >= state_row.$col:\n" +
+              s"        state_row.$col = obj.$pkName + 1\n"
+          }
+          .mkString
+        "    state_row = (await session.execute(select(ServiceState))).scalar_one_or_none()\n" +
+          body + "    await session.commit()\n"
     s"""|@router.post("/seed/$snake", status_code=201)
         |async def seed_$snake(
         |    payload: dict[str, Any] = Body(...),
@@ -150,7 +182,7 @@ object AdminRouter:
         |    session.add(obj)
         |    await session.commit()
         |    await session.refresh(obj)
-        |    return {"$pkName": obj.$pkName}
+        |$counterBumps    return {"$pkName": obj.$pkName}
         |""".stripMargin
 
   private def projectionLine(

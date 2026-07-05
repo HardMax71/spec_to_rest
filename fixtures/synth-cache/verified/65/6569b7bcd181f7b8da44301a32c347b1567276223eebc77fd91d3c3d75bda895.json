@@ -1,0 +1,11 @@
+{
+  "candidate" : "assert st.next_id !in st.todos;\n  todo := Todo(st.next_id, title, description, TODO, priority, now(), now(), None, tags);\n  st.todos := st.todos[todo.id := todo];\n  st.next_id := st.next_id + 1;",
+  "body" : "assert st.next_id !in st.todos;\n  todo := Todo(st.next_id, title, description, TODO, priority, now(), now(), None, tags);\n  st.todos := st.todos[todo.id := todo];\n  st.next_id := st.next_id + 1;",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "gpt-5-mini-2025-08-07",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

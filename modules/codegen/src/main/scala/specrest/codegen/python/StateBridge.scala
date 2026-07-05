@@ -12,6 +12,8 @@ import specrest.profile.ProfiledService
 // underscores (the Dafny Python backend's identifier escaping).
 object StateBridge:
 
+  import specrest.codegen.KernelTypes.Kind
+
   private val ScalarPyTypes = Set("str", "int", "bool", "datetime")
 
   export specrest.codegen.StatePlan.Plan
@@ -21,35 +23,87 @@ object StateBridge:
   private def baseType(domainType: String): String =
     domainType.replaceAll("\\s*\\|\\s*None$", "").trim
 
+  // Beyond bare scalars the bridge marshals enum-typed fields (string
+  // columns, Dafny datatype values) and scalar-element collections (JSON
+  // columns, Dafny sets/seqs); the spec type decides, not the column type.
+  private def kindFor(profiled: ProfiledService, entityName: String, f: ProfiledField) =
+    specrest.codegen.KernelTypes.fieldKind(profiled.ir, entityName, f.fieldName)
+
+  private def kindSupported(k: Option[Kind], nullable: Boolean): Boolean = k match
+    case Some(Kind.Scalar(b))                => ScalarPyTypes.contains(b)
+    case Some(Kind.EnumK(_))                 => true
+    case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
+    case Some(Kind.OptOf(inner))             =>
+      // Nullable collections have no bridge conversions on any target yet.
+      inner match
+        case Kind.SetOf(_) | Kind.SeqOf(_) => false
+        case _                             => kindSupported(Some(inner), nullable = false)
+    case _ => false
+
   def plan(profiled: ProfiledService): Either[String, Plan] =
     specrest.codegen.StatePlan.analyze(
       profiled,
-      fieldSupported = f => ScalarPyTypes.contains(baseType(f.domainType)),
+      fieldSupported = f =>
+        val owner = profiled.entities
+          .find(_.fields.exists(_ eq f))
+          .map(_.entityName)
+        owner.exists(en => kindSupported(kindFor(profiled, en, f), f.nullable)) ||
+        ScalarPyTypes.contains(baseType(f.domainType))
+      ,
       keySupported = k => Set("str", "int").contains(baseType(k.domainType)) && !k.nullable,
       seqSupported = true
     )
 
   def hasState(plan: Plan): Boolean = plan.hasState
 
-  private def toDafnyFieldExpr(f: ProfiledField, rowRef: String): String =
+  private def toDafnyFieldExpr(kind: Option[Kind], f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${f.columnName}"
-    val conv = baseType(f.domainType) match
-      case "str"      => (v: String) => s"to_dafny_str($v)"
-      case "datetime" => (v: String) => s"_epoch($v)"
-      case "bool"     => (v: String) => s"bool($v)"
-      case _          => (v: String) => s"int($v)"
-    if f.nullable then s"_some_or_none($access, ${convName(f)})"
-    else conv(access)
+    // A nullable field resolves to OptOf(inner); optionality rides on the
+    // profiled nullable flag, so the arms match on the payload kind.
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        s"enum_to_dafny(\"$n\", $access)"
+      case Some(Kind.EnumK(n)) =>
+        s"_some_or_none($access, lambda _v: enum_to_dafny(\"$n\", _v))"
+      case Some(Kind.SetOf(el)) =>
+        s"to_dafny_set(${elemToDafny(el, "_x")} for _x in $access)"
+      case Some(Kind.SeqOf(el)) =>
+        s"to_dafny_seq([${elemToDafny(el, "_x")} for _x in $access])"
+      case _ =>
+        val conv = baseType(f.domainType) match
+          case "str"      => (v: String) => s"to_dafny_str($v)"
+          case "datetime" => (v: String) => s"_epoch($v)"
+          case "bool"     => (v: String) => s"bool($v)"
+          case _          => (v: String) => s"int($v)"
+        if f.nullable then s"_some_or_none($access, ${convName(f)})"
+        else conv(access)
 
-  private def fromDafnyFieldExpr(f: ProfiledField, valueRef: String): String =
+  private def elemToDafny(el: String, ref: String): String =
+    if el == "str" then s"to_dafny_str($ref)" else s"int($ref)"
+
+  private def elemFromDafny(el: String, ref: String): String =
+    if el == "str" then s"from_dafny_str($ref)" else s"int($ref)"
+
+  private def fromDafnyFieldExpr(kind: Option[Kind], f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef.${specrest.codegen.EmitShared.pyDafnySelector(f.fieldName)}"
-    def conv(v: String): String = baseType(f.domainType) match
-      case "str"      => s"from_dafny_str($v)"
-      case "datetime" => s"_from_epoch($v)"
-      case "bool"     => s"bool($v)"
-      case _          => s"int($v)"
-    if f.nullable then s"_value_or_none($access, ${convBackName(f)})"
-    else conv(access)
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        s"enum_from_dafny(\"$n\", $access)"
+      case Some(Kind.EnumK(n)) =>
+        s"_value_or_none($access, lambda _v: enum_from_dafny(\"$n\", _v))"
+      case Some(Kind.SetOf(el)) =>
+        // Sets serialize sorted so the JSON column is deterministic.
+        s"sorted(${elemFromDafny(el, "_x")} for _x in $access)"
+      case Some(Kind.SeqOf(el)) =>
+        s"[${elemFromDafny(el, "_x")} for _x in $access]"
+      case _ =>
+        def conv(v: String): String = baseType(f.domainType) match
+          case "str"      => s"from_dafny_str($v)"
+          case "datetime" => s"_from_epoch($v)"
+          case "bool"     => s"bool($v)"
+          case _          => s"int($v)"
+        if f.nullable then s"_value_or_none($access, ${convBackName(f)})"
+        else conv(access)
 
   private def convName(f: ProfiledField): String = baseType(f.domainType) match
     case "str"      => "to_dafny_str"
@@ -109,7 +163,7 @@ object StateBridge:
           hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_seq(["
           hydrateLines += s"        module_.${r.entity.entityName}_${r.entity.entityName}("
           for f <- r.entity.fields do
-            hydrateLines += s"            ${toDafnyFieldExpr(f, "r")},"
+            hydrateLines += s"            ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, f), f, "r")},"
           hydrateLines += "        )"
           hydrateLines += s"        for r in ${rows}_ordered"
           hydrateLines += "    ])"
@@ -117,11 +171,11 @@ object StateBridge:
           hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_map({"
           r.valueField match
             case Some(vf) =>
-              hydrateLines += s"        ${keyToDafny(key, "r")}: ${toDafnyFieldExpr(vf, "r")}"
+              hydrateLines += s"        ${keyToDafny(key, "r")}: ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, vf), vf, "r")}"
             case None =>
               hydrateLines += s"        ${keyToDafny(key, "r")}: module_.${r.entity.entityName}_${r.entity.entityName}("
               for f <- r.entity.fields do
-                hydrateLines += s"            ${toDafnyFieldExpr(f, "r")},"
+                hydrateLines += s"            ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, f), f, "r")},"
               hydrateLines += "        )"
           hydrateLines += s"        for r in $rows"
           hydrateLines += "    })"
@@ -151,11 +205,11 @@ object StateBridge:
       persistLines += s"        if ${snake}_row is None:"
       persistLines += s"            session.add(${e.modelClassName}("
       for f <- e.fields do
-        persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(f, s"${snake}_value")},"
+        persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
       persistLines += "            ))"
       persistLines += "        else:"
       for f <- e.fields if f.fieldName != key.fieldName do
-        persistLines += s"            ${snake}_row.${f.columnName} = ${fromDafnyFieldExpr(f, s"${snake}_value")}"
+        persistLines += s"            ${snake}_row.${f.columnName} = ${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")}"
       persistLines += s"    for ${snake}_key, ${snake}_row in ${snake}_rows.items():"
       persistLines += s"        if ${snake}_key not in ${snake}_post:"
       persistLines += s"            await session.delete(${snake}_row)"
@@ -170,7 +224,7 @@ object StateBridge:
       persistLines += s"    for ${snake}_value in from_dafny_seq(st.${dafnyName(r.stateField)}):"
       persistLines += s"        session.add(${e.modelClassName}("
       for f <- e.fields do
-        persistLines += s"            ${f.columnName}=${fromDafnyFieldExpr(f, s"${snake}_value")},"
+        persistLines += s"            ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
       persistLines += "        ))"
     if planned.scalars.nonEmpty then
       persistLines += "    scalar_row = ("
@@ -217,9 +271,36 @@ object StateBridge:
       (if needsDatetime then "\nfrom datetime import datetime, timezone" else "") match
         case dt if needsDatetime || needsOptional => s"$dt\nfrom typing import Any\n"
         case dt                                   => s"$dt\n"
+    val usesEnum = planned.relations.exists(r =>
+      r.entity.fields.exists(f =>
+        kindFor(profiled, r.entity.entityName, f).exists {
+          case Kind.EnumK(_) => true
+          case _             => false
+        }
+      )
+    )
+    val usesSet = planned.relations.exists(r =>
+      r.entity.fields.exists(f =>
+        kindFor(profiled, r.entity.entityName, f).exists {
+          case Kind.SetOf(_) => true
+          case _             => false
+        }
+      )
+    )
+    val usesSeqField = planned.relations.exists(r =>
+      r.entity.fields.exists(f =>
+        kindFor(profiled, r.entity.entityName, f).exists {
+          case Kind.SeqOf(_) => true
+          case _             => false
+        }
+      )
+    )
     val adapterNames =
       (List("from_dafny_map", "from_dafny_str", "make_state", "to_dafny_map", "to_dafny_str") :::
-        (if seqRelations.nonEmpty then List("from_dafny_seq", "to_dafny_seq") else Nil)).sorted
+        (if seqRelations.nonEmpty || usesSeqField then List("from_dafny_seq", "to_dafny_seq")
+         else Nil) :::
+        (if usesEnum then List("enum_from_dafny", "enum_to_dafny") else Nil) :::
+        (if usesSet then List("to_dafny_set") else Nil)).sorted
 
     s"""from __future__ import annotations
        |${datetimeImport}

@@ -9,6 +9,7 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
+import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
@@ -86,6 +87,7 @@ final private case class GoOperation(
     kernelRedirect: Boolean,
     kernelNoResult: Boolean,
     kernelHandlerArgs: String,
+    kernelQueryBinds: List[String],
     lookupColumn: String,
     createAssigns: List[String],
     authMiddleware: Option[String]
@@ -113,6 +115,7 @@ final private case class GoEntityCtx(
     usesNotFound: Boolean,
     usesErrors: Boolean,
     servicesNeedTime: Boolean,
+    servicesNeedDafnyRuntime: Boolean,
     serviceStdlibImports: String,
     usesSqlNoRows: Boolean,
     usesKernel: Boolean,
@@ -647,11 +650,13 @@ object EmitGo:
       usesNotFound = usesNotFound,
       usesErrors = usesErrors,
       servicesNeedTime = operations.exists(_.kernelServiceMethod.contains("time.Unix(")),
+      servicesNeedDafnyRuntime = operations.exists(_.kernelServiceMethod.contains("_dafny.")),
       serviceStdlibImports = {
         val lines = List(
           Option.when(operations.nonEmpty)("\"context\""),
           Option.when(usesSqlNoRows)("\"database/sql\""),
           Option.when(usesErrors)("\"errors\""),
+          Option.when(operations.exists(_.kernelServiceMethod.contains("sort.")))("\"sort\""),
           Option.when(operations.exists(_.kernelServiceMethod.contains("time.Unix(")))("\"time\"")
         ).flatten
         if lines.isEmpty then "" else lines.map("\t" + _).mkString("", "\n", "\n\n")
@@ -869,8 +874,24 @@ object EmitGo:
         kernelCtx
       )
     val kernelNoResult = kernelMethod.exists(_._2)
+    // Query params bind in the handler: absent means nil, so an omitted
+    // optional filter never reaches the enum check as an empty string.
+    val kernelQueryBinds =
+      if kernelMethod.isDefined then
+        endpoint.queryParams.flatMap { p =>
+          val v = toCamelCase(p.name)
+          List(
+            s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
+            s"var $v *string",
+            s"if ${v}Raw != \"\" {",
+            s"\t$v = &${v}Raw",
+            "}"
+          )
+        }
+      else Nil
     val kernelHandlerArgs =
       (endpoint.pathParams.map(p => toCamelCase(p.name)) ++
+        endpoint.queryParams.map(p => toCamelCase(p.name)) ++
         (if hasRequestBody then List("body") else Nil)).mkString(", ")
 
     GoOperation(
@@ -902,6 +923,7 @@ object EmitGo:
       kernelRedirect = isRedirectKind,
       kernelNoResult = kernelNoResult,
       kernelHandlerArgs = kernelHandlerArgs,
+      kernelQueryBinds = kernelQueryBinds,
       lookupColumn = lookupCol,
       createAssigns = createAssigns,
       authMiddleware = Option.when(op.requiresAuth.nonEmpty)(
@@ -1099,6 +1121,29 @@ func sampleCandidate(length int, charset string) (string, error) {
   // Returns None (the caller falls back to the route-kind stub) unless the op is kernel-bound,
   // every input/output is a supported scalar, and the spec's state round-trips through the
   // bridge; query-param inputs and collection/datatype results remain deferred follow-ups.
+  final private case class GoConv(pre: List[String], expr: String)
+
+  private def goElemToDafny(el: String, ref: String): String =
+    if el == "str" then s"dafnykernel.StringToDafny($ref)" else s"dafnykernel.IntToDafny($ref)"
+
+  // Statement-level: gofmt rejects inline closures, so a collection converts
+  // through hoisted lines that build a slice and splat it into the ctor.
+  private def goCollLines(
+      el: String,
+      access: String,
+      local: String,
+      seq: Boolean,
+      indent: String
+  ): List[String] =
+    val ctor = if seq then "SeqOf" else "SetOf"
+    List(
+      s"$indent${local}Elems := make([]interface{}, 0, len($access))",
+      s"${indent}for _, x := range ${access.stripPrefix("(").stripSuffix(")")} {",
+      s"$indent\t${local}Elems = append(${local}Elems, ${goElemToDafny(el, "x")})",
+      s"$indent}",
+      s"$indent$local := _dafny.$ctor(${local}Elems...)"
+    )
+
   private def goKernelServiceMethod(
       op: ProfiledOperation,
       entity: ProfiledEntity,
@@ -1111,55 +1156,170 @@ func sampleCandidate(length int, charset string) (string, error) {
   ): Option[(String, Boolean)] =
     val endpoint = op.endpoint
     op.dafnyMethod
-      .filter(_ => endpoint.queryParams.isEmpty && kernelCtx.stateReady)
+      .filter(_ => kernelCtx.stateReady)
       .flatMap: dafnyName =>
+        // Inputs convert by their spec kinds: scalars inline, enums through
+        // the bridge's per-enum checked helpers (statement-level, since they
+        // reject invalid members with an error), scalar collections via the
+        // set/seq builders, options by nil-guarding the pointer.
+        def inputToDafny(
+            specName: String,
+            access: String,
+            kind: KernelTypes.Kind
+        ): Option[GoConv] =
+          kind match
+            case KernelTypes.Kind.Scalar("str") =>
+              Some(GoConv(Nil, s"dafnykernel.StringToDafny($access)"))
+            case KernelTypes.Kind.Scalar("int") =>
+              Some(GoConv(Nil, s"dafnykernel.IntToDafny($access)"))
+            case KernelTypes.Kind.Scalar("bool") => Some(GoConv(Nil, access))
+            case KernelTypes.Kind.Scalar(_)      => None
+            case KernelTypes.Kind.EnumK(n) =>
+              val local  = "conv" + toPascalCase(specName)
+              val helper = StateBridgeGo.enumHelperName(n, toDafny = true)
+              Some(
+                GoConv(
+                  List(
+                    s"\t\t$local, err$local := ${helper}Checked($access)",
+                    s"\t\tif err$local != nil {",
+                    s"\t\t\treturn err$local",
+                    "\t\t}"
+                  ),
+                  local
+                )
+              )
+            case KernelTypes.Kind.SetOf(el) =>
+              val local = "conv" + toPascalCase(specName)
+              Some(GoConv(goCollLines(el, access, local, seq = false, indent = "\t\t"), local))
+            case KernelTypes.Kind.SeqOf(el) =>
+              val local = "conv" + toPascalCase(specName)
+              Some(GoConv(goCollLines(el, access, local, seq = true, indent = "\t\t"), local))
+            case KernelTypes.Kind.OptOf(inner) =>
+              val local = "opt" + toPascalCase(specName)
+              inner match
+                case KernelTypes.Kind.Scalar("str") =>
+                  Some(GoConv(Nil, s"dafnykernel.OptStringToDafny($access)"))
+                case KernelTypes.Kind.Scalar("int") =>
+                  Some(GoConv(Nil, s"dafnykernel.OptIntToDafny($access)"))
+                case KernelTypes.Kind.EnumK(n) =>
+                  val helper = StateBridgeGo.enumHelperName(n, toDafny = true)
+                  Some(
+                    GoConv(
+                      List(
+                        s"\t\t$local := dafnykernel.Companion_Option_.Create_None_()",
+                        s"\t\tif $access != nil {",
+                        s"\t\t\tev, errEv := ${helper}Checked(*$access)",
+                        "\t\t\tif errEv != nil {",
+                        "\t\t\t\treturn errEv",
+                        "\t\t\t}",
+                        s"\t\t\t$local = dafnykernel.Companion_Option_.Create_Some_(ev)",
+                        "\t\t}"
+                      ),
+                      local
+                    )
+                  )
+                case KernelTypes.Kind.SetOf(el) =>
+                  val inner = local + "Set"
+                  Some(
+                    GoConv(
+                      List(
+                        s"\t\t$local := dafnykernel.Companion_Option_.Create_None_()",
+                        s"\t\tif $access != nil {"
+                      ) :::
+                        goCollLines(el, s"(*$access)", inner, seq = false, indent = "\t\t\t") :::
+                        List(
+                          s"\t\t\t$local = dafnykernel.Companion_Option_.Create_Some_($inner)",
+                          "\t\t}"
+                        ),
+                      local
+                    )
+                  )
+                case _ => None
+        val specInputTypes = svcOperations(kernelCtx.ir)
+          .find(o => operName(o) == op.operationName)
+          .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
+          .getOrElse(Map.empty)
+        val queryNames = endpoint.queryParams.map(_.name).toSet
+        // Query values arrive as strings, so only string-shaped kinds convert.
+        def queryKindOk(k: KernelTypes.Kind): Boolean =
+          KernelTypes.unwrapOpt(k) match
+            case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+            case _                                                          => false
         val inputSources =
-          endpoint.pathParams.map(p =>
-            toCamelCase(p.name) -> goTypeForParam(p.typeExpr, typeLookup)
-          ) ++
-            endpoint.bodyParams.map(p =>
-              s"body.${toPascalCase(p.name)}" -> goTypeForParam(p.typeExpr, typeLookup)
-            )
-        val convertedArgs = inputSources.map: (access, goType) =>
-          goKernelScalarConv.get(goType).map: (toDafny, _) =>
-            if toDafny.isEmpty then access else s"$toDafny($access)"
+          endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
+            endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
+            endpoint.bodyParams.map(p => p.name -> s"body.${toPascalCase(p.name)}")
+        val convertedArgs = inputSources.map: (specName, access) =>
+          specInputTypes
+            .get(specName)
+            .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+            .filter(k => !queryNames.contains(specName) || queryKindOk(k))
+            .flatMap(k => inputToDafny(specName, access, k))
         val outputs = op.responseFields
         val specOutputs = svcOperations(kernelCtx.ir)
           .find(o => operName(o) == op.operationName)
           .map(operOutputs)
           .getOrElse(Nil)
         // Mirrors the python marshalling: no outputs is a plain effect call,
-        // a single entity output projects the entity's read shape flat, and
-        // scalar outputs unpack positionally.
+        // a single entity output projects the read shape nested under the
+        // output name, a Seq of entities projects per element into the bare
+        // array, and scalar outputs unpack positionally.
         val entityOutput = specOutputs match
           case single :: Nil =>
             prmType(single) match
               case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
               case _                => None
           case _ => None
+        val seqEntityOutput = specOutputs match
+          case single :: Nil =>
+            prmType(single) match
+              case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
+              case _                             => None
+          case _ => None
         val entityOutputFields = entityOutput
+          .orElse(seqEntityOutput)
           .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
           .getOrElse(Nil)
         val goEntityTypes = Set("string", "int64", "bool", "time.Time")
+        val outFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
+          .orElse(seqEntityOutput)
+          .map(e =>
+            e.fields.flatMap { f =>
+              KernelTypes
+                .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
+                .map {
+                  case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
+                  case other                         => f.fieldName -> other
+                }
+            }.toMap
+          )
+          .getOrElse(Map.empty)
+        def outFieldOk(f: ProfiledField): Boolean =
+          outFieldKinds.get(f.fieldName) match
+            case Some(KernelTypes.Kind.EnumK(_))                             => true
+            case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+            case _                                                           => goEntityTypes.contains(f.domainType.stripPrefix("*"))
         val outputsOk =
           if specOutputs.isEmpty then true
-          else if entityOutput.isDefined then
-            entityOutputFields.nonEmpty && entityOutputFields.forall(f =>
-              goEntityTypes.contains(f.domainType.stripPrefix("*"))
-            )
+          else if entityOutput.isDefined || seqEntityOutput.isDefined then
+            entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
           else outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
         Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
           val candidates = op.dafnyCandidates.map: c =>
             (toCamelCase(c.param), c.sampleLength, goCandidateCharsetConst(c.param))
-          val candArgs = candidates.map((v, _, _) => s"dafnykernel.StringToDafny($v)")
-          val args     = convertedArgs.flatten ++ candArgs
-          val callArgs = ("state" :: args).mkString(", ")
-          val call     = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
-          val guard    = s"dafnykernel.Companion_Default___.Requires$dafnyName($callArgs)"
+          val candArgs  = candidates.map((v, _, _) => s"dafnykernel.StringToDafny($v)")
+          val convs     = convertedArgs.flatten
+          val convLines = convs.flatMap(_.pre)
+          val args      = convs.map(_.expr) ++ candArgs
+          val callArgs  = ("state" :: args).mkString(", ")
+          val call      = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
+          val guard     = s"dafnykernel.Companion_Default___.Requires$dafnyName($callArgs)"
           val sigParts =
             endpoint.pathParams.map(p =>
               s"${toCamelCase(p.name)} ${goTypeForParam(p.typeExpr, typeLookup)}"
-            ) ++ Option.when(hasRequestBody)(s"body models.$requestBodyType")
+            ) ++
+              endpoint.queryParams.map(p => s"${toCamelCase(p.name)} *string") ++
+              Option.when(hasRequestBody)(s"body models.$requestBodyType")
           val sig = if sigParts.isEmpty then "" else sigParts.mkString(", ", ", ", "")
           def fromDafny(f: ProfiledField, v: String): String =
             val conv = goKernelScalarConv(f.domainType)._2
@@ -1169,20 +1329,51 @@ func sampleCandidate(length int, charset string) (string, error) {
             case "int64"  => "0"
             case "bool"   => "false"
             case _        => "nil"
-          val noResult = specOutputs.isEmpty
+          val noResult         = specOutputs.isEmpty
+          val entityFieldKinds = outFieldKinds
           val (returnType, zero, resultAssign) =
             if noResult then ("error", "", List(s"\t\t$call"))
             else if entityOutput.isDefined then
-              // Keys match the entity read shape's json tags (column names).
+              // Keys match the entity read shape's json tags (column names);
+              // the response nests under the spec's output name, the shape
+              // the ensures clauses describe.
+              val outName   = specOutputs.headOption.map(prmName).getOrElse("result")
               val keyTokens = entityOutputFields.map(f => s"\"${f.columnName}\":")
               val keyWidth  = keyTokens.map(_.length).max
-              val entries = entityOutputFields.zip(keyTokens).map: (f, key) =>
-                s"\t\t\t${key.padTo(keyWidth, ' ')} ${StateBridgeGo.fromDafnyExpr(f, "out")},"
+              val parts = entityOutputFields.map(f =>
+                StateBridgeGo.fromDafnyParts(entityFieldKinds.get(f.fieldName), f, "out", "\t\t")
+              )
+              val preLines = parts.flatMap(_._1)
+              val entries = entityOutputFields.zip(keyTokens).zip(parts).map: (fk, part) =>
+                s"\t\t\t\t${fk._2.padTo(keyWidth, ' ')} ${part._2},"
               (
                 "(map[string]any, error)",
                 "nil",
-                (s"\t\tout := $call" :: "\t\tresult = map[string]any{" :: entries) :::
-                  List("\t\t}")
+                (s"\t\tout := $call" :: preLines) :::
+                  ("\t\tresult = map[string]any{" ::
+                    s"\t\t\t\"$outName\": map[string]any{" :: entries) :::
+                  List("\t\t\t},", "\t\t}")
+              )
+            else if seqEntityOutput.isDefined then
+              val keyTokens = entityOutputFields.map(f => s"\"${f.columnName}\":")
+              val keyWidth  = keyTokens.map(_.length).max
+              val parts = entityOutputFields.map(f =>
+                StateBridgeGo.fromDafnyParts(entityFieldKinds.get(f.fieldName), f, "elem", "\t\t\t")
+              )
+              val preLines = parts.flatMap(_._1)
+              val entries = entityOutputFields.zip(keyTokens).zip(parts).map: (fk, part) =>
+                s"\t\t\t\t${fk._2.padTo(keyWidth, ' ')} ${part._2},"
+              (
+                "([]map[string]any, error)",
+                "nil",
+                (s"\t\tout := $call" ::
+                  "\t\tresult = make([]map[string]any, 0)" ::
+                  "\t\tit := _dafny.Iterate(out)" ::
+                  "\t\tfor v, ok := it(); ok; v, ok = it() {" ::
+                  s"\t\t\telem := v.(dafnykernel.${seqEntityOutput.map(_.entityName).getOrElse("")})" ::
+                  preLines) :::
+                  ("\t\t\tresult = append(result, map[string]any{" :: entries) :::
+                  List("\t\t\t})", "\t\t}")
               )
             else
               outputs match
@@ -1209,9 +1400,10 @@ func sampleCandidate(length int, charset string) (string, error) {
                       List("\t\t}")
                   )
           val resultDecl = returnType match
-            case "error"                   => ""
-            case "(map[string]any, error)" => "\tvar result map[string]any"
-            case other                     => s"\tvar result ${outputs.head.domainType}"
+            case "error"                     => ""
+            case "(map[string]any, error)"   => "\tvar result map[string]any"
+            case "([]map[string]any, error)" => "\tvar result []map[string]any"
+            case other                       => s"\tvar result ${outputs.head.domainType}"
           val invCheck =
             if kernelCtx.hasInv then
               List(
@@ -1262,7 +1454,7 @@ func sampleCandidate(length int, charset string) (string, error) {
                 "\tif err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {" ::
                 "\t\tstate, err := hydrateState(ctx, tx)" ::
                 "\t\tif err != nil {" :: "\t\t\treturn err" :: "\t\t}" ::
-                (invCheck ::: guardCheck ::: resultAssign :::
+                (convLines ::: invCheck ::: guardCheck ::: resultAssign :::
                   List(
                     "\t\tif err := persistState(ctx, tx, state); err != nil {",
                     "\t\t\treturn err",
@@ -1278,7 +1470,7 @@ func sampleCandidate(length int, charset string) (string, error) {
               (header :: resultDecl ::
                 "\tstate := dafnykernel.MakeState()" ::
                 "\terr := func() error {" ::
-                (invCheck ::: guardCheck ::: resultAssign :::
+                (convLines ::: invCheck ::: guardCheck ::: resultAssign :::
                   List(
                     "\t\treturn nil",
                     "\t}()",

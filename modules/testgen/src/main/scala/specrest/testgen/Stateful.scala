@@ -49,6 +49,10 @@ object Stateful:
 
   private enum RuleRole derives CanEqual:
     case CreateTarget(bundle: BundleSpec, pkProjection: String)
+    // A consuming rule that may legitimately 4xx: the id returns to its
+    // bundle on rejection (hypothesis's conditional-consumption idiom), so
+    // the model tracks the SUT in both directions.
+    case RestoreOnReject(bundle: BundleSpec, paramName: String)
     case Plain
 
   final private case class EventuallySpec(
@@ -359,15 +363,51 @@ object Stateful:
     if skipped.nonEmpty then (Right(Nil), skipped ++ roleSkips)
     else
       val stateFields = stateFieldNames(ir)
-      val ruleBody = buildRuleBlock(
-        pop = pop,
-        opDecl = opDecl,
-        bindings = bindings,
-        role = role,
-        stateFields = stateFields,
-        ir = ir
-      )
-      (Right(List(ruleBody)), roleSkips)
+      // A delete over status-partitioned bundles fans out to one rule per
+      // bundle, each consuming its own: a non-consuming union leaks deleted
+      // ids into later draws and breaks every strict rule downstream.
+      val isDelete = pop.kind match
+        case _: Deletea => true
+        case _          => false
+      val unionParam = bindings.collectFirst {
+        case (n, InputBinding.BundleUnion(bundles, unionStrict)) if isDelete =>
+          (n, bundles, unionStrict)
+      }
+      unionParam match
+        case Some((paramName, bundles, unionStrict)) =>
+          val ruleBodies = bundles.map: b =>
+            val perBundle = bindings.map {
+              case (n, _) if n == paramName =>
+                // Consuming is what fixes the stale-id leak; strictness stays
+                // whatever the recognizer derived, so unrecognized requires
+                // keep the tolerant 4xx path.
+                n -> InputBinding.BundleConsume(b, strictByConstruction = unionStrict)
+              case other => other
+            }
+            // A tolerant consuming delete restores the id on 4xx, since the
+            // row survives a rejected call.
+            val perBundleRole =
+              if unionStrict then role else RuleRole.RestoreOnReject(b, paramName)
+            buildRuleBlock(
+              pop = pop,
+              opDecl = opDecl,
+              bindings = perBundle,
+              role = perBundleRole,
+              stateFields = stateFields,
+              ir = ir,
+              nameSuffix = b.statusValue.map(v => s"_from_${v.toLowerCase}").getOrElse("")
+            )
+          (Right(ruleBodies), roleSkips)
+        case None =>
+          val ruleBody = buildRuleBlock(
+            pop = pop,
+            opDecl = opDecl,
+            bindings = bindings,
+            role = role,
+            stateFields = stateFields,
+            ir = ir
+          )
+          (Right(List(ruleBody)), roleSkips)
 
   private def stateFieldNames(ir: ServiceIRFull): Set[String] =
     irStateFieldNames(ir).toSet
@@ -413,7 +453,10 @@ object Stateful:
     val outputs = operOutputs(opDecl)
     outputs match
       case List(p) if isEntityType(prmType(p), bundle.entityName) =>
-        Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
+        // Entity outputs nest under the spec's output name.
+        Some(
+          s"response_data[${ExprToPython.pyString(prmName(p))}][${ExprToPython.pyString(bundle.pkFieldName)}]"
+        )
       case _ =>
         outputs
           .find(o => sameNamedType(prmType(o), bundle.pkTypeExpr))
@@ -532,11 +575,12 @@ object Stateful:
               InputBinding.BundleConsume(head, strictByConstruction = true)
             else InputBinding.BundleDraw(head, strictByConstruction)
           case multi =>
-            // Multi-bundle non-consuming union; for Delete this leaks ids past the
-            // SUT's view → subsequent draws may hit deleted ids and 4xx, so we mark
-            // it not strict-by-construction even when the recognizer fully understood.
-            val unionStrict = strictByConstruction && !isDelete
-            InputBinding.BundleUnion(multi, unionStrict)
+            // Deletes over a multi-bundle union fan out downstream into one
+            // consuming rule per bundle, so the recognizer's strictness
+            // carries through unmasked; per-bundle draws satisfy any status
+            // restriction by construction (activeBundles is already
+            // filtered).
+            InputBinding.BundleUnion(multi, strictByConstruction)
       case None =>
         val ctx       = StrategyCtx.OperationInput(pop.operationName, paramName)
         val overrides = TestStrategyOverrides.from(ir)
@@ -554,11 +598,12 @@ object Stateful:
       bindings: List[(String, InputBinding)],
       role: RuleRole,
       stateFields: Set[String],
-      ir: ServiceIRFull
+      ir: ServiceIRFull,
+      nameSuffix: String = ""
   ): String =
     val sb        = new StringBuilder
     val ruleArgs  = ruleDecoratorArgs(bindings, role)
-    val funcName  = Naming.toSnakeCase(operName(opDecl))
+    val funcName  = Naming.toSnakeCase(operName(opDecl)) + nameSuffix
     val sigParams = ("self" :: bindings.map(_._1)).mkString(", ")
 
     sb.append(s"    @rule($ruleArgs)\n")
@@ -604,6 +649,8 @@ object Stateful:
         case RuleRole.CreateTarget(_, proj) =>
           sb.append("        response_data = response.json() if response.content else {}\n")
           sb.append(s"        return $proj\n")
+        case RuleRole.RestoreOnReject(_, _) =>
+          sb.append("        return multiple()\n")
         case RuleRole.Plain =>
           ()
     else
@@ -614,6 +661,16 @@ object Stateful:
           sb.append(s"            return $proj\n")
           sb.append(
             "        elif 400 <= response.status_code < 500:\n            return multiple()\n"
+          )
+          sb.append(
+            "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
+          )
+        case RuleRole.RestoreOnReject(_, param) =>
+          sb.append(
+            s"        if response.status_code == $successCode:\n            return multiple()\n"
+          )
+          sb.append(
+            s"        elif 400 <= response.status_code < 500:\n            return $param\n"
           )
           sb.append(
             "        else:\n            assert False, f\"unexpected status {response.status_code}: {response.text}\"\n"
@@ -635,8 +692,9 @@ object Stateful:
       role: RuleRole
   ): String =
     val targetArg = role match
-      case RuleRole.CreateTarget(b, _) => List(s"target=${b.pyVarName}")
-      case RuleRole.Plain              => Nil
+      case RuleRole.CreateTarget(b, _)    => List(s"target=${b.pyVarName}")
+      case RuleRole.RestoreOnReject(b, _) => List(s"target=${b.pyVarName}")
+      case RuleRole.Plain                 => Nil
     val paramArgs = bindings.map: (name, b) =>
       val rhs = b match
         case InputBinding.BundleDraw(bundle, _)    => bundle.pyVarName

@@ -5,6 +5,7 @@ import (
 
 	"{{module}}/internal/config"
 {{#if entity.usesKernel}}	dafnykernel "{{module}}/internal/dafnykernel"
+{{/if}}{{#if entity.servicesNeedDafnyRuntime}}	_dafny "{{module}}/internal/dafnykernel/dafny"
 {{/if}}{{#if entity.usesModels}}	"{{module}}/internal/models"
 {{/if}})
 

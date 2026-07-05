@@ -181,8 +181,10 @@ object Strategies:
         case StrategyExpr.Code(t)     => StrategyExpr.Code(b.option(t))
         case s @ StrategyExpr.Skip(_) => s
     case SetTypeF(inner, _) =>
+      // Set inputs ride JSON request bodies, so they generate as unique
+      // lists; a language-level set literal is not JSON-serializable.
       bareExpression(inner, ir, b) match
-        case StrategyExpr.Code(t)     => StrategyExpr.Code(b.set(t))
+        case StrategyExpr.Code(t)     => StrategyExpr.Code(b.jsonSetUnique(t))
         case s @ StrategyExpr.Skip(_) => s
     case SeqTypeF(inner, _) =>
       bareExpression(inner, ir, b) match

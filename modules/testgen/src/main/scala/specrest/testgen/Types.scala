@@ -61,6 +61,9 @@ enum CaptureMode derives CanEqual:
 final case class TestCtx(
     inputs: Set[String],
     outputs: Set[String],
+    // Names (inputs, or entity fields) whose spec type is a Set: equality on
+    // them compares order-free, since JSON carries sets as arrays.
+    setTyped: Set[String] = Set.empty,
     stateFields: Set[String],
     mapStateFields: Set[String],
     enumValues: Map[String, Set[String]],
@@ -128,6 +131,27 @@ object StateKeys:
     go(name, Set.empty)
 
 object TestCtx:
+  private def isSetType(ir: ServiceIRFull, t: type_expr, fuel: Int = 8): Boolean =
+    if fuel <= 0 then false
+    else
+      t match
+        case SetTypeF(_, _)        => true
+        case OptionTypeF(inner, _) => isSetType(ir, inner, fuel - 1)
+        case NamedTypeF(n, _) =>
+          svcTypeAliases(ir).find(a => talName(a) == n).exists(a =>
+            isSetType(ir, talType(a), fuel - 1)
+          )
+        case _ => false
+
+  private def setTypedNames(ir: ServiceIRFull, op: Option[operation_decl]): Set[String] =
+    val inputNames = op.toList.flatMap(operInputs).collect {
+      case pd if isSetType(ir, prmType(pd)) => prmName(pd)
+    }
+    val fieldNames = svcEntities(ir).flatMap(entFields).collect {
+      case f if isSetType(ir, fldType(f)) => fldName(f)
+    }
+    (inputNames ::: fieldNames).toSet
+
   def fromOperation(
       op: operation_decl,
       ir: ServiceIRFull,
@@ -141,6 +165,7 @@ object TestCtx:
     TestCtx(
       inputs = operInputs(op).map(prmName).toSet,
       outputs = operOutputs(op).map(prmName).toSet,
+      setTyped = setTypedNames(ir, Some(op)),
       stateFields = stateNames,
       mapStateFields = mapStateNames,
       enumValues = enumVals,
@@ -194,6 +219,7 @@ object TestCtx:
     TestCtx(
       inputs = Set.empty,
       outputs = Set.empty,
+      setTyped = setTypedNames(ir, None),
       stateFields = stateFieldsAll.map(stfName).toSet,
       mapStateFields = stateFieldsAll.filter(f => isMapType(stfType(f))).map(stfName).toSet,
       enumValues = svcEnums(ir).map(e => enmName(e) -> enmVariants(e).toSet).toMap,

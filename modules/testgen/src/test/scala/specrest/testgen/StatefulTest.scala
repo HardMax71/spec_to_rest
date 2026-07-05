@@ -130,7 +130,7 @@ class StatefulTest extends CatsEffectSuite:
       assert(out.file.contains("@rule(target=todo_todo_ids"), out.file)
       assert(out.file.contains("def create_todo(self,"))
       assert(out.file.contains("strategy_priority()"))
-      assert(out.file.contains("return response_data[\"id\"]"))
+      assert(out.file.contains("return response_data[\"todo\"][\"id\"]"))
 
   // ---------- #153: per-status bundles ----------
 
@@ -218,19 +218,18 @@ class StatefulTest extends CatsEffectSuite:
         s"strict path — no loose 4xx fallback;\nblock=$getBlock"
       )
 
-  test("#153: DeleteTodo draws from union, non-consuming, loose"):
+  test("#153: DeleteTodo fans out per bundle, each consuming its own"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>
-      val out    = Stateful.emitFor(profiled)
-      val lines  = out.file.linesIterator.toList
-      val defIdx = lines.indexWhere(_.contains("def delete_todo"))
-      assert(defIdx > 0, s"missing delete_todo def:\n${out.file}")
-      val ruleLine = lines(defIdx - 1)
-      assertEquals(
-        ruleLine.trim,
-        "@rule(id=st.one_of(todo_todo_ids, todo_in_progress_ids, todo_done_ids, todo_archived_ids))",
-        s"DeleteTodo across multi-bundle union should be non-consuming;\nrule=$ruleLine"
-      )
-      assert(!ruleLine.contains("consumes("), s"DeleteTodo over union must NOT consume:\n$ruleLine")
+      val out   = Stateful.emitFor(profiled)
+      val lines = out.file.linesIterator.toList
+      List("todo", "in_progress", "done", "archived").foreach: status =>
+        val defIdx = lines.indexWhere(_.contains(s"def delete_todo_from_$status"))
+        assert(defIdx > 0, s"missing delete_todo_from_$status def:\n${out.file}")
+        val ruleLine = lines(defIdx - 1)
+        assert(
+          ruleLine.contains(s"consumes(todo_${status}_ids)"),
+          s"per-bundle delete must consume its bundle (stale ids break every strict rule):\n$ruleLine"
+        )
 
   test("#153: imports include consumes and multiple when used"):
     loadProfiled("fixtures/spec/todo_list.spec").map: profiled =>

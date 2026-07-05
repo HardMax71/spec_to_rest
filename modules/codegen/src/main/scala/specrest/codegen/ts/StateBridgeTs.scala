@@ -2,6 +2,10 @@ package specrest.codegen.ts
 
 import specrest.codegen.StatePlan
 import specrest.ir.Naming
+import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
+import specrest.ir.generated.SpecRestGenerated.enumNameFull
+import specrest.ir.generated.SpecRestGenerated.enumValuesFull
+import specrest.ir.generated.SpecRestGenerated.svcEnums
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledService
 
@@ -12,16 +16,44 @@ import specrest.profile.ProfiledService
 // base__url) and exposes datatype fields as dtor_ properties.
 object StateBridgeTs:
 
+  import specrest.codegen.KernelTypes.Kind
+
   private val ScalarTsTypes = Set("string", "number", "boolean", "Date")
+
+  private[codegen] def kindFor(ir: ServiceIRFull, entityName: String, f: ProfiledField) =
+    specrest.codegen.KernelTypes.fieldKind(ir, entityName, f.fieldName)
+
+  private def kindSupported(k: Option[Kind], nullable: Boolean): Boolean = k match
+    case Some(Kind.Scalar(_))                => true
+    case Some(Kind.EnumK(_))                 => true
+    case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
+    case Some(Kind.OptOf(inner)) =>
+      inner match
+        case Kind.SetOf(_) | Kind.SeqOf(_) => false
+        case _                             => kindSupported(Some(inner), nullable = false)
+    case _ => false
 
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
       profiled,
-      // Nullable ts fields carry the union spelling in domainType.
-      fieldSupported = f => ScalarTsTypes.contains(baseTs(f.domainType)),
+      // Nullable ts fields carry the union spelling in domainType; enum and
+      // scalar-collection fields resolve through the spec's kinds.
+      fieldSupported = f =>
+        ScalarTsTypes.contains(baseTs(f.domainType)) || {
+          val owner = profiled.entities
+            .find(_.fields.exists(_ eq f))
+            .map(_.entityName)
+          owner.exists(en => kindSupported(kindFor(profiled.ir, en, f), f.nullable))
+        },
       keySupported = k => Set("string", "number").contains(k.domainType) && !k.nullable,
       seqSupported = true
     )
+
+  private[codegen] def enumValuesLiteral(ir: ServiceIRFull, enumName: String): String =
+    svcEnums(ir)
+      .find(e => enumNameFull(e) == enumName)
+      .map(e => enumValuesFull(e).map(v => s"'$v'").mkString("[", ", ", "]"))
+      .getOrElse("[]")
 
   private def baseTs(domainType: String): String =
     domainType.replaceAll("\\s*\\|\\s*null$", "").trim
@@ -31,8 +63,35 @@ object StateBridgeTs:
 
   private def dafnyName(specName: String): String = specName.replace("_", "__")
 
-  private def toDafnyExpr(f: ProfiledField, rowRef: String): String =
+  private def elemToDafny(el: String, ref: String): String =
+    if el == "str" then s"stringToDafny($ref as string)" else s"intToDafny($ref as number)"
+
+  private def elemFromDafny(el: String, ref: String): String =
+    if el == "str" then s"stringFromDafny($ref)" else s"intFromDafny($ref)"
+
+  private[codegen] def toDafnyExpr(
+      ir: ServiceIRFull,
+      entityName: String,
+      f: ProfiledField,
+      rowRef: String
+  ): String =
     val access = s"$rowRef.${camel(f.fieldName)}"
+    kindFor(ir, entityName, f).map(specrest.codegen.KernelTypes.unwrapOpt) match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        s"enumToDafny('$n', $access as string)"
+      case Some(Kind.EnumK(n)) =>
+        s"someOrNone($access, (_v) => enumToDafny('$n', _v as string))"
+      case Some(Kind.SetOf(el)) if !f.nullable =>
+        s"dafnySetOf(($access as unknown[]).map((x) => ${elemToDafny(el, "x")}))"
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
+        s"dafnySeqOf(($access as unknown[]).map((x) => ${elemToDafny(el, "x")}))"
+      case Some(Kind.SetOf(el)) =>
+        s"someOrNone($access, (_v) => dafnySetOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
+      case Some(Kind.SeqOf(el)) =>
+        s"someOrNone($access, (_v) => dafnySeqOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
+      case _ => scalarToDafny(f, access)
+
+  private def scalarToDafny(f: ProfiledField, access: String): String =
     if f.nullable then
       baseTs(f.domainType) match
         case "string" => s"someOrNone($access, (v) => stringToDafny(v as string))"
@@ -47,8 +106,30 @@ object StateBridgeTs:
         case "Date"   => s"intToDafny(Math.floor($access.getTime() / 1000))"
         case _        => access
 
-  private[codegen] def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
+  private[codegen] def fromDafnyExpr(
+      ir: ServiceIRFull,
+      entityName: String,
+      f: ProfiledField,
+      valueRef: String
+  ): String =
     val access = s"$valueRef['dtor_${dafnyName(f.fieldName)}']"
+    kindFor(ir, entityName, f).map(specrest.codegen.KernelTypes.unwrapOpt) match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        s"enumFromDafny('$n', ${enumValuesLiteral(ir, n)}, $access)"
+      case Some(Kind.EnumK(n)) =>
+        s"(valueOrNull($access, (_v) => enumFromDafny('$n', ${enumValuesLiteral(ir, n)}, _v)) as string | null)"
+      case Some(Kind.SetOf(el)) if !f.nullable =>
+        // Sets serialize sorted so the JSON column stays deterministic.
+        s"dafnyCollToArray($access).map((v) => ${elemFromDafny(el, "v")}).sort()"
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
+        s"dafnyCollToArray($access).map((v) => ${elemFromDafny(el, "v")})"
+      case Some(Kind.SetOf(el)) =>
+        s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")}).sort()) as string[] | null)"
+      case Some(Kind.SeqOf(el)) =>
+        s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")})) as unknown[] | null)"
+      case _ => scalarFromDafny(f, access)
+
+  private def scalarFromDafny(f: ProfiledField, access: String): String =
     if f.nullable then
       baseTs(f.domainType) match
         case "string" => s"(valueOrNull($access, (v) => stringFromDafny(v)) as string | null)"
@@ -85,7 +166,9 @@ object StateBridgeTs:
     for r <- seqRelations do
       // Rows ordered by the serial pk are the seq, element order preserved.
       val rows = s"${camel(r.entity.entityName)}Rows"
-      val args = r.entity.fields.map(f => s"      ${toDafnyExpr(f, "r")},").mkString("\n")
+      val args = r.entity.fields.map(f =>
+        s"      ${toDafnyExpr(profiled.ir, r.entity.entityName, f, "r")},"
+      ).mkString("\n")
       hydrate ++= s"  st['${dafnyName(r.stateField)}'] = dafnySeqOf(${rows}.map((r) =>\n"
       hydrate ++= s"    dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    ),\n"
       hydrate ++= "  ));\n"
@@ -95,9 +178,11 @@ object StateBridgeTs:
       hydrate ++= s"  let $builder = emptyDafnyMap() as DafnyMap;\n"
       hydrate ++= s"  for (const r of $rows) {\n"
       val value = r.valueField match
-        case Some(vf) => toDafnyExpr(vf, "r")
+        case Some(vf) => toDafnyExpr(profiled.ir, r.entity.entityName, vf, "r")
         case None =>
-          val args = r.entity.fields.map(f => s"      ${toDafnyExpr(f, "r")},").mkString("\n")
+          val args = r.entity.fields.map(f =>
+            s"      ${toDafnyExpr(profiled.ir, r.entity.entityName, f, "r")},"
+          ).mkString("\n")
           s"dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    )"
       hydrate ++= s"    $builder = $builder.update(${keyToDafny(rKey, "r")}, $value);\n"
       hydrate ++= "  }\n"
@@ -120,7 +205,7 @@ object StateBridgeTs:
       persist ++= "    const value = v as Record<string, unknown>;\n"
       persist ++= s"    await tx.$client.create({\n      data: {\n"
       for f <- e.fields do
-        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(f, "value")},\n"
+        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
       persist ++= "      },\n    });\n"
       persist ++= "  }\n"
     for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
@@ -142,14 +227,14 @@ object StateBridgeTs:
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
       persist ++= "    const data = {\n"
       for f <- nonKey do
-        persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(f, "value")},\n"
+        persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
       persist ++= "    };\n"
       persist ++= s"    const row = ${client}Existing.get(key);\n"
       persist ++= "    if (row) {\n"
       persist ++= s"      await tx.$client.update({ where: { id: row.id }, data });\n"
       persist ++= "    } else {\n"
       persist ++= s"      await tx.$client.create({\n"
-      persist ++= s"        data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(rKey, "value")}, ...data },\n"
+      persist ++= s"        data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, rKey, "value")}, ...data },\n"
       persist ++= "      });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
@@ -183,7 +268,14 @@ object StateBridgeTs:
            else Nil)
       ::: (if planned.relations.exists(_.entity.fields.exists(_.nullable)) then
              List("someOrNone", "valueOrNull")
-           else Nil)).sorted
+           else Nil)
+      ::: {
+        // Kind-driven conversions pull their helpers by content scan: the
+        // hydrate/persist text is already assembled at this point.
+        val text = hydrate.toString + persist.toString
+        List("enumToDafny", "enumFromDafny", "dafnySetOf", "dafnyCollToArray")
+          .filter(n => text.contains(n + "("))
+      }).sorted.distinct
     s"""import type { Prisma } from '@prisma/client';
        |
        |import {

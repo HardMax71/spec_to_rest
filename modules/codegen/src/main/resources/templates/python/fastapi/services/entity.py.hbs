@@ -54,15 +54,27 @@ class {{entity.entityName}}Service:
 
 {{/unless}}
 {{#if this.dafnyMethod}}
-    async def {{this.handlerName}}(self{{#if this.kernelHandlerSignature}}, {{this.kernelHandlerSignature}}{{/if}}) -> {{this.serviceReturnAnnotation}}:
+{{#if this.kernelHandlerParams.length}}
+    async def {{this.handlerName}}(
+        self,
+{{#each this.kernelHandlerParams}}
+        {{this}},
+{{/each}}
+    ) -> {{this.serviceReturnAnnotation}}:
+{{else}}
+    async def {{this.handlerName}}(self) -> {{this.serviceReturnAnnotation}}:
+{{/if}}
 {{#if this.kernelHasState}}
         state = await hydrate_state(self._session)
 {{else}}
         state = make_state()
 {{/if}}
 {{#if this.kernelHasInv}}
+        # An invariant-violating stored state (possible via admin seeding) is
+        # outside every contract: requires begins with ServiceStateInv, so it
+        # maps to the same guard status as any other precondition failure.
         if not _dafny_kernel.ServiceStateInv(state):
-            raise HTTPException(status_code=500, detail="state invariant violated")
+            raise HTTPException(status_code=409, detail="precondition failed")
 {{/if}}
 {{#if this.kernelCandidates.length}}
         # Sampled candidates: exhaustion means a real precondition failure,

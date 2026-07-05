@@ -35,12 +35,27 @@ func placeholders(n int, pg bool) string {
 func normalize(v any) any {
 	switch x := v.(type) {
 	case []byte:
-		return string(x)
+		return normalizeText(string(x))
+	case string:
+		return normalizeText(x)
 	case time.Time:
 		return x.UTC().Format(time.RFC3339)
 	default:
 		return v
 	}
+}
+
+// A JSON-typed column comes back as its serialized text; the state
+// projection must expose the real array or object, not the string.
+func normalizeText(s string) any {
+	trimmed := strings.TrimSpace(s)
+	if strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+		var decoded any
+		if err := json.Unmarshal([]byte(trimmed), &decoded); err == nil {
+			return decoded
+		}
+	}
+	return s
 }
 
 func queryAll(ctx context.Context, db *bun.DB, q string) ([]map[string]any, error) {

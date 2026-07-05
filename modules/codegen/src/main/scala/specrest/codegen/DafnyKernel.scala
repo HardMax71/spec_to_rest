@@ -109,7 +109,7 @@ func m_specrest_externs_abs_int(n _dafny.Int) _dafny.Int {
   // inlined runtime has initialized).
   private val JsExternShim: String =
     """const { createHash: _sx_createHash } = require('node:crypto');
-      |const specrest_externs_now = () => new _dafny.BigNumber(Math.floor(Date.now() / 1000));
+      |const specrest_externs_now = () => new BigNumber(Math.floor(Date.now() / 1000));
       |const specrest_externs_days = (n) => n.multipliedBy(86400);
       |const specrest_externs_hours = (n) => n.multipliedBy(3600);
       |const specrest_externs_minutes = (n) => n.multipliedBy(60);

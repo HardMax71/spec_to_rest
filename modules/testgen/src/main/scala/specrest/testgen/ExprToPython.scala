@@ -138,6 +138,13 @@ object ExprToPython extends ExprBackendBase:
 
   def lambdaExpr(param: String, body: String): String = s"(lambda $param: ($body))"
 
+  def setEquals(l: String, r: String): String =
+    // True set equality: JSON arrays at set-typed positions may carry
+    // duplicates the set semantics collapse.
+    s"(set($l) == set($r))"
+
+  def negate(cond: String): String = s"(not $cond)"
+
   def matchesExpr(target: String, pattern: String): String =
     s"(re.fullmatch(${pyString(pattern)}, $target) is not None)"
 

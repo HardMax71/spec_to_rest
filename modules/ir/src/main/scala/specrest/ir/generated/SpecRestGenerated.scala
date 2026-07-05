@@ -7232,6 +7232,369 @@ object SpecRestGenerated {
         }
     }
 
+  def isOptionPosition(opts: List[String], optFields: List[String], x: expr): Boolean =
+    x match {
+      case BinaryOpF(_, _, _, _)         => false
+      case UnaryOpF(_, _, _)             => false
+      case QuantifierF(_, _, _, _)       => false
+      case SomeWrapF(_, _)               => false
+      case TheF(_, _, _, _)              => false
+      case FieldAccessF(_, f, _)         => string_in_list(f, optFields)
+      case EnumAccessF(_, _, _)          => false
+      case IndexF(_, _, _)               => false
+      case CallF(_, _, _)                => false
+      case PrimeF(_, _)                  => false
+      case PreF(_, _)                    => false
+      case WithF(_, _, _)                => false
+      case IfF(_, _, _, _)               => false
+      case LetF(_, _, _, _)              => false
+      case LambdaF(_, _, _)              => false
+      case ConstructorF(_, _, _)         => false
+      case SetLiteralF(_, _)             => false
+      case MapLiteralF(_, _)             => false
+      case SetComprehensionF(_, _, _, _) => false
+      case SeqLiteralF(_, _)             => false
+      case MatchesF(_, _, _)             => false
+      case IntLitF(_, _)                 => false
+      case FloatLitF(_, _)               => false
+      case StringLitF(_, _)              => false
+      case BoolLitF(_, _)                => false
+      case NoneLitF(_)                   => false
+      case IdentifierF(n, _)             => string_in_list(n, opts)
+    }
+
+  def substValueOpt_bindings(
+      vt: String,
+      vu: List[String],
+      vv: List[String],
+      x3: List[quantifier_binding]
+  ): List[quantifier_binding] =
+    (vt, vu, vv, x3) match {
+      case (vt, vu, vv, Nil) => Nil
+      case (p, opts, optFields, QuantifierBindingFull(n, d, kk, sp) :: bs) =>
+        QuantifierBindingFull(n, substValueOpt(p, opts, optFields, d), kk, sp) ::
+          substValueOpt_bindings(p, opts, optFields, bs)
+    }
+
+  def substValueOpt_entries(
+      vq: String,
+      vr: List[String],
+      vs: List[String],
+      x3: List[map_entry]
+  ): List[map_entry] =
+    (vq, vr, vs, x3) match {
+      case (vq, vr, vs, Nil) => Nil
+      case (p, opts, optFields, MapEntryFull(k, v, sp) :: es) =>
+        MapEntryFull(
+          substValueOpt(p, opts, optFields, k),
+          substValueOpt(p, opts, optFields, v),
+          sp
+        ) ::
+          substValueOpt_entries(p, opts, optFields, es)
+    }
+
+  def substValueOpt_fields(
+      vn: String,
+      vo: List[String],
+      vp: List[String],
+      x3: List[field_assign]
+  ): List[field_assign] =
+    (vn, vo, vp, x3) match {
+      case (vn, vo, vp, Nil) => Nil
+      case (p, opts, optFields, FieldAssignFull(f, v, sp) :: fs) =>
+        FieldAssignFull(f, substValueOpt(p, opts, optFields, v), sp) ::
+          substValueOpt_fields(p, opts, optFields, fs)
+    }
+
+  def substValueOpt_list(
+      vj: String,
+      vk: List[String],
+      vm: List[String],
+      x3: List[expr]
+  ): List[expr] =
+    (vj, vk, vm, x3) match {
+      case (vj, vk, vm, Nil) => Nil
+      case (p, opts, optFields, x :: xs) =>
+        substValueOpt(p, opts, optFields, x) ::
+          substValueOpt_list(p, opts, optFields, xs)
+    }
+
+  def substValueOpt(p: String, opts: List[String], optFields: List[String], x3: expr): expr =
+    (p, opts, optFields, x3) match {
+      case (p, opts, optFields, BinaryOpF(op, l, r, sp)) =>
+        equal_bin_op(op, BEq()) &&
+          ((l match {
+            case BinaryOpF(_, _, _, _)         => false
+            case UnaryOpF(_, _, _)             => false
+            case QuantifierF(_, _, _, _)       => false
+            case SomeWrapF(_, _)               => false
+            case TheF(_, _, _, _)              => false
+            case FieldAccessF(_, _, _)         => false
+            case EnumAccessF(_, _, _)          => false
+            case IndexF(_, _, _)               => false
+            case CallF(_, _, _)                => false
+            case PrimeF(_, _)                  => false
+            case PreF(_, _)                    => false
+            case WithF(_, _, _)                => false
+            case IfF(_, _, _, _)               => false
+            case LetF(_, _, _, _)              => false
+            case LambdaF(_, _, _)              => false
+            case ConstructorF(_, _, _)         => false
+            case SetLiteralF(_, _)             => false
+            case MapLiteralF(_, _)             => false
+            case SetComprehensionF(_, _, _, _) => false
+            case SeqLiteralF(_, _)             => false
+            case MatchesF(_, _, _)             => false
+            case IntLitF(_, _)                 => false
+            case FloatLitF(_, _)               => false
+            case StringLitF(_, _)              => false
+            case BoolLitF(_, _)                => false
+            case NoneLitF(_)                   => false
+            case IdentifierF(n, _)             => n == p
+          }) &&
+            isOptionPosition(opts, optFields, r)) match {
+          case true => BinaryOpF(
+              op,
+              l,
+              r match {
+                case BinaryOpF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case UnaryOpF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case QuantifierF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SomeWrapF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case TheF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case FieldAccessF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case EnumAccessF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IndexF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case CallF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case PrimeF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case PreF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case WithF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IfF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case LetF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case LambdaF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case ConstructorF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SetLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case MapLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SetComprehensionF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SeqLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case MatchesF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IntLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case FloatLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case StringLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case BoolLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case NoneLitF(_) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IdentifierF(n, _) =>
+                  n == p match {
+                    case true  => r
+                    case false => substValueOpt(p, opts, optFields, r)
+                  }
+              },
+              sp
+            )
+          case false => equal_bin_op(op, BEq()) &&
+              ((r match {
+                case BinaryOpF(_, _, _, _)         => false
+                case UnaryOpF(_, _, _)             => false
+                case QuantifierF(_, _, _, _)       => false
+                case SomeWrapF(_, _)               => false
+                case TheF(_, _, _, _)              => false
+                case FieldAccessF(_, _, _)         => false
+                case EnumAccessF(_, _, _)          => false
+                case IndexF(_, _, _)               => false
+                case CallF(_, _, _)                => false
+                case PrimeF(_, _)                  => false
+                case PreF(_, _)                    => false
+                case WithF(_, _, _)                => false
+                case IfF(_, _, _, _)               => false
+                case LetF(_, _, _, _)              => false
+                case LambdaF(_, _, _)              => false
+                case ConstructorF(_, _, _)         => false
+                case SetLiteralF(_, _)             => false
+                case MapLiteralF(_, _)             => false
+                case SetComprehensionF(_, _, _, _) => false
+                case SeqLiteralF(_, _)             => false
+                case MatchesF(_, _, _)             => false
+                case IntLitF(_, _)                 => false
+                case FloatLitF(_, _)               => false
+                case StringLitF(_, _)              => false
+                case BoolLitF(_, _)                => false
+                case NoneLitF(_)                   => false
+                case IdentifierF(n, _)             => n == p
+              }) &&
+                isOptionPosition(opts, optFields, l)) match {
+              case true => BinaryOpF(
+                  op,
+                  l match {
+                    case BinaryOpF(_, _, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case UnaryOpF(_, _, _)       => substValueOpt(p, opts, optFields, l)
+                    case QuantifierF(_, _, _, _) => substValueOpt(p, opts, optFields, l)
+                    case SomeWrapF(_, _)         => substValueOpt(p, opts, optFields, l)
+                    case TheF(_, _, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case FieldAccessF(_, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case EnumAccessF(_, _, _)    => substValueOpt(p, opts, optFields, l)
+                    case IndexF(_, _, _)         => substValueOpt(p, opts, optFields, l)
+                    case CallF(_, _, _)          => substValueOpt(p, opts, optFields, l)
+                    case PrimeF(_, _)            => substValueOpt(p, opts, optFields, l)
+                    case PreF(_, _)              => substValueOpt(p, opts, optFields, l)
+                    case WithF(_, _, _)          => substValueOpt(p, opts, optFields, l)
+                    case IfF(_, _, _, _)         => substValueOpt(p, opts, optFields, l)
+                    case LetF(_, _, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case LambdaF(_, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case ConstructorF(_, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case SetLiteralF(_, _)       => substValueOpt(p, opts, optFields, l)
+                    case MapLiteralF(_, _)       => substValueOpt(p, opts, optFields, l)
+                    case SetComprehensionF(_, _, _, _) =>
+                      substValueOpt(p, opts, optFields, l)
+                    case SeqLiteralF(_, _) => substValueOpt(p, opts, optFields, l)
+                    case MatchesF(_, _, _) => substValueOpt(p, opts, optFields, l)
+                    case IntLitF(_, _)     => substValueOpt(p, opts, optFields, l)
+                    case FloatLitF(_, _)   => substValueOpt(p, opts, optFields, l)
+                    case StringLitF(_, _)  => substValueOpt(p, opts, optFields, l)
+                    case BoolLitF(_, _)    => substValueOpt(p, opts, optFields, l)
+                    case NoneLitF(_)       => substValueOpt(p, opts, optFields, l)
+                    case IdentifierF(n, _) =>
+                      n == p match {
+                        case true  => l
+                        case false => substValueOpt(p, opts, optFields, l)
+                      }
+                  },
+                  r,
+                  sp
+                )
+              case false => BinaryOpF(
+                  op,
+                  substValueOpt(p, opts, optFields, l),
+                  substValueOpt(p, opts, optFields, r),
+                  sp
+                )
+            }
+        }
+      case (p, opts, optFields, IdentifierF(n, sp)) =>
+        n == p match {
+          case true  => FieldAccessF(IdentifierF(p, None), "value", None)
+          case false => IdentifierF(n, sp)
+        }
+      case (p, opts, optFields, UnaryOpF(op, x, sp)) =>
+        UnaryOpF(op, substValueOpt(p, opts, optFields, x), sp)
+      case (p, opts, optFields, FieldAccessF(b, f, sp)) =>
+        FieldAccessF(substValueOpt(p, opts, optFields, b), f, sp)
+      case (p, opts, optFields, EnumAccessF(b, m, sp)) =>
+        EnumAccessF(substValueOpt(p, opts, optFields, b), m, sp)
+      case (p, opts, optFields, IndexF(b, i, sp)) =>
+        IndexF(substValueOpt(p, opts, optFields, b), substValueOpt(p, opts, optFields, i), sp)
+      case (p, opts, optFields, CallF(c, args, sp)) =>
+        CallF(c, substValueOpt_list(p, opts, optFields, args), sp)
+      case (p, opts, optFields, PrimeF(x, sp)) =>
+        PrimeF(substValueOpt(p, opts, optFields, x), sp)
+      case (p, opts, optFields, PreF(x, sp)) =>
+        PreF(substValueOpt(p, opts, optFields, x), sp)
+      case (p, opts, optFields, WithF(b, upds, sp)) =>
+        WithF(
+          substValueOpt(p, opts, optFields, b),
+          substValueOpt_fields(p, opts, optFields, upds),
+          sp
+        )
+      case (p, opts, optFields, IfF(c, t, e2, sp)) =>
+        IfF(
+          substValueOpt(p, opts, optFields, c),
+          substValueOpt(p, opts, optFields, t),
+          substValueOpt(p, opts, optFields, e2),
+          sp
+        )
+      case (p, opts, optFields, LetF(v, vl, body, sp)) =>
+        LetF(
+          v,
+          substValueOpt(p, opts, optFields, vl),
+          v == p match {
+            case true  => body
+            case false => substValueOpt(p, opts, optFields, body)
+          },
+          sp
+        )
+      case (p, opts, optFields, LambdaF(q, b, sp)) =>
+        LambdaF(
+          q,
+          q == p match {
+            case true  => b
+            case false => substValueOpt(p, opts, optFields, b)
+          },
+          sp
+        )
+      case (p, opts, optFields, ConstructorF(n, fs, sp)) =>
+        ConstructorF(n, substValueOpt_fields(p, opts, optFields, fs), sp)
+      case (p, opts, optFields, SetLiteralF(xs, sp)) =>
+        SetLiteralF(substValueOpt_list(p, opts, optFields, xs), sp)
+      case (p, opts, optFields, MapLiteralF(es, sp)) =>
+        MapLiteralF(substValueOpt_entries(p, opts, optFields, es), sp)
+      case (p, opts, optFields, SetComprehensionF(v, d, pr, sp)) =>
+        SetComprehensionF(
+          v,
+          substValueOpt(p, opts, optFields, d),
+          v == p match {
+            case true  => pr
+            case false => substValueOpt(p, opts, optFields, pr)
+          },
+          sp
+        )
+      case (p, opts, optFields, SeqLiteralF(xs, sp)) =>
+        SeqLiteralF(substValueOpt_list(p, opts, optFields, xs), sp)
+      case (p, opts, optFields, MatchesF(x, pat, sp)) =>
+        MatchesF(substValueOpt(p, opts, optFields, x), pat, sp)
+      case (p, opts, optFields, SomeWrapF(x, sp)) =>
+        SomeWrapF(substValueOpt(p, opts, optFields, x), sp)
+      case (p, opts, optFields, TheF(v, d, b, sp)) =>
+        TheF(
+          v,
+          substValueOpt(p, opts, optFields, d),
+          v == p match {
+            case true  => b
+            case false => substValueOpt(p, opts, optFields, b)
+          },
+          sp
+        )
+      case (p, opts, optFields, QuantifierF(q, bs, body, sp)) =>
+        QuantifierF(
+          q,
+          substValueOpt_bindings(p, opts, optFields, bs),
+          string_in_list(p, qb_names(bs)) match {
+            case true  => body
+            case false => substValueOpt(p, opts, optFields, body)
+          },
+          sp
+        )
+      case (uu, uv, uw, IntLitF(n, sp))    => IntLitF(n, sp)
+      case (ux, uy, uz, FloatLitF(n, sp))  => FloatLitF(n, sp)
+      case (va, vb, vc, StringLitF(n, sp)) => StringLitF(n, sp)
+      case (vd, ve, vf, BoolLitF(v, sp))   => BoolLitF(v, sp)
+      case (vg, vh, vi, NoneLitF(sp))      => NoneLitF(sp)
+    }
+
   def neqNoneName(e: expr): Option[String] =
     e match {
       case BinaryOpF(BAnd(), _, _, _)                                     => None
@@ -7335,9 +7698,6 @@ object SpecRestGenerated {
       case NoneLitF(_)                                                => None
       case IdentifierF(_, _)                                          => None
     }
-
-  def substValue(p: String, body: expr): expr =
-    subst(p, FieldAccessF(IdentifierF(p, None), "value", None), body)
 
   def eqNoneName(e: expr): Option[String] =
     e match {
@@ -7444,7 +7804,8 @@ object SpecRestGenerated {
 
   def desugarBindings(
       fuel: nat,
-      uv: List[String],
+      uw: List[String],
+      ux: List[String],
       bs: List[quantifier_binding]
   ): List[quantifier_binding] =
     equal_nat(fuel, zero_nat) match {
@@ -7452,12 +7813,12 @@ object SpecRestGenerated {
       case false => bs match {
           case Nil => Nil
           case QuantifierBindingFull(a, d, kind, bsp) :: rest =>
-            QuantifierBindingFull(a, desugarGo(minus_nat(fuel, one_nat), uv, d), kind, bsp) ::
-              desugarBindings(minus_nat(fuel, one_nat), uv, rest)
+            QuantifierBindingFull(a, desugarGo(minus_nat(fuel, one_nat), uw, ux, d), kind, bsp) ::
+              desugarBindings(minus_nat(fuel, one_nat), uw, ux, rest)
         }
     }
 
-  def desugarGo(fuel: nat, uu: List[String], e: expr): expr =
+  def desugarGo(fuel: nat, uu: List[String], uv: List[String], e: expr): expr =
     equal_nat(fuel, zero_nat) match {
       case true => e
       case false => e match {
@@ -7467,8 +7828,8 @@ object SpecRestGenerated {
                   case None =>
                     BinaryOpF(
                       op,
-                      desugarGo(minus_nat(fuel, one_nat), uu, l),
-                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                      desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                      desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                       sp
                     )
                   case Some(p) =>
@@ -7476,13 +7837,13 @@ object SpecRestGenerated {
                       case true => BinaryOpF(
                           BImplies(),
                           l,
-                          desugarGo(minus_nat(fuel, one_nat), uu, substValue(p, r)),
+                          desugarGo(minus_nat(fuel, one_nat), uu, uv, substValueOpt(p, uu, uv, r)),
                           sp
                         )
                       case false => BinaryOpF(
                           op,
-                          desugarGo(minus_nat(fuel, one_nat), uu, l),
-                          desugarGo(minus_nat(fuel, one_nat), uu, r),
+                          desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                          desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                           sp
                         )
                     }
@@ -7494,22 +7855,27 @@ object SpecRestGenerated {
                           case None =>
                             BinaryOpF(
                               op,
-                              desugarGo(minus_nat(fuel, one_nat), uu, l),
-                              desugarGo(minus_nat(fuel, one_nat), uu, r),
+                              desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                              desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                               sp
                             )
                           case Some(q) =>
                             string_in_list(q, uu) match {
                               case true => BinaryOpF(
                                   BOr(),
-                                  desugarGo(minus_nat(fuel, one_nat), uu, substValue(q, l)),
+                                  desugarGo(
+                                    minus_nat(fuel, one_nat),
+                                    uu,
+                                    uv,
+                                    substValueOpt(q, uu, uv, l)
+                                  ),
                                   r,
                                   sp
                                 )
                               case false => BinaryOpF(
                                   op,
-                                  desugarGo(minus_nat(fuel, one_nat), uu, l),
-                                  desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                                   sp
                                 )
                             }
@@ -7519,29 +7885,39 @@ object SpecRestGenerated {
                           case true => BinaryOpF(
                               BOr(),
                               l,
-                              desugarGo(minus_nat(fuel, one_nat), uu, substValue(p, r)),
+                              desugarGo(
+                                minus_nat(fuel, one_nat),
+                                uu,
+                                uv,
+                                substValueOpt(p, uu, uv, r)
+                              ),
                               sp
                             )
                           case false => eqNoneName(r) match {
                               case None =>
                                 BinaryOpF(
                                   op,
-                                  desugarGo(minus_nat(fuel, one_nat), uu, l),
-                                  desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                                  desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                                   sp
                                 )
                               case Some(q) =>
                                 string_in_list(q, uu) match {
                                   case true => BinaryOpF(
                                       BOr(),
-                                      desugarGo(minus_nat(fuel, one_nat), uu, substValue(q, l)),
+                                      desugarGo(
+                                        minus_nat(fuel, one_nat),
+                                        uu,
+                                        uv,
+                                        substValueOpt(q, uu, uv, l)
+                                      ),
                                       r,
                                       sp
                                     )
                                   case false => BinaryOpF(
                                       op,
-                                      desugarGo(minus_nat(fuel, one_nat), uu, l),
-                                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                                      desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                                      desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                                       sp
                                     )
                                 }
@@ -7550,19 +7926,19 @@ object SpecRestGenerated {
                     }
                   case false => BinaryOpF(
                       op,
-                      desugarGo(minus_nat(fuel, one_nat), uu, l),
-                      desugarGo(minus_nat(fuel, one_nat), uu, r),
+                      desugarGo(minus_nat(fuel, one_nat), uu, uv, l),
+                      desugarGo(minus_nat(fuel, one_nat), uu, uv, r),
                       sp
                     )
                 }
             }
           case UnaryOpF(op, x, a) =>
-            UnaryOpF(op, desugarGo(minus_nat(fuel, one_nat), uu, x), a)
+            UnaryOpF(op, desugarGo(minus_nat(fuel, one_nat), uu, uv, x), a)
           case QuantifierF(q, bs, body, a) =>
             QuantifierF(
               q,
-              desugarBindings(minus_nat(fuel, one_nat), uu, bs),
-              desugarGo(minus_nat(fuel, one_nat), uu, body),
+              desugarBindings(minus_nat(fuel, one_nat), uu, uv, bs),
+              desugarGo(minus_nat(fuel, one_nat), uu, uv, body),
               a
             )
           case SomeWrapF(_, _)               => e
@@ -15911,8 +16287,13 @@ object SpecRestGenerated {
   def classifyExternItems(items: List[extern_item]): (List[(String, extern_info)], List[String]) =
     foldExternItems(items, Nil, Nil)
 
-  def desugarOptionGuards(opts: List[String], e: expr): expr =
-    desugarGo(plus_nat(size_list[expr](allSubexprs(e)), nat_of_integer(BigInt(100))), opts, e)
+  def desugarOptionGuards(opts: List[String], optFields: List[String], e: expr): expr =
+    desugarGo(
+      plus_nat(size_list[expr](allSubexprs(e)), nat_of_integer(BigInt(100))),
+      opts,
+      optFields,
+      e
+    )
 
   def rewriteFieldRefsBindings(
       vk: List[String],

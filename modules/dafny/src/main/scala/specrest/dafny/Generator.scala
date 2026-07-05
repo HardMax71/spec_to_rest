@@ -346,8 +346,26 @@ object Generator:
       aliasWhereCall(ctx, prmName(p), prmType(p))
     }
 
-    val reqCtx          = mctx.copy(stateMode = StateMode.Direct)
-    val rawRequires     = flattenAndAll(operRequires(op)).map(renderExpr(reqCtx, _)).filter(_ != "true")
+    val reqCtx = mctx.copy(stateMode = StateMode.Direct)
+    // Requires need the option-guard desugar too: a guarded consequent like
+    // `title != none implies len(title) >= 1` reads the payload.
+    val optInputNames = mctx.inputTypes.collect { case (n, _: OptionTypeF) => n }.toList
+    val optFieldNamesReq = svcEntities(ctx.ir)
+      .flatMap(entFields)
+      .collect {
+        case f if fldType(f) match { case OptionTypeF(_, _) => true; case _ => false } =>
+          fldName(f)
+      }
+      .distinct
+    val rawRequires = flattenAndAll(
+      operRequires(op).map(e =>
+        specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(
+          optInputNames,
+          optFieldNamesReq,
+          e
+        )
+      )
+    ).map(renderExpr(reqCtx, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
@@ -356,9 +374,17 @@ object Generator:
         mctx.outputTypes.collect {
           case (n, _: OptionTypeF) if !mctx.inputTypes.contains(n) => n
         }.toList
+    // Field names that are option-typed on any entity: comparing a guarded
+    // option input against one keeps both sides wrapped.
+    val optFieldNames = svcEntities(ctx.ir)
+      .flatMap(entFields)
+      .collect {
+        case f if fldType(f) match { case OptionTypeF(_, _) => true; case _ => false } => fldName(f)
+      }
+      .distinct
     val rawEnsures = flattenAndAll(
       operEnsures(op).map(e =>
-        specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, e)
+        specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(optNames, optFieldNames, e)
       )
     )
       .map(injectWFGuards(_, ensCtx))

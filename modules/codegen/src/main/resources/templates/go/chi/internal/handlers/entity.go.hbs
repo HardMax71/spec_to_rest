@@ -28,11 +28,21 @@ func (h *{{../entity.entity.modelClassName}}Handler) {{handlerName}}(w http.Resp
 		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
-{{/if}}{{/if}}{{#if routeThroughKernel}}{{#if kernelNoResult}}	err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
+{{/if}}{{/if}}{{#if routeThroughKernel}}{{#each kernelQueryBinds}}
+	{{{this}}}
+{{/each}}{{#if kernelNoResult}}	err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
 {{else}}	result, err := h.svc.{{serviceMethod}}(r.Context(){{#if kernelHandlerArgs}}, {{kernelHandlerArgs}}{{/if}})
 {{/if}}
 	if err != nil {
 		if errors.Is(err, services.ErrKernelPrecondition) {
+			writeError(w, {{kernelGuardStatus}}, "{{kernelGuardDetail}}")
+			return
+		}
+		if errors.Is(err, services.ErrInvalidInput) {
+			writeError(w, http.StatusUnprocessableEntity, "invalid input value")
+			return
+		}
+		if errors.Is(err, services.ErrKernelStateInvariant) {
 			writeError(w, {{kernelGuardStatus}}, "{{kernelGuardDetail}}")
 			return
 		}

@@ -1,6 +1,10 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 
+// Lives here (not in the kernel adapter) so non-synthesis projects compile:
+// this middleware is always emitted, the adapter only under --with-synthesis.
+export class InvalidInputError extends Error {}
+
 export class HttpError extends Error {
   constructor(
     public readonly status: number,
@@ -22,6 +26,10 @@ export const errorHandler = (
 ): void => {
   if (err instanceof ZodError) {
     res.status(422).json({ detail: 'validation failed', errors: err.errors });
+    return;
+  }
+  if (err instanceof InvalidInputError) {
+    res.status(422).json({ detail: err.message });
     return;
   }
   if (err instanceof HttpError) {
