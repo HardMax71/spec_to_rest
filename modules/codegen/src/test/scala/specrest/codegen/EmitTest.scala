@@ -357,7 +357,7 @@ class EmitTest extends CatsEffectSuite:
       val service = byPath.getOrElse("src/services/urlMapping.ts", fail("no ts service emitted"))
       // Shorten: body op, two-value (code, short_url) return -> object literal.
       assert(
-        service.contains("companion.Shorten(state, stringToDafny(body.url))"),
+        service.contains("companion.Shorten(state, stringToDafny(body.url as string))"),
         s"Shorten should marshal body.url through the companion — got:\n$service"
       )
       assert(
@@ -368,7 +368,7 @@ class EmitTest extends CatsEffectSuite:
       )
       // Resolve: single scalar in/out.
       assert(
-        service.contains("companion.Resolve(state, stringToDafny(code))"),
+        service.contains("companion.Resolve(state, stringToDafny(code as string))"),
         s"Resolve should marshal the path param — got:\n$service"
       )
       assert(

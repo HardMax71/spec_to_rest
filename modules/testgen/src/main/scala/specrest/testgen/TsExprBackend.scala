@@ -1,6 +1,7 @@
 package specrest.testgen
 
 import specrest.ir.Builtins
+import specrest.ir.Naming
 import specrest.ir.generated.SpecRestGenerated.*
 
 private[testgen] val TsReservedNames: Set[String] = Set(
@@ -72,8 +73,10 @@ object TsExprBackend extends ExprBackendBase:
     case CaptureMode.PostState => "postState"
     case CaptureMode.PreState  => "preState"
 
+  // The ts surface is camelCase end to end: responses by convention, the
+  // state snapshot by normalization in stateSnapshot().
   def containerAccess(container: String, name: String): String =
-    s"$container[${TsLit.str(name)}]"
+    s"$container[${TsLit.str(Naming.toCamelCase(name, Naming.CamelStrategy.Plain))}]"
 
   def indexAccess(base: String, idx: String): String = s"$base[$idx]"
 

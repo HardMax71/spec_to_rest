@@ -8,6 +8,7 @@ import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
@@ -592,7 +593,20 @@ object EmitTs:
     val entityPluralKebab = Naming.toKebabCase(entityPlural)
 
     def mkField(f: ProfiledField): TsFieldView =
-      val base = toTsField(f, nativeAttrs, EmitShared.entityFieldRefinement(profiled, entity, f))
+      val enumVals = KernelTypes
+        .fieldKind(profiled.ir, entity.entityName, f.fieldName)
+        .collect {
+          case KernelTypes.Kind.EnumK(n)                         => n
+          case KernelTypes.Kind.OptOf(KernelTypes.Kind.EnumK(n)) => n
+        }
+        .flatMap(n => svcEnums(profiled.ir).find(e => enumNameFull(e) == n))
+        .map(enumValuesFull)
+      val base = toTsField(
+        f,
+        nativeAttrs,
+        EmitShared.entityFieldRefinement(profiled, entity, f),
+        enumVals
+      )
       if triggerMaintainedColumns.contains(f.columnName)
         && NumericPrismaTypes.contains(base.prismaType)
       then
@@ -676,6 +690,11 @@ object EmitTs:
         val fns = operations.filter(_.routeThroughKernel).map(_.kernelServiceFn).mkString("\n")
         val adapterNames = List(
           "companion",
+          "dafnyCollToArray",
+          "dafnySeqOf",
+          "dafnySetOf",
+          "enumFromDafny",
+          "enumToDafny",
           "intFromDafny",
           "intToDafny",
           "makeState",
@@ -708,10 +727,19 @@ object EmitTs:
   private def toTsField(
       f: ProfiledField,
       nativeAttrs: Boolean,
-      reduced: StringRefinements.Reduced = StringRefinements.Reduced(None, None, Nil)
+      reduced: StringRefinements.Reduced = StringRefinements.Reduced(None, None, Nil),
+      enumValues: Option[List[String]] = None
   ): TsFieldView =
     val tsName = toCamelCase(f.fieldName)
     val attrs  = prismaAttrs(f, tsName, nativeAttrs)
+    // Enum-typed inputs validate as z.enum members at the boundary: the
+    // kernel constructs the datatype by member name and must never see an
+    // invalid one.
+    val zod = enumValues match
+      case Some(vs) =>
+        val base = vs.map(v => s"'$v'").mkString("z.enum([", ", ", "])")
+        if f.nullable then s"$base.nullable()" else base
+      case None => zodSchemaFor(f, reduced)
     TsFieldView(
       tsField = tsName,
       jsonName = tsName,
@@ -719,7 +747,7 @@ object EmitTs:
       domainType = f.domainType,
       prismaType = prismaTypeFor(f.ormColumnType),
       prismaAttrs = attrs,
-      zodSchema = zodSchemaFor(f, reduced),
+      zodSchema = zod,
       nullable = f.nullable,
       isPrimaryKey = false
     )
@@ -1024,6 +1052,9 @@ object EmitTs:
 
   // Kernel entity projections must key exactly like the read DTOs, including
   // the TS reserved-identifier escaping.
+  private def tsElemToDafny(el: String, ref: String): String =
+    if el == "str" then s"stringToDafny($ref as string)" else s"intToDafny($ref as number)"
+
   private def camelName(name: String): String =
     Naming.toCamelCase(name, Naming.CamelStrategy.Ts)
 
@@ -1038,18 +1069,39 @@ object EmitTs:
       kernelCtx: TsKernelCtx
   ): Option[(String, String)] =
     val endpoint = op.endpoint
-    val eligible = endpoint.queryParams.isEmpty && kernelCtx.stateReady
+    val eligible = kernelCtx.stateReady
     op.dafnyMethod.filter(_ => eligible).flatMap: dafnyName =>
+      // Inputs convert by their spec kinds: enums through the adapter's
+      // checked helper (throws InvalidInputError, mapped to 422), scalar
+      // collections through the set/seq builders, options by null-guarding.
+      // The someOrNone callback types its argument unknown, so every leaf
+      // conversion carries its own cast.
+      def inputToDafny(access: String, kind: KernelTypes.Kind): Option[String] =
+        kind match
+          case KernelTypes.Kind.Scalar("str")  => Some(s"stringToDafny($access as string)")
+          case KernelTypes.Kind.Scalar("int")  => Some(s"intToDafny($access as number)")
+          case KernelTypes.Kind.Scalar("bool") => Some(access)
+          case KernelTypes.Kind.Scalar(_)      => None
+          case KernelTypes.Kind.EnumK(n)       => Some(s"enumToDafny('$n', $access as string)")
+          case KernelTypes.Kind.SetOf(el) =>
+            Some(s"dafnySetOf(($access as unknown[]).map((x) => ${tsElemToDafny(el, "x")}))")
+          case KernelTypes.Kind.SeqOf(el) =>
+            Some(s"dafnySeqOf(($access as unknown[]).map((x) => ${tsElemToDafny(el, "x")}))")
+          case KernelTypes.Kind.OptOf(inner) =>
+            inputToDafny("_v", inner).map(conv => s"someOrNone($access, (_v) => $conv)")
+      val specInputTypes = svcOperations(kernelCtx.ir)
+        .find(o => operName(o) == op.operationName)
+        .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
+        .getOrElse(Map.empty)
       val inputs =
-        endpoint.pathParams.map(p =>
-          toCamelCase(p.name) -> tsTypeForParam(p.typeExpr, typeLookup)
-        ) ++
-          endpoint.bodyParams.map(p =>
-            s"body.${toCamelCase(p.name)}" -> tsTypeForParam(p.typeExpr, typeLookup)
-          )
-      val convertedArgs = inputs.map: (access, tsType) =>
-        tsKernelScalarConv.get(tsType).map: (toDafny, _) =>
-          if toDafny.isEmpty then access else s"$toDafny($access)"
+        endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
+          endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
+          endpoint.bodyParams.map(p => p.name -> s"body.${toCamelCase(p.name)}")
+      val convertedArgs = inputs.map: (specName, access) =>
+        specInputTypes
+          .get(specName)
+          .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+          .flatMap(k => inputToDafny(access, k))
       val outputs = op.responseFields
       val specOutputs = svcOperations(kernelCtx.ir)
         .find(o => operName(o) == op.operationName)
@@ -1064,17 +1116,39 @@ object EmitTs:
             case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
             case _                => None
         case _ => None
+      val seqEntityOutput = specOutputs match
+        case single :: Nil =>
+          prmType(single) match
+            case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
+            case _                             => None
+        case _ => None
       val entityOutputFields = entityOutput
+        .orElse(seqEntityOutput)
         .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
         .getOrElse(Nil)
       val tsEntityTypes = Set("string", "number", "boolean", "Date")
+      val outFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
+        .orElse(seqEntityOutput)
+        .map(e =>
+          e.fields.flatMap { f =>
+            KernelTypes
+              .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
+              .map {
+                case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
+                case other                         => f.fieldName -> other
+              }
+          }.toMap
+        )
+        .getOrElse(Map.empty)
+      def outFieldOk(f: ProfiledField): Boolean =
+        outFieldKinds.get(f.fieldName) match
+          case Some(KernelTypes.Kind.EnumK(_))                             => true
+          case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+          case _                                                           => tsEntityTypes.contains(f.domainType.replaceAll("\\s*\\|\\s*null$", ""))
       val outputsOk =
         if specOutputs.isEmpty then true
-        else if entityOutput.isDefined then
-          entityOutputFields.nonEmpty &&
-          entityOutputFields.forall(f =>
-            tsEntityTypes.contains(f.domainType.replaceAll("\\s*\\|\\s*null$", ""))
-          )
+        else if entityOutput.isDefined || seqEntityOutput.isDefined then
+          entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
         else outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
       // A redirect op's route issues `res.redirect(status, result)`, so the kernel result must be a
       // single string (the redirect target); otherwise leave it to the redirect route-kind branch.
@@ -1089,22 +1163,42 @@ object EmitTs:
         val sig =
           (endpoint.pathParams.map(p =>
             s"${toCamelCase(p.name)}: ${tsTypeForParam(p.typeExpr, typeLookup)}"
-          ) ++ Option.when(hasRequestBody)(s"body: $requestBodyType")).mkString(", ")
+          ) ++
+            endpoint.queryParams.map(p => s"${toCamelCase(p.name)}: string | null") ++
+            Option.when(hasRequestBody)(s"body: $requestBodyType")).mkString(", ")
         def fromDafny(f: ProfiledField, v: String): String =
           val conv = tsKernelScalarConv(f.domainType)._2
           if conv.isEmpty then v else s"$conv($v)"
         // The state wrapper splices persistState before the LAST body line,
         // so every shape ends on exactly one return statement.
-        val noResult = specOutputs.isEmpty
+        val noResult  = specOutputs.isEmpty
+        val outEntity = entityOutput.orElse(seqEntityOutput)
         val (returnType, bodyLines) =
           if noResult then ("void", List(s"  $call;", "  return;"))
           else if entityOutput.isDefined then
+            // The response nests the entity under the spec's output name.
+            val outName = specOutputs.headOption.map(prmName).getOrElse("result")
             val pairs = entityOutputFields.map: f =>
-              s"    ${camelName(f.fieldName)}: ${StateBridgeTs.fromDafnyExpr(f, "out")},"
+              s"      ${camelName(f.fieldName)}: ${StateBridgeTs
+                  .fromDafnyExpr(kernelCtx.ir, outEntity.map(_.entityName).getOrElse(""), f, "out")},"
             (
               "Record<string, unknown>",
               (s"  const out = $call as Record<string, unknown>;" ::
-                "  const result = {" :: pairs) ::: List("  };", "  return result;")
+                "  const result = {" ::
+                s"    ${camelName(outName)}: {" :: pairs) :::
+                List("    },", "  };", "  return result;")
+            )
+          else if seqEntityOutput.isDefined then
+            val entityName = seqEntityOutput.map(_.entityName).getOrElse("")
+            val pairs = entityOutputFields.map: f =>
+              s"      ${camelName(f.fieldName)}: ${StateBridgeTs.fromDafnyExpr(kernelCtx.ir, entityName, f, "elem")},"
+            (
+              "Array<Record<string, unknown>>",
+              (s"  const out = $call;" ::
+                "  const result = dafnyCollToArray(out).map((v) => {" ::
+                "    const elem = v as Record<string, unknown>;" ::
+                "    return {" :: pairs) :::
+                List("    };", "  });", "  return result;")
             )
           else
             outputs match
@@ -1180,6 +1274,11 @@ object EmitTs:
             (header :: "  const state = makeState();" ::
               invCheck ::: guardCheck ::: bodyLines ::: List("};")).mkString("\n")
         val routeArgs =
-          (endpoint.pathParams.map(p => toCamelCase(p.name)) ++ Option.when(hasRequestBody)("body"))
+          (endpoint.pathParams.map(p => toCamelCase(p.name)) ++
+            endpoint.queryParams.map(p =>
+              // Absent optional filters arrive as null, never empty strings.
+              s"typeof req.query.${p.name} === 'string' && req.query.${p.name} !== '' ? req.query.${p.name} : null"
+            ) ++
+            Option.when(hasRequestBody)("body"))
             .mkString(", ")
         (fn, routeArgs)

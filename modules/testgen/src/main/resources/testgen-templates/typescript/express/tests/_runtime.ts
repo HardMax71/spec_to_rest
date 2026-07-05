@@ -52,9 +52,29 @@ export function _len(x: Anything): number {
   return 0;
 }
 
+// The ts API speaks camelCase while /admin/state serves spec-named (snake)
+// keys; the oracle normalizes the snapshot so both sides compare in one
+// casing. Digit keys (Int-keyed relations) pass through untouched.
+const camelKey = (k: string): string =>
+  k.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
+
+export function stateSnapshot(v: Anything): Anything {
+  if (Array.isArray(v)) return v.map(stateSnapshot);
+  if (v !== null && typeof v === 'object') {
+    const out: Record<string, Anything> = {};
+    for (const [k, val] of Object.entries(v as Record<string, Anything>)) {
+      out[/^\d+$/.test(k) ? k : camelKey(k)] = stateSnapshot(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 export function _setEq(a: Anything, b: Anything): boolean {
-  const as = _slice(a);
-  const bs = _slice(b);
+  const asArray = (v: Anything): Anything[] =>
+    Array.isArray(v) ? v : v instanceof Set ? Array.from(v) : [];
+  const as = asArray(a);
+  const bs = asArray(b);
   const contains = (xs: Anything[], v: Anything) => xs.some((x) => _eq(x, v));
   return as.every((x) => contains(bs, x)) && bs.every((y) => contains(as, y));
 }

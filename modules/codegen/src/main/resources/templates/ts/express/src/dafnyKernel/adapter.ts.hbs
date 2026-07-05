@@ -62,6 +62,40 @@ export const valueOrNull = (opt: unknown, conv: (v: unknown) => unknown): unknow
   return o.is_Some ? conv(o.value) : null;
 };
 
+// Dafny's js backend doubles underscores in constructor and member names.
+const dafnyCtorName = (member: string): string => member.replace(/_/g, '__');
+
+export const enumToDafny = (typeName: string, value: string): unknown => {
+  const companion = dafnyModule[typeName] as Record<string, () => unknown>;
+  const ctor = companion[`create_${dafnyCtorName(value)}`];
+  if (typeof ctor !== 'function') {
+    throw new InvalidInputError(`invalid ${typeName} value`);
+  }
+  return ctor.call(companion);
+};
+
+export const enumFromDafny = (typeName: string, values: string[], v: unknown): string => {
+  const rec = v as Record<string, boolean>;
+  for (const member of values) {
+    if (rec[`is_${dafnyCtorName(member)}`]) return member;
+  }
+  return '';
+};
+
+export class InvalidInputError extends Error {}
+
+export const dafnySetOf = (values: unknown[]): unknown =>
+  (kernel._dafny.Set as { fromElements(...xs: unknown[]): unknown }).fromElements(...values);
+
+export const dafnyCollToArray = (coll: unknown): unknown[] => {
+  const out: unknown[] = [];
+  const iterable = coll as Iterable<unknown>;
+  for (const v of iterable) {
+    out.push(v);
+  }
+  return out;
+};
+
 export const dafnySeqOf = (values: unknown[]): unknown => {
   // Chunked concatenation: spreading every element into one variadic call
   // hits engine argument limits on large hydrations.

@@ -22,8 +22,10 @@ private[testgen] object TestFormat:
   val TsRuntimeHelpers: List[String] =
     List(
       "quantDomain",
+      "stateSnapshot",
       "_diff",
       "_eq",
+      "_setEq",
       "_in",
       "_inter",
       "_len",
