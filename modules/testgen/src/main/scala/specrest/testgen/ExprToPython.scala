@@ -139,7 +139,9 @@ object ExprToPython extends ExprBackendBase:
   def lambdaExpr(param: String, body: String): String = s"(lambda $param: ($body))"
 
   def setEquals(l: String, r: String): String =
-    s"(sorted($l) == sorted($r))"
+    // True set equality: JSON arrays at set-typed positions may carry
+    // duplicates the set semantics collapse.
+    s"(set($l) == set($r))"
 
   def negate(cond: String): String = s"(not $cond)"
 

@@ -73,9 +73,11 @@ private[testgen] object TestFormat:
     val queryExpr =
       if queryParamNames.isEmpty then ""
       else
+        // An absent optional query param must be OMITTED: httpx serializes a
+        // None value as an empty string, which a validated route rejects.
         val pairs =
           queryParamNames.map(n => s"${ExprToPython.pyString(n)}: $n").mkString(", ")
-        s", params={$pairs}"
+        s", params={_k: _v for _k, _v in {$pairs}.items() if _v is not None}"
     // Redirect routes answer with an external Location; a conformance client
     // must assert it, never fetch it. The conftest helper also discards
     // examples whose stored URL httpx cannot represent at all.

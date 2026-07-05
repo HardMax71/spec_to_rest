@@ -359,15 +359,43 @@ object Stateful:
     if skipped.nonEmpty then (Right(Nil), skipped ++ roleSkips)
     else
       val stateFields = stateFieldNames(ir)
-      val ruleBody = buildRuleBlock(
-        pop = pop,
-        opDecl = opDecl,
-        bindings = bindings,
-        role = role,
-        stateFields = stateFields,
-        ir = ir
-      )
-      (Right(List(ruleBody)), roleSkips)
+      // A delete over status-partitioned bundles fans out to one rule per
+      // bundle, each consuming its own: a non-consuming union leaks deleted
+      // ids into later draws and breaks every strict rule downstream.
+      val isDelete = pop.kind match
+        case _: Deletea => true
+        case _          => false
+      val unionParam = bindings.collectFirst {
+        case (n, InputBinding.BundleUnion(bundles, _)) if isDelete => (n, bundles)
+      }
+      unionParam match
+        case Some((paramName, bundles)) =>
+          val ruleBodies = bundles.map: b =>
+            val perBundle = bindings.map {
+              case (n, _) if n == paramName =>
+                n -> InputBinding.BundleConsume(b, strictByConstruction = true)
+              case other => other
+            }
+            buildRuleBlock(
+              pop = pop,
+              opDecl = opDecl,
+              bindings = perBundle,
+              role = role,
+              stateFields = stateFields,
+              ir = ir,
+              nameSuffix = b.statusValue.map(v => s"_from_${v.toLowerCase}").getOrElse("")
+            )
+          (Right(ruleBodies), roleSkips)
+        case None =>
+          val ruleBody = buildRuleBlock(
+            pop = pop,
+            opDecl = opDecl,
+            bindings = bindings,
+            role = role,
+            stateFields = stateFields,
+            ir = ir
+          )
+          (Right(List(ruleBody)), roleSkips)
 
   private def stateFieldNames(ir: ServiceIRFull): Set[String] =
     irStateFieldNames(ir).toSet
@@ -413,7 +441,10 @@ object Stateful:
     val outputs = operOutputs(opDecl)
     outputs match
       case List(p) if isEntityType(prmType(p), bundle.entityName) =>
-        Some(s"response_data[${ExprToPython.pyString(bundle.pkFieldName)}]")
+        // Entity outputs nest under the spec's output name.
+        Some(
+          s"response_data[${ExprToPython.pyString(prmName(p))}][${ExprToPython.pyString(bundle.pkFieldName)}]"
+        )
       case _ =>
         outputs
           .find(o => sameNamedType(prmType(o), bundle.pkTypeExpr))
@@ -554,11 +585,12 @@ object Stateful:
       bindings: List[(String, InputBinding)],
       role: RuleRole,
       stateFields: Set[String],
-      ir: ServiceIRFull
+      ir: ServiceIRFull,
+      nameSuffix: String = ""
   ): String =
     val sb        = new StringBuilder
     val ruleArgs  = ruleDecoratorArgs(bindings, role)
-    val funcName  = Naming.toSnakeCase(operName(opDecl))
+    val funcName  = Naming.toSnakeCase(operName(opDecl)) + nameSuffix
     val sigParams = ("self" :: bindings.map(_._1)).mkString(", ")
 
     sb.append(s"    @rule($ruleArgs)\n")

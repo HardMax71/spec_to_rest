@@ -102,8 +102,10 @@ object AdminRouter:
        |    for col in row.__table__.columns:
        |        v = getattr(row, col.name)
        |        if isinstance(v, (datetime, date)):
-       |            # Same canonical wire form as the API's responses.
-       |            v = v.isoformat().replace("+00:00", "Z")
+       |            # Same canonical wire form as the API's responses; drivers
+       |            # hand back naive datetimes for UTC-stored columns.
+       |            iso = v.isoformat()
+       |            v = iso.replace("+00:00", "Z") if iso.endswith("+00:00") else f"{iso}Z"
        |        out[col.name] = v
        |    return out
        |

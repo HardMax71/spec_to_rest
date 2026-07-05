@@ -458,7 +458,10 @@ object EmitPython:
     val sensitive = SensitiveFields.isSensitive(f.columnName)
     val ptype =
       if sensitive then "SecretStr"
-      else enumLiteral.getOrElse(f.validationType)
+      else
+        enumLiteral
+          .map(lit => if f.nullable then s"$lit | None" else lit)
+          .getOrElse(f.validationType)
     val args =
       if sensitive || f.domainType != "str" then Nil
       else
@@ -869,7 +872,17 @@ object EmitPython:
       queryParamsWithTypes =
         if dafnyMethodFinal.isDefined then
           endpoint.queryParams.map { p =>
-            val t          = pythonTypeForParam(p.typeExpr, typeLookup)
+            val enumLit = KernelTypes
+              .resolve(kernelCtx.ir, p.typeExpr)
+              .collect {
+                case KernelTypes.Kind.EnumK(n)                         => (n, false)
+                case KernelTypes.Kind.OptOf(KernelTypes.Kind.EnumK(n)) => (n, true)
+              }
+              .flatMap((n, opt) => enumLiteralType(kernelCtx.ir, n).map(l => (l, opt)))
+            val t = enumLit match
+              case Some((lit, true))  => s"$lit | None"
+              case Some((lit, false)) => lit
+              case None               => pythonTypeForParam(p.typeExpr, typeLookup)
             val routerType = if t.endsWith("| None") then s"$t = None" else t
             EnrichedPathParam(name = p.name, domainType = t, routerType = routerType)
           }
@@ -1018,12 +1031,16 @@ object EmitPython:
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
         schemaSet += entity.readSchemaName
       op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
+      op.queryParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
 
     val needsAnnotated =
       operations.exists(_.pathParamsWithTypes.exists(p => p.routerType != p.domainType))
     val needsAny = operations.exists(_.responseAnnotation.contains("Any"))
+    val needsLiteral =
+      operations.exists(_.queryParamsWithTypes.exists(_.domainType.startsWith("Literal[")))
     val typingNames =
-      (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any")).toList
+      (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any") ++
+        Option.when(needsLiteral)("Literal")).toList
     val stdlib =
       (Option
         .when(typingNames.nonEmpty)(

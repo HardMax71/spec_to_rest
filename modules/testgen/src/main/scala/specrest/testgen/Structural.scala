@@ -137,6 +137,15 @@ object Structural:
               sb.append(s"    if response.status_code != $successLit:\n")
               sb.append("        return\n")
               sb.append("    response_data = response.json() if response.content else {}\n")
+              // Inputs the clause reads come from the schemathesis case body;
+              // there is no @given binding in the structural layer.
+              val inputRefs = operInputs(opDecl)
+                .map(prmName)
+                .filter(free_vars(clause).contains)
+              inputRefs.foreach: n =>
+                sb.append(
+                  s"    $n = (case.body or {}).get(${ExprToPython.pyString(n)})\n"
+                )
               sb.append(
                 s"    assert $text, ${ExprToPython.pyString(s"ensures violated (${operName(opDecl)}#$idx)")}\n"
               )

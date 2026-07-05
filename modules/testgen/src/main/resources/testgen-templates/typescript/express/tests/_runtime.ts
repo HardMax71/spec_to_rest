@@ -55,14 +55,8 @@ export function _len(x: Anything): number {
 export function _setEq(a: Anything, b: Anything): boolean {
   const as = _slice(a);
   const bs = _slice(b);
-  if (as.length !== bs.length) return false;
-  const used = new Array(bs.length).fill(false);
-  for (const x of as) {
-    const i = bs.findIndex((y, j) => !used[j] && _eq(x, y));
-    if (i < 0) return false;
-    used[i] = true;
-  }
-  return true;
+  const contains = (xs: Anything[], v: Anything) => xs.some((x) => _eq(x, v));
+  return as.every((x) => contains(bs, x)) && bs.every((y) => contains(as, y));
 }
 
 export function _eq(a: Anything, b: Anything): boolean {

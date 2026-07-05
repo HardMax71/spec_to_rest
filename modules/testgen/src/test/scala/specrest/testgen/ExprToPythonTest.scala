@@ -250,7 +250,7 @@ class ExprToPythonTest extends CatsEffectSuite:
     val domE = CallF(id("dom"), List(id("store")), None)
     assertEquals(py(ExprToPython.translate(domE, ctx)), "set(post_state[\"store\"].keys())")
     val ranE = CallF(id("ran"), List(id("store")), None)
-    assertEquals(py(ExprToPython.translate(ranE, ctx)), "set(post_state[\"store\"].values())")
+    assertEquals(py(ExprToPython.translate(ranE, ctx)), "list(post_state[\"store\"].values())")
     val uriE = CallF(id("isValidURI"), List(id("url")), None)
     assertEquals(py(ExprToPython.translate(uriE, ctx)), "is_valid_uri(url)")
     val emailE = CallF(id("isValidEmail"), List(id("x")), None)
