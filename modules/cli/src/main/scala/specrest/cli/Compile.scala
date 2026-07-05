@@ -232,6 +232,9 @@ object Compile:
           IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
             .as(Left(ExitStatus.Translator))
         case Right(dafny) =>
+          dafny.skipped.foreach { (opName, why) =>
+            log.warn(s"$specFile: $opName stays off the kernel: $why")
+          }
           val cacheRoot =
             opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
           val verifiedRoot = cacheRoot.resolve("verified")

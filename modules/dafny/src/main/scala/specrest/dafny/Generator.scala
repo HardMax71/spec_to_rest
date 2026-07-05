@@ -25,7 +25,11 @@ final case class DafnyMethodHeader(
     candidates: List[DafnyCandidate] = Nil
 )
 
-final case class DafnyOutput(text: String, methods: List[DafnyMethodHeader])
+final case class DafnyOutput(
+    text: String,
+    methods: List[DafnyMethodHeader],
+    skipped: List[(String, String)] = Nil
+)
 
 private type DafnyLabel = boundary.Label[Either[DafnyError, DafnyOutput]]
 
@@ -89,7 +93,20 @@ object Generator:
       val derived                        = derivedStateClauses(ctx, entitiesWithInv)
       val invPredicate                   = renderInvariantPredicate(ctx, svcInvariants(ir), derived)
 
-      val methods = svcOperations(ir).map(op => renderMethod(ctx, op))
+      // A construct the transform cannot lower downgrades its own operation
+      // (it keeps the fail-loud stub and synthesis skips it) instead of
+      // failing the whole spec. The per-op boundary shares failDafny's label
+      // type, so the rendered method rides out through the builder and the
+      // placeholder Right is never read.
+      val attempts = svcOperations(ir).map { op =>
+        val rendered = List.newBuilder[RenderedMethod]
+        val res = boundary[Either[DafnyError, DafnyOutput]]:
+          rendered += renderMethod(ctx, op)
+          Right(DafnyOutput("", Nil))
+        (operName(op), res, rendered.result())
+      }
+      val methods = attempts.flatMap(_._3)
+      val skipped = attempts.collect { case (name, Left(err), _) => name -> err.message }
 
       if enumDecls.nonEmpty then
         sb ++= "\n"
@@ -116,7 +133,7 @@ object Generator:
         sb ++= "\n"
         sb ++= rendered.text
 
-      Right(DafnyOutput(sb.toString, methods.map(_.header)))
+      Right(DafnyOutput(sb.toString, methods.map(_.header), skipped))
 
   private def header(serviceName: String): String =
     s"// AUTO-GENERATED Dafny skeleton for service $serviceName.\n" +
