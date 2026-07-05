@@ -142,12 +142,19 @@ class EmitTest extends CatsEffectSuite:
         .find(_.path == "app/services/todo.py")
         .map(_.content)
         .getOrElse(fail("no todo service emitted"))
-      // CreateTodo's body carries Option- and enum-typed fields the kernel
-      // boundary cannot convert, so the scalar gate must fall it back to the
-      // route-kind body instead of calling the kernel with wrong-typed values.
+      // CreateTodo's Option-, enum-, and set-typed inputs convert at the
+      // kernel boundary now; the call must carry those conversions.
       assert(
-        !todoService.contains("_dafny_kernel.CreateTodo("),
-        s"non-scalar inputs must not be kernel-routed — got:\n$todoService"
+        todoService.contains("enum_to_dafny(\"Priority\", body.priority)"),
+        s"enum input should convert through the datatype constructor — got:\n$todoService"
+      )
+      assert(
+        todoService.contains("to_dafny_set(to_dafny_str(_x) for _x in body.tags)"),
+        "set input should convert through to_dafny_set"
+      )
+      assert(
+        todoService.contains("some_or_none(body.description, lambda _v: to_dafny_str(_v))"),
+        "optional input should wrap through some_or_none"
       )
 
   test("kernel-routed router call args match kernel handler signature (#27 review)"):

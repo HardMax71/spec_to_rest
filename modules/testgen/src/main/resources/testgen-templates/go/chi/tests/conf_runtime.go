@@ -247,6 +247,30 @@ func _num(x any) (float64, bool) {
 	return 0, false
 }
 
+// Order-free equality for set-typed positions (JSON carries sets as arrays).
+func _setEq(a, b any) bool {
+	as := _slice(a)
+	bs := _slice(b)
+	if len(as) != len(bs) {
+		return false
+	}
+	used := make([]bool, len(bs))
+	for _, x := range as {
+		found := false
+		for i, y := range bs {
+			if !used[i] && _eq(x, y) {
+				used[i] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
 func _cmp(a, b any) (int, bool) {
 	if fa, oka := _num(a); oka {
 		if fb, okb := _num(b); okb {

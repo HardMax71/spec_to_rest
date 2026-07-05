@@ -189,5 +189,9 @@ object GoExprBackend extends ExprBackendBase:
   def lambdaExpr(param: String, body: String): String =
     s"func($param any) any { return $body }"
 
+  def setEquals(l: String, r: String): String = s"_setEq($l, $r)"
+
+  def negate(cond: String): String = s"!($cond)"
+
   def matchesExpr(target: String, pattern: String): String =
     s"_matches($target, ${GoLit.str(Strategies.fullMatchPattern(pattern))})"

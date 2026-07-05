@@ -26,6 +26,78 @@ private[testgen] object StateMachineTests:
       val per = transitionTestsForTd(td, profiled, ir)
       TransitionEmissionResult(acc.results ++ per.results, acc.coveredOps ++ per.coveredOps)
 
+  // Entity invariants the seeded row must satisfy, or every guarded call on
+  // the seeded state 409s (requires begins with the state invariant). Drawn
+  // rows repair in place: the pk drops so the serial assigns a fresh valid
+  // key, length bounds clamp, an implication tied to the forced enum field
+  // sets its consequent, and a two-field ordering copies the bound.
+  private def invariantRepairLines(entity: entity_decl): List[String] =
+    val pk             = AdminModel.primaryKeyField(entity).getOrElse("id")
+    val pkPop          = s"row.pop(${ExprToPython.pyString(pk)}, None)"
+    val atoms          = entInvariants(entity).flatMap(inv => flattenEnsures(List(inv)))
+    val fieldTypes     = entFields(entity).map(f => fldName(f) -> fldType(f)).toMap
+    def key(f: String) = ExprToPython.pyString(f)
+    def fieldOf(e: expr): Option[String] = e match
+      case FieldAccessF(IdentifierF(_, _), f, _) => Some(f)
+      case _                                     => None
+    def enumLit(e: expr): Option[String] = e match
+      case EnumAccessF(_, m, _) => Some(m)
+      case IdentifierF(m, _)    => Some(m)
+      case StringLitF(m, _)     => Some(m)
+      case _                    => None
+    def fillFor(f: String): String = fieldTypes.get(f) match
+      case Some(NamedTypeF("DateTime", _)) | Some(OptionTypeF(NamedTypeF("DateTime", _), _)) =>
+        "\"2026-01-01T00:00:00Z\""
+      case Some(NamedTypeF("Int", _)) | Some(OptionTypeF(NamedTypeF("Int", _), _)) => "1"
+      case _                                                                       => "\"x\""
+    val repairs = atoms.flatMap {
+      case BinaryOpF(
+            BImplies(),
+            BinaryOpF(BEq(), lhs, rhs, _),
+            BinaryOpF(BNeq(), c, NoneLitF(_), _),
+            _
+          ) =>
+        (fieldOf(lhs), enumLit(rhs), fieldOf(c)) match
+          case (Some(sf), Some(lit), Some(cf)) =>
+            List(
+              s"if row[${key(sf)}] == ${ExprToPython.pyString(lit)} and row.get(${key(cf)}) is None:",
+              s"    row[${key(cf)}] = ${fillFor(cf)}"
+            )
+          case _ => Nil
+      case BinaryOpF(
+            BImplies(),
+            BinaryOpF(BNeq(), lhs, rhs, _),
+            BinaryOpF(BEq(), c, NoneLitF(_), _),
+            _
+          ) =>
+        (fieldOf(lhs), enumLit(rhs), fieldOf(c)) match
+          case (Some(sf), Some(lit), Some(cf)) =>
+            List(
+              s"if row[${key(sf)}] != ${ExprToPython.pyString(lit)}:",
+              s"    row[${key(cf)}] = None"
+            )
+          case _ => Nil
+      case BinaryOpF(BGe(), CallF(IdentifierF("len", _), List(arg), _), IntLitF(n, _), _) =>
+        fieldOf(arg).toList.flatMap: f =>
+          List(
+            s"if len(row[${key(f)}]) < $n:",
+            s"    row[${key(f)}] = ${ExprToPython.pyString("x")} * $n"
+          )
+      case BinaryOpF(BGe(), a, b, _) =>
+        (fieldOf(a), fieldOf(b)) match
+          case (Some(fa), Some(fb)) =>
+            List(
+              s"if row[${key(fa)}] < row[${key(fb)}]:",
+              s"    row[${key(fa)}] = row[${key(fb)}]"
+            )
+          case _ => Nil
+      case BinaryOpF(BLe(), CallF(IdentifierF("len", _), List(arg), _), IntLitF(n, _), _) =>
+        fieldOf(arg).toList.flatMap: f =>
+          List(s"row[${key(f)}] = row[${key(f)}][:$n]")
+      case _ => Nil
+    }
+    pkPop :: repairs
+
   private def transitionTestsForTd(
       td: transition_decl,
       profiled: ProfiledService,
@@ -300,6 +372,8 @@ private[testgen] object StateMachineTests:
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    invariantRepairLines(entity).foreach: line =>
+      sb.append(s"    $line\n")
     guardFixLines.foreach: line =>
       sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
@@ -350,6 +424,8 @@ private[testgen] object StateMachineTests:
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
+    invariantRepairLines(entity).foreach: line =>
+      sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")
@@ -470,13 +546,14 @@ private[testgen] object StateMachineTests:
             )
           )
         case Right(nonPath) =>
-          Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath)))
+          Some(Right(buildStatusRestrictionNegative(opDecl, pop, restriction, nonPath, ir)))
 
   private def buildStatusRestrictionNegative(
       opDecl: operation_decl,
       pop: ProfiledOperation,
       r: StatusRestriction,
-      nonPath: List[NonPathInput]
+      nonPath: List[NonPathInput],
+      ir: ServiceIRFull
   ): GeneratedTest =
     val opSnake     = Naming.toSnakeCase(operName(opDecl))
     val entitySnake = Naming.toSnakeCase(r.entityName)
@@ -504,6 +581,9 @@ private[testgen] object StateMachineTests:
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = wrong_status\n")
+    entityByName(svcEntities(ir), r.entityName).foreach: ent =>
+      invariantRepairLines(ent).foreach: line =>
+        sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")
     sb.append(s"    seeded_id = seed.json()[$pkKey]\n")

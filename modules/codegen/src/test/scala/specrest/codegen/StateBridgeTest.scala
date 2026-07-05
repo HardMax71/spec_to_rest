@@ -32,13 +32,30 @@ class StateBridgeTest extends CatsEffectSuite:
         s"the key column is upsert-stable and must not be reassigned:\n$bridge"
       )
 
-  test("todo_list state is not bridgeable (enum and collection fields)"):
+  test("todo_list state bridges enum and scalar-collection fields"):
     SpecFixtures.loadIR("todo_list").map: ir =>
       val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       StateBridge.plan(profiled) match
+        case Left(reason) => fail(s"todo_list should be bridgeable: $reason")
+        case Right(plan)  => assert(plan.hasState)
+      val bridge = StateBridge.emit(profiled)
+      assert(bridge.contains("enum_to_dafny(\"Status\", r.status)"), bridge)
+      assert(
+        bridge.contains("to_dafny_set(to_dafny_str(_x) for _x in r.tags)"),
+        "tags should hydrate as a Dafny set of strings"
+      )
+      assert(
+        bridge.contains("sorted(from_dafny_str(_x) for _x in "),
+        "tags should persist as a sorted JSON list"
+      )
+
+  test("ecommerce state is not bridgeable (entity-valued collection)"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      StateBridge.plan(profiled) match
         case Left(reason) =>
-          assert(reason.contains("Todo"), s"reason should name the entity: $reason")
-        case Right(_) => fail("todo_list should not be bridgeable yet")
+          assert(reason.contains("Order"), s"reason should name the entity: $reason")
+        case Right(_) => fail("ecommerce items are Set[LineItem]; the bridge must refuse")
 
   test("dafnyName doubles underscores like the Dafny Python backend"):
     assertEquals(StateBridge.dafnyName("created_at"), "created__at")

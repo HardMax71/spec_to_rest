@@ -138,6 +138,11 @@ object ExprToPython extends ExprBackendBase:
 
   def lambdaExpr(param: String, body: String): String = s"(lambda $param: ($body))"
 
+  def setEquals(l: String, r: String): String =
+    s"(sorted($l) == sorted($r))"
+
+  def negate(cond: String): String = s"(not $cond)"
+
   def matchesExpr(target: String, pattern: String): String =
     s"(re.fullmatch(${pyString(pattern)}, $target) is not None)"
 

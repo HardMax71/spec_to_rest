@@ -169,7 +169,7 @@ class StrategiesTest extends CatsEffectSuite:
     assertEquals(
       Strategies.expressionFor(SetTypeF(named("String"), None), ir),
       StrategyExpr.Code(
-        "st.sets(st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))), max_size=5)"
+        "st.lists(st.text(alphabet=st.characters(exclude_characters=\"\\x00\", exclude_categories=(\"Cs\",))), unique=True, max_size=5)"
       )
     )
     assertEquals(

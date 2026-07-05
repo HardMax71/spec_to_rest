@@ -7,6 +7,7 @@ import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
 import specrest.codegen.RenderContext
@@ -484,6 +485,12 @@ object EmitPython:
   // LLM_SYNTHESIS op is the fail-loud stub.
   private val KernelScalarTypes = Set("str", "int", "bool")
 
+  private def kernelElemToDafny(el: String, ref: String): String =
+    if el == "str" then s"to_dafny_str($ref)" else ref
+
+  private def kernelElemFromDafny(el: String, ref: String): String =
+    if el == "str" then s"from_dafny_str($ref)" else s"int($ref)"
+
   private def kernelFromDafny(domainType: String, ref: String): String = domainType match
     case "str"      => s"from_dafny_str($ref)"
     case "bool"     => s"bool($ref)"
@@ -499,13 +506,25 @@ object EmitPython:
   // A single entity-valued output projects the response fields off the Dafny
   // datatype (selector names double their underscores); optional fields go
   // through value_or_none so the None case never touches a selector.
-  private def kernelEntityProjection(fields: List[ProfiledField]): String =
+  private def kernelEntityProjection(
+      fields: List[ProfiledField],
+      kinds: Map[String, KernelTypes.Kind]
+  ): String =
     val pairs = fields.map: f =>
       val selector = s"result.${EmitShared.pyDafnySelector(f.fieldName)}"
-      val value =
-        if f.nullable then
-          s"value_or_none($selector, ${kernelFromDafnyName(baseDomain(f.domainType))})"
-        else kernelFromDafny(baseDomain(f.domainType), selector)
+      val value = kinds.get(f.fieldName) match
+        case Some(KernelTypes.Kind.EnumK(n)) if !f.nullable =>
+          s"enum_from_dafny(\"$n\", $selector)"
+        case Some(KernelTypes.Kind.EnumK(n)) =>
+          s"value_or_none($selector, lambda _v: enum_from_dafny(\"$n\", _v))"
+        case Some(KernelTypes.Kind.SetOf(el)) =>
+          s"sorted(${kernelElemFromDafny(el, "_x")} for _x in $selector)"
+        case Some(KernelTypes.Kind.SeqOf(el)) =>
+          s"[${kernelElemFromDafny(el, "_x")} for _x in $selector]"
+        case _ =>
+          if f.nullable then
+            s"value_or_none($selector, ${kernelFromDafnyName(baseDomain(f.domainType))})"
+          else kernelFromDafny(baseDomain(f.domainType), selector)
       s"\"${f.fieldName}\": $value"
     pairs.mkString("{\n            ", ",\n            ", ",\n        }")
 
@@ -633,16 +652,39 @@ object EmitPython:
         .filter(f => SensitiveFields.isSensitive(f.columnName))
         .map(_.fieldName)
         .toSet
-    val kernelArgSources: List[(String, String)] =
-      endpoint.pathParams.map(p => p.name -> pythonTypeForParam(p.typeExpr, typeLookup)) ++
-        endpoint.bodyParams.map { p =>
+    // Each input converts by its SPEC type: scalars as before, enums through
+    // the datatype constructors, scalar collections through set/seq builders,
+    // options by wrapping any of those.
+    def inputToDafny(access: String, kind: KernelTypes.Kind): Option[String] =
+      kind match
+        case KernelTypes.Kind.Scalar("str")  => Some(s"to_dafny_str($access)")
+        case KernelTypes.Kind.Scalar("int")  => Some(access)
+        case KernelTypes.Kind.Scalar("bool") => Some(access)
+        case KernelTypes.Kind.Scalar(_)      => None
+        case KernelTypes.Kind.EnumK(n)       => Some(s"enum_to_dafny(\"$n\", $access)")
+        case KernelTypes.Kind.SetOf(el) =>
+          Some(s"to_dafny_set(${kernelElemToDafny(el, "_x")} for _x in $access)")
+        case KernelTypes.Kind.SeqOf(el) =>
+          Some(s"to_dafny_seq([${kernelElemToDafny(el, "_x")} for _x in $access])")
+        case KernelTypes.Kind.OptOf(inner) =>
+          inputToDafny("_v", inner).map(conv => s"some_or_none($access, lambda _v: $conv)")
+    val specInputTypes = svcOperations(kernelCtx.ir)
+      .find(o => operName(o) == op.operationName)
+      .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
+      .getOrElse(Map.empty)
+    val kernelArgConversions: List[Option[String]] =
+      (endpoint.pathParams ++ endpoint.bodyParams).map { p =>
+        val access =
+          if endpoint.pathParams.exists(_.name == p.name) then p.name
           // Sensitive fields arrive as pydantic SecretStr and must unwrap
           // before crossing the kernel boundary.
-          val access =
-            if sensitiveBodyFields.contains(p.name) then s"body.${p.name}.get_secret_value()"
-            else s"body.${p.name}"
-          access -> pythonTypeForParam(p.typeExpr, typeLookup)
-        }
+          else if sensitiveBodyFields.contains(p.name) then s"body.${p.name}.get_secret_value()"
+          else s"body.${p.name}"
+        specInputTypes
+          .get(p.name)
+          .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+          .flatMap(k => inputToDafny(access, k))
+      }
     val kernelOuts = op.responseFields
     val specOutputs = svcOperations(kernelCtx.ir)
       .find(o => operName(o) == op.operationName)
@@ -661,13 +703,31 @@ object EmitPython:
     val entityOutputFields = entityOutput
       .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
       .getOrElse(Nil)
+    // Optionality lives on the profiled nullable flag; the kinds map keeps
+    // the payload kind so projection and eligibility read one shape.
+    val entityFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
+      .map(e =>
+        e.fields.flatMap { f =>
+          KernelTypes
+            .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
+            .map {
+              case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
+              case other                         => f.fieldName -> other
+            }
+        }.toMap
+      )
+      .getOrElse(Map.empty)
+    def outFieldOk(f: ProfiledField): Boolean =
+      entityFieldKinds.get(f.fieldName) match
+        case Some(KernelTypes.Kind.Scalar(b))                            => (KernelScalarTypes + "datetime").contains(b)
+        case Some(KernelTypes.Kind.EnumK(_))                             => true
+        case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+        case Some(KernelTypes.Kind.OptOf(_))                             => false
+        case None                                                        => (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
     val outsMarshalable =
       if specOutputs.isEmpty then true
       else if entityOutput.isDefined then
-        entityOutputFields.nonEmpty &&
-        entityOutputFields.forall(f =>
-          (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
-        )
+        entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
       else
         kernelOuts.nonEmpty &&
         kernelOuts.forall(f => !f.nullable && KernelScalarTypes.contains(f.domainType))
@@ -675,12 +735,11 @@ object EmitPython:
       op.dafnyMethod.isDefined &&
         endpoint.queryParams.isEmpty &&
         kernelCtx.stateReady &&
-        kernelArgSources.forall((_, t) => KernelScalarTypes.contains(t)) &&
+        kernelArgConversions.forall(_.isDefined) &&
         outsMarshalable
     val dafnyMethodFinal = if kernelEligible then op.dafnyMethod else None
 
-    val kernelCallArgs = kernelArgSources.map: (arg, t) =>
-      if t == "str" then s"to_dafny_str($arg)" else arg
+    val kernelCallArgs = kernelArgConversions.flatten
     // Candidates ride after the declared inputs, matching the lowered Dafny
     // signature; each is sampled fresh per guard attempt and converted at the
     // sample site, so call args stay short bare names.
@@ -699,7 +758,14 @@ object EmitPython:
         val out = kernelOuts.headOption
         ("result", out.map(f => kernelFromDafny(f.domainType, "result")).getOrElse("result"))
       else if specOutputs.isEmpty then ("_", "None")
-      else if entityOutput.isDefined then ("result", kernelEntityProjection(entityOutputFields))
+      else if entityOutput.isDefined then
+        // The response nests the entity under the spec's output name, the
+        // shape the ensures clauses (and so the oracle) describe.
+        val outName = specOutputs.headOption.map(prmName).getOrElse("result")
+        (
+          "result",
+          s"{\"$outName\": ${kernelEntityProjection(entityOutputFields, entityFieldKinds)}}"
+        )
       else
         kernelOuts match
           case Nil => ("result", "result")
@@ -863,7 +929,9 @@ object EmitPython:
       else sqlSet += colType
       mergeStdlibImport(stdlibByModule, field.domainType)
     EntityImports(
-      sqlalchemyImports = sqlSet.toList.sorted,
+      // ruff's isort profile orders all-caps names (JSON) before mixed-case
+      // ones within a from-import.
+      sqlalchemyImports = sqlSet.toList.sortBy(n => (n.toUpperCase != n, n)),
       postgresImports = pgSet.toList.sorted,
       stdlibImports = finalizeStdlibImports(stdlibByModule)
     )
@@ -992,8 +1060,13 @@ object EmitPython:
       // The candidate sample lines convert with to_dafny_str in the template,
       // outside the strings this text scan sees.
       Option.when(kernelText.contains("to_dafny_str(") || hasCandidates)("to_dafny_str"),
-      Option.when(kernelText.contains("value_or_none("))("value_or_none")
-    ).flatten
+      Option.when(kernelText.contains("value_or_none("))("value_or_none"),
+      Option.when(kernelText.contains("some_or_none("))("some_or_none"),
+      Option.when(kernelText.contains("enum_to_dafny("))("enum_to_dafny"),
+      Option.when(kernelText.contains("enum_from_dafny("))("enum_from_dafny"),
+      Option.when(kernelText.contains("to_dafny_set("))("to_dafny_set"),
+      Option.when(kernelText.contains("to_dafny_seq("))("to_dafny_seq")
+    ).flatten.sorted
     ServiceTemplateImports(
       sqlalchemyPlainImports = plainImports.result().sorted,
       sqlalchemyAliasImports = aliasImports.result().sorted,

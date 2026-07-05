@@ -65,6 +65,30 @@ object ScalarState:
 
   def columnName(specName: String): String = Naming.toColumnName(specName)
 
+  // Scalar counters a seeded row must stay below: an invariant of shape
+  // `forall k in <relField> : k < counter` ties a relation's keys to a
+  // freshness counter, so /admin/seed must bump the counter past inserted
+  // keys or every later guarded call fails that invariant conjunct.
+  def freshnessCounters(ir: ServiceIRFull, relField: String): List[String] =
+    val scalarNames = fieldNames(ir).toSet
+    svcInvariants(ir)
+      .flatMap(inv => flattenEnsures(List(invBody(inv))))
+      .collect {
+        case QuantifierF(
+              QAll(),
+              List(QuantifierBindingFull(k, dom, _, _)),
+              BinaryOpF(BLt(), IdentifierF(k2, _), IdentifierF(counter, _), _),
+              _
+            )
+            if k2 == k && domName(dom).contains(relField) && scalarNames.contains(counter) =>
+          counter
+      }
+      .distinct
+
+  private def domName(dom: expr): Option[String] = dom match
+    case IdentifierF(n, _) => Some(n)
+    case _                 => None
+
   def stateTable(ir: ServiceIRFull): Option[table_spec] =
     val scalars = fieldsWithSeeds(ir)
     if scalars.isEmpty then None

@@ -42,6 +42,17 @@ private[testgen] trait ExprBackendBase extends ExprBackend:
   def theExpr(v: String, dom: String, body: String): String
   def lambdaExpr(param: String, body: String): String
   def matchesExpr(target: String, pattern: String): String
+  def setEquals(l: String, r: String): String
+  def negate(cond: String): String
+
+  // Set-typed positions surface as JSON arrays, so equality on them must be
+  // order-free; names come from the spec's Set-typed inputs and fields.
+  private def isSetTypedRef(e: expr, ctx: TestCtx): Boolean = e match
+    case IdentifierF(n, _)     => ctx.setTyped.contains(n)
+    case FieldAccessF(_, f, _) => ctx.setTyped.contains(f)
+    case PrimeF(inner, _)      => isSetTypedRef(inner, ctx)
+    case PreF(inner, _)        => isSetTypedRef(inner, ctx)
+    case _                     => false
 
   final def translate(expr: expr, ctx: TestCtx): Translated = expr match
     case BoolLitF(v, _)   => Translated.Emit(boolLit(v))
@@ -59,6 +70,15 @@ private[testgen] trait ExprBackendBase extends ExprBackend:
       ExprLift.lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>
         Translated.Emit(mapMerge(lp, rp))
       )
+
+    case BinaryOpF(op @ (BEq() | BNeq()), l, r, _)
+        if isSetTypedRef(l, ctx) || isSetTypedRef(r, ctx) =>
+      ExprLift.lift2(translate(l, ctx), translate(r, ctx)): (lp, rp) =>
+        val eq = setEquals(lp, rp)
+        val negated = op match
+          case BNeq() => true
+          case _      => false
+        Translated.Emit(if negated then negate(eq) else eq)
 
     case BinaryOpF(op, l, r, _) =>
       ExprLift.lift2(translate(l, ctx), translate(r, ctx))((lp, rp) =>

@@ -52,6 +52,19 @@ export function _len(x: Anything): number {
   return 0;
 }
 
+export function _setEq(a: Anything, b: Anything): boolean {
+  const as = _slice(a);
+  const bs = _slice(b);
+  if (as.length !== bs.length) return false;
+  const used = new Array(bs.length).fill(false);
+  for (const x of as) {
+    const i = bs.findIndex((y, j) => !used[j] && _eq(x, y));
+    if (i < 0) return false;
+    used[i] = true;
+  }
+  return true;
+}
+
 export function _eq(a: Anything, b: Anything): boolean {
   if (a === b) return true;
   if (a === null || b === null || a === undefined || b === undefined) return a === b;

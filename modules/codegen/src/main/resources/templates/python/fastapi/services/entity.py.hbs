@@ -61,8 +61,11 @@ class {{entity.entityName}}Service:
         state = make_state()
 {{/if}}
 {{#if this.kernelHasInv}}
+        # An invariant-violating stored state (possible via admin seeding) is
+        # outside every contract: requires begins with ServiceStateInv, so it
+        # maps to the same guard status as any other precondition failure.
         if not _dafny_kernel.ServiceStateInv(state):
-            raise HTTPException(status_code=500, detail="state invariant violated")
+            raise HTTPException(status_code=409, detail="precondition failed")
 {{/if}}
 {{#if this.kernelCandidates.length}}
         # Sampled candidates: exhaustion means a real precondition failure,
