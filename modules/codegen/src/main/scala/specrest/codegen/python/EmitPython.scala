@@ -260,7 +260,23 @@ object EmitPython:
         )
       val readFieldViews       = readFieldsRaw.map(schemaReadField)
       val customRequestSchemas = entityOps.flatMap(_.customRequestSchema)
-      val schemaStdlib         = collectSchemaStdlibImports(entity, customRequestSchemas)
+      val enumAliasDefs =
+        svcEnums(profiled.ir)
+          .map(enumNameFull)
+          .flatMap(n => enumAliasDef(profiled.ir, n))
+          .filter { d =>
+            val alias = d.takeWhile(_ != ' ')
+            (nonIdFieldViews ++ customRequestSchemas.flatMap(_.fields))
+              .exists(_.validationType.contains(alias)) ||
+            entityOps.exists(_.queryParamsWithTypes.exists(_.domainType.contains(alias)))
+          }
+      val schemaStdlib =
+        collectSchemaStdlibImports(
+          entity,
+          customRequestSchemas,
+          nonIdFieldViews,
+          enumAliasDefs.nonEmpty
+        )
       val needsSecretStr =
         nonIdFields.exists(f => SensitiveFields.isSensitive(f.columnName)) ||
           customRequestSchemas.exists(_.fields.exists(_.validationType == "SecretStr"))
@@ -272,6 +288,7 @@ object EmitPython:
         ("postgresImports"   -> imports.postgresImports) +
         ("stdlibImports"     -> imports.stdlibImports)
       val schemaCtx = base +
+        ("enumLiteralAliases"   -> enumAliasDefs) +
         ("nonIdFields"          -> nonIdFieldViews) +
         ("readFields"           -> readFieldViews) +
         ("customRequestSchemas" -> customRequestSchemas) +
@@ -444,11 +461,22 @@ object EmitPython:
   // database CHECKs cannot either, so this is the only enforcement point.
   // Enum-typed inputs validate as Literal members at the pydantic boundary:
   // the kernel conversion constructs the datatype by member name and must
-  // never see an invalid one.
+  // never see an invalid one. Fields reference a module-level alias, since a
+  // wide inline Literal blows the line limit.
+  private def enumAliasName(typeName: String): String = s"${typeName}Value"
+
   private def enumLiteralType(ir: ServiceIRFull, typeName: String): Option[String] =
     svcEnums(ir)
       .find(e => enumNameFull(e) == typeName)
-      .map(e => enumValuesFull(e).map(v => s"\"$v\"").mkString("Literal[", ", ", "]"))
+      .map(_ => enumAliasName(typeName))
+
+  private def enumAliasDef(ir: ServiceIRFull, typeName: String): Option[String] =
+    svcEnums(ir)
+      .find(e => enumNameFull(e) == typeName)
+      .map(e =>
+        enumAliasName(typeName) + " = " +
+          enumValuesFull(e).map(v => s"\"$v\"").mkString("Literal[", ", ", "]")
+      )
 
   private def schemaInputField(
       f: ProfiledField,
@@ -1004,15 +1032,17 @@ object EmitPython:
 
   private def collectSchemaStdlibImports(
       entity: ProfiledEntity,
-      customRequestSchemas: List[CustomRequestSchema]
+      customRequestSchemas: List[CustomRequestSchema],
+      entityFieldViews: List[SchemaFieldView],
+      hasEnumAliases: Boolean
   ): List[StdlibImport] =
     val stdlibByModule = mutable.Map.empty[String, mutable.Set[String]]
-    for field  <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
-    for schema <- customRequestSchemas; view <- schema.fields do
-      mergeStdlibImport(stdlibByModule, view.domainType)
-      if view.validationType.startsWith("Literal[") then
-        val existing = stdlibByModule.getOrElseUpdate("typing", mutable.Set.empty)
-        existing += "Literal"
+    for field <- entity.fields do mergeStdlibImport(stdlibByModule, field.domainType)
+    val allViews = customRequestSchemas.flatMap(_.fields) ::: entityFieldViews
+    for view <- allViews do mergeStdlibImport(stdlibByModule, view.domainType)
+    if hasEnumAliases then
+      val existing = stdlibByModule.getOrElseUpdate("typing", mutable.Set.empty)
+      existing += "Literal"
     finalizeStdlibImports(stdlibByModule)
 
   // The router's whole import header assembles here as one rendered block
@@ -1031,16 +1061,18 @@ object EmitPython:
       if op.routeKind == "create" || op.routeKind == "read" || op.routeKind == "list" then
         schemaSet += entity.readSchemaName
       op.pathParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
-      op.queryParamsWithTypes.foreach(p => mergeStdlibImport(stdlibByModule, p.domainType))
+      op.queryParamsWithTypes.foreach { p =>
+        mergeStdlibImport(stdlibByModule, p.domainType)
+        // Enum-typed query params reference the schema module's Literal alias.
+        if p.domainType.endsWith("Value") || p.domainType.contains("Value |") then
+          schemaSet += p.domainType.takeWhile(_ != ' ')
+      }
 
     val needsAnnotated =
       operations.exists(_.pathParamsWithTypes.exists(p => p.routerType != p.domainType))
     val needsAny = operations.exists(_.responseAnnotation.contains("Any"))
-    val needsLiteral =
-      operations.exists(_.queryParamsWithTypes.exists(_.domainType.startsWith("Literal[")))
     val typingNames =
-      (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any") ++
-        Option.when(needsLiteral)("Literal")).toList
+      (Option.when(needsAnnotated)("Annotated") ++ Option.when(needsAny)("Any")).toList
     val stdlib =
       (Option
         .when(typingNames.nonEmpty)(

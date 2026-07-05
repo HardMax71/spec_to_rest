@@ -5,6 +5,10 @@ from {{this.module}} import {{join this.names ", "}}
 
 {{/if}}
 from pydantic import BaseModel, ConfigDict{{#if needsField}}, Field{{/if}}{{#if needsSecretStr}}, SecretStr{{/if}}
+{{#each enumLiteralAliases}}
+
+{{this}}
+{{/each}}
 
 
 class {{entity.createSchemaName}}(BaseModel):
