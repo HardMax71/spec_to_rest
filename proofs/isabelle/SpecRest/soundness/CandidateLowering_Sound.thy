@@ -1636,13 +1636,6 @@ next
   show ?case using eb' erest' favEq by simp
 qed (auto split: option.splits ir_value.splits list.splits if_splits)
 
-text \<open>The field-candidate analogue. \<open>of_ok out fld e\<close> says every free
-  occurrence of \<open>out\<close> is exactly as the base of \<open>out.fld\<close> (the shape the
-  lowering substitutes away); the movable filter guarantees it, since any
-  other occurrence would leave \<open>out\<close> free in the substituted conjunct.
-  \<open>substFieldCand\<close> renames no identifiers, so every syntactic fast path of
-  the evaluator is preserved unconditionally.\<close>
-
 theorem lower_entails_direct:
   assumes original: "eval fs ps fuel s st envPost e = Some bv"
       and lowered:
