@@ -27,7 +27,13 @@ The fix is the candidate lowering, a proven transformation (`lowerFreshOutputs` 
 `CandidateLowering.thy`, extracted and applied by the Dafny generator). An output position whose
 value the ensures only observe against pre-state becomes an extra input: the runtime samples a
 candidate from a CSPRNG, the compiled `Requires` twin validates it against live state, and a glue
-conjunct `ensures output == candidate` pins the result. The sampler's length and character set
+conjunct `ensures output == candidate` pins the result. The entailment behind that shape is proved
+in `CandidateLowering_Sound.thy`: `lower_entails_direct` and `lower_entails_field` show that
+whenever the reference semantics gives an original ensures conjunct a value at all, the moved
+requires clause plus the glue equality force that value to be true, for direct outputs and for
+entity-field candidates respectively. The coverage matches the reference evaluator's: conjuncts it
+abstains on (relation membership over pre-state, quantifiers over `pre()` domains) are vacuous for
+the lemma exactly as they are for the rest of the soundness chain. The sampler's length and character set
 derive from the refinement through `samplerFor`, with `charset_exact` proving the set matches the
 class semantics in both directions. Sampling loops retry a handful of times and then surface the
 operation's mapped guard status, since a real collision has negligible odds and exhaustion in

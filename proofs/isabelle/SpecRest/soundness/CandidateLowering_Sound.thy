@@ -997,6 +997,652 @@ next
   show ?case using eb' erest' favEq by simp
 qed (auto split: option.splits ir_value.splits list.splits if_splits)
 
+text \<open>The field-candidate analogue. \<open>of_ok out fld e\<close> says every free
+  occurrence of \<open>out\<close> is exactly as the base of \<open>out.fld\<close> (the shape the
+  lowering substitutes away); the movable filter guarantees it, since any
+  other occurrence would leave \<open>out\<close> free in the substituted conjunct.
+  \<open>substFieldCand\<close> renames no identifiers, so every syntactic fast path of
+  the evaluator is preserved unconditionally.\<close>
+
+fun of_ok :: "String.literal \<Rightarrow> String.literal \<Rightarrow> expr \<Rightarrow> bool"
+and of_ok_list :: "String.literal \<Rightarrow> String.literal \<Rightarrow> expr list \<Rightarrow> bool"
+and of_ok_fields :: "String.literal \<Rightarrow> String.literal \<Rightarrow> field_assign list \<Rightarrow> bool"
+and of_ok_entries :: "String.literal \<Rightarrow> String.literal \<Rightarrow> map_entry list \<Rightarrow> bool"
+and of_ok_bindings :: "String.literal \<Rightarrow> String.literal \<Rightarrow> quantifier_binding list \<Rightarrow> bool"
+where
+  "of_ok out fld (FieldAccessF b g _) =
+     (case b of
+        IdentifierF n _ \<Rightarrow> n \<noteq> out \<or> g = fld
+      | _ \<Rightarrow> of_ok out fld b)"
+| "of_ok out fld (IdentifierF n _) = (n \<noteq> out)"
+| "of_ok out fld (BinaryOpF op l r _) = (of_ok out fld l \<and> of_ok out fld r)"
+| "of_ok out fld (UnaryOpF op e _) = of_ok out fld e"
+| "of_ok out fld (EnumAccessF b m _) = of_ok out fld b"
+| "of_ok out fld (IndexF b i _) = (of_ok out fld b \<and> of_ok out fld i)"
+| "of_ok out fld (CallF c args _) = of_ok_list out fld args"
+| "of_ok out fld (PrimeF e _) = of_ok out fld e"
+| "of_ok out fld (PreF e _) = of_ok out fld e"
+| "of_ok out fld (WithF b upds _) = (of_ok out fld b \<and> of_ok_fields out fld upds)"
+| "of_ok out fld (IfF c t e _) = (of_ok out fld c \<and> of_ok out fld t \<and> of_ok out fld e)"
+| "of_ok out fld (LetF v vl body _) =
+     (of_ok out fld vl \<and> (v = out \<or> of_ok out fld body))"
+| "of_ok out fld (LambdaF p b _) = (p = out \<or> of_ok out fld b)"
+| "of_ok out fld (ConstructorF n fs _) = of_ok_fields out fld fs"
+| "of_ok out fld (SetLiteralF xs _) = of_ok_list out fld xs"
+| "of_ok out fld (MapLiteralF es _) = of_ok_entries out fld es"
+| "of_ok out fld (SetComprehensionF v d p _) =
+     (of_ok out fld d \<and> (v = out \<or> of_ok out fld p))"
+| "of_ok out fld (SeqLiteralF xs _) = of_ok_list out fld xs"
+| "of_ok out fld (MatchesF e pat _) = of_ok out fld e"
+| "of_ok out fld (SomeWrapF e _) = of_ok out fld e"
+| "of_ok out fld (TheF v d b _) =
+     (of_ok out fld d \<and> (v = out \<or> of_ok out fld b))"
+| "of_ok out fld (QuantifierF q bs body _) =
+     (of_ok_bindings out fld bs \<and>
+      (string_in_list out (qb_names bs) \<or> of_ok out fld body))"
+| "of_ok out fld (IntLitF n _) = True"
+| "of_ok out fld (FloatLitF n _) = True"
+| "of_ok out fld (StringLitF n _) = True"
+| "of_ok out fld (BoolLitF v _) = True"
+| "of_ok out fld (NoneLitF _) = True"
+| "of_ok_list out fld [] = True"
+| "of_ok_list out fld (e # es) = (of_ok out fld e \<and> of_ok_list out fld es)"
+| "of_ok_fields out fld [] = True"
+| "of_ok_fields out fld (FieldAssignFull g v _ # fs) =
+     (of_ok out fld v \<and> of_ok_fields out fld fs)"
+| "of_ok_entries out fld [] = True"
+| "of_ok_entries out fld (MapEntryFull k v _ # es) =
+     (of_ok out fld k \<and> of_ok out fld v \<and> of_ok_entries out fld es)"
+| "of_ok_bindings out fld [] = True"
+| "of_ok_bindings out fld (QuantifierBindingFull n d kk _ # bs) =
+     (of_ok out fld d \<and> of_ok_bindings out fld bs)"
+
+text \<open>Forward shape preservation: \<open>substFieldCand\<close> keeps identifiers (and so
+  every name the fast paths read) verbatim; the one node it rewrites,
+  \<open>out.fld\<close>, can only ever APPEAR inside a fast-path shape after
+  substitution, and then the original expression evaluated to \<open>None\<close>.\<close>
+
+lemma substF_dom_call:
+  "dom_arg l = Some a \<Longrightarrow> substFieldCand out fld cn l = l"
+  by (auto dest!: dom_arg_SomeD)
+
+lemma eval_dom_any_args_None:
+  assumes "lookup_callee fs ps (STR ''dom'') = None"
+  shows "eval fs ps fuel s st env (CallF (IdentifierF (STR ''dom'') spd) args sp) = None"
+proof (cases fuel)
+  case 0 then show ?thesis by simp
+next
+  case (Suc f)
+  then show ?thesis
+    using assms
+    by (auto simp: is_builtin_pred_def is_builtin_func_def is_builtin_int_func_def
+                   is_builtin_const_def
+             split: option.splits list.splits ir_value.splits if_splits)
+qed
+
+lemma substF_domshape_eval_None:
+  assumes "lookup_callee fs ps (STR ''dom'') = None"
+      and "substFieldCand out fld cn l = CallF (IdentifierF (STR ''dom'') spd) [aa] sp"
+  shows "eval fs ps fuel s st env l = None"
+proof -
+  obtain c args spc where leq: "l = CallF c args spc"
+    using assms(2) by (cases l) (auto split: expr.splits if_splits)
+  have ceq: "c = IdentifierF (STR ''dom'') spd"
+    using assms(2) leq by simp
+  show ?thesis using leq ceq eval_dom_any_args_None[OF assms(1)] by simp
+qed
+
+lemma substF_compshape_eval_None:
+  assumes "substFieldCand out fld cn r = SetComprehensionF v d p sp"
+  shows "eval fs ps fuel s st env r = None"
+proof -
+  obtain w d0 p0 sp0 where "r = SetComprehensionF w d0 p0 sp0"
+    using assms by (cases r) (auto split: expr.splits if_splits)
+  then show ?thesis by simp
+qed
+
+lemma quant_dom_substF:
+  "quant_dom s st k bs = Some pr
+     \<Longrightarrow> quant_dom s st k (substFieldCand_bindings out fld cn bs) = Some pr"
+  by (erule quant_dom.elims) (auto split: option.splits)
+
+lemma identName_substF:
+  "identName ba = Some n
+     \<Longrightarrow> identName (substFieldCand out fld cn ba) = Some n"
+  by (cases ba) auto
+
+lemma peel_substF:
+  assumes "peelRelationRef b = Some rel"
+  shows "peelRelationRef (substFieldCand out fld cn b) = Some rel"
+proof (cases b)
+  case (IdentifierF n sp) then show ?thesis using assms by simp
+next
+  case (PreF ba sp)
+  then have "identName ba = Some rel" using assms by simp
+  then show ?thesis using PreF identName_substF by simp
+next
+  case (PrimeF ba sp)
+  then have "identName ba = Some rel" using assms by simp
+  then show ?thesis using PrimeF identName_substF by simp
+qed (use assms in auto)
+
+lemma eval_substFieldCand:
+  "eval fs ps fuel s st env2 e = Some v
+     \<Longrightarrow> of_ok out fld e \<Longrightarrow> bn_ok cn e
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval fs ps fuel s st env1 (substFieldCand out fld cn e) = Some v"
+  "eval_list fs ps fuel s st env2 es = Some vs
+     \<Longrightarrow> of_ok_list out fld es \<Longrightarrow> bn_ok_list cn es
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval_list fs ps fuel s st env1 (substFieldCand_list out fld cn es) = Some vs"
+  "eval_entries fs ps fuel s st env2 ents = Some kvs
+     \<Longrightarrow> of_ok_entries out fld ents \<Longrightarrow> bn_ok_entries cn ents
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval_entries fs ps fuel s st env1 (substFieldCand_entries out fld cn ents) = Some kvs"
+  "eval_fields fs ps fuel s st env2 fas = Some fvs
+     \<Longrightarrow> of_ok_fields out fld fas \<Longrightarrow> bn_ok_fields cn fas
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval_fields fs ps fuel s st env1 (substFieldCand_fields out fld cn fas) = Some fvs"
+  "eval_the fs ps fuel s st env2 var dmv body = Some ths
+     \<Longrightarrow> of_ok out fld body \<Longrightarrow> bn_ok cn body \<Longrightarrow> var \<noteq> out \<Longrightarrow> var \<noteq> cn
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval_the fs ps fuel s st env1 var dmv (substFieldCand out fld cn body) = Some ths"
+  "eval_forall fs ps fuel s st env2 var dmv body = Some fav
+     \<Longrightarrow> of_ok out fld body \<Longrightarrow> bn_ok cn body \<Longrightarrow> var \<noteq> out \<Longrightarrow> var \<noteq> cn
+     \<Longrightarrow> env_lookup env2 out = Some ov
+     \<Longrightarrow> value_field_lookup st ov fld = Some vc
+     \<Longrightarrow> env_lookup env1 cn = Some vc
+     \<Longrightarrow> (\<forall>y. y \<noteq> out \<longrightarrow> env_lookup env2 y = env_lookup env1 y)
+     \<Longrightarrow> eval_forall fs ps fuel s st env1 var dmv (substFieldCand out fld cn body) = Some fav"
+proof (induction fs ps fuel s st env2 e and fs ps fuel s st env2 es
+         and fs ps fuel s st env2 ents and fs ps fuel s st env2 fas
+         and fs ps fuel s st env2 var dmv body and fs ps fuel s st env2 var dmv body
+         arbitrary: v env1 and vs env1 and kvs env1 and fvs env1 and ths env1 and fav env1
+         rule: eval_eval_list_eval_entries_eval_fields_eval_the_eval_forall.induct)
+  case (5 fs ps fuel s st env2 n sp)
+  have nout: "n \<noteq> out" using "5.prems"(2) by simp
+  have same: "env_lookup env2 n = env_lookup env1 n"
+    using "5.prems"(7) nout by simp
+  show ?case using "5.prems"(1) same by (simp split: option.splits)
+next
+  case (6 fs ps fuel s st env2 bop l r sp)
+  have ofl: "of_ok out fld l" and ofr: "of_ok out fld r"
+    using "6.prems"(2) by simp_all
+  have bnl: "bn_ok cn l" and bnr: "bn_ok cn r"
+    using "6.prems"(3) by simp_all
+  show ?case
+  proof (cases "dom_eq_domains fs ps st bop l r")
+    case (Some p)
+    obtain dx dy where peq: "p = (dx, dy)" by (cases p)
+    have de: "dom_eq_domains fs ps st bop l r = Some (dx, dy)" using Some peq by simp
+    obtain rx ry where args: "dom_arg l = Some rx" "dom_arg r = Some ry"
+      using dom_eq_domains_SomeD[OF de] by blast
+    have sl: "substFieldCand out fld cn l = l" and sr: "substFieldCand out fld cn r = r"
+      using args by (auto intro: substF_dom_call)
+    have de': "dom_eq_domains fs ps st bop (substFieldCand out fld cn l)
+                 (substFieldCand out fld cn r) = Some (dx, dy)"
+      using de sl sr by simp
+    have "eval fs ps fuel s st env1
+            (substFieldCand out fld cn (BinaryOpF bop l r sp))
+            = Some (VBool (set dx = set dy))"
+      by (simp only: substFieldCand.simps eval_dom_eq[OF de'])
+    also have "\<dots> = Some v"
+      using "6.prems"(1) by (simp only: eval_dom_eq[OF de])
+    finally show ?thesis .
+  next
+    case None
+    note deN = this
+    show ?thesis
+    proof (cases "beq_comp bop r")
+      case (Some t)
+      obtain var dnm pred where teq: "t = (var, dnm, pred)" by (cases t)
+      have bc: "beq_comp bop r = Some (var, dnm, pred)" using Some teq by simp
+      obtain csp cdsp where req: "r = SetComprehensionF var (IdentifierF dnm cdsp) pred csp"
+        and bopEq: "bop = BEq"
+        using bc by (auto elim!: beq_comp.elims split: expr.splits)
+      have rsub: "substFieldCand out fld cn r
+                    = SetComprehensionF var (IdentifierF dnm cdsp)
+                        (if var = out then pred else substFieldCand out fld cn pred) csp"
+        using req by simp
+      have bc': "beq_comp bop (substFieldCand out fld cn r)
+                   = Some (var, dnm, if var = out then pred else substFieldCand out fld cn pred)"
+        using rsub bopEq by simp
+      have deN': "dom_eq_domains fs ps st bop (substFieldCand out fld cn l)
+                    (substFieldCand out fld cn r) = None"
+        using rsub by (auto simp: dom_eq_domains_def split: option.splits)
+      have enr: "schema_lookup_enum s dnm = None"
+        using "6.prems"(1) deN bc by (auto split: option.splits if_splits)
+      have enrP: "\<not> schema_lookup_enum s dnm \<noteq> None" using enr by simp
+      obtain dvs where srd: "state_relation_domain st dnm = Some dvs"
+        using "6.prems"(1) deN bc enr by (auto split: option.splits if_splits)
+      obtain ms where etm: "eval_the fs ps fuel s st env2 var dvs pred = Some ms"
+        using "6.prems"(1) deN bc enr srd by (auto split: option.splits if_splits)
+      obtain xs where elv: "eval fs ps fuel s st env2 l = Some (VSet xs)"
+        and allc: "list_all (\<lambda>xx. contains_value dvs xx) xs"
+        and vEq: "v = VBool (set xs = set ms)"
+        using "6.prems"(1) deN bc enr srd etm
+        by (auto split: option.splits ir_value.splits if_splits)
+      have ofp: "var = out \<or> of_ok out fld pred" using ofr req by auto
+      have bnp: "bn_ok cn pred" and vcn: "var \<noteq> cn" using bnr req by simp_all
+      have ethe': "eval_the fs ps fuel s st env1 var dvs
+                     (if var = out then pred else substFieldCand out fld cn pred) = Some ms"
+      proof (cases "var = out")
+        case True
+        have agr: "\<forall>y. string_in_list y (remove_name var (free_vars pred))
+                     \<longrightarrow> env_lookup env2 y = env_lookup env1 y"
+          using "6.prems"(7) True by auto
+        show ?thesis
+          using eval_coincidence(5)[OF agr] etm True by simp
+      next
+        case False
+        have ofp': "of_ok out fld pred" using ofp False by simp
+        show ?thesis
+          using "6.IH"(3)[OF deN bc refl refl enrP srd etm ofp' bnp False vcn
+                             "6.prems"(4) "6.prems"(5) "6.prems"(6) "6.prems"(7)] False by simp
+      qed
+      have el': "eval fs ps fuel s st env1 (substFieldCand out fld cn l) = Some (VSet xs)"
+        using "6.IH"(4)[OF deN bc refl refl enrP srd etm elv ofl bnl
+                           "6.prems"(4) "6.prems"(5) "6.prems"(6) "6.prems"(7)] by simp
+      show ?thesis
+        using deN' bc' enr srd ethe' el' allc vEq by simp
+    next
+      case None
+      note bcN = this
+      obtain lv rv where elv: "eval fs ps fuel s st env2 l = Some lv"
+        and erv: "eval fs ps fuel s st env2 r = Some rv"
+        and vbin: "eval_bin bop (Some lv) (Some rv) = Some v"
+        using "6.prems"(1) deN bcN
+        by (auto split: option.splits dest: eval_bin_someD) (metis eval_bin_someD)
+      have il: "eval fs ps fuel s st env1 (substFieldCand out fld cn l) = Some lv"
+        using "6.IH"(1)[OF deN bcN elv ofl bnl
+                           "6.prems"(4) "6.prems"(5) "6.prems"(6) "6.prems"(7)] by simp
+      have ir: "eval fs ps fuel s st env1 (substFieldCand out fld cn r) = Some rv"
+        using "6.IH"(2)[OF deN bcN erv ofr bnr
+                           "6.prems"(4) "6.prems"(5) "6.prems"(6) "6.prems"(7)] by simp
+      have deN': "dom_eq_domains fs ps st bop (substFieldCand out fld cn l)
+                    (substFieldCand out fld cn r) = None"
+      proof (cases "dom_eq_domains fs ps st bop (substFieldCand out fld cn l)
+                      (substFieldCand out fld cn r)")
+        case (Some q)
+        obtain dx dy where qeq: "q = (dx, dy)" by (cases q)
+        obtain rx where dsl: "dom_arg (substFieldCand out fld cn l) = Some rx"
+          and lk: "lookup_callee fs ps (STR ''dom'') = None"
+          using dom_eq_domains_SomeD Some qeq by blast
+        obtain spd spa spc where lshape:
+          "substFieldCand out fld cn l
+             = CallF (IdentifierF (STR ''dom'') spd) [IdentifierF rx spa] spc"
+          using dom_arg_SomeD[OF dsl] by blast
+        have "eval fs ps fuel s st env2 l = None"
+          using substF_domshape_eval_None[OF lk lshape] .
+        with elv show ?thesis by simp
+      qed simp
+      have bcN': "beq_comp bop (substFieldCand out fld cn r) = None"
+      proof (cases "beq_comp bop (substFieldCand out fld cn r)")
+        case (Some t')
+        obtain var' dnm' pred' where t'eq: "t' = (var', dnm', pred')" by (cases t')
+        obtain csp' cdsp' where rshape:
+          "substFieldCand out fld cn r
+             = SetComprehensionF var' (IdentifierF dnm' cdsp') pred' csp'"
+          using Some t'eq by (auto elim!: beq_comp.elims split: expr.splits)
+        have "eval fs ps fuel s st env2 r = None"
+          using substF_compshape_eval_None[OF rshape] .
+        with erv show ?thesis by simp
+      qed simp
+      show ?thesis
+        using deN' bcN' il ir vbin "6.prems"(1) deN bcN by simp
+    qed
+  qed
+next
+  case (7 fs ps fuel s st env2 uop e0 sp)
+  obtain a where ea: "eval fs ps fuel s st env2 e0 = Some a"
+    using "7.prems"(1) eval_un_someD by fastforce
+  show ?case using "7.IH"[OF ea] ea "7.prems" by simp
+next
+  case (8 fs ps fuel s st env2 c a b sp)
+  obtain cv where ec: "eval fs ps fuel s st env2 c = Some cv"
+    using "8.prems"(1) by (auto split: option.splits)
+  obtain cb where cvb: "cv = VBool cb"
+    using "8.prems"(1) ec by (cases cv) (auto split: option.splits)
+  show ?case
+  proof (cases cb)
+    case True
+    have cT: "eval fs ps fuel s st env2 c = Some (VBool True)" using ec cvb True by simp
+    have ea: "eval fs ps fuel s st env2 a = Some v" using "8.prems"(1) cT by simp
+    show ?thesis
+      using "8.IH"(1)[OF cT] "8.IH"(2)[OF cT refl refl] ea "8.prems" by simp
+  next
+    case False
+    have cF: "eval fs ps fuel s st env2 c = Some (VBool False)" using ec cvb False by simp
+    have eb: "eval fs ps fuel s st env2 b = Some v" using "8.prems"(1) cF by simp
+    show ?thesis
+      using "8.IH"(1)[OF cF] "8.IH"(3)[OF cF refl refl] eb "8.prems" by simp
+  qed
+next
+  case (9 fs ps fuel s st env2 w vl body sp)
+  obtain va where ev: "eval fs ps fuel s st env2 vl = Some va"
+    using "9.prems"(1) by (auto split: option.splits)
+  have eb: "eval fs ps fuel s st ((w, va) # env2) body = Some v"
+    using "9.prems"(1) ev by simp
+  have ofv: "of_ok out fld vl" and ofb: "w = out \<or> of_ok out fld body"
+    using "9.prems"(2) by auto
+  have bnv: "bn_ok cn vl" and bnb: "bn_ok cn body" and wcn: "w \<noteq> cn"
+    using "9.prems"(3) by simp_all
+  have ev': "eval fs ps fuel s st env1 (substFieldCand out fld cn vl) = Some va"
+    using "9.IH"(1)[OF ev ofv bnv "9.prems"(4) "9.prems"(5) "9.prems"(6) "9.prems"(7)] by simp
+  show ?case
+  proof (cases "w = out")
+    case True
+    have agr: "\<forall>y. string_in_list y (free_vars body)
+                 \<longrightarrow> env_lookup ((w, va) # env2) y = env_lookup ((w, va) # env1) y"
+      using "9.prems"(7) True by (auto simp: env_lookup_def)
+    have "eval fs ps fuel s st ((w, va) # env1) body = Some v"
+      using eval_coincidence(1)[OF agr] eb by simp
+    then show ?thesis using ev' True by simp
+  next
+    case False
+    have ofb': "of_ok out fld body" using ofb False by simp
+    have lo: "env_lookup ((w, va) # env2) out = Some ov"
+      using "9.prems"(4) False by (simp add: env_lookup_def)
+    have lc: "env_lookup ((w, va) # env1) cn = Some vc"
+      using "9.prems"(6) wcn by (simp add: env_lookup_def)
+    have fr: "\<forall>y. y \<noteq> out \<longrightarrow> env_lookup ((w, va) # env2) y = env_lookup ((w, va) # env1) y"
+      using "9.prems"(7) by (auto simp: env_lookup_def)
+    have "eval fs ps fuel s st ((w, va) # env1)
+            (substFieldCand out fld cn body) = Some v"
+      using "9.IH"(2)[OF ev eb ofb' bnb lo "9.prems"(5) lc fr] by simp
+    then show ?thesis using ev' False by simp
+  qed
+next
+  case (10 fs ps fuel s st env2 base g sp)
+  show ?case
+  proof (cases "\<exists>n nsp. base = IdentifierF n nsp")
+    case True
+    then obtain n nsp where beq: "base = IdentifierF n nsp" by blast
+    show ?thesis
+    proof (cases "n = out")
+      case True
+      have gfld: "g = fld" using "10.prems"(2) beq True by simp
+      have ebase: "eval fs ps fuel s st env2 base = Some ov"
+        using beq True "10.prems"(4) by (simp split: option.splits)
+      have vvc: "v = vc"
+        using "10.prems"(1) ebase gfld "10.prems"(5) by (auto split: option.splits)
+      show ?thesis
+        using beq True gfld "10.prems"(6) vvc by simp
+    next
+      case False
+      have keep: "substFieldCand out fld cn (FieldAccessF base g sp)
+                    = FieldAccessF base g sp"
+        using beq False by simp
+      have same: "env_lookup env2 n = env_lookup env1 n"
+        using "10.prems"(7) False by simp
+      have "eval fs ps fuel s st env1 base = eval fs ps fuel s st env2 base"
+        using beq same by (simp split: option.splits)
+      then show ?thesis using keep "10.prems"(1) by (auto split: option.splits)
+    qed
+  next
+    case False
+    obtain bv2 where eb2: "eval fs ps fuel s st env2 base = Some bv2"
+      using "10.prems"(1) by (auto split: option.splits)
+    have ofb: "of_ok out fld base"
+      using "10.prems"(2) False by (cases base) auto
+    have bnb: "bn_ok cn base" using "10.prems"(3) by simp
+    have eb2': "eval fs ps fuel s st env1 (substFieldCand out fld cn base) = Some bv2"
+      using "10.IH"[OF eb2 ofb bnb "10.prems"(4) "10.prems"(5) "10.prems"(6) "10.prems"(7)] .
+    have sub: "substFieldCand out fld cn (FieldAccessF base g sp)
+                 = FieldAccessF (substFieldCand out fld cn base) g sp"
+      using False by (cases base) auto
+    show ?thesis using sub eb2 eb2' "10.prems"(1) by (auto split: option.splits)
+  qed
+next
+  case (15 fs ps fuel s st env2 callee cargs sp)
+  show ?case
+  proof (cases fuel)
+    case 0 then show ?thesis using "15.prems"(1) by simp
+  next
+    case (Suc f)
+    obtain nm nsp where cal: "callee = IdentifierF nm nsp"
+      using "15.prems"(1) Suc by (cases callee) (auto split: option.splits)
+    show ?thesis
+    proof (cases "lookup_callee fs ps nm")
+      case (Some pb)
+      obtain params fbody where pbeq: "pb = (params, fbody)" by (cases pb)
+      have lk: "lookup_callee fs ps nm = Some (params, fbody)" using Some pbeq by simp
+      have guard: "length params = length cargs \<and> distinct params"
+        using "15.prems"(1) Suc cal lk by (auto split: if_splits)
+      obtain vals where evs: "eval_list fs ps fuel s st env2 cargs = Some vals"
+        using "15.prems"(1) Suc cal lk guard by (auto split: option.splits)
+      have body: "eval fs ps f s st (zip params vals) fbody = Some v"
+        using "15.prems"(1) Suc cal lk guard evs by simp
+      have ofa: "of_ok_list out fld cargs" using "15.prems"(2) by simp
+      have bna: "bn_ok_list cn cargs" using "15.prems"(3) by simp
+      have evs': "eval_list fs ps fuel s st env1
+                    (substFieldCand_list out fld cn cargs) = Some vals"
+        using "15.IH"(4)[OF Suc cal lk refl guard evs ofa bna
+                            "15.prems"(4) "15.prems"(5) "15.prems"(6) "15.prems"(7)] by simp
+      have len': "length (substFieldCand_list out fld cn cargs) = length cargs"
+        by (induction cargs) auto
+      show ?thesis
+        using Suc cal lk guard evs' body len' by simp
+    next
+      case None
+      note lkN = this
+      show ?thesis
+      proof (cases cargs)
+        case Nil
+        then show ?thesis using "15.prems"(1) Suc cal lkN by simp
+      next
+        case (Cons a0 rest)
+        note consR = this
+        show ?thesis
+        proof (cases rest)
+          case Nil
+          note restN = this
+          have ofa: "of_ok out fld a0" using "15.prems"(2) consR restN by simp
+          have bna: "bn_ok cn a0" using "15.prems"(3) consR restN by simp
+          show ?thesis
+          proof (cases "is_builtin_pred nm")
+            case True
+            obtain str where ea: "eval fs ps fuel s st env2 a0 = Some (VStr str)"
+              and vv: "v = VBool (str_predicate nm str)"
+              using "15.prems"(1) Suc cal lkN consR restN True
+              by (auto split: option.splits ir_value.splits)
+            have ea': "eval fs ps fuel s st env1
+                         (substFieldCand out fld cn a0) = Some (VStr str)"
+              using "15.IH"(1)[OF Suc cal lkN consR restN True ea ofa bna
+                                  "15.prems"(4) "15.prems"(5) "15.prems"(6) "15.prems"(7)] .
+            show ?thesis using Suc cal lkN consR restN True ea' vv by simp
+          next
+            case False
+            note npred = this
+            show ?thesis
+            proof (cases "is_builtin_func nm")
+              case True
+              obtain str where ea: "eval fs ps fuel s st env2 a0 = Some (VStr str)"
+                and vv: "v = VStr (builtin_str_func nm str)"
+                using "15.prems"(1) Suc cal lkN consR restN npred True
+                by (auto split: option.splits ir_value.splits)
+              have ea': "eval fs ps fuel s st env1
+                           (substFieldCand out fld cn a0) = Some (VStr str)"
+                using "15.IH"(2)[OF Suc cal lkN consR restN npred True ea ofa bna
+                                    "15.prems"(4) "15.prems"(5) "15.prems"(6) "15.prems"(7)] .
+              show ?thesis
+                using Suc cal lkN consR restN npred True ea' vv by simp
+            next
+              case False
+              note nfunc = this
+              have nint: "is_builtin_int_func nm"
+                using "15.prems"(1) Suc cal lkN consR restN npred nfunc
+                by (auto split: option.splits ir_value.splits if_splits)
+              obtain n0 where ea: "eval fs ps fuel s st env2 a0 = Some (VInt n0)"
+                and vv: "v = VInt (builtin_int_func nm n0)"
+                using "15.prems"(1) Suc cal lkN consR restN npred nfunc nint
+                by (auto split: option.splits ir_value.splits)
+              have ea': "eval fs ps fuel s st env1
+                           (substFieldCand out fld cn a0) = Some (VInt n0)"
+                using "15.IH"(3)[OF Suc cal lkN consR restN npred nfunc nint ea ofa bna
+                                    "15.prems"(4) "15.prems"(5) "15.prems"(6) "15.prems"(7)] .
+              show ?thesis
+                using Suc cal lkN consR restN npred nfunc nint ea' vv by simp
+            qed
+          qed
+        next
+          case (Cons a1 rest2)
+          then show ?thesis using "15.prems"(1) Suc cal lkN consR by simp
+        qed
+      qed
+    qed
+  qed
+next
+  case (22 fs ps fuel s st env2 base mem sp)
+  obtain en esp where be: "base = IdentifierF en esp"
+    using "22.prems"(1) by (cases base) (auto split: option.splits)
+  show ?case using "22.prems"(1) be by simp
+next
+  case (23 fs ps fuel s st env2 base key sp)
+  obtain rel where peel: "peelRelationRef base = Some rel"
+    using "23.prems"(1) by (auto split: option.splits)
+  obtain kv where ek: "eval fs ps fuel s st env2 key = Some kv"
+    using "23.prems"(1) peel by (auto split: option.splits)
+  have peel': "peelRelationRef (substFieldCand out fld cn base) = Some rel"
+    using peel_substF[OF peel] .
+  have ofk: "of_ok out fld key" using "23.prems"(2) by simp
+  have bnk: "bn_ok cn key" using "23.prems"(3) by simp
+  have ek': "eval fs ps fuel s st env1 (substFieldCand out fld cn key) = Some kv"
+    using "23.IH"[OF _ ofk bnk "23.prems"(4) "23.prems"(5) "23.prems"(6) "23.prems"(7)]
+          ek peel by (auto split: option.splits)
+  show ?case using peel peel' ek ek' "23.prems"(1) by (auto split: option.splits)
+next
+  case (24 fs ps fuel s st env2 var dm body sp)
+  obtain rel dsp where dme: "dm = IdentifierF rel dsp"
+    using "24.prems"(1) by (cases dm) (auto split: option.splits)
+  obtain dmv0 where srd: "state_relation_domain st rel = Some dmv0"
+    using "24.prems"(1) dme by (auto split: option.splits)
+  obtain x0 rest0 where eth: "eval_the fs ps fuel s st env2 var dmv0 body = Some (x0 # rest0)"
+    and alleq: "list_all (\<lambda>y. y = x0) rest0" and vEq: "v = x0"
+    using "24.prems"(1) dme srd
+    by (auto split: option.splits list.splits if_splits)
+  have ofb: "var = out \<or> of_ok out fld body" using "24.prems"(2) dme by auto
+  have bnb: "bn_ok cn body" and vcn: "var \<noteq> cn" using "24.prems"(3) dme by simp_all
+  have eth': "eval_the fs ps fuel s st env1 var dmv0
+                (if var = out then body else substFieldCand out fld cn body)
+                = Some (x0 # rest0)"
+  proof (cases "var = out")
+    case True
+    have agr: "\<forall>y. string_in_list y (remove_name var (free_vars body))
+                 \<longrightarrow> env_lookup env2 y = env_lookup env1 y"
+      using "24.prems"(7) True by auto
+    show ?thesis using eval_coincidence(5)[OF agr] eth True by simp
+  next
+    case False
+    have ofb': "of_ok out fld body" using ofb False by simp
+    show ?thesis
+      using "24.IH"[OF dme srd eth ofb' bnb False vcn
+                       "24.prems"(4) "24.prems"(5) "24.prems"(6) "24.prems"(7)] False by simp
+  qed
+  show ?case using dme srd eth' alleq vEq by simp
+next
+  case (25 fs ps fuel s st env2 k bs body sp)
+  obtain var0 dmv0 where qd: "quant_dom s st k bs = Some (var0, dmv0)"
+    using "25.prems"(1) by (auto split: option.splits)
+  have ef: "eval_forall fs ps fuel s st env2 var0 dmv0 body = Some v"
+    using "25.prems"(1) qd by simp
+  have qd': "quant_dom s st k (substFieldCand_bindings out fld cn bs)
+               = Some (var0, dmv0)"
+    using quant_dom_substF[OF qd] .
+  obtain dnm0 dsp0 kk0 sp0 where bs_eq:
+    "bs = [QuantifierBindingFull var0 (IdentifierF dnm0 dsp0) kk0 sp0]"
+    using qd by (auto elim!: quant_dom.elims split: option.splits)
+  have ofb: "string_in_list out (qb_names bs) \<or> of_ok out fld body"
+    using "25.prems"(2) by auto
+  have bnb: "bn_ok cn body" using "25.prems"(3) by simp
+  have vcn: "var0 \<noteq> cn"
+    using "25.prems"(3) bs_eq by auto
+  show ?case
+  proof (cases "string_in_list out (qb_names bs)")
+    case True
+    have varx: "var0 = out" using True bs_eq by (simp add: string_in_list_iff)
+    have agr: "\<forall>y. string_in_list y (remove_name var0 (free_vars body))
+                 \<longrightarrow> env_lookup env2 y = env_lookup env1 y"
+      using "25.prems"(7) varx by auto
+    have ef': "eval_forall fs ps fuel s st env1 var0 dmv0 body = Some v"
+      using eval_coincidence(6)[OF agr] ef by simp
+    then show ?thesis using qd qd' True by simp
+  next
+    case False
+    have varx: "var0 \<noteq> out" using False bs_eq by (simp add: string_in_list_iff)
+    have ofb': "of_ok out fld body" using ofb False by simp
+    have ef': "eval_forall fs ps fuel s st env1 var0 dmv0
+                 (substFieldCand out fld cn body) = Some v"
+      using "25.IH"[OF qd refl ef ofb' bnb varx vcn
+                       "25.prems"(4) "25.prems"(5) "25.prems"(6) "25.prems"(7)] by simp
+    then show ?thesis using qd qd' False by simp
+  qed
+next
+  case (34 fs ps fuel s st env2 var v0 rest body)
+  obtain b0 where eb: "eval fs ps fuel s st ((var, v0) # env2) body = Some (VBool b0)"
+    using "34.prems"(1) by (auto split: option.splits ir_value.splits)
+  obtain ms where erest: "eval_the fs ps fuel s st env2 var rest body = Some ms"
+    and thsEq: "ths = (if b0 then v0 # ms else ms)"
+    using "34.prems"(1) eb by (auto split: option.splits)
+  have lo: "env_lookup ((var, v0) # env2) out = Some ov"
+    using "34.prems"(6) "34.prems"(4) by (simp add: env_lookup_def)
+  have lc: "env_lookup ((var, v0) # env1) cn = Some vc"
+    using "34.prems"(8) "34.prems"(5) by (simp add: env_lookup_def)
+  have fr: "\<forall>y. y \<noteq> out \<longrightarrow> env_lookup ((var, v0) # env2) y = env_lookup ((var, v0) # env1) y"
+    using "34.prems"(9) by (auto simp: env_lookup_def)
+  have eb': "eval fs ps fuel s st ((var, v0) # env1)
+               (substFieldCand out fld cn body) = Some (VBool b0)"
+    using "34.IH"(1)[OF eb "34.prems"(2) "34.prems"(3) lo "34.prems"(7) lc fr] by simp
+  have erest': "eval_the fs ps fuel s st env1 var rest
+                  (substFieldCand out fld cn body) = Some ms"
+    using "34.IH"(2)[OF eb refl erest "34.prems"(2) "34.prems"(3) "34.prems"(4) "34.prems"(5)
+                        "34.prems"(6) "34.prems"(7) "34.prems"(8) "34.prems"(9)] by simp
+  show ?case using eb' erest' thsEq by simp
+next
+  case (36 fs ps fuel s st env2 var v0 rest body)
+  obtain b0 where eb: "eval fs ps fuel s st ((var, v0) # env2) body = Some (VBool b0)"
+    using "36.prems"(1) by (auto split: option.splits ir_value.splits)
+  obtain acc where erest: "eval_forall fs ps fuel s st env2 var rest body = Some (VBool acc)"
+    and favEq: "fav = VBool (b0 \<and> acc)"
+    using "36.prems"(1) eb by (auto split: option.splits ir_value.splits)
+  have lo: "env_lookup ((var, v0) # env2) out = Some ov"
+    using "36.prems"(6) "36.prems"(4) by (simp add: env_lookup_def)
+  have lc: "env_lookup ((var, v0) # env1) cn = Some vc"
+    using "36.prems"(8) "36.prems"(5) by (simp add: env_lookup_def)
+  have fr: "\<forall>y. y \<noteq> out \<longrightarrow> env_lookup ((var, v0) # env2) y = env_lookup ((var, v0) # env1) y"
+    using "36.prems"(9) by (auto simp: env_lookup_def)
+  have eb': "eval fs ps fuel s st ((var, v0) # env1)
+               (substFieldCand out fld cn body) = Some (VBool b0)"
+    using "36.IH"(1)[OF eb "36.prems"(2) "36.prems"(3) lo "36.prems"(7) lc fr] by simp
+  have erest': "eval_forall fs ps fuel s st env1 var rest
+                  (substFieldCand out fld cn body) = Some (VBool acc)"
+    using "36.IH"(2)[OF eb refl erest "36.prems"(2) "36.prems"(3) "36.prems"(4) "36.prems"(5)
+                        "36.prems"(6) "36.prems"(7) "36.prems"(8) "36.prems"(9)] by simp
+  show ?case using eb' erest' favEq by simp
+qed (auto split: option.splits ir_value.splits list.splits if_splits)
+
+text \<open>The field-candidate analogue. \<open>of_ok out fld e\<close> says every free
+  occurrence of \<open>out\<close> is exactly as the base of \<open>out.fld\<close> (the shape the
+  lowering substitutes away); the movable filter guarantees it, since any
+  other occurrence would leave \<open>out\<close> free in the substituted conjunct.
+  \<open>substFieldCand\<close> renames no identifiers, so every syntactic fast path of
+  the evaluator is preserved unconditionally.\<close>
+
 theorem lower_entails_direct:
   assumes original: "eval fs ps fuel s st envPost e = Some bv"
       and lowered:
@@ -1013,6 +1659,27 @@ proof -
     by (rule eval_subst_cand(1)[OF original sn bn glue cand frame])
   have "eval fs ps fuel s st envPre
           (stripPre (subst x (IdentifierF cn None) e)) = Some bv"
+    by (rule eval_stripPre(1)[OF subd])
+  with lowered show ?thesis by simp
+qed
+
+theorem lower_entails_field:
+  assumes original: "eval fs ps fuel s st envPost e = Some bv"
+      and lowered:
+        "eval fs ps fuel s st envPre
+           (stripPre (substFieldCand out fld cn e)) = Some (VBool True)"
+      and ofok: "of_ok out fld e" and bn: "bn_ok cn e"
+      and outv: "env_lookup envPost out = Some ov"
+      and glue: "value_field_lookup st ov fld = Some vc"
+      and cand: "env_lookup envPre cn = Some vc"
+      and frame: "\<forall>y. y \<noteq> out \<longrightarrow> env_lookup envPost y = env_lookup envPre y"
+  shows "bv = VBool True"
+proof -
+  have subd:
+    "eval fs ps fuel s st envPre (substFieldCand out fld cn e) = Some bv"
+    by (rule eval_substFieldCand(1)[OF original ofok bn outv glue cand frame])
+  have "eval fs ps fuel s st envPre
+          (stripPre (substFieldCand out fld cn e)) = Some bv"
     by (rule eval_stripPre(1)[OF subd])
   with lowered show ?thesis by simp
 qed
