@@ -101,6 +101,7 @@ service OrderService {
     payments: Int -> lone Payment
     next_order_id: OrderId
     next_payment_id: Int
+    next_line_item_id: Int
   }
 
   // --- State Machine ---
@@ -154,6 +155,7 @@ service OrderService {
     ensures:
       let product = products[sku] in
       let item = LineItem {
+        id = pre(next_line_item_id),
         order_id = order_id,
         product_sku = sku,
         quantity = quantity,
@@ -167,6 +169,7 @@ service OrderService {
                   + pre(orders)[order_id].tax
         }
         orders' = pre(orders) + {order_id -> order}
+        next_line_item_id' = pre(next_line_item_id) + 1
         inventory'[sku].reserved =
           pre(inventory)[sku].reserved + quantity
         inventory'[sku].available =
@@ -396,6 +399,13 @@ service OrderService {
 
   invariant paymentIdFresh:
     all pid in payments | pid < next_payment_id
+
+  invariant nextLineItemIdPositive:
+    next_line_item_id > 0
+
+  invariant lineItemIdFresh:
+    all oid in orders |
+      all item in orders[oid].items | item.id < next_line_item_id
 
   invariant nextOrderIdFresh:
     all oid in orders | oid < next_order_id
