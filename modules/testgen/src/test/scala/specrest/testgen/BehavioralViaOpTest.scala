@@ -37,8 +37,10 @@ class BehavioralViaOpTest extends BehavioralTestSupport:
         .find(_.name == "test_promote_transition_low_to_high")
         .getOrElse(fail(s"missing positive; skips=${out.skips}"))
       assert(
-        pos.body.contains("@given(row=strategy_item(), value=st.integers())\n"),
-        s"missing value=st.integers() in @given; body=${pos.body}"
+        pos.body.contains(
+          "@given(row=strategy_item(), value=st.integers(min_value=-2147483648, max_value=2147483647))\n"
+        ),
+        s"missing bounded value strategy in @given; body=${pos.body}"
       )
       assert(
         pos.body.contains("def test_promote_transition_low_to_high(row, value):\n"),

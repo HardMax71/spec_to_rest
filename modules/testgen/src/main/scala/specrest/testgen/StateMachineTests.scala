@@ -28,23 +28,25 @@ private[testgen] object StateMachineTests:
 
   // Entity invariants the seeded row must satisfy, or every guarded call on
   // the seeded state 409s (requires begins with the state invariant). Drawn
-  // rows repair in place: the pk drops so the serial assigns a fresh valid
-  // key, length bounds clamp, an implication tied to the forced enum field
-  // sets its consequent, and a two-field ordering copies the bound.
+  // rows repair in place: strict lower bounds lift (ids are app-assigned,
+  // so they stay in the payload), length bounds clamp, an implication tied
+  // to the forced enum field sets its consequent, and a two-field ordering
+  // copies the bound.
   private def invariantRepairLines(entity: entity_decl): List[String] =
-    val pk             = AdminModel.primaryKeyField(entity).getOrElse("id")
-    val pkPop          = s"row.pop(${ExprToPython.pyString(pk)}, None)"
     val atoms          = entInvariants(entity).flatMap(inv => flattenEnsures(List(inv)))
     val fieldTypes     = entFields(entity).map(f => fldName(f) -> fldType(f)).toMap
     def key(f: String) = ExprToPython.pyString(f)
+    // Entity invariants reference fields as bare identifiers; an identifier
+    // that is not a field is an enum member (DONE in status = DONE).
     def fieldOf(e: expr): Option[String] = e match
-      case FieldAccessF(IdentifierF(_, _), f, _) => Some(f)
-      case _                                     => None
+      case FieldAccessF(IdentifierF(_, _), f, _)       => Some(f)
+      case IdentifierF(n, _) if fieldTypes.contains(n) => Some(n)
+      case _                                           => None
     def enumLit(e: expr): Option[String] = e match
-      case EnumAccessF(_, m, _) => Some(m)
-      case IdentifierF(m, _)    => Some(m)
-      case StringLitF(m, _)     => Some(m)
-      case _                    => None
+      case EnumAccessF(_, m, _)                         => Some(m)
+      case IdentifierF(m, _) if !fieldTypes.contains(m) => Some(m)
+      case StringLitF(m, _)                             => Some(m)
+      case _                                            => None
     def fillFor(f: String): String = fieldTypes.get(f) match
       case Some(NamedTypeF("DateTime", _)) | Some(OptionTypeF(NamedTypeF("DateTime", _), _)) =>
         "\"2026-01-01T00:00:00Z\""
@@ -77,6 +79,12 @@ private[testgen] object StateMachineTests:
               s"    row[${key(cf)}] = None"
             )
           case _ => Nil
+      case BinaryOpF(BGt(), a, IntLitF(n, _), _) =>
+        fieldOf(a).toList.flatMap: f =>
+          List(
+            s"if row[${key(f)}] <= $n:",
+            s"    row[${key(f)}] = $n + 1"
+          )
       case BinaryOpF(BGe(), CallF(IdentifierF("len", _), List(arg), _), IntLitF(n, _), _) =>
         fieldOf(arg).toList.flatMap: f =>
           List(
@@ -84,11 +92,14 @@ private[testgen] object StateMachineTests:
             s"    row[${key(f)}] = ${ExprToPython.pyString("x")} * $n"
           )
       case BinaryOpF(BGe(), a, b, _) =>
+        // Lower the bound side: the guard-fix lines may have pinned the
+        // other side (updated_at = completed_at + 1s), and lowering a bound
+        // cannot un-pin anything.
         (fieldOf(a), fieldOf(b)) match
           case (Some(fa), Some(fb)) =>
             List(
               s"if row[${key(fa)}] < row[${key(fb)}]:",
-              s"    row[${key(fa)}] = row[${key(fb)}]"
+              s"    row[${key(fb)}] = row[${key(fa)}]"
             )
           case _ => Nil
       case BinaryOpF(BLe(), CallF(IdentifierF("len", _), List(arg), _), IntLitF(n, _), _) =>
@@ -96,7 +107,7 @@ private[testgen] object StateMachineTests:
           List(s"row[${key(f)}] = row[${key(f)}][:$n]")
       case _ => Nil
     }
-    pkPop :: repairs
+    repairs
 
   private def transitionTestsForTd(
       td: transition_decl,
@@ -372,9 +383,9 @@ private[testgen] object StateMachineTests:
     sb.append("    client.post(\"/admin/reset\")\n")
     sb.append("    row = dict(row)\n")
     sb.append(s"    row[$fieldKey] = ${ExprToPython.pyString(from)}\n")
-    invariantRepairLines(entity).foreach: line =>
-      sb.append(s"    $line\n")
     guardFixLines.foreach: line =>
+      sb.append(s"    $line\n")
+    invariantRepairLines(entity).foreach: line =>
       sb.append(s"    $line\n")
     sb.append(s"    seed = client.post(\"/admin/seed/$entitySnake\", json=row)\n")
     sb.append("    assume(seed.status_code == 201)\n")

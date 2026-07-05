@@ -54,7 +54,7 @@ class StructuralTest extends CatsEffectSuite:
       assert(
         out.file.contains("def _check_invariant_click_count_non_negative(ctx, response, case):")
       )
-      assert(out.file.contains("post_state = client.get(\"/admin/state\").json()"))
+      assert(out.file.contains("post_state = state_snapshot(_INT_KEYED_STATE)"))
 
   test("url_shortener: invariant checks gated by status < 500"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>

@@ -69,7 +69,7 @@ object Structural:
         )
         sb.append("    if response.status_code >= 500:\n")
         sb.append("        return\n")
-        sb.append("    post_state = client.get(\"/admin/state\").json()\n")
+        sb.append("    post_state = state_snapshot(_INT_KEYED_STATE)\n")
         sb.append(
           s"    assert $text, ${ExprToPython.pyString(s"invariant violated: $name")}\n"
         )
@@ -212,9 +212,13 @@ object Structural:
         |import schemathesis
         |from hypothesis import HealthCheck, settings
         |
-        |from tests.conftest import client
+        |from tests.conftest import client, state_snapshot
         |from tests.predicates import is_valid_email, is_valid_uri
         |${sensitiveBlock}
+        |_INT_KEYED_STATE = frozenset({${StateKeys.intKeyed(ir).map(n => s"\"$n\"").mkString(
+         ", "
+       )}})
+        |
         |BASE_URL = os.environ.get("SPEC_TEST_BASE_URL", "http://localhost:8000")
         |
         |PROFILE = os.environ.get("SPEC_TEST_PROFILE", "thorough")

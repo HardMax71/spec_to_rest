@@ -102,7 +102,8 @@ object AdminRouter:
        |    for col in row.__table__.columns:
        |        v = getattr(row, col.name)
        |        if isinstance(v, (datetime, date)):
-       |            v = v.isoformat()
+       |            # Same canonical wire form as the API's responses.
+       |            v = v.isoformat().replace("+00:00", "Z")
        |        out[col.name] = v
        |    return out
        |

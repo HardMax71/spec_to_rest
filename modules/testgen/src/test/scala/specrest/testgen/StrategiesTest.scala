@@ -154,7 +154,7 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       Strategies.expressionFor(named("Int"), ir),
-      StrategyExpr.Code("st.integers()")
+      StrategyExpr.Code("st.integers(min_value=-2147483648, max_value=2147483647)")
     )
     assertEquals(
       Strategies.expressionFor(named("Bool"), ir),
@@ -174,7 +174,9 @@ class StrategiesTest extends CatsEffectSuite:
     )
     assertEquals(
       Strategies.expressionFor(SeqTypeF(named("Int"), None), ir),
-      StrategyExpr.Code("st.lists(st.integers(), max_size=5)")
+      StrategyExpr.Code(
+        "st.lists(st.integers(min_value=-2147483648, max_value=2147483647), max_size=5)"
+      )
     )
     assertEquals(
       Strategies.expressionFor(named("Code"), ir),
@@ -200,7 +202,7 @@ class StrategiesTest extends CatsEffectSuite:
       typeAliases = List(alias("Counter", named("Int")))
     )
     val spec = Strategies.forIR(ir).head
-    assertEquals(spec.body, "st.integers()")
+    assertEquals(spec.body, "st.integers(min_value=-2147483648, max_value=2147483647)")
 
   test("Int with positive constraint via where value > 0"):
     val ir = serviceIR(
@@ -213,7 +215,7 @@ class StrategiesTest extends CatsEffectSuite:
       )
     )
     val spec = Strategies.forIR(ir).head
-    assertEquals(spec.body, "st.integers(min_value=1)")
+    assertEquals(spec.body, "st.integers(min_value=1, max_value=2147483647)")
 
   test("Unhandled string constraint goes to skipped list, base strategy still produced"):
     val weird = BinaryOpF(
@@ -294,7 +296,7 @@ class StrategiesTest extends CatsEffectSuite:
     )
     val specs = Strategies.forIR(ir).map(s => s.typeName -> s).toMap
     assertEquals(specs("Overridden").body, "s()")
-    assertEquals(specs("PosInt").body, "st.integers(min_value=1)")
+    assertEquals(specs("PosInt").body, "st.integers(min_value=1, max_value=2147483647)")
     assertEquals(specs("PosInt").imports, Nil)
 
   test("malformed override (no colon) silently falls through to synth"):
