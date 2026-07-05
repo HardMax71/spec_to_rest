@@ -33,7 +33,12 @@ object StateBridge:
     case Some(Kind.Scalar(b))                => ScalarPyTypes.contains(b)
     case Some(Kind.EnumK(_))                 => true
     case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
-    case _                                   => false
+    case Some(Kind.OptOf(inner))             =>
+      // Nullable collections have no bridge conversions on any target yet.
+      inner match
+        case Kind.SetOf(_) | Kind.SeqOf(_) => false
+        case _                             => kindSupported(Some(inner), nullable = false)
+    case _ => false
 
   def plan(profiled: ProfiledService): Either[String, Plan] =
     specrest.codegen.StatePlan.analyze(
@@ -53,7 +58,9 @@ object StateBridge:
 
   private def toDafnyFieldExpr(kind: Option[Kind], f: ProfiledField, rowRef: String): String =
     val access = s"$rowRef.${f.columnName}"
-    kind match
+    // A nullable field resolves to OptOf(inner); optionality rides on the
+    // profiled nullable flag, so the arms match on the payload kind.
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         s"enum_to_dafny(\"$n\", $access)"
       case Some(Kind.EnumK(n)) =>
@@ -79,7 +86,7 @@ object StateBridge:
 
   private def fromDafnyFieldExpr(kind: Option[Kind], f: ProfiledField, valueRef: String): String =
     val access = s"$valueRef.${specrest.codegen.EmitShared.pyDafnySelector(f.fieldName)}"
-    kind match
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         s"enum_from_dafny(\"$n\", $access)"
       case Some(Kind.EnumK(n)) =>

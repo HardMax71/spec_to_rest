@@ -27,8 +27,11 @@ object StateBridgeTs:
     case Some(Kind.Scalar(_))                => true
     case Some(Kind.EnumK(_))                 => true
     case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
-    case Some(Kind.OptOf(inner))             => kindSupported(Some(inner), nullable = false)
-    case _                                   => false
+    case Some(Kind.OptOf(inner)) =>
+      inner match
+        case Kind.SetOf(_) | Kind.SeqOf(_) => false
+        case _                             => kindSupported(Some(inner), nullable = false)
+    case _ => false
 
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
@@ -73,13 +76,19 @@ object StateBridgeTs:
       rowRef: String
   ): String =
     val access = s"$rowRef.${camel(f.fieldName)}"
-    kindFor(ir, entityName, f) match
+    kindFor(ir, entityName, f).map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         s"enumToDafny('$n', $access as string)"
-      case Some(Kind.SetOf(el)) =>
+      case Some(Kind.EnumK(n)) =>
+        s"someOrNone($access, (_v) => enumToDafny('$n', _v as string))"
+      case Some(Kind.SetOf(el)) if !f.nullable =>
         s"dafnySetOf(($access as unknown[]).map((x) => ${elemToDafny(el, "x")}))"
-      case Some(Kind.SeqOf(el)) =>
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
         s"dafnySeqOf(($access as unknown[]).map((x) => ${elemToDafny(el, "x")}))"
+      case Some(Kind.SetOf(el)) =>
+        s"someOrNone($access, (_v) => dafnySetOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
+      case Some(Kind.SeqOf(el)) =>
+        s"someOrNone($access, (_v) => dafnySeqOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
       case _ => scalarToDafny(f, access)
 
   private def scalarToDafny(f: ProfiledField, access: String): String =
@@ -104,14 +113,20 @@ object StateBridgeTs:
       valueRef: String
   ): String =
     val access = s"$valueRef['dtor_${dafnyName(f.fieldName)}']"
-    kindFor(ir, entityName, f) match
+    kindFor(ir, entityName, f).map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         s"enumFromDafny('$n', ${enumValuesLiteral(ir, n)}, $access)"
-      case Some(Kind.SetOf(el)) =>
+      case Some(Kind.EnumK(n)) =>
+        s"(valueOrNull($access, (_v) => enumFromDafny('$n', ${enumValuesLiteral(ir, n)}, _v)) as string | null)"
+      case Some(Kind.SetOf(el)) if !f.nullable =>
         // Sets serialize sorted so the JSON column stays deterministic.
         s"dafnyCollToArray($access).map((v) => ${elemFromDafny(el, "v")}).sort()"
-      case Some(Kind.SeqOf(el)) =>
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
         s"dafnyCollToArray($access).map((v) => ${elemFromDafny(el, "v")})"
+      case Some(Kind.SetOf(el)) =>
+        s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")}).sort()) as string[] | null)"
+      case Some(Kind.SeqOf(el)) =>
+        s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")})) as unknown[] | null)"
       case _ => scalarFromDafny(f, access)
 
   private def scalarFromDafny(f: ProfiledField, access: String): String =

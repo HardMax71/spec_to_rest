@@ -30,8 +30,12 @@ object StateBridgeGo:
     case Some(Kind.Scalar(_))                => true
     case Some(Kind.EnumK(_))                 => true
     case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
-    case Some(Kind.OptOf(inner))             => kindSupported(Some(inner), nullable = false)
-    case _                                   => false
+    case Some(Kind.OptOf(inner))             =>
+      // Nullable collections have no bridge conversions on any target yet.
+      inner match
+        case Kind.SetOf(_) | Kind.SeqOf(_) => false
+        case _                             => kindSupported(Some(inner), nullable = false)
+    case _ => false
 
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
@@ -79,12 +83,30 @@ object StateBridgeGo:
       indent: String
   ): (List[String], String) =
     val access = s"$rowRef.${pascal(f.fieldName)}"
-    kind match
+    // A nullable field resolves to OptOf(inner); optionality rides on the
+    // profiled nullable flag, so the arms match on the payload kind.
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         (Nil, s"${enumHelperName(n, toDafny = true)}($access)")
-      case Some(Kind.SetOf(el)) => collToDafnyParts(el, access, f, seq = false, indent)
-      case Some(Kind.SeqOf(el)) => collToDafnyParts(el, access, f, seq = true, indent)
-      case _                    => (Nil, scalarToDafny(f, access))
+      case Some(Kind.EnumK(n)) =>
+        val local = Naming.toCamelCase(f.fieldName, Naming.CamelStrategy.Plain) + "Opt"
+        (
+          List(
+            s"$indent$local := dafnykernel.Companion_Option_.Create_None_()",
+            s"${indent}if $access != nil {",
+            s"$indent\t$local = dafnykernel.Companion_Option_.Create_Some_(${enumHelperName(n, toDafny = true)}(*$access))",
+            s"$indent}"
+          ),
+          local
+        )
+      case Some(Kind.SetOf(el)) if !f.nullable =>
+        collToDafnyParts(el, access, f, seq = false, indent)
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
+        collToDafnyParts(el, access, f, seq = true, indent)
+      case Some(Kind.SetOf(_) | Kind.SeqOf(_)) =>
+        // The plan gate rejects nullable collections; nothing marshals them.
+        (Nil, access)
+      case _ => (Nil, scalarToDafny(f, access))
 
   private def collToDafnyParts(
       el: String,
@@ -131,12 +153,28 @@ object StateBridgeGo:
       indent: String
   ): (List[String], String) =
     val access = s"$valueRef.Dtor_${dafnyName(f.fieldName)}()"
-    kind match
+    kind.map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         (Nil, s"${enumHelperName(n, toDafny = false)}($access)")
-      case Some(Kind.SetOf(el)) => collFromDafnyParts(el, access, f, seq = false, indent)
-      case Some(Kind.SeqOf(el)) => collFromDafnyParts(el, access, f, seq = true, indent)
-      case _                    => (Nil, scalarFromDafny(f, access))
+      case Some(Kind.EnumK(n)) =>
+        val local = Naming.toCamelCase(f.fieldName, Naming.CamelStrategy.Plain) + "OptOut"
+        (
+          List(
+            s"${indent}var $local *string",
+            s"${indent}if ($access).Is_Some() {",
+            s"$indent\t${local}V := ${enumHelperName(n, toDafny = false)}(($access).Dtor_value().(dafnykernel.$n))",
+            s"$indent\t$local = &${local}V",
+            s"$indent}"
+          ),
+          local
+        )
+      case Some(Kind.SetOf(el)) if !f.nullable =>
+        collFromDafnyParts(el, access, f, seq = false, indent)
+      case Some(Kind.SeqOf(el)) if !f.nullable =>
+        collFromDafnyParts(el, access, f, seq = true, indent)
+      case Some(Kind.SetOf(_) | Kind.SeqOf(_)) =>
+        (Nil, access)
+      case _ => (Nil, scalarFromDafny(f, access))
 
   private def collFromDafnyParts(
       el: String,

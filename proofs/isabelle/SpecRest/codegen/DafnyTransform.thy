@@ -149,10 +149,14 @@ where
   "substValueOpt p opts optFields (BinaryOpF op l r sp) =
      (if op = BEq \<and> (case l of IdentifierF n _ \<Rightarrow> n = p | _ \<Rightarrow> False)
          \<and> isOptionPosition opts optFields r
-      then BinaryOpF op l (substValueOpt p opts optFields r) sp
+      then BinaryOpF op l
+             (case r of IdentifierF n _ \<Rightarrow> if n = p then r else substValueOpt p opts optFields r
+              | _ \<Rightarrow> substValueOpt p opts optFields r) sp
       else if op = BEq \<and> (case r of IdentifierF n _ \<Rightarrow> n = p | _ \<Rightarrow> False)
          \<and> isOptionPosition opts optFields l
-      then BinaryOpF op (substValueOpt p opts optFields l) r sp
+      then BinaryOpF op
+             (case l of IdentifierF n _ \<Rightarrow> if n = p then l else substValueOpt p opts optFields l
+              | _ \<Rightarrow> substValueOpt p opts optFields l) r sp
       else BinaryOpF op (substValueOpt p opts optFields l) (substValueOpt p opts optFields r) sp)"
 | "substValueOpt p opts optFields (IdentifierF n sp) =
      (if n = p then FieldAccessF (IdentifierF p None) (STR ''value'') None

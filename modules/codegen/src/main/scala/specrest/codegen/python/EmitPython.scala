@@ -100,6 +100,7 @@ final private case class KernelCandidateView(
 final private case class EnrichedOperation(
     operationName: String,
     handlerName: String,
+    routeThroughKernel: Boolean,
     kind: String,
     method: String,
     path: String,
@@ -732,6 +733,14 @@ object EmitPython:
       .getOrElse(Map.empty)
     val nonBodyNames =
       (endpoint.pathParams ++ endpoint.queryParams).map(_.name).toSet
+    val queryNames = endpoint.queryParams.map(_.name).toSet
+    // Query values arrive as strings, so only string-shaped kinds (plain or
+    // enum, optionally wrapped) convert; anything else keeps the op off the
+    // kernel rather than passing a mistyped value.
+    def queryKindOk(k: KernelTypes.Kind): Boolean =
+      KernelTypes.unwrapOpt(k) match
+        case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+        case _                                                          => false
     val kernelArgConversions: List[Option[String]] =
       (endpoint.pathParams ++ endpoint.queryParams ++ endpoint.bodyParams).map { p =>
         val access =
@@ -743,6 +752,7 @@ object EmitPython:
         specInputTypes
           .get(p.name)
           .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+          .filter(k => !queryNames.contains(p.name) || queryKindOk(k))
           .flatMap(k => inputToDafny(access, k))
       }
     val kernelOuts = op.responseFields
@@ -889,6 +899,7 @@ object EmitPython:
     EnrichedOperation(
       operationName = op.operationName,
       handlerName = op.handlerName,
+      routeThroughKernel = dafnyMethodFinal.isDefined,
       kind = kindName,
       method = method,
       path = endpoint.path,
@@ -898,8 +909,12 @@ object EmitPython:
       // fastapi reads them from the query string); direct routes keep their
       // route-kind signatures.
       queryParamsWithTypes =
+        // Defaulted (optional) params must follow required ones or the def
+        // is invalid python.
         if dafnyMethodFinal.isDefined then
-          endpoint.queryParams.map { p =>
+          endpoint.queryParams.sortBy(p =>
+            pythonTypeForParam(p.typeExpr, typeLookup).endsWith("| None")
+          ).map { p =>
             val enumLit = KernelTypes
               .resolve(kernelCtx.ir, p.typeExpr)
               .collect {
@@ -1180,7 +1195,7 @@ object EmitPython:
       needsModelImport = needsModelImport,
       needsDafnyKernel = needsDafnyKernel,
       needsStateBridge = kernelOps.exists(_.kernelHasState),
-      needsAny = kernelOps.exists(_.serviceReturnAnnotation == "dict[str, Any]"),
+      needsAny = kernelOps.exists(_.serviceReturnAnnotation.contains("Any")),
       adapterImports = adapterImports,
       adapterImportBlock =
         if adapterImports.sizeIs <= 3 then

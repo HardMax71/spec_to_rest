@@ -1,7 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
 
-import { InvalidInputError } from '../dafnyKernel/adapter.js';
+// Lives here (not in the kernel adapter) so non-synthesis projects compile:
+// this middleware is always emitted, the adapter only under --with-synthesis.
+export class InvalidInputError extends Error {}
 
 export class HttpError extends Error {
   constructor(

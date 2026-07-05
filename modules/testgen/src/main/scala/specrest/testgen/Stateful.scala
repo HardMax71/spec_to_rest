@@ -366,14 +366,18 @@ object Stateful:
         case _: Deletea => true
         case _          => false
       val unionParam = bindings.collectFirst {
-        case (n, InputBinding.BundleUnion(bundles, _)) if isDelete => (n, bundles)
+        case (n, InputBinding.BundleUnion(bundles, unionStrict)) if isDelete =>
+          (n, bundles, unionStrict)
       }
       unionParam match
-        case Some((paramName, bundles)) =>
+        case Some((paramName, bundles, unionStrict)) =>
           val ruleBodies = bundles.map: b =>
             val perBundle = bindings.map {
               case (n, _) if n == paramName =>
-                n -> InputBinding.BundleConsume(b, strictByConstruction = true)
+                // Consuming is what fixes the stale-id leak; strictness stays
+                // whatever the recognizer derived, so unrecognized requires
+                // keep the tolerant 4xx path.
+                n -> InputBinding.BundleConsume(b, strictByConstruction = unionStrict)
               case other => other
             }
             buildRuleBlock(
@@ -563,11 +567,12 @@ object Stateful:
               InputBinding.BundleConsume(head, strictByConstruction = true)
             else InputBinding.BundleDraw(head, strictByConstruction)
           case multi =>
-            // Multi-bundle non-consuming union; for Delete this leaks ids past the
-            // SUT's view → subsequent draws may hit deleted ids and 4xx, so we mark
-            // it not strict-by-construction even when the recognizer fully understood.
-            val unionStrict = strictByConstruction && !isDelete
-            InputBinding.BundleUnion(multi, unionStrict)
+            // Deletes over a multi-bundle union fan out downstream into one
+            // consuming rule per bundle, so the recognizer's strictness
+            // carries through unmasked; per-bundle draws satisfy any status
+            // restriction by construction (activeBundles is already
+            // filtered).
+            InputBinding.BundleUnion(multi, strictByConstruction)
       case None =>
         val ctx       = StrategyCtx.OperationInput(pop.operationName, paramName)
         val overrides = TestStrategyOverrides.from(ir)

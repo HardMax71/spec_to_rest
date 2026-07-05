@@ -15,9 +15,9 @@ async def {{this.handlerName}}(
 {{#each this.queryParamsWithTypes}}
     {{this.name}}: {{this.routerType}},
 {{/each}}
-{{#if (eq this.routeKind "list")}}
+{{#if (eq this.routeKind "list")}}{{#unless this.routeThroughKernel}}
     pagination: Pagination = Depends(),
-{{/if}}
+{{/unless}}{{/if}}
     session: AsyncSession = Depends(get_session),
 ) -> {{this.responseAnnotation}}:
     svc = {{../entity.entityName}}Service(session)

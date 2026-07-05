@@ -1239,6 +1239,12 @@ func sampleCandidate(length int, charset string) (string, error) {
           .find(o => operName(o) == op.operationName)
           .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
           .getOrElse(Map.empty)
+        val queryNames = endpoint.queryParams.map(_.name).toSet
+        // Query values arrive as strings, so only string-shaped kinds convert.
+        def queryKindOk(k: KernelTypes.Kind): Boolean =
+          KernelTypes.unwrapOpt(k) match
+            case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+            case _                                                          => false
         val inputSources =
           endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
@@ -1247,6 +1253,7 @@ func sampleCandidate(length int, charset string) (string, error) {
           specInputTypes
             .get(specName)
             .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+            .filter(k => !queryNames.contains(specName) || queryKindOk(k))
             .flatMap(k => inputToDafny(specName, access, k))
         val outputs = op.responseFields
         val specOutputs = svcOperations(kernelCtx.ir)

@@ -48,7 +48,9 @@ private[testgen] trait ExprBackendBase extends ExprBackend:
   // Set-typed positions surface as JSON arrays, so equality on them must be
   // order-free; names come from the spec's Set-typed inputs and fields.
   private def isSetTypedRef(e: expr, ctx: TestCtx): Boolean = e match
-    case IdentifierF(n, _)     => ctx.setTyped.contains(n)
+    // A bound variable shadows any same-named input; its equality stays
+    // scalar.
+    case IdentifierF(n, _)     => ctx.setTyped.contains(n) && !ctx.boundVars.contains(n)
     case FieldAccessF(_, f, _) => ctx.setTyped.contains(f)
     case PrimeF(inner, _)      => isSetTypedRef(inner, ctx)
     case PreF(inner, _)        => isSetTypedRef(inner, ctx)

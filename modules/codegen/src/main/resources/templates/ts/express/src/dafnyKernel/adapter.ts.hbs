@@ -62,6 +62,8 @@ export const valueOrNull = (opt: unknown, conv: (v: unknown) => unknown): unknow
   return o.is_Some ? conv(o.value) : null;
 };
 
+import { InvalidInputError } from '../middleware/error.js';
+
 // Dafny's js backend doubles underscores in constructor and member names.
 const dafnyCtorName = (member: string): string => member.replace(/_/g, '__');
 
@@ -79,13 +81,23 @@ export const enumFromDafny = (typeName: string, values: string[], v: unknown): s
   for (const member of values) {
     if (rec[`is_${dafnyCtorName(member)}`]) return member;
   }
-  return '';
+  throw new InvalidInputError(`invalid ${typeName} value`);
 };
 
-export class InvalidInputError extends Error {}
-
-export const dafnySetOf = (values: unknown[]): unknown =>
-  (kernel._dafny.Set as { fromElements(...xs: unknown[]): unknown }).fromElements(...values);
+export const dafnySetOf = (values: unknown[]): unknown => {
+  // Chunked union: spreading every element into one variadic call hits
+  // engine argument limits on large hydrations.
+  const S = kernel._dafny.Set as {
+    fromElements(...xs: unknown[]): { Union(other: unknown): unknown };
+  };
+  let out: unknown = S.fromElements();
+  for (let i = 0; i < values.length; i += 512) {
+    out = (out as { Union(other: unknown): unknown }).Union(
+      S.fromElements(...values.slice(i, i + 512)),
+    );
+  }
+  return out;
+};
 
 export const dafnyCollToArray = (coll: unknown): unknown[] => {
   const out: unknown[] = [];

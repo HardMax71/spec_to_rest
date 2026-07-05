@@ -101,11 +101,19 @@ object AdminRouter:
        |    out: dict[str, Any] = {}
        |    for col in row.__table__.columns:
        |        v = getattr(row, col.name)
-       |        if isinstance(v, (datetime, date)):
+       |        if isinstance(v, datetime):
        |            # Same canonical wire form as the API's responses; drivers
-       |            # hand back naive datetimes for UTC-stored columns.
+       |            # hand back naive datetimes for UTC-stored columns. Dates
+       |            # and non-UTC offsets serialize unchanged.
        |            iso = v.isoformat()
-       |            v = iso.replace("+00:00", "Z") if iso.endswith("+00:00") else f"{iso}Z"
+       |            if iso.endswith("+00:00"):
+       |                v = iso.replace("+00:00", "Z")
+       |            elif v.tzinfo is None:
+       |                v = f"{iso}Z"
+       |            else:
+       |                v = iso
+       |        elif isinstance(v, date):
+       |            v = v.isoformat()
        |        out[col.name] = v
        |    return out
        |

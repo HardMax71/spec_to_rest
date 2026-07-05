@@ -7353,7 +7353,70 @@ object SpecRestGenerated {
             case IdentifierF(n, _)             => n == p
           }) &&
             isOptionPosition(opts, optFields, r)) match {
-          case true => BinaryOpF(op, l, substValueOpt(p, opts, optFields, r), sp)
+          case true => BinaryOpF(
+              op,
+              l,
+              r match {
+                case BinaryOpF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case UnaryOpF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case QuantifierF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SomeWrapF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case TheF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case FieldAccessF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case EnumAccessF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IndexF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case CallF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case PrimeF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case PreF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case WithF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IfF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case LetF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case LambdaF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case ConstructorF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SetLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case MapLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SetComprehensionF(_, _, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case SeqLiteralF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case MatchesF(_, _, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IntLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case FloatLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case StringLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case BoolLitF(_, _) =>
+                  substValueOpt(p, opts, optFields, r)
+                case NoneLitF(_) =>
+                  substValueOpt(p, opts, optFields, r)
+                case IdentifierF(n, _) =>
+                  n == p match {
+                    case true  => r
+                    case false => substValueOpt(p, opts, optFields, r)
+                  }
+              },
+              sp
+            )
           case false => equal_bin_op(op, BEq()) &&
               ((r match {
                 case BinaryOpF(_, _, _, _)         => false
@@ -7385,7 +7448,45 @@ object SpecRestGenerated {
                 case IdentifierF(n, _)             => n == p
               }) &&
                 isOptionPosition(opts, optFields, l)) match {
-              case true => BinaryOpF(op, substValueOpt(p, opts, optFields, l), r, sp)
+              case true => BinaryOpF(
+                  op,
+                  l match {
+                    case BinaryOpF(_, _, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case UnaryOpF(_, _, _)       => substValueOpt(p, opts, optFields, l)
+                    case QuantifierF(_, _, _, _) => substValueOpt(p, opts, optFields, l)
+                    case SomeWrapF(_, _)         => substValueOpt(p, opts, optFields, l)
+                    case TheF(_, _, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case FieldAccessF(_, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case EnumAccessF(_, _, _)    => substValueOpt(p, opts, optFields, l)
+                    case IndexF(_, _, _)         => substValueOpt(p, opts, optFields, l)
+                    case CallF(_, _, _)          => substValueOpt(p, opts, optFields, l)
+                    case PrimeF(_, _)            => substValueOpt(p, opts, optFields, l)
+                    case PreF(_, _)              => substValueOpt(p, opts, optFields, l)
+                    case WithF(_, _, _)          => substValueOpt(p, opts, optFields, l)
+                    case IfF(_, _, _, _)         => substValueOpt(p, opts, optFields, l)
+                    case LetF(_, _, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case LambdaF(_, _, _)        => substValueOpt(p, opts, optFields, l)
+                    case ConstructorF(_, _, _)   => substValueOpt(p, opts, optFields, l)
+                    case SetLiteralF(_, _)       => substValueOpt(p, opts, optFields, l)
+                    case MapLiteralF(_, _)       => substValueOpt(p, opts, optFields, l)
+                    case SetComprehensionF(_, _, _, _) =>
+                      substValueOpt(p, opts, optFields, l)
+                    case SeqLiteralF(_, _) => substValueOpt(p, opts, optFields, l)
+                    case MatchesF(_, _, _) => substValueOpt(p, opts, optFields, l)
+                    case IntLitF(_, _)     => substValueOpt(p, opts, optFields, l)
+                    case FloatLitF(_, _)   => substValueOpt(p, opts, optFields, l)
+                    case StringLitF(_, _)  => substValueOpt(p, opts, optFields, l)
+                    case BoolLitF(_, _)    => substValueOpt(p, opts, optFields, l)
+                    case NoneLitF(_)       => substValueOpt(p, opts, optFields, l)
+                    case IdentifierF(n, _) =>
+                      n == p match {
+                        case true  => l
+                        case false => substValueOpt(p, opts, optFields, l)
+                      }
+                  },
+                  r,
+                  sp
+                )
               case false => BinaryOpF(
                   op,
                   substValueOpt(p, opts, optFields, l),

@@ -29,6 +29,8 @@ object KernelTypes:
   private val PrimitiveBases =
     Map("String" -> "str", "Int" -> "int", "Bool" -> "bool", "DateTime" -> "datetime")
 
+  // Fuel bounds only the alias chain (the loop risk); structural wrappers
+  // recurse fuel-neutral so deep-but-finite nesting still resolves.
   def resolve(ir: ServiceIRFull, t: type_expr, fuel: Int = 8): Option[Kind] =
     if fuel <= 0 then None
     else
@@ -41,14 +43,18 @@ object KernelTypes:
                 .find(a => talName(a) == name)
                 .flatMap(a => resolve(ir, talType(a), fuel - 1))
           }
-        case SetTypeF(inner, _) => elemBase(ir, inner, fuel - 1).map(Kind.SetOf(_))
-        case SeqTypeF(inner, _) => elemBase(ir, inner, fuel - 1).map(Kind.SeqOf(_))
+        case SetTypeF(inner, _) => elemBase(ir, inner, fuel).map(Kind.SetOf(_))
+        case SeqTypeF(inner, _) => elemBase(ir, inner, fuel).map(Kind.SeqOf(_))
         case OptionTypeF(inner, _) =>
-          resolve(ir, inner, fuel - 1).collect {
+          resolve(ir, inner, fuel).collect {
             case k @ (Kind.Scalar(_) | Kind.EnumK(_) | Kind.SetOf(_) | Kind.SeqOf(_)) =>
               Kind.OptOf(k)
           }
         case _ => None
+
+  def unwrapOpt(k: Kind): Kind = k match
+    case Kind.OptOf(inner) => inner
+    case other             => other
 
   private def elemBase(ir: ServiceIRFull, inner: type_expr, fuel: Int): Option[String] =
     resolve(ir, inner, fuel).collect { case Kind.Scalar(b) if b == "str" || b == "int" => b }

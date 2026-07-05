@@ -69,7 +69,8 @@ class AdminRouterTest extends CatsEffectSuite:
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)
       assert(src.contains("def _row_to_dict(row: Any)"))
-      assert(src.contains("isinstance(v, (datetime, date))"))
+      assert(src.contains("isinstance(v, datetime)"))
+      assert(src.contains("isinstance(v, date)"))
       assert(src.contains(".isoformat()"))
 
   test("conftest enabled-check fails on 5xx, only skips on other non-204"):
