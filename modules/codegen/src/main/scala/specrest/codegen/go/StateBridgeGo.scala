@@ -2,6 +2,12 @@ package specrest.codegen.go
 
 import specrest.codegen.StatePlan
 import specrest.ir.Naming
+import specrest.ir.generated.SpecRestGenerated.enumNameFull
+import specrest.ir.generated.SpecRestGenerated.enumValuesFull
+import specrest.ir.generated.SpecRestGenerated.operInputs
+import specrest.ir.generated.SpecRestGenerated.prmType
+import specrest.ir.generated.SpecRestGenerated.svcEnums
+import specrest.ir.generated.SpecRestGenerated.svcOperations
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
 import specrest.profile.ProfiledService
@@ -13,15 +19,32 @@ import specrest.profile.ProfiledService
 // and returns tuple elements behind pointers; both quirks live here only.
 object StateBridgeGo:
 
+  import specrest.codegen.KernelTypes.Kind
+
   private val ScalarGoTypes = Set("string", "int64", "bool", "time.Time")
 
-  // Nullable fields would need Option constructors on the Dafny side; the
-  // gate keeps them out until a spec actually needs them in go.
+  private[codegen] def kindFor(profiled: ProfiledService, entityName: String, f: ProfiledField) =
+    specrest.codegen.KernelTypes.fieldKind(profiled.ir, entityName, f.fieldName)
+
+  private def kindSupported(k: Option[Kind], nullable: Boolean): Boolean = k match
+    case Some(Kind.Scalar(_))                => true
+    case Some(Kind.EnumK(_))                 => true
+    case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
+    case Some(Kind.OptOf(inner))             => kindSupported(Some(inner), nullable = false)
+    case _                                   => false
+
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
     StatePlan.analyze(
       profiled,
-      // Nullable go fields carry the pointer spelling in domainType.
-      fieldSupported = f => ScalarGoTypes.contains(f.domainType.stripPrefix("*")),
+      // Nullable go fields carry the pointer spelling in domainType; enum
+      // and scalar-collection fields resolve through the spec's kinds.
+      fieldSupported = f =>
+        ScalarGoTypes.contains(f.domainType.stripPrefix("*")) || {
+          val owner = profiled.entities
+            .find(_.fields.exists(_ eq f))
+            .map(_.entityName)
+          owner.exists(en => kindSupported(kindFor(profiled, en, f), f.nullable))
+        },
       keySupported = k => Set("string", "int64").contains(k.domainType) && !k.nullable,
       seqSupported = true
     )
@@ -40,8 +63,50 @@ object StateBridgeGo:
   private def rowsVar(e: ProfiledEntity): String =
     Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Rows"
 
-  private def toDafnyExpr(f: ProfiledField, rowRef: String): String =
+  private[codegen] def enumHelperName(enumName: String, toDafny: Boolean): String =
+    val base = Naming.toCamelCase(enumName, Naming.CamelStrategy.Plain)
+    if toDafny then s"${base}ToDafny" else s"${base}FromDafny"
+
+  private def elemToDafny(el: String, ref: String): String =
+    if el == "str" then s"dafnykernel.StringToDafny($ref)" else s"dafnykernel.IntToDafny($ref)"
+
+  // Collection fields hoist to pre-lines (gofmt rejects inline closures);
+  // toDafnyParts returns those lines plus the expression to splice.
+  private def toDafnyParts(
+      kind: Option[Kind],
+      f: ProfiledField,
+      rowRef: String,
+      indent: String
+  ): (List[String], String) =
     val access = s"$rowRef.${pascal(f.fieldName)}"
+    kind match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        (Nil, s"${enumHelperName(n, toDafny = true)}($access)")
+      case Some(Kind.SetOf(el)) => collToDafnyParts(el, access, f, seq = false, indent)
+      case Some(Kind.SeqOf(el)) => collToDafnyParts(el, access, f, seq = true, indent)
+      case _                    => (Nil, scalarToDafny(f, access))
+
+  private def collToDafnyParts(
+      el: String,
+      access: String,
+      f: ProfiledField,
+      seq: Boolean,
+      indent: String
+  ): (List[String], String) =
+    val local = Naming.toCamelCase(f.fieldName, Naming.CamelStrategy.Plain) + "Conv"
+    val ctor  = if seq then "SeqOf" else "SetOf"
+    (
+      List(
+        s"$indent${local}Elems := make([]interface{}, 0, len($access))",
+        s"${indent}for _, x := range $access {",
+        s"$indent\t${local}Elems = append(${local}Elems, ${elemToDafny(el, "x")})",
+        s"$indent}",
+        s"$indent$local := _dafny.$ctor(${local}Elems...)"
+      ),
+      local
+    )
+
+  private def scalarToDafny(f: ProfiledField, access: String): String =
     if f.nullable then
       f.domainType.stripPrefix("*") match
         case "string"    => s"dafnykernel.OptStringToDafny($access)"
@@ -55,8 +120,55 @@ object StateBridgeGo:
         case "int64"     => s"dafnykernel.IntToDafny($access)"
         case "time.Time" => s"dafnykernel.IntToDafny($access.Unix())"
         case _           => access
-  private[codegen] def fromDafnyExpr(f: ProfiledField, valueRef: String): String =
+  private def elemFromDafny(el: String, ref: String): String =
+    if el == "str" then s"dafnykernel.StringFromDafny($ref.(_dafny.Sequence))"
+    else s"dafnykernel.IntFromDafny($ref.(_dafny.Int))"
+
+  private[codegen] def fromDafnyParts(
+      kind: Option[Kind],
+      f: ProfiledField,
+      valueRef: String,
+      indent: String
+  ): (List[String], String) =
     val access = s"$valueRef.Dtor_${dafnyName(f.fieldName)}()"
+    kind match
+      case Some(Kind.EnumK(n)) if !f.nullable =>
+        (Nil, s"${enumHelperName(n, toDafny = false)}($access)")
+      case Some(Kind.SetOf(el)) => collFromDafnyParts(el, access, f, seq = false, indent)
+      case Some(Kind.SeqOf(el)) => collFromDafnyParts(el, access, f, seq = true, indent)
+      case _                    => (Nil, scalarFromDafny(f, access))
+
+  private def collFromDafnyParts(
+      el: String,
+      access: String,
+      f: ProfiledField,
+      seq: Boolean,
+      indent: String
+  ): (List[String], String) =
+    val goElem = if el == "str" then "string" else "int64"
+    val local  = Naming.toCamelCase(f.fieldName, Naming.CamelStrategy.Plain) + "Out"
+    // Sets serialize sorted so the JSON column stays deterministic.
+    val sortLines =
+      if seq then Nil
+      else if el == "str" then List(s"${indent}sort.Strings($local)")
+      else
+        List(
+          s"${indent}sort.Slice($local, func(i, j int) bool {",
+          s"$indent\treturn $local[i] < $local[j]",
+          s"$indent})"
+        )
+    (
+      List(
+        s"$indent$local := make([]$goElem, 0)",
+        s"${indent}it$local := _dafny.Iterate($access)",
+        s"${indent}for v, ok := it$local(); ok; v, ok = it$local() {",
+        s"$indent\t$local = append($local, ${elemFromDafny(el, "v")})",
+        s"$indent}"
+      ) ::: sortLines,
+      local
+    )
+
+  private def scalarFromDafny(f: ProfiledField, access: String): String =
     if f.nullable then
       f.domainType.stripPrefix("*") match
         case "string"    => s"dafnykernel.OptStringFromDafny($access)"
@@ -85,9 +197,62 @@ object StateBridgeGo:
     val needsTime =
       entities.exists(_.fields.exists(_.domainType.stripPrefix("*") == "time.Time"))
     val timeImport = if needsTime then "\n\t\"time\"" else ""
+    val fieldKinds =
+      entities.flatMap(e => e.fields.flatMap(f => kindFor(profiled, e.entityName, f)))
+    val inputKinds = svcOperations(profiled.ir)
+      .flatMap(operInputs)
+      .flatMap(pd => specrest.codegen.KernelTypes.resolve(profiled.ir, prmType(pd)))
+    def unwrap(k: Kind): Kind = k match
+      case Kind.OptOf(inner) => inner
+      case other             => other
+    val allKinds  = (fieldKinds ++ inputKinds).map(unwrap)
+    val usedEnums = allKinds.collect { case Kind.EnumK(n) => n }.distinct
+    val usesColl = allKinds.exists {
+      case Kind.SetOf(_) | Kind.SeqOf(_) => true
+      case _                             => false
+    }
+    val sortImport = if usesColl then "\n\t\"sort\"" else ""
     val scalarImports =
       if planned.scalars.isEmpty then ""
       else "\n\t\"database/sql\"\n\t\"errors\""
+    // One trio per enum: hydrate trusts stored values, the checked variant
+    // rejects invalid API inputs, and the reverse reads the ctor back out.
+    val enumHelpers = usedEnums
+      .flatMap { n =>
+        svcEnums(profiled.ir).find(e => enumNameFull(e) == n).map { e =>
+          val values = enumValuesFull(e)
+          val goName = enumHelperName(n, toDafny = true)
+          val fromN  = enumHelperName(n, toDafny = false)
+          val toCases = values
+            .map(v =>
+              s"\tcase \"$v\":\n\t\treturn dafnykernel.Companion_${n}_.Create_${v.replace("_", "__")}_(), nil"
+            )
+            .mkString("\n")
+          val fromCases = values
+            .map(v => s"\tcase v.Is_${v.replace("_", "__")}():\n\t\treturn \"$v\"")
+            .mkString("\n")
+          s"""|func ${goName}Checked(v string) (dafnykernel.$n, error) {
+              |\tswitch v {
+              |$toCases
+              |\t}
+              |\treturn dafnykernel.$n{}, ErrInvalidInput
+              |}
+              |
+              |func $goName(v string) dafnykernel.$n {
+              |\tout, _ := ${goName}Checked(v)
+              |\treturn out
+              |}
+              |
+              |func $fromN(v dafnykernel.$n) string {
+              |\tswitch {
+              |$fromCases
+              |\t}
+              |\treturn \"\"
+              |}
+              |""".stripMargin
+        }
+      }
+      .mkString("\n")
 
     val seqRelations = planned.relations.filter(_.isSeq)
     val seqEntities  = seqRelations.map(_.entity.entityName).toSet
@@ -103,7 +268,10 @@ object StateBridgeGo:
       val elems = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Elems"
       hydrate ++= s"\t$elems := make([]interface{}, 0, len(${rowsVar(r.entity)}))\n"
       hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
-      val args = r.entity.fields.map(f => s"\t\t\t${toDafnyExpr(f, "r")},").mkString("\n")
+      val parts = r.entity.fields
+        .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t"))
+      parts.flatMap(_._1).foreach(l => hydrate ++= s"$l\n")
+      val args = parts.map(p => s"\t\t\t${p._2},").mkString("\n")
       hydrate ++= s"\t\t$elems = append($elems, dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t))\n"
       hydrate ++= "\t}\n"
       hydrate ++= s"\tst.${stateFieldName(r.stateField)} = _dafny.SeqOf($elems...)\n"
@@ -112,9 +280,16 @@ object StateBridgeGo:
       hydrate ++= s"\t$builder := _dafny.NewMapBuilder()\n"
       hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
       val value = r.valueField match
-        case Some(vf) => toDafnyExpr(vf, "r")
+        case Some(vf) =>
+          val (pre, expr) =
+            toDafnyParts(kindFor(profiled, r.entity.entityName, vf), vf, "r", "\t\t")
+          pre.foreach(l => hydrate ++= s"$l\n")
+          expr
         case None =>
-          val args = r.entity.fields.map(f => s"\t\t\t${toDafnyExpr(f, "r")},").mkString("\n")
+          val parts = r.entity.fields
+            .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t"))
+          parts.flatMap(_._1).foreach(l => hydrate ++= s"$l\n")
+          val args = parts.map(p => s"\t\t\t${p._2},").mkString("\n")
           s"dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t)"
       hydrate ++= s"\t\t$builder.Add(${keyToDafny(rKey, "r")}, $value)\n"
       hydrate ++= "\t}\n"
@@ -149,12 +324,17 @@ object StateBridgeGo:
       // and rewriting it from the Dafny value could desync row identity from
       // the map key); inserts set it from the value like every other field.
       for f <- e.fields if f.fieldName != rKey.fieldName do
-        persist ++= s"\t\trow.${pascal(f.fieldName)} = ${fromDafnyExpr(f, "value")}\n"
+        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t")
+        preF.foreach(l => persist ++= s"$l\n")
+        persist ++= s"\t\trow.${pascal(f.fieldName)} = $exprF\n"
       persist ++= "\t\tif exists {\n"
       persist ++= "\t\t\tif _, err := db.NewUpdate().Model(&row).WherePK().Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t} else {\n"
-      persist ++= s"\t\t\trow.${pascal(rKey.fieldName)} = ${fromDafnyExpr(rKey, "value")}\n"
+      val (preK, exprK) =
+        fromDafnyParts(kindFor(profiled, e.entityName, rKey), rKey, "value", "\t\t\t")
+      preK.foreach(l => persist ++= s"$l\n")
+      persist ++= s"\t\t\trow.${pascal(rKey.fieldName)} = $exprK\n"
       persist ++= "\t\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t}\n"
@@ -177,7 +357,9 @@ object StateBridgeGo:
       persist ++= s"\t\tvalue := elem.(dafnykernel.${e.entityName})\n"
       persist ++= s"\t\trow := models.${e.modelClassName}{}\n"
       for f <- e.fields do
-        persist ++= s"\t\trow.${pascal(f.fieldName)} = ${fromDafnyExpr(f, "value")}\n"
+        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t")
+        preF.foreach(l => persist ++= s"$l\n")
+        persist ++= s"\t\trow.${pascal(f.fieldName)} = $exprF\n"
       persist ++= "\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
       persist ++= "\t\t\treturn err\n\t\t}\n"
       persist ++= "\t}\n"
@@ -204,7 +386,7 @@ object StateBridgeGo:
     s"""package services
        |
        |import (
-       |\t"context"$scalarImports$timeImport
+       |\t"context"$scalarImports$sortImport$timeImport
        |
        |\t"github.com/uptrace/bun"
        |
@@ -213,6 +395,7 @@ object StateBridgeGo:
        |\t"$module/internal/models"
        |)
        |
+       |$enumHelpers
        |func hydrateState(ctx context.Context, db bun.IDB) (*dafnykernel.ServiceState, error) {
        |\tst := dafnykernel.MakeState()
        |${hydrate.toString}${scalarHydrate.toString}\treturn st, nil

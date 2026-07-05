@@ -155,12 +155,27 @@ object AdminRouterGo:
         |func normalize(v any) any {
         |\tswitch x := v.(type) {
         |\tcase []byte:
-        |\t\treturn string(x)
+        |\t\treturn normalizeText(string(x))
+        |\tcase string:
+        |\t\treturn normalizeText(x)
         |\tcase time.Time:
         |\t\treturn x.UTC().Format(time.RFC3339)
         |\tdefault:
         |\t\treturn v
         |\t}
+        |}
+        |
+        |// A JSON-typed column comes back as its serialized text; the state
+        |// projection must expose the real array or object, not the string.
+        |func normalizeText(s string) any {
+        |\ttrimmed := strings.TrimSpace(s)
+        |\tif strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{") {
+        |\t\tvar decoded any
+        |\t\tif err := json.Unmarshal([]byte(trimmed), &decoded); err == nil {
+        |\t\t\treturn decoded
+        |\t\t}
+        |\t}
+        |\treturn s
         |}
         |
         |func queryAll(ctx context.Context, db *bun.DB, q string) ([]map[string]any, error) {
