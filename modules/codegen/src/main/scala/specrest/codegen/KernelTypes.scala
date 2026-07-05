@@ -24,6 +24,7 @@ object KernelTypes:
     case EnumK(name: String)
     case SetOf(elem: String)
     case SeqOf(elem: String)
+    case EntitySetOf(entity: String)
     case OptOf(inner: Kind)
 
   private val PrimitiveBases =
@@ -43,7 +44,10 @@ object KernelTypes:
                 .find(a => talName(a) == name)
                 .flatMap(a => resolve(ir, talType(a), fuel - 1))
           }
-        case SetTypeF(inner, _) => elemBase(ir, inner, fuel).map(Kind.SetOf(_))
+        case SetTypeF(inner, _) =>
+          elemBase(ir, inner, fuel)
+            .map(Kind.SetOf(_))
+            .orElse(entityElem(ir, inner).map(Kind.EntitySetOf(_)))
         case SeqTypeF(inner, _) => elemBase(ir, inner, fuel).map(Kind.SeqOf(_))
         case OptionTypeF(inner, _) =>
           resolve(ir, inner, fuel).collect {
@@ -58,6 +62,11 @@ object KernelTypes:
 
   private def elemBase(ir: ServiceIRFull, inner: type_expr, fuel: Int): Option[String] =
     resolve(ir, inner, fuel).collect { case Kind.Scalar(b) if b == "str" || b == "int" => b }
+
+  private def entityElem(ir: ServiceIRFull, inner: type_expr): Option[String] =
+    inner match
+      case NamedTypeF(name, _) if svcEntities(ir).exists(e => entName(e) == name) => Some(name)
+      case _                                                                      => None
 
   def fieldKind(ir: ServiceIRFull, entityName: String, fieldName: String): Option[Kind] =
     svcEntities(ir)

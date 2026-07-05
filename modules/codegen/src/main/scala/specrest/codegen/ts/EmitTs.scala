@@ -1087,6 +1087,7 @@ object EmitTs:
             Some(s"dafnySetOf(($access as unknown[]).map((x) => ${tsElemToDafny(el, "x")}))")
           case KernelTypes.Kind.SeqOf(el) =>
             Some(s"dafnySeqOf(($access as unknown[]).map((x) => ${tsElemToDafny(el, "x")}))")
+          case KernelTypes.Kind.EntitySetOf(_) => None
           case KernelTypes.Kind.OptOf(inner) =>
             inputToDafny("_v", inner).map(conv => s"someOrNone($access, (_v) => $conv)")
       val specInputTypes = svcOperations(kernelCtx.ir)
@@ -1151,6 +1152,7 @@ object EmitTs:
         outFieldKinds.get(f.fieldName) match
           case Some(KernelTypes.Kind.EnumK(_))                             => true
           case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+          case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
           case _                                                           => tsEntityTypes.contains(f.domainType.replaceAll("\\s*\\|\\s*null$", ""))
       val outputsOk =
         if specOutputs.isEmpty then true

@@ -1194,6 +1194,7 @@ func sampleCandidate(length int, charset string) (string, error) {
             case KernelTypes.Kind.SeqOf(el) =>
               val local = "conv" + toPascalCase(specName)
               Some(GoConv(goCollLines(el, access, local, seq = true, indent = "\t\t"), local))
+            case KernelTypes.Kind.EntitySetOf(_) => None
             case KernelTypes.Kind.OptOf(inner) =>
               val local = "opt" + toPascalCase(specName)
               inner match
@@ -1298,6 +1299,7 @@ func sampleCandidate(length int, charset string) (string, error) {
           outFieldKinds.get(f.fieldName) match
             case Some(KernelTypes.Kind.EnumK(_))                             => true
             case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+            case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
             case _                                                           => goEntityTypes.contains(f.domainType.stripPrefix("*"))
         val outputsOk =
           if specOutputs.isEmpty then true

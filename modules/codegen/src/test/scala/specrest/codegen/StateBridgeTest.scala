@@ -49,13 +49,35 @@ class StateBridgeTest extends CatsEffectSuite:
         "tags should persist as a sorted JSON list"
       )
 
-  test("ecommerce state is not bridgeable (entity-valued collection)"):
+  test("ecommerce state bridges the nested Set[LineItem] field"):
     SpecFixtures.loadIR("ecommerce").map: ir =>
       val profiled = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
       StateBridge.plan(profiled) match
-        case Left(reason) =>
-          assert(reason.contains("Order"), s"reason should name the entity: $reason")
-        case Right(_) => fail("ecommerce items are Set[LineItem]; the bridge must refuse")
+        case Left(reason) => fail(s"ecommerce should be bridgeable: $reason")
+        case Right(plan)  => assert(plan.hasState)
+      val bridge = StateBridge.emit(profiled)
+      assert(
+        bridge.contains("_line_item_by_id = {int(r.id): r for r in line_item_rows}"),
+        "hydration should index line item rows by id"
+      )
+      assert(
+        bridge.contains(
+          "to_dafny_set(_line_item_to_dafny(_line_item_by_id[int(_x)]) for _x in r.items)"
+        ),
+        "items should hydrate by joining the id list against the line item rows"
+      )
+      assert(
+        bridge.contains("def _line_item_to_dafny"),
+        "the nested entity should get a to-dafny helper"
+      )
+      assert(
+        bridge.contains("sorted(int(_x.id_) for _x in "),
+        "items should persist as a sorted id list (id_ is the reserved-name selector)"
+      )
+      assert(
+        bridge.contains("_line_item_post"),
+        "line item rows should upsert from the post-state sets"
+      )
 
   test("dafnyName doubles underscores like the Dafny Python backend"):
     assertEquals(StateBridge.dafnyName("created_at"), "created__at")

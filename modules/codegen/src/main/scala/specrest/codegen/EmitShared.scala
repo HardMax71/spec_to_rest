@@ -90,6 +90,16 @@ private[codegen] object EmitShared:
   def doubleQuoted(s: String): String =
     "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
+  // A nested entity (a Set[Entity] field's element) joins through its id
+  // field: the owning row's JSON column stores ids, the entity's own table
+  // stores the rows. No id field means the bridge cannot key the join and the
+  // kind stays unsupported.
+  def nestedEntity(
+      profiled: specrest.profile.ProfiledService,
+      entityName: String
+  ): Option[specrest.profile.ProfiledEntity] =
+    profiled.entities.find(e => e.entityName == entityName && e.fields.exists(_.fieldName == "id"))
+
   // A field's boundary-enforceable string refinement: the entity declaration's
   // alias type plus its inline where clause, reduced by StringRefinements.
   def entityFieldRefinement(

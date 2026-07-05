@@ -29,15 +29,31 @@ object StateBridge:
   private def kindFor(profiled: ProfiledService, entityName: String, f: ProfiledField) =
     specrest.codegen.KernelTypes.fieldKind(profiled.ir, entityName, f.fieldName)
 
-  private def kindSupported(k: Option[Kind], nullable: Boolean): Boolean = k match
+  private def kindSupported(
+      profiled: ProfiledService,
+      k: Option[Kind],
+      nullable: Boolean
+  ): Boolean = k match
     case Some(Kind.Scalar(b))                => ScalarPyTypes.contains(b)
     case Some(Kind.EnumK(_))                 => true
     case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
-    case Some(Kind.OptOf(inner))             =>
+    case Some(Kind.EntitySetOf(en))          =>
+      // One nesting level: the element entity's own fields must all marshal
+      // without another entity collection inside.
+      !nullable && specrest.codegen.EmitShared.nestedEntity(profiled, en).exists { ne =>
+        ne.fields.forall { nf =>
+          kindFor(profiled, ne.entityName, nf) match
+            case Some(Kind.EntitySetOf(_)) => false
+            case k =>
+              kindSupported(profiled, k, nf.nullable) ||
+              ScalarPyTypes.contains(baseType(nf.domainType))
+        }
+      }
+    case Some(Kind.OptOf(inner)) =>
       // Nullable collections have no bridge conversions on any target yet.
       inner match
-        case Kind.SetOf(_) | Kind.SeqOf(_) => false
-        case _                             => kindSupported(Some(inner), nullable = false)
+        case Kind.SetOf(_) | Kind.SeqOf(_) | Kind.EntitySetOf(_) => false
+        case _                                                   => kindSupported(profiled, Some(inner), nullable = false)
     case _ => false
 
   def plan(profiled: ProfiledService): Either[String, Plan] =
@@ -47,7 +63,7 @@ object StateBridge:
         val owner = profiled.entities
           .find(_.fields.exists(_ eq f))
           .map(_.entityName)
-        owner.exists(en => kindSupported(kindFor(profiled, en, f), f.nullable)) ||
+        owner.exists(en => kindSupported(profiled, kindFor(profiled, en, f), f.nullable)) ||
         ScalarPyTypes.contains(baseType(f.domainType))
       ,
       keySupported = k => Set("str", "int").contains(baseType(k.domainType)) && !k.nullable,
@@ -69,6 +85,11 @@ object StateBridge:
         s"to_dafny_set(${elemToDafny(el, "_x")} for _x in $access)"
       case Some(Kind.SeqOf(el)) =>
         s"to_dafny_seq([${elemToDafny(el, "_x")} for _x in $access])"
+      case Some(Kind.EntitySetOf(en)) =>
+        // The JSON column stores element ids; the nested entity's own rows
+        // were indexed by id in the hydrate prelude.
+        val snake = Naming.toSnakeCase(en)
+        s"to_dafny_set(_${snake}_to_dafny(_${snake}_by_id[int(_x)]) for _x in $access)"
       case _ =>
         val conv = baseType(f.domainType) match
           case "str"      => (v: String) => s"to_dafny_str($v)"
@@ -96,6 +117,10 @@ object StateBridge:
         s"sorted(${elemFromDafny(el, "_x")} for _x in $access)"
       case Some(Kind.SeqOf(el)) =>
         s"[${elemFromDafny(el, "_x")} for _x in $access]"
+      case Some(Kind.EntitySetOf(_)) =>
+        // The column keeps the id-list shape; the element rows persist in
+        // their own table pass.
+        s"sorted(int(_x.${specrest.codegen.EmitShared.pyDafnySelector("id")}) for _x in $access)"
       case _ =>
         def conv(v: String): String = baseType(f.domainType) match
           case "str"      => s"from_dafny_str($v)"
@@ -132,9 +157,29 @@ object StateBridge:
       case Right(p) => p
       case Left(_)  => specrest.codegen.StatePlan.Plan(Nil, Nil)
 
+    // Element entities of Set[Entity] fields, paired with the relations that
+    // embed them: hydration joins their rows in by id, persistence upserts
+    // them from the post-state sets.
+    val nestedByName: Map[String, ProfiledEntity] =
+      (for
+        r <- planned.relations
+        f <- r.entity.fields
+        en <- kindFor(profiled, r.entity.entityName, f).toList.collect {
+                case Kind.EntitySetOf(en) => en
+              }
+        ne <- specrest.codegen.EmitShared.nestedEntity(profiled, en)
+      yield ne.entityName -> ne).toMap
+    val nestedEntities = nestedByName.values.toList.sortBy(_.entityName)
+    def nestedFieldsOf(e: ProfiledEntity): List[(ProfiledField, ProfiledEntity)] =
+      e.fields.flatMap(f =>
+        kindFor(profiled, e.entityName, f)
+          .collect { case Kind.EntitySetOf(en) => en }
+          .flatMap(nestedByName.get)
+          .map(f -> _)
+      )
+
     val entityImports =
-      (planned.relations
-        .map(_.entity)
+      ((planned.relations.map(_.entity) ++ nestedEntities)
         .distinctBy(_.entityName)
         .map(e =>
           s"from app.models.${Naming.toSnakeCase(e.entityName)} import ${e.modelClassName}"
@@ -143,13 +188,17 @@ object StateBridge:
          else List("from app.models.service_state import ServiceState as _ServiceStateRow"))).sorted
     val scalarImport = Nil
 
-    val needsDatetime = planned.relations
-      .exists(_.entity.fields.exists(f => baseType(f.domainType) == "datetime"))
+    val needsDatetime = (planned.relations.map(_.entity) ++ nestedEntities)
+      .exists(_.fields.exists(f => baseType(f.domainType) == "datetime"))
 
     val rowsVar = (e: ProfiledEntity) => s"${Naming.toSnakeCase(e.entityName)}_rows"
 
     val seqRelations = planned.relations.filter(_.isSeq)
     val hydrateLines = List.newBuilder[String]
+    for e <- nestedEntities do
+      val snake = Naming.toSnakeCase(e.entityName)
+      hydrateLines += s"    ${snake}_rows = (await session.execute(select(${e.modelClassName}))).scalars().all()"
+      hydrateLines += s"    _${snake}_by_id = {int(r.id): r for r in ${snake}_rows}"
     for e <- planned.relations.filterNot(_.isSeq).map(_.entity).distinctBy(_.entityName) do
       hydrateLines += s"    ${rowsVar(e)} = (await session.execute(select(${e.modelClassName}))).scalars().all()"
     for r <- planned.relations do
@@ -226,6 +275,39 @@ object StateBridge:
       for f <- e.fields do
         persistLines += s"            ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
       persistLines += "        ))"
+    for ne <- nestedEntities do
+      val snake = Naming.toSnakeCase(ne.entityName)
+      val idSel = specrest.codegen.EmitShared.pyDafnySelector("id")
+      val owners =
+        for
+          r      <- planned.relations
+          (f, e) <- nestedFieldsOf(r.entity) if e.entityName == ne.entityName
+        yield (r, f)
+      persistLines += s"    _${snake}_post: dict[int, Any] = {}"
+      for (r, f) <- owners do
+        val values =
+          if r.isSeq then s"from_dafny_seq(st.${dafnyName(r.stateField)})"
+          else s"from_dafny_map(st.${dafnyName(r.stateField)}).values()"
+        persistLines += s"    for _owner in $values:"
+        persistLines += s"        for _x in _owner.${specrest.codegen.EmitShared.pyDafnySelector(f.fieldName)}:"
+        persistLines += s"            _${snake}_post[int(_x.$idSel)] = _x"
+      persistLines += s"    _${snake}_rows = {"
+      persistLines += "        int(r.id): r"
+      persistLines += s"        for r in (await session.execute(select(${ne.modelClassName}))).scalars().all()"
+      persistLines += "    }"
+      persistLines += s"    for _${snake}_key, _${snake}_value in _${snake}_post.items():"
+      persistLines += s"        _${snake}_row = _${snake}_rows.get(_${snake}_key)"
+      persistLines += s"        if _${snake}_row is None:"
+      persistLines += s"            session.add(${ne.modelClassName}("
+      for f <- ne.fields do
+        persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, ne.entityName, f), f, s"_${snake}_value")},"
+      persistLines += "            ))"
+      persistLines += "        else:"
+      for f <- ne.fields if f.fieldName != "id" do
+        persistLines += s"            _${snake}_row.${f.columnName} = ${fromDafnyFieldExpr(kindFor(profiled, ne.entityName, f), f, s"_${snake}_value")}"
+      persistLines += s"    for _${snake}_key, _${snake}_row in _${snake}_rows.items():"
+      persistLines += s"        if _${snake}_key not in _${snake}_post:"
+      persistLines += s"            await session.delete(_${snake}_row)"
     if planned.scalars.nonEmpty then
       persistLines += "    scalar_row = ("
       persistLines += "        await session.execute(select(_ServiceStateRow))"
@@ -267,29 +349,48 @@ object StateBridge:
            |    # values, so persist writes naive UTC.
            |    return datetime.fromtimestamp(int(value), tz=timezone.utc).replace(tzinfo=None)""".stripMargin
 
+    val nestedHelpers =
+      nestedEntities.map { ne =>
+        val snake = Naming.toSnakeCase(ne.entityName)
+        val ctorArgs = ne.fields
+          .map(f =>
+            s"        ${toDafnyFieldExpr(kindFor(profiled, ne.entityName, f), f, "r")},"
+          )
+          .mkString("\n")
+        s"""|
+            |
+            |
+            |def _${snake}_to_dafny(r: Any) -> Any:
+            |    return module_.${ne.entityName}_${ne.entityName}(
+            |$ctorArgs
+            |    )""".stripMargin
+      }.mkString
+
     val datetimeImport =
       (if needsDatetime then "\nfrom datetime import datetime, timezone" else "") match
-        case dt if needsDatetime || needsOptional => s"$dt\nfrom typing import Any\n"
-        case dt                                   => s"$dt\n"
-    val usesEnum = planned.relations.exists(r =>
-      r.entity.fields.exists(f =>
-        kindFor(profiled, r.entity.entityName, f).exists {
-          case Kind.EnumK(_) => true
-          case _             => false
+        case dt if needsDatetime || needsOptional || nestedEntities.nonEmpty =>
+          s"$dt\nfrom typing import Any\n"
+        case dt => s"$dt\n"
+    val bridgedEntities = planned.relations.map(_.entity) ++ nestedEntities
+    val usesEnum = bridgedEntities.exists(e =>
+      e.fields.exists(f =>
+        kindFor(profiled, e.entityName, f).exists {
+          case Kind.EnumK(_) | Kind.OptOf(Kind.EnumK(_)) => true
+          case _                                         => false
         }
       )
     )
-    val usesSet = planned.relations.exists(r =>
-      r.entity.fields.exists(f =>
-        kindFor(profiled, r.entity.entityName, f).exists {
-          case Kind.SetOf(_) => true
-          case _             => false
+    val usesSet = bridgedEntities.exists(e =>
+      e.fields.exists(f =>
+        kindFor(profiled, e.entityName, f).exists {
+          case Kind.SetOf(_) | Kind.EntitySetOf(_) => true
+          case _                                   => false
         }
       )
     )
-    val usesSeqField = planned.relations.exists(r =>
-      r.entity.fields.exists(f =>
-        kindFor(profiled, r.entity.entityName, f).exists {
+    val usesSeqField = bridgedEntities.exists(e =>
+      e.fields.exists(f =>
+        kindFor(profiled, e.entityName, f).exists {
           case Kind.SeqOf(_) => true
           case _             => false
         }
@@ -311,7 +412,7 @@ object StateBridge:
        |${(entityImports ++ scalarImport).mkString("\n")}
        |from app.services._dafny_adapter import (
        |${adapterNames.map(n => s"    $n,").mkString("\n")}
-       |)$optionalHelpers$datetimeHelpers
+       |)$optionalHelpers$datetimeHelpers$nestedHelpers
        |
        |
        |async def hydrate_state(session: AsyncSession) -> module_.ServiceState:
