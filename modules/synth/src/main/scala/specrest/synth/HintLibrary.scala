@@ -16,6 +16,11 @@ object HintLibrary:
 
   val all: List[Hint] = List(
     Hint(
+      "postcondition_fresh_id_disjointness",
+      "postcondition_violation",
+      "Counter-keyed insert: assert the fresh id is no existing key and nothing references it (both follow from the counter invariants); keep the body a minimal construction plus state updates."
+    ),
+    Hint(
       "postcondition_capture_old",
       "postcondition_violation",
       "Save old(...) values into ghost-friendly local vars at method entry; reference these in postcondition assertions."

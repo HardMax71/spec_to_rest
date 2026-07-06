@@ -157,9 +157,9 @@ object AdminRouter:
       .map(stdFields)
       .getOrElse(Nil)
       .filter(f => AdminModel.projectionFor(f, ir).exists(_.entityName == entName(entity)))
-    val counters = backingFields
-      .flatMap(f => specrest.convention.ScalarState.freshnessCounters(ir, stfName(f)))
-      .distinct
+    val counters = (backingFields
+      .flatMap(f => specrest.convention.ScalarState.freshnessCounters(ir, stfName(f))) :::
+      specrest.convention.ScalarState.nestedIdFreshnessCounters(ir, entName(entity))).distinct
     val counterBumps =
       if counters.isEmpty then ""
       else

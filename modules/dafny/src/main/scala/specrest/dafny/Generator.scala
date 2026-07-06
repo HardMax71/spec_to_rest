@@ -25,7 +25,11 @@ final case class DafnyMethodHeader(
     candidates: List[DafnyCandidate] = Nil
 )
 
-final case class DafnyOutput(text: String, methods: List[DafnyMethodHeader])
+final case class DafnyOutput(
+    text: String,
+    methods: List[DafnyMethodHeader],
+    skipped: List[(String, String)] = Nil
+)
 
 private type DafnyLabel = boundary.Label[Either[DafnyError, DafnyOutput]]
 
@@ -43,6 +47,19 @@ final private case class ExternInfo(kind: ExternKind, arity: Int)
 final private case class Ctx(
     ir: ServiceIRFull,
     stateFields: ListMap[String, type_expr],
+    // (collection field, lambda field) -> element entity, for the sum
+    // recognizer: sum(coll.items, i => i.f) lowers to a generated ghost
+    // set-sum function instead of an extern.
+    sumSpecs: Map[(String, String), String] = Map.empty,
+    // Sum-consistency conjuncts call the ghost set-sum functions, so they
+    // live in ghost invariant predicates carried on method contracts only;
+    // the compiled twins keep every other conjunct.
+    hasGhostInv: Boolean = false,
+    // Rendered forms of expressions an earlier requires conjunct pins with
+    // `!= none`: arithmetic on them unwraps through .value. Dafny re-checks
+    // the guard ordering itself (the destructor's well-formedness fails
+    // without a preceding Some-ness fact), so a wrong entry cannot verify.
+    optGuarded: Set[String] = Set.empty,
     aliasesWithWhere: Set[String],
     samplerSpecs: ListMap[String, (Int, String)],
     externs: ListMap[String, ExternInfo],
@@ -67,9 +84,33 @@ object Generator:
         svcTypeAliases(ir).filter(a => talConstraint(a).isDefined).map(talName).toSet
       val samplerSpecs             = deriveSamplerSpecs(ir)
       val (externs, matchPatterns) = classifyExterns(ir)
+      val sumSpecs                 = collectSumSpecs(ir)
+      // The ghost predicate only ever gets clauses from service invariants
+      // and from entity invariants lifted through STATE relations, so a sum
+      // on an entity unreachable from state must not set the flag: methods
+      // would reference a predicate that is never emitted.
+      def namedType(t: type_expr): Option[String] = t match
+        case NamedTypeF(n, _) => Some(n)
+        case _                => None
+      // Mirrors derivedStateClauses exactly: only map and relation state
+      // fields lift entity invariants into the state predicates, so only
+      // their value entities can back a ghost clause. A seq-backed entity's
+      // sum invariant never renders and must not set the flag.
+      def stateValueEntity(t: type_expr): Option[String] = t match
+        case MapTypeF(_, v, _)          => namedType(v)
+        case RelationTypeF(_, _, to, _) => namedType(to)
+        case _                          => None
+      val stateEntityNames = stateFields.values.flatMap(stateValueEntity).toSet
+      val anyGhostInv =
+        svcInvariants(ir).exists(inv => containsSumCall(invBody(inv))) ||
+          svcEntities(ir).exists(e =>
+            stateEntityNames.contains(entName(e)) && entInvariants(e).exists(containsSumCall)
+          )
       val ctx = Ctx(
         ir = ir,
         stateFields = stateFields,
+        sumSpecs = sumSpecs,
+        hasGhostInv = anyGhostInv && stateFields.nonEmpty,
         aliasesWithWhere = aliasesWithWhere,
         samplerSpecs = samplerSpecs,
         externs = externs,
@@ -81,15 +122,32 @@ object Generator:
       sb ++= header(svcName(ir))
       sb ++= optionDatatype()
       sb ++= theByFunction()
+      sb ++= sumFunctions(sumSpecs)
 
-      val enumDecls                      = renderEnums(svcEnums(ir))
-      val typeAliases                    = renderTypeAliases(ctx, svcTypeAliases(ir))
-      val (entityDecls, entitiesWithInv) = renderEntities(ctx, svcEntities(ir))
-      val stateClass                     = renderStateClass(ctx)
-      val derived                        = derivedStateClauses(ctx, entitiesWithInv)
-      val invPredicate                   = renderInvariantPredicate(ctx, svcInvariants(ir), derived)
+      val enumDecls   = renderEnums(svcEnums(ir))
+      val typeAliases = renderTypeAliases(ctx, svcTypeAliases(ir))
+      val (entityDecls, entitiesWithInv, entitiesWithGhostInv) =
+        renderEntities(ctx, svcEntities(ir))
+      val stateClass   = renderStateClass(ctx)
+      val derived      = derivedStateClauses(ctx, entitiesWithInv, ghost = false)
+      val derivedGhost = derivedStateClauses(ctx, entitiesWithGhostInv, ghost = true)
+      val (invPredicate, ghostInvPredicate) =
+        renderInvariantPredicate(ctx, svcInvariants(ir), derived, derivedGhost)
 
-      val methods = svcOperations(ir).map(op => renderMethod(ctx, op))
+      // A construct the transform cannot lower downgrades its own operation
+      // (it keeps the fail-loud stub and synthesis skips it) instead of
+      // failing the whole spec. The per-op boundary shares failDafny's label
+      // type, so the rendered method rides out through the builder and the
+      // placeholder Right is never read.
+      val attempts = svcOperations(ir).map { op =>
+        val rendered = List.newBuilder[RenderedMethod]
+        val res = boundary[Either[DafnyError, DafnyOutput]]:
+          rendered += renderMethod(ctx, op)
+          Right(DafnyOutput("", Nil))
+        (operName(op), res, rendered.result())
+      }
+      val methods = attempts.flatMap(_._3)
+      val skipped = attempts.collect { case (name, Left(err), _) => name -> err.message }
 
       if enumDecls.nonEmpty then
         sb ++= "\n"
@@ -106,6 +164,9 @@ object Generator:
       invPredicate.foreach: pred =>
         sb ++= "\n"
         sb ++= pred
+      ghostInvPredicate.foreach: pred =>
+        sb ++= "\n"
+        sb ++= pred
 
       val externDecls = renderExterns(ctx)
       if externDecls.nonEmpty then
@@ -116,7 +177,7 @@ object Generator:
         sb ++= "\n"
         sb ++= rendered.text
 
-      Right(DafnyOutput(sb.toString, methods.map(_.header)))
+      Right(DafnyOutput(sb.toString, methods.map(_.header), skipped))
 
   private def header(serviceName: String): String =
     s"// AUTO-GENERATED Dafny skeleton for service $serviceName.\n" +
@@ -165,12 +226,19 @@ object Generator:
         sb ++= "}\n"
     sb.toString
 
+  private def containsSumCall(e: expr): Boolean =
+    specrest.ir.generated.SpecRestGenerated.allSubexprs(e).exists {
+      case CallF(IdentifierF("sum", _), _, _) => true
+      case _                                  => false
+    }
+
   private def renderEntities(
       ctx: Ctx,
       decls: List[entity_decl]
-  )(using DafnyLabel): (String, Set[String]) =
-    val sb      = new StringBuilder
-    val withInv = Set.newBuilder[String]
+  )(using DafnyLabel): (String, Set[String], Set[String]) =
+    val sb           = new StringBuilder
+    val withInv      = Set.newBuilder[String]
+    val withGhostInv = Set.newBuilder[String]
     decls.foreach: d =>
       val name       = entName(d)
       val fields     = entFields(d)
@@ -196,11 +264,12 @@ object Generator:
         aliasWhereCall(ctx, s"x.${fldName(f)}", fldType(f)).map(c => s"($c)")
       }
 
+      val invCtx                             = ctx.copy(boundVars = ctx.boundVars + "x")
+      val (ghostInvariants, plainInvariants) = invariants.partition(containsSumCall)
       val invClauses =
-        if invariants.nonEmpty then
-          val invCtx = ctx.copy(boundVars = ctx.boundVars + "x")
-          invariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
-        else Nil
+        plainInvariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
+      val ghostClauses =
+        ghostInvariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
 
       val allClauses = (fieldWhereClauses ++ aliasFieldClauses ++ invClauses).distinct
       if allClauses.nonEmpty then
@@ -208,7 +277,12 @@ object Generator:
         sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
         sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
-    (sb.toString, withInv.result())
+      if ghostClauses.nonEmpty then
+        withGhostInv += name
+        sb ++= s"\nghost predicate ${name}InvGhost(x: $name)\n{\n"
+        sb ++= s"  ${ghostClauses.mkString("\n  && ")}\n"
+        sb ++= "}\n"
+    (sb.toString, withInv.result(), withGhostInv.result())
 
   private def renderEntityInvariant(ctx: Ctx, expr: expr, entityName: String)(using
       DafnyLabel
@@ -233,22 +307,25 @@ object Generator:
   // state hydrated from valid rows satisfies the methods' preconditions, and
   // invariant preservation forbids mutations the schema's CHECK constraints
   // would reject at persist time.
-  private def derivedStateClauses(ctx: Ctx, entitiesWithInv: Set[String])(using
-      DafnyLabel
-  ): List[String] =
+  private def derivedStateClauses(
+      ctx: Ctx,
+      entitiesWithInv: Set[String],
+      ghost: Boolean
+  )(using DafnyLabel): List[String] =
     ctx.stateFields.toList.flatMap: (name, t) =>
       t match
         case _: NamedTypeF =>
-          aliasWhereCall(ctx, s"st.$name", t).map(c => s"($c)").toList
+          if ghost then Nil
+          else aliasWhereCall(ctx, s"st.$name", t).map(c => s"($c)").toList
         case RelationTypeF(k, m, v, _) =>
           // set/some relations render as map<K, set<V>>, so their value
           // clauses quantify over the element set instead of the map image.
           val elementValued = m match
             case MultSet() | MultSome() => true
             case _                      => false
-          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued)
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued, ghost)
         case MapTypeF(k, v, _) =>
-          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued = false)
+          relationClauses(ctx, name, k, v, entitiesWithInv, elementValued = false, ghost)
         case _ => Nil
 
   private def relationClauses(
@@ -257,38 +334,59 @@ object Generator:
       k: type_expr,
       v: type_expr,
       entitiesWithInv: Set[String],
-      elementValued: Boolean
+      elementValued: Boolean,
+      ghost: Boolean
   )(using DafnyLabel): List[String] =
     val keyClause =
-      aliasWhereCall(ctx, "k", k).map(w => s"(forall k :: k in st.$name ==> $w)")
+      if ghost then None
+      else aliasWhereCall(ctx, "k", k).map(w => s"(forall k :: k in st.$name ==> $w)")
+    val invName = if ghost then "InvGhost" else "Inv"
     val (valueRef, wrap) =
       if elementValued then
         ("v", (c: String) => s"(forall k :: k in st.$name ==> forall v :: v in st.$name[k] ==> $c)")
       else (s"st.$name[k]", (c: String) => s"(forall k :: k in st.$name ==> $c)")
     val valueClause = v match
       case NamedTypeF(vn, _) if entitiesWithInv.contains(vn) =>
-        Some(wrap(s"${vn}Inv($valueRef)"))
+        Some(wrap(s"$vn$invName($valueRef)"))
       case _ =>
-        aliasWhereCall(ctx, valueRef, v).map(wrap)
+        if ghost then None else aliasWhereCall(ctx, valueRef, v).map(wrap)
     keyClause.toList ++ valueClause.toList
 
   private def renderInvariantPredicate(
       ctx: Ctx,
       invs: List[invariant_decl],
-      derived: List[String]
-  )(using DafnyLabel): Option[String] =
-    if ctx.stateFields.isEmpty then None
+      derived: List[String],
+      derivedGhost: List[String]
+  )(using DafnyLabel): (Option[String], Option[String]) =
+    if ctx.stateFields.isEmpty then (None, None)
     else
-      val invCtx = ctx.copy(stateMode = StateMode.Direct)
-      val parts  = invs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})") ++ derived
-      val body   = if parts.isEmpty then "true" else parts.mkString("\n  && ")
-      Some(
+      val invCtx                 = ctx.copy(stateMode = StateMode.Direct)
+      val (ghostInvs, plainInvs) = invs.partition(inv => containsSumCall(invBody(inv)))
+      val parts                  = plainInvs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})") ++ derived
+      val body                   = if parts.isEmpty then "true" else parts.mkString("\n  && ")
+      val compiled =
         "predicate ServiceStateInv(st: ServiceState)\n" +
           "  reads st\n" +
           "{\n" +
           s"  $body\n" +
           "}\n"
-      )
+      val ghostParts =
+        ghostInvs.map(inv => s"(${renderExpr(invCtx, invBody(inv))})") ++ derivedGhost
+      // Sum-consistency lives here: the compiled twins cannot evaluate the
+      // ghost set-sums, so these conjuncts ride on method contracts only.
+      // Verified bodies preserve them; hydrated state is trusted for them
+      // the way candidate freshness already trusts the sampler.
+      val ghost =
+        if ghostParts.isEmpty then None
+        else
+          Some(
+            "ghost predicate ServiceStateInvGhost(st: ServiceState)\n" +
+              "  reads st\n" +
+              "{\n" +
+              s"  ${ghostParts.mkString("\n  && ")}\n" +
+              "}\n"
+          )
+      (Some(compiled), ghost)
 
   final private case class RenderedMethod(text: String, header: DafnyMethodHeader)
 
@@ -341,6 +439,8 @@ object Generator:
     val invariantClauses =
       if ctx.stateFields.nonEmpty then List("ServiceStateInv(st)")
       else Nil
+    val ghostInvariantClauses =
+      if ctx.hasGhostInv then List("ServiceStateInvGhost(st)") else Nil
 
     val aliasInputClauses = inputs.flatMap { p =>
       aliasWhereCall(ctx, prmName(p), prmType(p))
@@ -357,7 +457,7 @@ object Generator:
           fldName(f)
       }
       .distinct
-    val rawRequires = flattenAndAll(
+    val desugaredRequires = flattenAndAll(
       operRequires(op).map(e =>
         specrest.ir.generated.SpecRestGenerated.desugarOptionGuards(
           optInputNames,
@@ -365,7 +465,14 @@ object Generator:
           e
         )
       )
-    ).map(renderExpr(reqCtx, _)).filter(_ != "true")
+    )
+    val guardedOpt = desugaredRequires
+      .collect { case BinaryOpF(BNeq(), g, NoneLitF(_), _) => g }
+      .map(renderExpr(reqCtx, _))
+      .toSet
+    val reqCtxG = reqCtx.copy(optGuarded = guardedOpt)
+    val rawRequires =
+      desugaredRequires.map(renderExpr(reqCtxG, _)).filter(_ != "true")
     val requiresClauses = invariantClauses ++ aliasInputClauses ++ rawRequires
 
     val ensCtx = mctx.copy(stateMode = StateMode.Old)
@@ -410,9 +517,9 @@ object Generator:
     sb ++= "\n"
     modifiesClauses.foreach: m =>
       sb ++= s"  modifies $m\n"
-    requiresClauses.foreach: r =>
+    (requiresClauses ++ ghostInvariantClauses).foreach: r =>
       sb ++= s"  requires $r\n"
-    ensuresClauses.foreach: e =>
+    (ensuresClauses ++ ghostInvariantClauses).foreach: e =>
       sb ++= s"  ensures $e\n"
     sb ++= "{\n"
     sb ++= "  // YOUR CODE HERE\n"
@@ -423,8 +530,8 @@ object Generator:
       DafnyMethodHeader(
         name = operName(op),
         signature = signature,
-        requiresClauses = requiresClauses,
-        ensuresClauses = ensuresClauses,
+        requiresClauses = requiresClauses ++ ghostInvariantClauses,
+        ensuresClauses = ensuresClauses ++ ghostInvariantClauses,
         modifiesClauses = modifiesClauses,
         candidates = candidates
       )
@@ -475,8 +582,111 @@ object Generator:
         }
     val (externsAlist, patterns) =
       specrest.ir.generated.SpecRestGenerated.classifyExternItems(all)
-    val externs = ListMap.from(externsAlist.map { case (n, info) => n -> toScalaExternInfo(info) })
+    // sum lowers through the generated set-sum functions, never as an extern.
+    val externs = ListMap.from(
+      externsAlist
+        .filter { case (n, _) => n != "sum" }
+        .map { case (n, info) => n -> toScalaExternInfo(info) }
+    )
     (externs, patterns)
+
+  // Every `sum(<...>.g, i => i.f)` in the spec resolves its element entity
+  // structurally: exactly one entity may declare a Set[E] field named g whose
+  // element E has a field f. Ambiguity leaves the pair unregistered and the
+  // render site fails (downgrading the op, or the spec for invariants).
+  private def collectSumSpecs(ir: ServiceIRFull): Map[(String, String), String] =
+    val exprs: List[expr] =
+      svcInvariants(ir).map(invBody) :::
+        svcEntities(ir).flatMap(e => entInvariants(e)) :::
+        svcOperations(ir).flatMap(op => operRequires(op) ::: operEnsures(op))
+    val shapes = exprs
+      .flatMap(specrest.ir.generated.SpecRestGenerated.allSubexprs)
+      .collect {
+        case CallF(
+              IdentifierF("sum", _),
+              List(coll, LambdaF(p, FieldAccessF(IdentifierF(p2, _), fld, _), _)),
+              _
+            ) if p2 == p =>
+          collFieldName(coll).map(_ -> fld)
+      }
+      .flatten
+      .distinct
+    shapes.flatMap { case (collFld, lamFld) =>
+      val elems = svcEntities(ir)
+        .flatMap(e => entFields(e).find(f => fldName(f) == collFld).map(fldType))
+        .collect { case SetTypeF(NamedTypeF(en, _), _) => en }
+        .filter(en =>
+          svcEntities(ir)
+            .find(e => entName(e) == en)
+            .exists(e => entFields(e).exists(f => fldName(f) == lamFld))
+        )
+        .distinct
+      elems match
+        case en :: Nil => List((collFld, lamFld) -> en)
+        case _         => Nil
+    }.toMap
+
+  private def collFieldName(coll: expr): Option[String] = coll match
+    case FieldAccessF(_, g, _) => Some(g)
+    case _                     => None
+
+  private def sumFnName(elem: String, fld: String): String = s"SumBy_${elem}_$fld"
+
+  // A ghost recursive set-sum per (element entity, field), with the
+  // pick-independence lemma SumByEq (the definitional axiom exposes only
+  // SOME witness, so unfolding at a chosen element needs the exchange
+  // argument) plus the add/remove corollaries method bodies actually use.
+  private def sumFunctions(specs: Map[(String, String), String]): String =
+    // Two set fields over the same element entity and field would emit the
+    // same helper twice; the function is keyed by (element, field) alone.
+    val parts = specs.toList.distinctBy { case ((_, fld), elem) => (elem, fld) }.map {
+      case ((_, fld), elem) =>
+        val fn = sumFnName(elem, fld)
+        s"""|
+          |ghost function $fn(s: set<$elem>): int
+          |  decreases s
+          |{
+          |  if s == {} then 0
+          |  else var x :| x in s; x.$fld + $fn(s - {x})
+          |}
+          |
+          |lemma ${fn}Eq(s: set<$elem>, x: $elem)
+          |  requires x in s
+          |  ensures $fn(s) == x.$fld + $fn(s - {x})
+          |  decreases |s|
+          |{
+          |  var y :| y in s && $fn(s) == y.$fld + $fn(s - {y});
+          |  if y != x {
+          |    calc {
+          |      $fn(s);
+          |      y.$fld + $fn(s - {y});
+          |      { ${fn}Eq(s - {y}, x); }
+          |      y.$fld + x.$fld + $fn(s - {y} - {x});
+          |      { assert s - {y} - {x} == s - {x} - {y}; }
+          |      y.$fld + x.$fld + $fn(s - {x} - {y});
+          |      { ${fn}Eq(s - {x}, y); }
+          |      x.$fld + $fn(s - {x});
+          |    }
+          |  }
+          |}
+          |
+          |lemma ${fn}Add(s: set<$elem>, x: $elem)
+          |  requires x !in s
+          |  ensures $fn(s + {x}) == $fn(s) + x.$fld
+          |{
+          |  ${fn}Eq(s + {x}, x);
+          |  assert (s + {x}) - {x} == s;
+          |}
+          |
+          |lemma ${fn}Remove(s: set<$elem>, x: $elem)
+          |  requires x in s
+          |  ensures $fn(s - {x}) == $fn(s) - x.$fld
+          |{
+          |  ${fn}Eq(s, x);
+          |}
+          |""".stripMargin
+    }
+    parts.mkString
 
   private def toScalaExternInfo(info: extern_info): ExternInfo = info match
     case ExInfo(k, arity) =>
@@ -590,6 +800,15 @@ object Generator:
     case FieldAccessF(b, f, _)  => s"${renderExpr(ctx, b)}.$f"
     case EnumAccessF(_, m, _)   => m
     case IndexF(b, i, _)        => s"${renderExpr(ctx, b)}[${renderExpr(ctx, i)}]"
+    case CallF(
+          IdentifierF("sum", _),
+          List(coll, LambdaF(p, FieldAccessF(IdentifierF(p2, _), fld, _), _)),
+          sp
+        ) if p2 == p =>
+      collFieldName(coll).flatMap(cf => ctx.sumSpecs.get((cf, fld))) match
+        case Some(elem) => s"${sumFnName(elem, fld)}(${renderExpr(ctx, coll)})"
+        case None =>
+          failDafny("sum: cannot resolve a unique element entity for the collection", sp)
     case CallF(IdentifierF("len", _), arg :: Nil, _) =>
       s"|${renderExpr(ctx, arg)}|"
     case CallF(IdentifierF("dom", _), arg :: Nil, _) =>
@@ -792,8 +1011,16 @@ object Generator:
   private def renderBinary(ctx: Ctx, op: bin_op, l: expr, r: expr)(using
       DafnyLabel
   ): String =
-    val lr = renderExpr(ctx, l)
-    val rr = renderExpr(ctx, r)
+    def unwrapIfGuarded(rendered: String): String =
+      if ctx.optGuarded.contains(rendered) then s"$rendered.value" else rendered
+    val arithmetic = op match
+      case _: BAdd | _: BSub | _: BMul | _: BDiv | _: BLt | _: BLe | _: BGt | _: BGe =>
+        true
+      case _ => false
+    val lr =
+      if arithmetic then unwrapIfGuarded(renderExpr(ctx, l)) else renderExpr(ctx, l)
+    val rr =
+      if arithmetic then unwrapIfGuarded(renderExpr(ctx, r)) else renderExpr(ctx, r)
     op match
       case BAnd()       => s"($lr && $rr)"
       case BOr()        => s"($lr || $rr)"

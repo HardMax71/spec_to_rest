@@ -572,6 +572,9 @@ object EmitPython:
           s"sorted(${kernelElemFromDafny(el, "_x")} for _x in $selector)"
         case Some(KernelTypes.Kind.SeqOf(el)) =>
           s"[${kernelElemFromDafny(el, "_x")} for _x in $selector]"
+        case Some(KernelTypes.Kind.EntitySetOf(_)) =>
+          // The response schema keeps the id-list shape the column stores.
+          s"sorted(int(_x.${EmitShared.pyDafnySelector("id")}) for _x in $selector)"
         case _ =>
           if f.nullable then
             s"value_or_none($selector, ${kernelFromDafnyName(baseDomain(f.domainType))})"
@@ -725,6 +728,7 @@ object EmitPython:
           Some(s"to_dafny_set(${kernelElemToDafny(el, "_x")} for _x in $access)")
         case KernelTypes.Kind.SeqOf(el) =>
           Some(s"to_dafny_seq([${kernelElemToDafny(el, "_x")} for _x in $access])")
+        case KernelTypes.Kind.EntitySetOf(_) => None
         case KernelTypes.Kind.OptOf(inner) =>
           inputToDafny("_v", inner).map(conv => s"some_or_none($access, lambda _v: $conv)")
     val specInputTypes = svcOperations(kernelCtx.ir)
@@ -740,7 +744,11 @@ object EmitPython:
     def queryKindOk(k: KernelTypes.Kind): Boolean =
       KernelTypes.unwrapOpt(k) match
         case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
-        case _                                                          => false
+        // Int-shaped query params are safe here: the kernel route binds them
+        // with their python types, so fastapi coerces and 422s garbage before
+        // the service runs.
+        case KernelTypes.Kind.Scalar("int") => true
+        case _                              => false
     val kernelArgConversions: List[Option[String]] =
       (endpoint.pathParams ++ endpoint.queryParams ++ endpoint.bodyParams).map { p =>
         val access =
@@ -800,6 +808,7 @@ object EmitPython:
         case Some(KernelTypes.Kind.Scalar(b))                            => (KernelScalarTypes + "datetime").contains(b)
         case Some(KernelTypes.Kind.EnumK(_))                             => true
         case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+        case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
         case Some(KernelTypes.Kind.OptOf(_))                             => false
         case None                                                        => (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
     val outsMarshalable =

@@ -876,17 +876,42 @@ object EmitGo:
     val kernelNoResult = kernelMethod.exists(_._2)
     // Query params bind in the handler: absent means nil, so an omitted
     // optional filter never reaches the enum check as an empty string.
+    // Int-shaped params parse here so garbage 422s before the service runs.
+    val querySpecTypes = svcOperations(kernelCtx.ir)
+      .find(o => operName(o) == op.operationName)
+      .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
+      .getOrElse(Map.empty)
+    def queryIsInt(name: String): Boolean =
+      querySpecTypes
+        .get(name)
+        .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+        .map(KernelTypes.unwrapOpt)
+        .contains(KernelTypes.Kind.Scalar("int"))
     val kernelQueryBinds =
       if kernelMethod.isDefined then
         endpoint.queryParams.flatMap { p =>
           val v = toCamelCase(p.name)
-          List(
-            s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
-            s"var $v *string",
-            s"if ${v}Raw != \"\" {",
-            s"\t$v = &${v}Raw",
-            "}"
-          )
+          if queryIsInt(p.name) then
+            List(
+              s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
+              s"var $v *int64",
+              s"if ${v}Raw != \"\" {",
+              s"\t${v}Parsed, ${v}Err := strconv.ParseInt(${v}Raw, 10, 64)",
+              s"\tif ${v}Err != nil {",
+              "\t\twriteError(w, http.StatusUnprocessableEntity, \"invalid input value\")",
+              "\t\treturn",
+              "\t}",
+              s"\t$v = &${v}Parsed",
+              "}"
+            )
+          else
+            List(
+              s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
+              s"var $v *string",
+              s"if ${v}Raw != \"\" {",
+              s"\t$v = &${v}Raw",
+              "}"
+            )
         }
       else Nil
     val kernelHandlerArgs =
@@ -1194,6 +1219,7 @@ func sampleCandidate(length int, charset string) (string, error) {
             case KernelTypes.Kind.SeqOf(el) =>
               val local = "conv" + toPascalCase(specName)
               Some(GoConv(goCollLines(el, access, local, seq = true, indent = "\t\t"), local))
+            case KernelTypes.Kind.EntitySetOf(_) => None
             case KernelTypes.Kind.OptOf(inner) =>
               val local = "opt" + toPascalCase(specName)
               inner match
@@ -1241,10 +1267,15 @@ func sampleCandidate(length int, charset string) (string, error) {
           .getOrElse(Map.empty)
         val queryNames = endpoint.queryParams.map(_.name).toSet
         // Query values arrive as strings, so only string-shaped kinds convert.
-        def queryKindOk(k: KernelTypes.Kind): Boolean =
-          KernelTypes.unwrapOpt(k) match
-            case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
-            case _                                                          => false
+        def queryKindOk(k: KernelTypes.Kind): Boolean = k match
+          // Optional int query params parse in the handler bind (422 on
+          // garbage), so the service sees *int64; required ints would need a
+          // value bind and stay off the kernel.
+          case KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int")) => true
+          case other =>
+            KernelTypes.unwrapOpt(other) match
+              case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+              case _                                                          => false
         val inputSources =
           endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
@@ -1298,6 +1329,7 @@ func sampleCandidate(length int, charset string) (string, error) {
           outFieldKinds.get(f.fieldName) match
             case Some(KernelTypes.Kind.EnumK(_))                             => true
             case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
+            case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
             case _                                                           => goEntityTypes.contains(f.domainType.stripPrefix("*"))
         val outputsOk =
           if specOutputs.isEmpty then true
@@ -1314,11 +1346,17 @@ func sampleCandidate(length int, charset string) (string, error) {
           val callArgs  = ("state" :: args).mkString(", ")
           val call      = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
           val guard     = s"dafnykernel.Companion_Default___.Requires$dafnyName($callArgs)"
+          def queryGoType(name: String): String =
+            specInputTypes
+              .get(name)
+              .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+              .collect { case KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int")) => "*int64" }
+              .getOrElse("*string")
           val sigParts =
             endpoint.pathParams.map(p =>
               s"${toCamelCase(p.name)} ${goTypeForParam(p.typeExpr, typeLookup)}"
             ) ++
-              endpoint.queryParams.map(p => s"${toCamelCase(p.name)} *string") ++
+              endpoint.queryParams.map(p => s"${toCamelCase(p.name)} ${queryGoType(p.name)}") ++
               Option.when(hasRequestBody)(s"body models.$requestBodyType")
           val sig = if sigParts.isEmpty then "" else sigParts.mkString(", ", ", ", "")
           def fromDafny(f: ProfiledField, v: String): String =

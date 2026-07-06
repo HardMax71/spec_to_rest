@@ -12,6 +12,7 @@ import specrest.ir.generated.SpecRestGenerated.*
 import specrest.parser.Builder
 import specrest.parser.Parse
 import specrest.synth.Cache
+import specrest.synth.CacheEntry
 import specrest.synth.CegisBudget
 import specrest.synth.CegisLoop
 import specrest.synth.CegisOutcome
@@ -19,15 +20,18 @@ import specrest.synth.DafnyCli
 import specrest.synth.FallbackBudget
 import specrest.synth.FallbackOrchestrator
 import specrest.synth.FallbackOutcome
+import specrest.synth.FileAssembly
 import specrest.synth.LlmProvider
 import specrest.synth.ModelFamily
 import specrest.synth.OpOutcome
 import specrest.synth.PromptStrategy
 import specrest.synth.Reporter
+import specrest.synth.SynthPromptVersion
 import specrest.synth.SynthRequest
 import specrest.synth.SynthResult
 import specrest.synth.SynthesisReport
 import specrest.synth.Synthesizer
+import specrest.synth.TokenUsage
 import specrest.synth.Tracker
 import specrest.synth.providers.AnthropicProvider
 import specrest.synth.providers.OpenAIProvider
@@ -62,6 +66,16 @@ final case class SynthVerifyOptions(
     withHints: Option[Boolean] = None
 ):
   def hintsEnabled: Boolean = withHints.getOrElse(fallback)
+
+final case class SynthAcceptOptions(
+    operation: String,
+    bodyFile: String,
+    model: String,
+    temperature: Double,
+    cacheDir: Option[String],
+    dafnyBin: Option[String],
+    dafnyTimeoutSec: Int
+)
 
 final case class SynthVerifyAllOptions(
     model: String,
@@ -207,6 +221,126 @@ object Synth:
       )
     }
 
+  def runAccept(
+      specFile: String,
+      opts: SynthAcceptOptions,
+      log: Logger,
+      out: PrintStream = System.out
+  ): IO[ExitStatus] =
+    Check.readSource(specFile, log).flatMap:
+      case Left(code) => IO.pure(code)
+      case Right(source) =>
+        Parse.parseSpec(source).flatMap:
+          case Left(VerifyError.Parse(errors)) =>
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitStatus.Violations)
+          case Right(parsed) =>
+            Builder.buildIR(parsed.tree).flatMap:
+              case Left(buildErr) =>
+                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
+                  .as(ExitStatus.Violations)
+              case Right(ir) => runAcceptWithIR(specFile, ir, opts, log, out)
+
+  private def runAcceptWithIR(
+      specFile: String,
+      ir: ServiceIRFull,
+      opts: SynthAcceptOptions,
+      log: Logger,
+      out: PrintStream
+  ): IO[ExitStatus] =
+    val classifications = Classify.classifyOperations(ir)
+    classifications.find(c => classificationOperationName(c) == opts.operation) match
+      case None =>
+        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
+          .as(ExitStatus.Violations)
+      case Some(c) if isDirectEmit(classificationStrategy(c)) =>
+        IO.delay(
+          log.error(
+            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
+              "no synthesized body is used"
+          )
+        ).as(ExitStatus.Violations)
+      case Some(c) =>
+        DafnyGenerator.generate(ir) match
+          case Left(dErr) =>
+            IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
+              .as(ExitStatus.Translator)
+          case Right(dafny) =>
+            val opName = classificationOperationName(c)
+            dafny.methods.find(_.name == opName) match
+              case None =>
+                IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
+                  .as(ExitStatus.Translator)
+              case Some(header) =>
+                acceptBody(specFile, opName, header, dafny.text, opts, log, out)
+
+  // The same gate the CEGIS loop applies to an LLM candidate, applied to a
+  // provided body: splice into the skeleton, verify with dafny once, and only
+  // a verified result reaches the cache. Provenance rides in the model label.
+  private def acceptBody(
+      specFile: String,
+      opName: String,
+      header: specrest.dafny.DafnyMethodHeader,
+      skeleton: String,
+      opts: SynthAcceptOptions,
+      log: Logger,
+      out: PrintStream
+  ): IO[ExitStatus] =
+    IO.blocking(java.nio.file.Files.readString(java.nio.file.Paths.get(opts.bodyFile)))
+      .attempt
+      .flatMap:
+        case Left(e) =>
+          IO.delay(
+            log.error(
+              s"$specFile: cannot read --body-file '${opts.bodyFile}': " +
+                Option(e.getMessage).getOrElse(e.toString)
+            )
+          ).as(ExitStatus.Violations)
+        case Right(bodyText) =>
+          DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
+            case Left(msg) =>
+              IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Backend)
+            case Right(binary) =>
+              FileAssembly.splice(skeleton, opName, bodyText.stripLineEnd) match
+                case Left(failure) =>
+                  IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
+                    .as(ExitStatus.Violations)
+                case Right(fullDfy) =>
+                  DafnyCli.make(binary).use: verifier =>
+                    verifier.verify(fullDfy, opts.dafnyTimeoutSec).flatMap:
+                      case Left(backendErr) =>
+                        IO.delay(log.error(s"$specFile: dafny failed: $backendErr"))
+                          .as(ExitStatus.Backend)
+                      case Right(run) if run.verifiedFor(opName) =>
+                        val baseRoot = opts.cacheDir match
+                          case Some(pth) => Paths.get(pth)
+                          case None      => Cache.defaultRoot(Paths.get(""))
+                        Cache.make(Cache.verifiedRoot(baseRoot)).flatMap: cache =>
+                          val key = Cache.keyFor(header, opts.model, opts.temperature)
+                          val entry = CacheEntry(
+                            bodyText,
+                            bodyText.stripLineEnd,
+                            TokenUsage(0, 0),
+                            opts.model,
+                            SynthPromptVersion
+                          )
+                          cache.store(key, entry) *>
+                            IO.delay(
+                              out.println(s"[synth-accept] op=$opName VERIFIED and cached")
+                            ).as(ExitStatus.Ok)
+                      case Right(run) =>
+                        IO.delay {
+                          run
+                            .errorsFor(opName)
+                            .foreach(e =>
+                              log.error(
+                                s"$opName: ${e.category}${e.line.fold("")(l => s" line $l")}: ${e.message}"
+                              )
+                            )
+                        }.as(ExitStatus.Violations)
+
   def runVerify(
       specFile: String,
       opts: SynthVerifyOptions,
@@ -296,9 +430,15 @@ object Synth:
         resources.use: (provider, cache, skelCache, verifier) =>
           Tracker.empty.flatMap: tracker =>
             if opts.fallback then
+              // The shared token pools must scale with the plan, or their
+              // defaults strangle the ladder after one attempt and escalation
+              // never fires; cost stays the binding global guard.
+              val planSize = ladder.length * PromptStrategy.FallbackOrder.length
               val fb = FallbackBudget.Default.copy(
                 modelLadder = ladder,
-                sharedCostCapUsd = opts.maxCostUsd
+                sharedCostCapUsd = opts.maxCostUsd,
+                sharedInputTokenCap = CegisBudget.Default.maxInputTokens * planSize,
+                sharedOutputTokenCap = opts.maxOutputTokens * planSize
               )
               val orch = new FallbackOrchestrator(
                 provider,
@@ -488,9 +628,12 @@ object Synth:
       yield (provider, cache, skelCache, verifier)
     resources.use: (provider, cache, skelCache, verifier) =>
       Tracker.empty.flatMap: tracker =>
+        val fbPlanSize = ladder.length * PromptStrategy.FallbackOrder.length
         val fb = FallbackBudget.Default.copy(
           modelLadder = ladder,
-          sharedCostCapUsd = opts.maxCostUsd
+          sharedCostCapUsd = opts.maxCostUsd,
+          sharedInputTokenCap = CegisBudget.Default.maxInputTokens * fbPlanSize,
+          sharedOutputTokenCap = opts.maxOutputTokens * fbPlanSize
         )
         val orch = new FallbackOrchestrator(
           provider,

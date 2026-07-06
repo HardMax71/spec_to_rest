@@ -263,11 +263,12 @@ object Stateful:
       else
         val pathParam = pathParamNames.head
         matchingRules.toList.map: tr =>
-          buildTransitionMoveRule(pop, opDecl, eb, tr, pathParam)
+          buildTransitionMoveRule(pop, opDecl, ir, eb, tr, pathParam)
 
   private def buildTransitionMoveRule(
       pop: ProfiledOperation,
       opDecl: operation_decl,
+      ir: ServiceIRFull,
       eb: EntityBundles,
       tr: transition_rule,
       pathParam: String
@@ -278,6 +279,11 @@ object Stateful:
       case (Some(fb), Some(tb)) =>
         val funcName =
           s"${Naming.toSnakeCase(operName(opDecl))}_from_${trlFrom(tr).toLowerCase}_to_${trlTo(tr).toLowerCase}"
+        // Requires the recognizer cannot reduce to membership plus a status
+        // restriction (item counts, input-to-field equalities, time windows)
+        // may legitimately reject a bundle-drawn id, so such transitions take
+        // the same tolerant path as when-guarded ones.
+        val extraRequires = recognizeStatusRestriction(opDecl, ir).isEmpty
         val body = buildTransitionMoveBlock(
           pop = pop,
           opDecl = opDecl,
@@ -286,7 +292,7 @@ object Stateful:
           fromBundle = fb,
           toBundle = tb,
           pathParam = pathParam,
-          guarded = trlGuard(tr).isDefined,
+          guarded = trlGuard(tr).isDefined || extraRequires,
           funcName = funcName
         )
         (Right(List(body)), Nil)
@@ -473,13 +479,13 @@ object Stateful:
   ): Option[List[String]] =
     SpecRestGenerated.enumValuesForField(field, svcEnums(ir), svcTypeAliases(ir))
 
-  final private case class StatusRestriction(
+  final private[testgen] case class StatusRestriction(
       stateFieldName: String,
       inputName: String,
       perFieldRestrictions: Map[String, Set[String]]
   )
 
-  private def recognizeStatusRestriction(
+  private[testgen] def recognizeStatusRestriction(
       opDecl: operation_decl,
       ir: ServiceIRFull
   ): Option[StatusRestriction] =

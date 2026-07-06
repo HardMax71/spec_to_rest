@@ -86,10 +86,8 @@ service OrderService {
   entity InventoryEntry {
     sku: SKU
     available: Int where value >= 0
-    reserved: Int where value >= 0
 
     invariant: available >= 0
-    invariant: reserved >= 0
   }
 
   // --- State ---
@@ -101,6 +99,7 @@ service OrderService {
     payments: Int -> lone Payment
     next_order_id: OrderId
     next_payment_id: Int
+    next_line_item_id: Int
   }
 
   // --- State Machine ---
@@ -150,10 +149,12 @@ service OrderService {
       sku in products
       sku in inventory
       inventory[sku].available >= quantity
+      all i in orders[order_id].items | i.product_sku != sku
 
     ensures:
       let product = products[sku] in
       let item = LineItem {
+        id = pre(next_line_item_id),
         order_id = order_id,
         product_sku = sku,
         quantity = quantity,
@@ -167,8 +168,7 @@ service OrderService {
                   + pre(orders)[order_id].tax
         }
         orders' = pre(orders) + {order_id -> order}
-        inventory'[sku].reserved =
-          pre(inventory)[sku].reserved + quantity
+        next_line_item_id' = pre(next_line_item_id) + 1
         inventory'[sku].available =
           pre(inventory)[sku].available - quantity
   }
@@ -192,8 +192,6 @@ service OrderService {
                   + pre(orders)[order_id].tax
         }
         orders' = pre(orders) + {order_id -> order}
-        inventory'[removed.product_sku].reserved =
-          pre(inventory)[removed.product_sku].reserved - removed.quantity
         inventory'[removed.product_sku].available =
           pre(inventory)[removed.product_sku].available + removed.quantity
   }
@@ -246,9 +244,7 @@ service OrderService {
         shipped_at = some(now())
       }
       orders' = pre(orders) + {order_id -> order}
-      all item in order.items |
-        inventory'[item.product_sku].reserved =
-          pre(inventory)[item.product_sku].reserved - item.quantity
+      inventory' = inventory
   }
 
   operation ConfirmDelivery {
@@ -278,11 +274,7 @@ service OrderService {
     ensures:
       order = pre(orders)[order_id] with { status = CANCELLED }
       orders' = pre(orders) + {order_id -> order}
-      all item in pre(orders)[order_id].items |
-        inventory'[item.product_sku].available =
-          pre(inventory)[item.product_sku].available + item.quantity
-        and inventory'[item.product_sku].reserved =
-          pre(inventory)[item.product_sku].reserved - item.quantity
+      inventory' = inventory
       pre(orders)[order_id].status = PAID implies (
         payments' = pre(payments) + {pre(next_payment_id) -> Payment {
           id = pre(next_payment_id),
@@ -310,9 +302,7 @@ service OrderService {
     ensures:
       order = pre(orders)[order_id] with { status = RETURNED }
       orders' = pre(orders) + {order_id -> order}
-      all item in pre(orders)[order_id].items |
-        inventory'[item.product_sku].available =
-          pre(inventory)[item.product_sku].available + item.quantity
+      inventory' = inventory
       payments' = pre(payments) + {pre(next_payment_id) -> Payment {
         id = pre(next_payment_id),
         order_id = order_id,
@@ -366,7 +356,10 @@ service OrderService {
   invariant inventoryNonNegative:
     all sku in inventory |
       inventory[sku].available >= 0
-      and inventory[sku].reserved >= 0
+
+  invariant itemSkusStocked:
+    all oid in orders |
+      all item in orders[oid].items | item.product_sku in inventory
 
   invariant placedOrdersHaveItems:
     all oid in orders |
@@ -396,6 +389,22 @@ service OrderService {
 
   invariant paymentIdFresh:
     all pid in payments | pid < next_payment_id
+
+  invariant paymentIdPositive:
+    next_payment_id > 0
+
+  invariant nextLineItemIdPositive:
+    next_line_item_id > 0
+
+  invariant lineItemIdFresh:
+    all oid in orders |
+      all item in orders[oid].items | item.id < next_line_item_id
+
+  invariant oneLineItemPerSku:
+    all oid in orders |
+      all i1 in orders[oid].items |
+        all i2 in orders[oid].items |
+          i1.product_sku = i2.product_sku implies i1 = i2
 
   invariant nextOrderIdFresh:
     all oid in orders | oid < next_order_id

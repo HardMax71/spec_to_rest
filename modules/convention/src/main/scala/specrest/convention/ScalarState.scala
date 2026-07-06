@@ -85,6 +85,67 @@ object ScalarState:
       }
       .distinct
 
+  // Nested id-freshness: `forall k in rel : forall item in rel[k].fld :
+  // item.id < counter` ties the ids of an embedded entity collection to a
+  // counter, so /admin/seed for the element entity must bump it past the
+  // seeded row's id exactly like the flat form above.
+  def nestedIdFreshnessCounters(ir: ServiceIRFull, entityName: String): List[String] =
+    val scalarNames = fieldNames(ir).toSet
+    svcInvariants(ir)
+      .flatMap(inv => flattenEnsures(List(invBody(inv))))
+      .collect {
+        case QuantifierF(
+              QAll(),
+              List(QuantifierBindingFull(k, dom, _, _)),
+              QuantifierF(
+                QAll(),
+                List(
+                  QuantifierBindingFull(
+                    it,
+                    FieldAccessF(IndexF(IdentifierF(rel2, _), IdentifierF(k2, _), _), fld, _),
+                    _,
+                    _
+                  )
+                ),
+                BinaryOpF(
+                  BLt(),
+                  FieldAccessF(IdentifierF(it2, _), idf, _),
+                  IdentifierF(counter, _),
+                  _
+                ),
+                _
+              ),
+              _
+            )
+            if k2 == k && it2 == it && idf == "id" && domName(dom).contains(rel2) &&
+              scalarNames.contains(counter) &&
+              elemEntityOf(ir, rel2, fld).contains(entityName) =>
+          counter
+      }
+      .distinct
+
+  private def elemEntityOf(ir: ServiceIRFull, rel: String, fld: String): Option[String] =
+    val valueEntity = svcState(ir)
+      .flatMap(sd => stdFields(sd).find(f => stfName(f) == rel))
+      .map(stfType)
+      .flatMap {
+        case MapTypeF(_, v, _)          => namedEntity(v)
+        case RelationTypeF(_, _, to, _) => namedEntity(to)
+        case _                          => None
+      }
+    valueEntity
+      .flatMap(en => svcEntities(ir).find(e => entName(e) == en))
+      .flatMap(e => entFields(e).find(f => fldName(f) == fld))
+      .map(fldType)
+      .flatMap {
+        case SetTypeF(inner, _) => namedEntity(inner)
+        case _                  => None
+      }
+
+  private def namedEntity(t: type_expr): Option[String] = t match
+    case NamedTypeF(n, _) => Some(n)
+    case _                => None
+
   private def domName(dom: expr): Option[String] = dom match
     case IdentifierF(n, _) => Some(n)
     case _                 => None

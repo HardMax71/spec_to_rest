@@ -24,7 +24,9 @@ object Pricing:
     // frontier model can never silently disable the --cost-cap-usd guard; the cap is
     // meant to fail safe (abort early) rather than overspend on a missing price row.
     ModelPricing("gpt-5", 2.50, 20.00, "openai"),
-    ModelPricing("gpt-5-mini", 0.50, 4.00, "openai")
+    ModelPricing("gpt-5-mini", 0.50, 4.00, "openai"),
+    ModelPricing("gpt-5.1", 3.00, 25.00, "openai"),
+    ModelPricing("gpt-5.2", 3.00, 25.00, "openai")
   )
 
   def forModel(model: String): Option[ModelPricing] =

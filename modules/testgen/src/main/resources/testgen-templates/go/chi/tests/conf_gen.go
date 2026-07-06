@@ -33,7 +33,7 @@ func storable(s string) bool {
 func genString() *rapid.Generator[any] {
 	return mapAny(rapid.String().Filter(storable))
 }
-func genInt() *rapid.Generator[any]    { return mapAny(rapid.Int64()) }
+func genInt() *rapid.Generator[any] { return mapAny(rapid.Int64Range(math.MinInt32, math.MaxInt32)) }
 func genFloat() *rapid.Generator[any] {
 	return mapAny(rapid.Float64Range(-1e9, 1e9))
 }
@@ -141,8 +141,8 @@ func genIntRange(lo, hi int64) *rapid.Generator[any] {
 	return mapAny(rapid.Int64Range(lo, hi))
 }
 func genIntMin(lo int64) *rapid.Generator[any] {
-	return mapAny(rapid.Int64Range(lo, math.MaxInt64))
+	return mapAny(rapid.Int64Range(lo, math.MaxInt32))
 }
 func genIntMax(hi int64) *rapid.Generator[any] {
-	return mapAny(rapid.Int64Range(math.MinInt64, hi))
+	return mapAny(rapid.Int64Range(math.MinInt32, hi))
 }

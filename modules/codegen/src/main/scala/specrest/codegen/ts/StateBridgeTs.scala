@@ -23,14 +23,30 @@ object StateBridgeTs:
   private[codegen] def kindFor(ir: ServiceIRFull, entityName: String, f: ProfiledField) =
     specrest.codegen.KernelTypes.fieldKind(ir, entityName, f.fieldName)
 
-  private def kindSupported(k: Option[Kind], nullable: Boolean): Boolean = k match
+  private def kindSupported(
+      profiled: ProfiledService,
+      k: Option[Kind],
+      nullable: Boolean
+  ): Boolean = k match
     case Some(Kind.Scalar(_))                => true
     case Some(Kind.EnumK(_))                 => true
     case Some(Kind.SetOf(_) | Kind.SeqOf(_)) => !nullable
+    case Some(Kind.EntitySetOf(en))          =>
+      // One nesting level: the element entity's own fields must all marshal
+      // without another entity collection inside.
+      !nullable && specrest.codegen.EmitShared.nestedEntity(profiled, en).exists { ne =>
+        ne.fields.forall { nf =>
+          kindFor(profiled.ir, ne.entityName, nf) match
+            case Some(Kind.EntitySetOf(_)) => false
+            case k =>
+              kindSupported(profiled, k, nf.nullable) ||
+              ScalarTsTypes.contains(baseTs(nf.domainType))
+        }
+      }
     case Some(Kind.OptOf(inner)) =>
       inner match
-        case Kind.SetOf(_) | Kind.SeqOf(_) => false
-        case _                             => kindSupported(Some(inner), nullable = false)
+        case Kind.SetOf(_) | Kind.SeqOf(_) | Kind.EntitySetOf(_) => false
+        case _                                                   => kindSupported(profiled, Some(inner), nullable = false)
     case _ => false
 
   def plan(profiled: ProfiledService): Either[String, StatePlan.Plan] =
@@ -43,7 +59,7 @@ object StateBridgeTs:
           val owner = profiled.entities
             .find(_.fields.exists(_ eq f))
             .map(_.entityName)
-          owner.exists(en => kindSupported(kindFor(profiled.ir, en, f), f.nullable))
+          owner.exists(en => kindSupported(profiled, kindFor(profiled.ir, en, f), f.nullable))
         },
       keySupported = k => Set("string", "number").contains(k.domainType) && !k.nullable,
       seqSupported = true
@@ -89,7 +105,13 @@ object StateBridgeTs:
         s"someOrNone($access, (_v) => dafnySetOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
       case Some(Kind.SeqOf(el)) =>
         s"someOrNone($access, (_v) => dafnySeqOf((_v as unknown[]).map((x) => ${elemToDafny(el, "x")})))"
-      case _ => scalarToDafny(f, access)
+      case Some(Kind.EntitySetOf(en)) if !f.nullable =>
+        // The JSON column stores element ids; the element rows were fetched
+        // in the hydrate prelude and the helper builds the Dafny value.
+        val rows = s"${camel(en)}Rows"
+        s"dafnySetOf($rows.filter((li) => ($access as number[]).includes(Number(li.id))).map((li) => ${camel(en)}ToDafny(li)))"
+      case Some(Kind.EntitySetOf(_)) => access
+      case _                         => scalarToDafny(f, access)
 
   private def scalarToDafny(f: ProfiledField, access: String): String =
     if f.nullable then
@@ -127,7 +149,12 @@ object StateBridgeTs:
         s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")}).sort()) as string[] | null)"
       case Some(Kind.SeqOf(el)) =>
         s"(valueOrNull($access, (_v) => dafnyCollToArray(_v).map((v) => ${elemFromDafny(el, "v")})) as unknown[] | null)"
-      case _ => scalarFromDafny(f, access)
+      case Some(Kind.EntitySetOf(_)) if !f.nullable =>
+        // The column keeps the id-list shape; the element rows persist in
+        // their own table pass.
+        s"dafnyCollToArray($access).map((v) => intFromDafny((v as Record<string, unknown>)['dtor_id'])).sort((a, b) => a - b)"
+      case Some(Kind.EntitySetOf(_)) => access
+      case _                         => scalarFromDafny(f, access)
 
   private def scalarFromDafny(f: ProfiledField, access: String): String =
     if f.nullable then
@@ -158,7 +185,36 @@ object StateBridgeTs:
     val seqRelations = planned.relations.filter(_.isSeq)
     val seqEntities  = seqRelations.map(_.entity.entityName).toSet
 
+    // Element entities of Set[Entity] fields: hydration fetches their rows
+    // and builds Dafny values through a local helper, persistence upserts
+    // them from the post-state sets.
+    val nestedByName =
+      (for
+        r <- planned.relations
+        f <- r.entity.fields
+        en <- kindFor(profiled.ir, r.entity.entityName, f).toList.collect {
+                case Kind.EntitySetOf(en) => en
+              }
+        ne <- specrest.codegen.EmitShared.nestedEntity(profiled, en)
+      yield ne.entityName -> ne).toMap
+    val nestedEntities = nestedByName.values.toList.sortBy(_.entityName)
+    def nestedFieldsOf(e: specrest.profile.ProfiledEntity) =
+      e.fields.flatMap(f =>
+        kindFor(profiled.ir, e.entityName, f)
+          .collect { case Kind.EntitySetOf(en) => en }
+          .flatMap(nestedByName.get)
+          .map(f -> _)
+      )
+
     val hydrate = new StringBuilder
+    for ne <- nestedEntities do
+      val client = camel(ne.entityName)
+      val args = ne.fields.map(f =>
+        s"      ${toDafnyExpr(profiled.ir, ne.entityName, f, "r")},"
+      ).mkString("\n")
+      hydrate ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
+      hydrate ++= s"  const ${client}ToDafny = (r: (typeof ${client}Rows)[number]): unknown =>\n"
+      hydrate ++= s"    dafnyModule['${ne.entityName}'].create_${ne.entityName}(\n$args\n    );\n"
     for e <- entities do
       val order =
         if seqEntities.contains(e.entityName) then "{ orderBy: { id: 'asc' } }" else ""
@@ -240,6 +296,46 @@ object StateBridgeTs:
       persist ++= "  }\n"
       persist ++= s"  for (const [key, row] of ${client}Existing) {\n"
       persist ++= s"    if (!${client}Seen.has(key)) {\n"
+      persist ++= s"      await tx.$client.delete({ where: { id: row.id } });\n"
+      persist ++= "    }\n"
+      persist ++= "  }\n"
+    for ne <- nestedEntities do
+      val client = camel(ne.entityName)
+      // Only whole-entity relations iterate as owner objects; a relation
+      // projecting a single value field holds scalars, not rows.
+      val owners =
+        for
+          r      <- planned.relations if r.valueField.isEmpty
+          (f, e) <- nestedFieldsOf(r.entity) if e.entityName == ne.entityName
+        yield (r, f)
+      persist ++= s"  const ${client}Post = new Map<number, Record<string, unknown>>();\n"
+      for (r, f) <- owners do
+        if r.isSeq then
+          persist ++= s"  for (const v of st['${dafnyName(r.stateField)}'] as Iterable<unknown>) {\n"
+        else
+          persist ++= s"  for (const [, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
+        persist ++= "    const owner = v as Record<string, unknown>;\n"
+        persist ++= s"    for (const x of dafnyCollToArray(owner['dtor_${dafnyName(f.fieldName)}'])) {\n"
+        persist ++= "      const li = x as Record<string, unknown>;\n"
+        persist ++= s"      ${client}Post.set(intFromDafny(li['dtor_id']), li);\n"
+        persist ++= "    }\n"
+        persist ++= "  }\n"
+      persist ++= s"  const ${client}PostRows = await tx.$client.findMany();\n"
+      persist ++= s"  const ${client}Existing = new Map(${client}PostRows.map((r) => [Number(r.id), r]));\n"
+      persist ++= s"  for (const [key, value] of ${client}Post) {\n"
+      persist ++= "    const data = {\n"
+      for f <- ne.fields if f.fieldName != "id" do
+        persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, ne.entityName, f, "value")},\n"
+      persist ++= "    };\n"
+      persist ++= s"    const row = ${client}Existing.get(key);\n"
+      persist ++= "    if (row) {\n"
+      persist ++= s"      await tx.$client.update({ where: { id: row.id }, data });\n"
+      persist ++= "    } else {\n"
+      persist ++= s"      await tx.$client.create({ data: { id: key, ...data } });\n"
+      persist ++= "    }\n"
+      persist ++= "  }\n"
+      persist ++= s"  for (const [key, row] of ${client}Existing) {\n"
+      persist ++= s"    if (!${client}Post.has(key)) {\n"
       persist ++= s"      await tx.$client.delete({ where: { id: row.id } });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
