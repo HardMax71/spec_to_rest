@@ -325,6 +325,22 @@ private[testgen] object StateMachineTests:
     val fixLines = trlGuard(rule) match
       case None        => Some(Nil)
       case Some(guard) => GuardSatisfier.recognize(guard, entity, fieldName, trlFrom(rule), ir)
+    // Positives assert 200 off a bare seeded row, so requires the recognizer
+    // cannot reduce to membership plus a status restriction (item counts,
+    // input-to-field equalities, time windows) are unsatisfiable here; the
+    // stateful machine covers those transitions through real call sequences.
+    // Illegal-from negatives stay (they expect rejection either way), and an
+    // unrecognized guard keeps its own more specific skip reason.
+    if fixLines.isDefined && Stateful.recognizeStatusRestriction(opDecl, ir).isEmpty then
+      return Left(
+        TestSkip(
+          operName(opDecl),
+          s"transition[${trlFrom(rule)}_to_${trlTo(rule)}]",
+          "the op's requires go beyond membership plus a status restriction, " +
+            "which a bare seeded row cannot establish; the stateful machine " +
+            "covers this transition through real call sequences"
+        )
+      )
     fixLines match
       case None =>
         Left(

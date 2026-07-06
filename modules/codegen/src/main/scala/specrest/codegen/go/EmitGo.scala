@@ -876,17 +876,42 @@ object EmitGo:
     val kernelNoResult = kernelMethod.exists(_._2)
     // Query params bind in the handler: absent means nil, so an omitted
     // optional filter never reaches the enum check as an empty string.
+    // Int-shaped params parse here so garbage 422s before the service runs.
+    val querySpecTypes = svcOperations(kernelCtx.ir)
+      .find(o => operName(o) == op.operationName)
+      .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
+      .getOrElse(Map.empty)
+    def queryIsInt(name: String): Boolean =
+      querySpecTypes
+        .get(name)
+        .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+        .map(KernelTypes.unwrapOpt)
+        .contains(KernelTypes.Kind.Scalar("int"))
     val kernelQueryBinds =
       if kernelMethod.isDefined then
         endpoint.queryParams.flatMap { p =>
           val v = toCamelCase(p.name)
-          List(
-            s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
-            s"var $v *string",
-            s"if ${v}Raw != \"\" {",
-            s"\t$v = &${v}Raw",
-            "}"
-          )
+          if queryIsInt(p.name) then
+            List(
+              s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
+              s"var $v *int64",
+              s"if ${v}Raw != \"\" {",
+              s"\t${v}Parsed, ${v}Err := strconv.ParseInt(${v}Raw, 10, 64)",
+              s"\tif ${v}Err != nil {",
+              s"\t\twriteError(w, http.StatusUnprocessableEntity, \"invalid input value\")",
+              "\t\treturn",
+              "\t}",
+              s"\t$v = &${v}Parsed",
+              "}"
+            )
+          else
+            List(
+              s"""${v}Raw := r.URL.Query().Get("${p.name}")""",
+              s"var $v *string",
+              s"if ${v}Raw != \"\" {",
+              s"\t$v = &${v}Raw",
+              "}"
+            )
         }
       else Nil
     val kernelHandlerArgs =
@@ -1242,10 +1267,15 @@ func sampleCandidate(length int, charset string) (string, error) {
           .getOrElse(Map.empty)
         val queryNames = endpoint.queryParams.map(_.name).toSet
         // Query values arrive as strings, so only string-shaped kinds convert.
-        def queryKindOk(k: KernelTypes.Kind): Boolean =
-          KernelTypes.unwrapOpt(k) match
-            case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
-            case _                                                          => false
+        def queryKindOk(k: KernelTypes.Kind): Boolean = k match
+          // Optional int query params parse in the handler bind (422 on
+          // garbage), so the service sees *int64; required ints would need a
+          // value bind and stay off the kernel.
+          case KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int")) => true
+          case other =>
+            KernelTypes.unwrapOpt(other) match
+              case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+              case _                                                          => false
         val inputSources =
           endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++

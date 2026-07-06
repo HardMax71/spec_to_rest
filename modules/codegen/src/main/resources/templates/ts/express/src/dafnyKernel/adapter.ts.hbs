@@ -76,6 +76,16 @@ export const enumToDafny = (typeName: string, value: string): unknown => {
   return ctor.call(companion);
 };
 
+// Query values arrive as strings; the kernel boundary parses int-shaped
+// ones here so garbage 422s through the shared error mapping.
+export const intFromQueryString = (v: unknown): number => {
+  const n = Number(v as string);
+  if (!Number.isSafeInteger(n)) {
+    throw new InvalidInputError('invalid integer value');
+  }
+  return n;
+};
+
 export const enumFromDafny = (typeName: string, values: string[], v: unknown): string => {
   const rec = v as Record<string, boolean>;
   for (const member of values) {

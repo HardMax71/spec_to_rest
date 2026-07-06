@@ -696,6 +696,7 @@ object EmitTs:
           "enumFromDafny",
           "enumToDafny",
           "intFromDafny",
+          "intFromQueryString",
           "intToDafny",
           "makeState",
           "sampleCandidate",
@@ -1096,10 +1097,14 @@ object EmitTs:
         .getOrElse(Map.empty)
       val queryNames = endpoint.queryParams.map(_.name).toSet
       // Query values arrive as strings, so only string-shaped kinds convert.
-      def queryKindOk(k: KernelTypes.Kind): Boolean =
-        KernelTypes.unwrapOpt(k) match
-          case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
-          case _                                                          => false
+      def queryKindOk(k: KernelTypes.Kind): Boolean = k match
+        // Optional int query params parse via intFromQueryString (throws
+        // InvalidInputError, mapped to 422); required ints stay off.
+        case KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int")) => true
+        case other =>
+          KernelTypes.unwrapOpt(other) match
+            case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
+            case _                                                          => false
       val inputs =
         endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
           endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
@@ -1109,7 +1114,12 @@ object EmitTs:
           .get(specName)
           .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
           .filter(k => !queryNames.contains(specName) || queryKindOk(k))
-          .flatMap(k => inputToDafny(access, k))
+          .flatMap(k =>
+            (queryNames.contains(specName), k) match
+              case (true, KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int"))) =>
+                Some(s"someOrNone($access, (_v) => intToDafny(intFromQueryString(_v)))")
+              case _ => inputToDafny(access, k)
+          )
       val outputs = op.responseFields
       val specOutputs = svcOperations(kernelCtx.ir)
         .find(o => operName(o) == op.operationName)

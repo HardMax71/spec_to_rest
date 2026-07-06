@@ -744,7 +744,11 @@ object EmitPython:
     def queryKindOk(k: KernelTypes.Kind): Boolean =
       KernelTypes.unwrapOpt(k) match
         case KernelTypes.Kind.Scalar("str") | KernelTypes.Kind.EnumK(_) => true
-        case _                                                          => false
+        // Int-shaped query params are safe here: the kernel route binds them
+        // with their python types, so fastapi coerces and 422s garbage before
+        // the service runs.
+        case KernelTypes.Kind.Scalar("int") => true
+        case _                              => false
     val kernelArgConversions: List[Option[String]] =
       (endpoint.pathParams ++ endpoint.queryParams ++ endpoint.bodyParams).map { p =>
         val access =
