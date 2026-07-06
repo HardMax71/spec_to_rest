@@ -37,7 +37,7 @@ jobs:
 
       - name: Cache Isabelle distribution (extracted)
         id: cache-isabelle
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             /opt/Isabelle${{ env.ISABELLE_VERSION }}
@@ -46,7 +46,7 @@ jobs:
       - name: Cache Isabelle tarball (decouples install from upstream)
         if: steps.cache-isabelle.outputs.cache-hit != 'true'
         id: cache-isabelle-tar
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/isabelle-tarball/Isabelle${{ env.ISABELLE_VERSION }}_linux.tar.gz
           key: isabelle-tarball-${{ env.ISABELLE_VERSION }}-linux
@@ -100,7 +100,7 @@ jobs:
         run: sudo ln -sf "/opt/Isabelle${ISABELLE_VERSION}/bin/isabelle" /usr/local/bin/isabelle
 
       - name: Restore Isabelle heaps (two-tier)
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         id: heaps-restore
         with:
           path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
@@ -127,7 +127,7 @@ jobs:
 
       - name: Save Isabelle heaps (push-to-main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.build.outputs.needs_build == 'true'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.isabelle/Isabelle${{ env.ISABELLE_VERSION }}/heaps
           key: ${{ steps.heaps-restore.outputs.cache-primary-key }}
