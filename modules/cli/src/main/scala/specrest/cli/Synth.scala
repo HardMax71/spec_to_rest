@@ -296,9 +296,15 @@ object Synth:
         resources.use: (provider, cache, skelCache, verifier) =>
           Tracker.empty.flatMap: tracker =>
             if opts.fallback then
+              // The shared token pools must scale with the plan, or their
+              // defaults strangle the ladder after one attempt and escalation
+              // never fires; cost stays the binding global guard.
+              val planSize = ladder.length * PromptStrategy.FallbackOrder.length
               val fb = FallbackBudget.Default.copy(
                 modelLadder = ladder,
-                sharedCostCapUsd = opts.maxCostUsd
+                sharedCostCapUsd = opts.maxCostUsd,
+                sharedInputTokenCap = CegisBudget.Default.maxInputTokens * planSize,
+                sharedOutputTokenCap = opts.maxOutputTokens * planSize
               )
               val orch = new FallbackOrchestrator(
                 provider,
@@ -488,9 +494,12 @@ object Synth:
       yield (provider, cache, skelCache, verifier)
     resources.use: (provider, cache, skelCache, verifier) =>
       Tracker.empty.flatMap: tracker =>
+        val fbPlanSize = ladder.length * PromptStrategy.FallbackOrder.length
         val fb = FallbackBudget.Default.copy(
           modelLadder = ladder,
-          sharedCostCapUsd = opts.maxCostUsd
+          sharedCostCapUsd = opts.maxCostUsd,
+          sharedInputTokenCap = CegisBudget.Default.maxInputTokens * fbPlanSize,
+          sharedOutputTokenCap = opts.maxOutputTokens * fbPlanSize
         )
         val orch = new FallbackOrchestrator(
           provider,
