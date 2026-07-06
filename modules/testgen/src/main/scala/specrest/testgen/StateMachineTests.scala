@@ -79,6 +79,39 @@ private[testgen] object StateMachineTests:
               s"    row[${key(cf)}] = None"
             )
           case _ => Nil
+      // One optional field implying another: fill the consequent whenever the
+      // antecedent is set (delivered implies shipped).
+      case BinaryOpF(
+            BImplies(),
+            BinaryOpF(BNeq(), a, NoneLitF(_), _),
+            BinaryOpF(BNeq(), b, NoneLitF(_), _),
+            _
+          ) =>
+        (fieldOf(a), fieldOf(b)) match
+          case (Some(fa), Some(fb)) =>
+            List(
+              s"if row.get(${key(fa)}) is not None and row.get(${key(fb)}) is None:",
+              s"    row[${key(fb)}] = ${fillFor(fb)}"
+            )
+          case _ => Nil
+      // A field defined as the fold of a collection field: seed the empty
+      // collection and the fold's zero, which every downstream arithmetic
+      // invariant then computes from.
+      case BinaryOpF(BEq(), a, CallF(IdentifierF("sum", _), List(coll, _), _), _) =>
+        (fieldOf(a), fieldOf(coll)) match
+          case (Some(fa), Some(fc)) =>
+            List(
+              s"row[${key(fc)}] = []",
+              s"row[${key(fa)}] = 0"
+            )
+          case _ => Nil
+      // A field defined as the sum of two sibling fields recomputes from
+      // whatever the strategy (or an earlier repair) put in them.
+      case BinaryOpF(BEq(), a, BinaryOpF(BAdd(), b, c, _), _) =>
+        (fieldOf(a), fieldOf(b), fieldOf(c)) match
+          case (Some(fa), Some(fb), Some(fc)) =>
+            List(s"row[${key(fa)}] = row[${key(fb)}] + row[${key(fc)}]")
+          case _ => Nil
       case BinaryOpF(BGt(), a, IntLitF(n, _), _) =>
         fieldOf(a).toList.flatMap: f =>
           List(
@@ -211,6 +244,8 @@ private[testgen] object StateMachineTests:
               val illegalFroms = statusValues.filterNot(legalFroms.contains)
               val stateField = stateFieldForEntity(trnEntity(td), ir)
                 .getOrElse(Naming.toSnakeCase(trnEntity(td)) + "s")
+              val graphEncumbered =
+                graphEncumberedStatuses(td, ir, stateField, statusValues)
               val positives = rules.toList.map: rule =>
                 buildTransitionPositiveOrSkip(
                   td = td,
@@ -222,7 +257,8 @@ private[testgen] object StateMachineTests:
                   pop = pop,
                   stateField = stateField,
                   ir = ir,
-                  nonPath = nonPath
+                  nonPath = nonPath,
+                  graphEncumbered = graphEncumbered
                 )
               val negatives = illegalFroms.toList.sorted.map: from =>
                 buildTransitionNegative(
@@ -310,6 +346,66 @@ private[testgen] object StateMachineTests:
               (acc :+ NonPathInput(n, arg, k, t), taken + arg)
         Right(withArgs._1)
 
+  // Statuses whose state invariants demand the existence of related data
+  // (an existential over another relation, or a nonempty collection): a bare
+  // seeded row cannot satisfy those, so positive transitions FROM such a
+  // status defer to the stateful machine's real call sequences. Universally
+  // quantified or negative consequents stay seedable: they hold vacuously on
+  // an otherwise empty database.
+  private def graphEncumberedStatuses(
+      td: transition_decl,
+      ir: ServiceIRFull,
+      stateField: String,
+      statusValues: List[String]
+  ): Set[String] =
+    def demandsExistence(e: expr): Boolean = e match
+      case QuantifierF(QSome(), _, _, _)                                      => true
+      case BinaryOpF(BGt(), UnaryOpF(UCardinality(), _, _), IntLitF(n, _), _) => n >= 0
+      case BinaryOpF(_, l, r, _)                                              => demandsExistence(l) || demandsExistence(r)
+      case UnaryOpF(_, inner, _)                                              => demandsExistence(inner)
+      case QuantifierF(_, _, body, _)                                         => demandsExistence(body)
+      case _                                                                  => false
+    def statusFieldRef(e: expr, binder: String): Boolean = e match
+      case FieldAccessF(IndexF(IdentifierF(rel, _), IdentifierF(k, _), _), f, _) =>
+        rel == stateField && k == binder && f == trnField(td)
+      case _ => false
+    def enumLits(elems: List[expr]): Option[Set[String]] =
+      val lits = elems.map {
+        case IdentifierF(m, _)    => Some(m)
+        case EnumAccessF(_, m, _) => Some(m)
+        case StringLitF(m, _)     => Some(m)
+        case _                    => None
+      }
+      if lits.forall(_.isDefined) then Some(lits.flatten.toSet) else None
+    def antecedentStatuses(e: expr, binder: String): Option[Set[String]] = e match
+      case BinaryOpF(BEq(), lhs, rhs, _) if statusFieldRef(lhs, binder) =>
+        enumLits(List(rhs))
+      case BinaryOpF(BIn(), lhs, SetLiteralF(elems, _), _) if statusFieldRef(lhs, binder) =>
+        enumLits(elems)
+      case BinaryOpF(BNotIn(), lhs, SetLiteralF(elems, _), _) if statusFieldRef(lhs, binder) =>
+        enumLits(elems).map(statusValues.toSet -- _)
+      case _ => None
+    def scan(e: expr, binder: String): Set[String] = e match
+      case BinaryOpF(BImplies(), ant, cons, _) =>
+        val here =
+          antecedentStatuses(ant, binder).filter(_ => demandsExistence(cons)).getOrElse(Set.empty)
+        here ++ scan(cons, binder)
+      case BinaryOpF(_, l, r, _) => scan(l, binder) ++ scan(r, binder)
+      case _                     => Set.empty
+    svcInvariants(ir)
+      .flatMap(inv => flattenEnsures(List(invBody(inv))))
+      .flatMap {
+        case QuantifierF(
+              QAll(),
+              List(QuantifierBindingFull(k, IdentifierF(rel, _), _, _)),
+              body,
+              _
+            ) if rel == stateField =>
+          scan(body, k)
+        case _ => Set.empty[String]
+      }
+      .toSet
+
   private def buildTransitionPositiveOrSkip(
       td: transition_decl,
       entity: entity_decl,
@@ -320,7 +416,8 @@ private[testgen] object StateMachineTests:
       pop: ProfiledOperation,
       stateField: String,
       ir: ServiceIRFull,
-      nonPath: List[NonPathInput]
+      nonPath: List[NonPathInput],
+      graphEncumbered: Set[String]
   ): Either[TestSkip, GeneratedTest] =
     val fixLines = trlGuard(rule) match
       case None        => Some(Nil)
@@ -339,6 +436,17 @@ private[testgen] object StateMachineTests:
           "the op's requires go beyond membership plus a status restriction, " +
             "which a bare seeded row cannot establish; the stateful machine " +
             "covers this transition through real call sequences"
+        )
+      )
+    if fixLines.isDefined && graphEncumbered.contains(trlFrom(rule)) then
+      return Left(
+        TestSkip(
+          operName(opDecl),
+          s"transition[${trlFrom(rule)}_to_${trlTo(rule)}]",
+          s"state invariants demand related data for status '${trlFrom(rule)}' " +
+            "(a payment witness or nonempty collection) that a bare seeded row " +
+            "cannot carry; the stateful machine covers this transition through " +
+            "real call sequences"
         )
       )
     fixLines match
