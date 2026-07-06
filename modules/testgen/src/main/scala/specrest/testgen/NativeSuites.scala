@@ -278,7 +278,13 @@ private[testgen] object TsRender:
     val bodyExpr =
       if ep.bodyParams.isEmpty then ""
       else
-        val pairs = ep.bodyParams.map(p => s"${TsLit.str(p.name)}: ${ref(p.name)}").mkString(", ")
+        // Request schemas key bodies in camelCase; query strings keep the
+        // spec's names (the routes read req.query by spec name).
+        val pairs = ep.bodyParams
+          .map(p =>
+            s"${TsLit.str(specrest.ir.Naming.toCamelCase(p.name, specrest.ir.Naming.CamelStrategy.Plain))}: ${ref(p.name)}"
+          )
+          .mkString(", ")
         s", { $pairs }"
     s"client.$method($target$bodyExpr)"
 

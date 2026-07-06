@@ -898,7 +898,7 @@ object EmitGo:
               s"if ${v}Raw != \"\" {",
               s"\t${v}Parsed, ${v}Err := strconv.ParseInt(${v}Raw, 10, 64)",
               s"\tif ${v}Err != nil {",
-              s"\t\twriteError(w, http.StatusUnprocessableEntity, \"invalid input value\")",
+              "\t\twriteError(w, http.StatusUnprocessableEntity, \"invalid input value\")",
               "\t\treturn",
               "\t}",
               s"\t$v = &${v}Parsed",
@@ -1346,11 +1346,17 @@ func sampleCandidate(length int, charset string) (string, error) {
           val callArgs  = ("state" :: args).mkString(", ")
           val call      = s"dafnykernel.Companion_Default___.$dafnyName($callArgs)"
           val guard     = s"dafnykernel.Companion_Default___.Requires$dafnyName($callArgs)"
+          def queryGoType(name: String): String =
+            specInputTypes
+              .get(name)
+              .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
+              .collect { case KernelTypes.Kind.OptOf(KernelTypes.Kind.Scalar("int")) => "*int64" }
+              .getOrElse("*string")
           val sigParts =
             endpoint.pathParams.map(p =>
               s"${toCamelCase(p.name)} ${goTypeForParam(p.typeExpr, typeLookup)}"
             ) ++
-              endpoint.queryParams.map(p => s"${toCamelCase(p.name)} *string") ++
+              endpoint.queryParams.map(p => s"${toCamelCase(p.name)} ${queryGoType(p.name)}") ++
               Option.when(hasRequestBody)(s"body models.$requestBodyType")
           val sig = if sigParts.isEmpty then "" else sigParts.mkString(", ", ", ", "")
           def fromDafny(f: ProfiledField, v: String): String =

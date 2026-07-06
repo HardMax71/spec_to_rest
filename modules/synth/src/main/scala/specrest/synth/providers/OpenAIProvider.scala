@@ -7,14 +7,13 @@ import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.errors.OpenAIException
 import com.openai.models.ReasoningEffort
 import com.openai.models.chat.completions.ChatCompletionCreateParams
-
-import java.time.Duration
 import specrest.synth.LlmProvider
 import specrest.synth.LlmRequest
 import specrest.synth.LlmResponse
 import specrest.synth.ProviderError
 import specrest.synth.TokenUsage
 
+import java.time.Duration
 import scala.jdk.CollectionConverters.*
 import scala.jdk.OptionConverters.*
 import scala.util.control.NonFatal

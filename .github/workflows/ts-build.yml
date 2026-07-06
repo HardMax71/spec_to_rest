@@ -214,9 +214,11 @@ jobs:
           - fixture: ecommerce
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app
+            synthesis: "--with-synthesis --synthesis-model claude-fable-5"
           - fixture: ecommerce
             dialect: sqlite
             db_url: file:./app.db
+            synthesis: "--with-synthesis --synthesis-model claude-fable-5"
           - fixture: auth_service
             dialect: postgres
             db_url: postgresql://app:app@localhost:5432/app

@@ -985,8 +985,8 @@ object EmitTs:
         hasRequestBody,
         requestBodyType,
         allEntities,
-        typeLookup,
-        kernelCtx
+        kernelCtx,
+        pathParams
       )
 
     TsOperation(
@@ -1066,8 +1066,8 @@ object EmitTs:
       hasRequestBody: Boolean,
       requestBodyType: String,
       allEntities: List[ProfiledEntity],
-      typeLookup: Map[String, String],
-      kernelCtx: TsKernelCtx
+      kernelCtx: TsKernelCtx,
+      routePathParams: List[TsPathParam]
   ): Option[(String, String)] =
     val endpoint = op.endpoint
     val eligible = kernelCtx.stateReady
@@ -1077,9 +1077,15 @@ object EmitTs:
       // collections through the set/seq builders, options by null-guarding.
       // The someOrNone callback types its argument unknown, so every leaf
       // conversion carries its own cast.
+      val bigintParams =
+        routePathParams.filter(_.domainType == "bigint").map(_.tsName).toSet
       def inputToDafny(access: String, kind: KernelTypes.Kind): Option[String] =
         kind match
-          case KernelTypes.Kind.Scalar("str")  => Some(s"stringToDafny($access as string)")
+          case KernelTypes.Kind.Scalar("str") => Some(s"stringToDafny($access as string)")
+          // A synthesized-pk path param arrives as bigint (the route coerces
+          // with BigInt for the Prisma where); intToDafny takes both.
+          case KernelTypes.Kind.Scalar("int") if bigintParams.contains(access) =>
+            Some(s"intToDafny($access)")
           case KernelTypes.Kind.Scalar("int")  => Some(s"intToDafny($access as number)")
           case KernelTypes.Kind.Scalar("bool") => Some(access)
           case KernelTypes.Kind.Scalar(_)      => None
@@ -1180,9 +1186,7 @@ object EmitTs:
         val callArgs = ("state" :: convertedArgs.flatten ::: candArgs).mkString(", ")
         val call     = s"companion.$dafnyName($callArgs)"
         val sig =
-          (endpoint.pathParams.map(p =>
-            s"${toCamelCase(p.name)}: ${tsTypeForParam(p.typeExpr, typeLookup)}"
-          ) ++
+          (routePathParams.map(p => s"${p.tsName}: ${p.domainType}") ++
             endpoint.queryParams.map(p => s"${toCamelCase(p.name)}: string | null") ++
             Option.when(hasRequestBody)(s"body: $requestBodyType")).mkString(", ")
         def fromDafny(f: ProfiledField, v: String): String =
