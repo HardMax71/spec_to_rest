@@ -79,7 +79,9 @@ export const enumToDafny = (typeName: string, value: string): unknown => {
 // Query values arrive as strings; the kernel boundary parses int-shaped
 // ones here so garbage 422s through the shared error mapping.
 export const intFromQueryString = (v: unknown): number => {
-  const n = Number(v as string);
+  // Number('') is 0, so the empty string must reject explicitly.
+  const s = v as string;
+  const n = s === '' ? Number.NaN : Number(s);
   if (!Number.isSafeInteger(n)) {
     throw new InvalidInputError('invalid integer value');
   }

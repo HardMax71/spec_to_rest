@@ -278,9 +278,11 @@ object StateBridge:
     for ne <- nestedEntities do
       val snake = Naming.toSnakeCase(ne.entityName)
       val idSel = specrest.codegen.EmitShared.pyDafnySelector("id")
+      // Only whole-entity relations iterate as owner objects; a relation
+      // projecting a single value field holds scalars, not rows.
       val owners =
         for
-          r      <- planned.relations
+          r      <- planned.relations if r.valueField.isEmpty
           (f, e) <- nestedFieldsOf(r.entity) if e.entityName == ne.entityName
         yield (r, f)
       persistLines += s"    _${snake}_post: dict[int, Any] = {}"
@@ -319,7 +321,8 @@ object StateBridge:
         persistLines += s"    scalar_row.${sc.columnName} = int(st.${dafnyName(sc.stateField)})"
     persistLines += "    await session.flush()"
 
-    val needsOptional = planned.relations.exists(_.entity.fields.exists(_.nullable))
+    val needsOptional =
+      (planned.relations.map(_.entity) ++ nestedEntities).exists(_.fields.exists(_.nullable))
     val optionalHelpers =
       if !needsOptional then ""
       else

@@ -288,49 +288,58 @@ object Synth:
       log: Logger,
       out: PrintStream
   ): IO[ExitStatus] =
-    DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
-      case Left(msg) =>
-        IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Backend)
-      case Right(binary) =>
-        IO.blocking(java.nio.file.Files.readString(java.nio.file.Paths.get(opts.bodyFile)))
-          .flatMap: bodyText =>
-            FileAssembly.splice(skeleton, opName, bodyText.stripLineEnd) match
-              case Left(failure) =>
-                IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
-                  .as(ExitStatus.Violations)
-              case Right(fullDfy) =>
-                DafnyCli.make(binary).use: verifier =>
-                  verifier.verify(fullDfy, opts.dafnyTimeoutSec).flatMap:
-                    case Left(backendErr) =>
-                      IO.delay(log.error(s"$specFile: dafny failed: $backendErr"))
-                        .as(ExitStatus.Backend)
-                    case Right(run) if run.verifiedFor(opName) =>
-                      val baseRoot = opts.cacheDir match
-                        case Some(pth) => Paths.get(pth)
-                        case None      => Cache.defaultRoot(Paths.get(""))
-                      Cache.make(Cache.verifiedRoot(baseRoot)).flatMap: cache =>
-                        val key = Cache.keyFor(header, opts.model, opts.temperature)
-                        val entry = CacheEntry(
-                          bodyText,
-                          bodyText.stripLineEnd,
-                          TokenUsage(0, 0),
-                          opts.model,
-                          SynthPromptVersion
-                        )
-                        cache.store(key, entry) *>
-                          IO.delay(
-                            out.println(s"[synth-accept] op=$opName VERIFIED and cached")
-                          ).as(ExitStatus.Ok)
-                    case Right(run) =>
-                      IO.delay {
-                        run
-                          .errorsFor(opName)
-                          .foreach(e =>
-                            log.error(
-                              s"$opName: ${e.category}${e.line.fold("")(l => s" line $l")}: ${e.message}"
-                            )
+    IO.blocking(java.nio.file.Files.readString(java.nio.file.Paths.get(opts.bodyFile)))
+      .attempt
+      .flatMap:
+        case Left(e) =>
+          IO.delay(
+            log.error(
+              s"$specFile: cannot read --body-file '${opts.bodyFile}': " +
+                Option(e.getMessage).getOrElse(e.toString)
+            )
+          ).as(ExitStatus.Violations)
+        case Right(bodyText) =>
+          DafnyCli.resolveBinary(opts.dafnyBin).flatMap:
+            case Left(msg) =>
+              IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Backend)
+            case Right(binary) =>
+              FileAssembly.splice(skeleton, opName, bodyText.stripLineEnd) match
+                case Left(failure) =>
+                  IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
+                    .as(ExitStatus.Violations)
+                case Right(fullDfy) =>
+                  DafnyCli.make(binary).use: verifier =>
+                    verifier.verify(fullDfy, opts.dafnyTimeoutSec).flatMap:
+                      case Left(backendErr) =>
+                        IO.delay(log.error(s"$specFile: dafny failed: $backendErr"))
+                          .as(ExitStatus.Backend)
+                      case Right(run) if run.verifiedFor(opName) =>
+                        val baseRoot = opts.cacheDir match
+                          case Some(pth) => Paths.get(pth)
+                          case None      => Cache.defaultRoot(Paths.get(""))
+                        Cache.make(Cache.verifiedRoot(baseRoot)).flatMap: cache =>
+                          val key = Cache.keyFor(header, opts.model, opts.temperature)
+                          val entry = CacheEntry(
+                            bodyText,
+                            bodyText.stripLineEnd,
+                            TokenUsage(0, 0),
+                            opts.model,
+                            SynthPromptVersion
                           )
-                      }.as(ExitStatus.Violations)
+                          cache.store(key, entry) *>
+                            IO.delay(
+                              out.println(s"[synth-accept] op=$opName VERIFIED and cached")
+                            ).as(ExitStatus.Ok)
+                      case Right(run) =>
+                        IO.delay {
+                          run
+                            .errorsFor(opName)
+                            .foreach(e =>
+                              log.error(
+                                s"$opName: ${e.category}${e.line.fold("")(l => s" line $l")}: ${e.message}"
+                              )
+                            )
+                        }.as(ExitStatus.Violations)
 
   def runVerify(
       specFile: String,

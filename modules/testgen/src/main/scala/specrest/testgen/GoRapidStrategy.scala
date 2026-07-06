@@ -53,13 +53,18 @@ object GoRapidStrategy extends StrategyBackend:
   def predicateFilter(base: String, helper: String): String =
     s"genFilterPred($base, $helper)"
 
+  // The transports validate Int as int32 (pydantic conint on python,
+  // fast-check's default integer range on ts, INTEGER columns underneath),
+  // so open bounds clamp to the int32 window exactly like the python backend.
   def constrainedInt(c: int_constraint): String = c match
     case IntConstraint(minOpt, maxOpt, _) =>
-      (minOpt.map(_.toLong), maxOpt.map(_.toLong)) match
-        case (Some(lo), Some(hi)) => s"genIntRange($lo, $hi)"
-        case (Some(lo), None)     => s"genIntMin($lo)"
-        case (None, Some(hi))     => s"genIntMax($hi)"
-        case (None, None)         => "genInt()"
+      val lo = minOpt.map(n => BigInt(n.toString).max(BigInt(Int.MinValue))).getOrElse(BigInt(
+        Int.MinValue
+      ))
+      val hi = maxOpt.map(n => BigInt(n.toString).min(BigInt(Int.MaxValue))).getOrElse(BigInt(
+        Int.MaxValue
+      ))
+      s"genIntRange($lo, $hi)"
 
   def functionName(typeName: String): String =
     s"strategy$typeName"

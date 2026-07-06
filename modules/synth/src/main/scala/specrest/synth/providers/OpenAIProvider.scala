@@ -27,15 +27,16 @@ final class OpenAIProvider(client: OpenAIClient) extends LlmProvider:
         .builder()
         .model(req.model)
         .maxCompletionTokens(req.maxTokens.toLong)
-        .temperature(req.temperature)
         .addSystemMessage(req.system)
         .addUserMessage(req.userMessage)
       // Reasoning models burn 20+ minutes per call at their default effort;
       // the CEGIS loop supplies depth through iterations, so low effort per
       // call converges in wall-clock time the dafny feedback loop can use.
+      // They also reject non-default temperatures, so the knob only applies
+      // to the non-reasoning families.
       val params =
         (if req.model.startsWith("gpt-5") then base.reasoningEffort(ReasoningEffort.LOW)
-         else base).build()
+         else base.temperature(req.temperature)).build()
       val response = client.chat().completions().create(params)
       val text = response.choices().asScala.iterator
         .flatMap(c => c.message().content().toScala.iterator)

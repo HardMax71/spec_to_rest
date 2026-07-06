@@ -301,9 +301,11 @@ object StateBridgeTs:
       persist ++= "  }\n"
     for ne <- nestedEntities do
       val client = camel(ne.entityName)
+      // Only whole-entity relations iterate as owner objects; a relation
+      // projecting a single value field holds scalars, not rows.
       val owners =
         for
-          r      <- planned.relations
+          r      <- planned.relations if r.valueField.isEmpty
           (f, e) <- nestedFieldsOf(r.entity) if e.entityName == ne.entityName
         yield (r, f)
       persist ++= s"  const ${client}Post = new Map<number, Record<string, unknown>>();\n"

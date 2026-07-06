@@ -85,9 +85,24 @@ object Generator:
       val samplerSpecs             = deriveSamplerSpecs(ir)
       val (externs, matchPatterns) = classifyExterns(ir)
       val sumSpecs                 = collectSumSpecs(ir)
+      // The ghost predicate only ever gets clauses from service invariants
+      // and from entity invariants lifted through STATE relations, so a sum
+      // on an entity unreachable from state must not set the flag: methods
+      // would reference a predicate that is never emitted.
+      def namedType(t: type_expr): Option[String] = t match
+        case NamedTypeF(n, _) => Some(n)
+        case _                => None
+      def stateValueEntity(t: type_expr): Option[String] = t match
+        case MapTypeF(_, v, _)          => namedType(v)
+        case RelationTypeF(_, _, to, _) => namedType(to)
+        case SeqTypeF(v, _)             => namedType(v)
+        case _                          => None
+      val stateEntityNames = stateFields.values.flatMap(stateValueEntity).toSet
       val anyGhostInv =
         svcInvariants(ir).exists(inv => containsSumCall(invBody(inv))) ||
-          svcEntities(ir).exists(e => entInvariants(e).exists(containsSumCall))
+          svcEntities(ir).exists(e =>
+            stateEntityNames.contains(entName(e)) && entInvariants(e).exists(containsSumCall)
+          )
       val ctx = Ctx(
         ir = ir,
         stateFields = stateFields,
@@ -619,9 +634,12 @@ object Generator:
   // SOME witness, so unfolding at a chosen element needs the exchange
   // argument) plus the add/remove corollaries method bodies actually use.
   private def sumFunctions(specs: Map[(String, String), String]): String =
-    val parts = specs.toList.map { case ((_, fld), elem) =>
-      val fn = sumFnName(elem, fld)
-      s"""|
+    // Two set fields over the same element entity and field would emit the
+    // same helper twice; the function is keyed by (element, field) alone.
+    val parts = specs.toList.distinctBy { case ((_, fld), elem) => (elem, fld) }.map {
+      case ((_, fld), elem) =>
+        val fn = sumFnName(elem, fld)
+        s"""|
           |ghost function $fn(s: set<$elem>): int
           |  decreases s
           |{

@@ -129,7 +129,13 @@ object StateBridgeGo:
           List(
             s"$indent${local}Elems := make([]interface{}, 0, len($access))",
             s"${indent}for _, x := range $access {",
-            s"$indent\t${local}Elems = append(${local}Elems, $helper($byID[x]))",
+            // A stale id-list entry must fail hydration loudly, not enter
+            // verified state as a zero-valued element.
+            s"$indent\t${local}Row, ${local}Ok := $byID[x]",
+            s"$indent\tif !${local}Ok {",
+            s"""$indent\t\treturn nil, fmt.Errorf("stale ${en} id %d in ${f.columnName}", x)""",
+            s"$indent\t}",
+            s"$indent\t${local}Elems = append(${local}Elems, $helper(${local}Row))",
             s"$indent}",
             s"$indent$local := _dafny.SetOf(${local}Elems...)"
           ),
@@ -497,9 +503,11 @@ object StateBridgeGo:
       persist ++= "\t}\n"
     for ne <- nestedEntities do
       val camel = Naming.toCamelCase(ne.entityName, Naming.CamelStrategy.Plain)
+      // Only whole-entity relations iterate as owner objects; a relation
+      // projecting a single value field holds scalars, not rows.
       val owners =
         for
-          r      <- planned.relations
+          r      <- planned.relations if r.valueField.isEmpty
           (f, e) <- nestedFieldsOf(r.entity) if e.entityName == ne.entityName
         yield (r, f)
       persist ++= s"\t${camel}Post := make(map[int64]dafnykernel.${ne.entityName})\n"
@@ -568,10 +576,11 @@ object StateBridgeGo:
         scalarHydrate ++= s"\t\tst.${stateFieldName(sc.stateField)} = dafnykernel.IntToDafny(scalarRow.${pascal(sc.columnName)})\n"
       scalarHydrate ++= "\t}\n"
 
+    val fmtImport = if nestedEntities.nonEmpty then "\n\t\"fmt\"" else ""
     s"""package services
        |
        |import (
-       |\t"context"$scalarImports$sortImport$timeImport
+       |\t"context"$fmtImport$scalarImports$sortImport$timeImport
        |
        |\t"github.com/uptrace/bun"
        |

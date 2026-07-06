@@ -359,12 +359,15 @@ private[testgen] object StateMachineTests:
       statusValues: List[String]
   ): Set[String] =
     def demandsExistence(e: expr): Boolean = e match
-      case QuantifierF(QSome(), _, _, _)                                      => true
-      case BinaryOpF(BGt(), UnaryOpF(UCardinality(), _, _), IntLitF(n, _), _) => n >= 0
-      case BinaryOpF(_, l, r, _)                                              => demandsExistence(l) || demandsExistence(r)
-      case UnaryOpF(_, inner, _)                                              => demandsExistence(inner)
-      case QuantifierF(_, _, body, _)                                         => demandsExistence(body)
-      case _                                                                  => false
+      case QuantifierF(QSome(), _, _, _)                                          => true
+      case BinaryOpF(BGt(), UnaryOpF(UCardinality(), _, _), IntLitF(n, _), _)     => n >= 0
+      case BinaryOpF(BGe(), UnaryOpF(UCardinality(), _, _), IntLitF(n, _), _)     => n >= 1
+      case BinaryOpF(BGe(), CallF(IdentifierF("len", _), _, _), IntLitF(n, _), _) => n >= 1
+      case BinaryOpF(BGt(), CallF(IdentifierF("len", _), _, _), IntLitF(n, _), _) => n >= 0
+      case BinaryOpF(_, l, r, _)                                                  => demandsExistence(l) || demandsExistence(r)
+      case UnaryOpF(_, inner, _)                                                  => demandsExistence(inner)
+      case QuantifierF(_, _, body, _)                                             => demandsExistence(body)
+      case _                                                                      => false
     def statusFieldRef(e: expr, binder: String): Boolean = e match
       case FieldAccessF(IndexF(IdentifierF(rel, _), IdentifierF(k, _), _), f, _) =>
         rel == stateField && k == binder && f == trnField(td)
