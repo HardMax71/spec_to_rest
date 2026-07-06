@@ -92,10 +92,13 @@ object Generator:
       def namedType(t: type_expr): Option[String] = t match
         case NamedTypeF(n, _) => Some(n)
         case _                => None
+      // Mirrors derivedStateClauses exactly: only map and relation state
+      // fields lift entity invariants into the state predicates, so only
+      // their value entities can back a ghost clause. A seq-backed entity's
+      // sum invariant never renders and must not set the flag.
       def stateValueEntity(t: type_expr): Option[String] = t match
         case MapTypeF(_, v, _)          => namedType(v)
         case RelationTypeF(_, _, to, _) => namedType(to)
-        case SeqTypeF(v, _)             => namedType(v)
         case _                          => None
       val stateEntityNames = stateFields.values.flatMap(stateValueEntity).toSet
       val anyGhostInv =
