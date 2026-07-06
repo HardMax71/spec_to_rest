@@ -121,7 +121,10 @@ object PromptBuilder:
           "in a single ```dafny fenced block."
     s"""## Your Task
        |Produce the complete method body for `$name`. Return your code inside a single
-       |```dafny fenced block. Include any helper lemmas BEFORE the method declaration.$extra""".stripMargin
+       |```dafny fenced block. Include any helper lemmas BEFORE the method declaration.
+       |Prefer the shortest body that satisfies the contract: a direct construction or
+       |update plus a few targeted asserts. The state invariants carry most obligations;
+       |do not restate them wholesale.$extra""".stripMargin
 
   private def previousAttemptSection(body: String): String =
     s"""## Previous Attempt (FAILED)
@@ -157,7 +160,7 @@ object PromptBuilder:
 
   private def repairHint(category: String): String = category match
     case "postcondition_violation" =>
-      "The implementation does not establish the ensures clause on at least one return path. Add intermediate assertions or branch logic that closes the gap."
+      "The implementation does not establish the ensures clause on at least one return path. Add intermediate assertions or branch logic that closes the gap. If the method inserts a record keyed by a freshness counter, assert the fresh id's disjointness (not already a key, referenced by nothing) from the counter invariants."
     case "precondition_violation" =>
       "A method/function call does not establish its requires clause. Add a guard or assertion that proves the precondition holds at the call site."
     case "loop_invariant_failure" =>
