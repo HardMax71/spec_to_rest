@@ -86,8 +86,8 @@ class PromptBuilderTest extends CatsEffectSuite:
         )
         val p = PromptBuilder.repair(c, h, skel, "{ st.count := st.count; }", err, withHints = true)
         assert(p.user.contains("## Suggested Patterns"), "hints section appears")
+        assert(p.user.contains("postcondition_fresh_id_disjointness"))
         assert(p.user.contains("postcondition_capture_old"))
-        assert(p.user.contains("postcondition_branch_assert"))
         assert(
           p.user.contains("ghost var oldStore"),
           "first hint's Dafny snippet is embedded verbatim"

@@ -18,7 +18,7 @@ object HintLibrary:
     Hint(
       "postcondition_fresh_id_disjointness",
       "postcondition_violation",
-      "Inserting a record keyed by a freshness counter: assert the fresh id is not already a key and that no other record references it (both follow from the counter invariants), then keep the body a minimal construction plus state updates."
+      "Counter-keyed insert: assert the fresh id is no existing key and nothing references it (both follow from the counter invariants); keep the body a minimal construction plus state updates."
     ),
     Hint(
       "postcondition_capture_old",
