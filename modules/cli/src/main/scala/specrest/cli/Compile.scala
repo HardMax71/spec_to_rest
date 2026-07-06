@@ -238,7 +238,12 @@ object Compile:
           val cacheRoot =
             opts.synthesisCacheDir.map(Paths.get(_)).getOrElse(Cache.defaultRoot(Paths.get("")))
           val verifiedRoot = cacheRoot.resolve("verified")
-          loadVerifiedBodies(specFile, synthOps, dafny.methods, verifiedRoot, opts, log).flatMap:
+          // Transform-downgraded ops have no Dafny header by design; they keep
+          // their fail-loud stubs, so the body loader must not demand one.
+          val skippedNames = dafny.skipped.map(_._1).toSet
+          val liftableOps =
+            synthOps.filterNot(c => skippedNames.contains(classificationOperationName(c)))
+          loadVerifiedBodies(specFile, liftableOps, dafny.methods, verifiedRoot, opts, log).flatMap:
             case Left(code)    => IO.pure(Left(code))
             case Right(bodies) =>
               // --synthesis-partial: only ops that actually got a verified body are bound to
@@ -247,7 +252,7 @@ object Compile:
               // (Finding 1) skips them. Binding off `synthOps` instead would call kernel
               // methods backed by unverified placeholder bodies.
               val boundOps =
-                synthOps.filter(c => bodies.contains(classificationOperationName(c)))
+                liftableOps.filter(c => bodies.contains(classificationOperationName(c)))
               FileAssembly.spliceAll(dafny.text, bodies) match
                 case Left(failure) =>
                   IO.delay(log.error(s"$specFile: splice failed: ${failure.message}"))
