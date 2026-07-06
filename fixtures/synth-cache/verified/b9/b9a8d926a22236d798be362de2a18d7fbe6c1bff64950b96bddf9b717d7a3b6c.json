@@ -1,0 +1,11 @@
+{
+  "candidate" : "var o := st.orders[order_id];\nvar t := now();\norder := o.(status := RETURNED);\nst.orders := st.orders[order_id := order];\nvar pid := st.next_payment_id;\nvar payment := Payment(pid, order_id, o.total, REFUNDED, t);\nst.payments := st.payments[pid := payment];\nassert forall pk :: pk in old(st.payments) ==> pk in st.payments && st.payments[pk] == old(st.payments)[pk];\nst.next_payment_id := pid + 1;\n",
+  "body" : "var o := st.orders[order_id];\nvar t := now();\norder := o.(status := RETURNED);\nst.orders := st.orders[order_id := order];\nvar pid := st.next_payment_id;\nvar payment := Payment(pid, order_id, o.total, REFUNDED, t);\nst.payments := st.payments[pid := payment];\nassert forall pk :: pk in old(st.payments) ==> pk in st.payments && st.payments[pk] == old(st.payments)[pk];\nst.next_payment_id := pid + 1;",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "claude-fable-5",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

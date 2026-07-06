@@ -1,0 +1,11 @@
+{
+  "candidate" : "var o := st.orders[order_id];\nvar product := st.products[sku];\nvar item := LineItem(st.next_line_item_id, order_id, sku, quantity, product.price, product.price * quantity);\nassert item.line_total > 0;\nassert forall i :: i in o.items ==> i.id < st.next_line_item_id;\nassert item !in o.items;\nSumBy_LineItem_line_totalAdd(o.items, item);\norder := o.(items := o.items + {item}, subtotal := o.subtotal + item.line_total, total := o.subtotal + item.line_total + o.tax);\nst.orders := st.orders[order_id := order];\nst.next_line_item_id := st.next_line_item_id + 1;\nst.inventory := st.inventory[sku := st.inventory[sku].(available := st.inventory[sku].available - quantity)];\n",
+  "body" : "var o := st.orders[order_id];\nvar product := st.products[sku];\nvar item := LineItem(st.next_line_item_id, order_id, sku, quantity, product.price, product.price * quantity);\nassert item.line_total > 0;\nassert forall i :: i in o.items ==> i.id < st.next_line_item_id;\nassert item !in o.items;\nSumBy_LineItem_line_totalAdd(o.items, item);\norder := o.(items := o.items + {item}, subtotal := o.subtotal + item.line_total, total := o.subtotal + item.line_total + o.tax);\nst.orders := st.orders[order_id := order];\nst.next_line_item_id := st.next_line_item_id + 1;\nst.inventory := st.inventory[sku := st.inventory[sku].(available := st.inventory[sku].available - quantity)];",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "claude-fable-5",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

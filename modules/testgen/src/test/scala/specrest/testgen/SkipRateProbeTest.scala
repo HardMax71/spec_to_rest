@@ -83,7 +83,7 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "ecommerce",
-      79,
+      83,
       9,
       "next_order_id, next_payment_id and next_line_item_id are scalar-backed now, but the nine counter ensures only check when the ops route through the kernel; without one (as in this probe) they skip as before"
     ),

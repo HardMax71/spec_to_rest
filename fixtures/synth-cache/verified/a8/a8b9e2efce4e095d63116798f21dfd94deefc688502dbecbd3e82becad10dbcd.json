@@ -1,0 +1,11 @@
+{
+  "candidate" : "order := st.orders[order_id].(status := DELIVERED, delivered_at := Some(now()));\nassert exists pid :: pid in st.payments && st.payments[pid].order_id == order_id && st.payments[pid].status == CAPTURED;\nst.orders := st.orders[order_id := order];\n",
+  "body" : "order := st.orders[order_id].(status := DELIVERED, delivered_at := Some(now()));\nassert exists pid :: pid in st.payments && st.payments[pid].order_id == order_id && st.payments[pid].status == CAPTURED;\nst.orders := st.orders[order_id := order];",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "claude-fable-5",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

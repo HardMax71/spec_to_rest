@@ -1,0 +1,11 @@
+{
+  "candidate" : "var oid := st.next_order_id;\norder := Order(oid, customer_id, DRAFT, {}, 0, 0, 0, 0, 0, None, None);\nassert oid !in st.orders;\nassert forall pid :: pid in st.payments ==> st.payments[pid].order_id != oid;\nst.orders := st.orders[oid := order];\nst.next_order_id := oid + 1;\n",
+  "body" : "var oid := st.next_order_id;\norder := Order(oid, customer_id, DRAFT, {}, 0, 0, 0, 0, 0, None, None);\nassert oid !in st.orders;\nassert forall pid :: pid in st.payments ==> st.payments[pid].order_id != oid;\nst.orders := st.orders[oid := order];\nst.next_order_id := oid + 1;",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "claude-fable-5",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}

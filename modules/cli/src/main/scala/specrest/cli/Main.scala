@@ -455,8 +455,35 @@ object Main
             SynthVerifyAllOptions(m, t, mt, nc, cd, db, dt, mi, mc, mot, esc, hints),
             Logger.fromFlags(verbose = v, quiet = q, color = c)
           )
+    val bodyFile = Opts.option[String](
+      "body-file",
+      "path to a file holding the Dafny method body to verify and cache"
+    )
+    val acceptCmd: Opts[IO[ExitStatus]] =
+      Opts.subcommand(
+        "accept",
+        "Verify a provided Dafny body with the same gate as CEGIS and cache it on success"
+      ):
+        (
+          specFile,
+          operation,
+          bodyFile,
+          model,
+          temperature,
+          cacheDir,
+          dafnyBin,
+          dafnyTimeout,
+          verbose,
+          quiet,
+          colorMode
+        ).mapN: (spec, op, bf, m, t, cd, db, dt, v, q, c) =>
+          Synth.runAccept(
+            spec,
+            SynthAcceptOptions(op, bf, m, t, cd, db, dt),
+            Logger.fromFlags(verbose = v, quiet = q, color = c)
+          )
     Opts.subcommand("synth", "Experimental LLM synthesis (Phase 6)"):
-      tryCmd orElse verifyCmd orElse verifyAllCmd
+      tryCmd orElse verifyCmd orElse verifyAllCmd orElse acceptCmd
 
   private val diffCmd: Opts[IO[ExitStatus]] =
     val outDir =

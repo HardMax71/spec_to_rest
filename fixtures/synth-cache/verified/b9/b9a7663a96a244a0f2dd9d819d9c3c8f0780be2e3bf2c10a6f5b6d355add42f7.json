@@ -1,0 +1,11 @@
+{
+  "candidate" : "results := [];\nvar remaining := st.orders.Keys;\nwhile remaining != {}\n  invariant remaining <= st.orders.Keys\n  invariant forall o :: (o in results) ==> (((o in st.orders.Values && (customer_id == None || o.customer_id == customer_id.value)) && (status_filter == None || o.status == status_filter.value)))\n  decreases |remaining|\n{\n  var k :| k in remaining;\n  var o := st.orders[k];\n  if (customer_id == None || o.customer_id == customer_id.value) && (status_filter == None || o.status == status_filter.value) {\n    results := results + [o];\n  }\n  remaining := remaining - {k};\n}\n",
+  "body" : "results := [];\nvar remaining := st.orders.Keys;\nwhile remaining != {}\n  invariant remaining <= st.orders.Keys\n  invariant forall o :: (o in results) ==> (((o in st.orders.Values && (customer_id == None || o.customer_id == customer_id.value)) && (status_filter == None || o.status == status_filter.value)))\n  decreases |remaining|\n{\n  var k :| k in remaining;\n  var o := st.orders[k];\n  if (customer_id == None || o.customer_id == customer_id.value) && (status_filter == None || o.status == status_filter.value) {\n    results := results + [o];\n  }\n  remaining := remaining - {k};\n}",
+  "usage" : {
+    "inputTokens" : 0,
+    "outputTokens" : 0
+  },
+  "model" : "claude-fable-5",
+  "promptVersion" : "v2",
+  "outcome" : "verified"
+}
