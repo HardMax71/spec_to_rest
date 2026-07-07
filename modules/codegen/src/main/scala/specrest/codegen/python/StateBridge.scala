@@ -1,5 +1,6 @@
 package specrest.codegen.python
 
+import specrest.codegen.StatePlan
 import specrest.ir.Naming
 import specrest.profile.ProfiledEntity
 import specrest.profile.ProfiledField
@@ -19,6 +20,15 @@ object StateBridge:
   export specrest.codegen.StatePlan.Plan
 
   def dafnyName(specName: String): String = specName.replace("_", "__")
+
+  // Renders `<prefix>{e1, e2, ...}` on one line when it fits the generated
+  // project's 100-column ruff limit, one entry per line otherwise.
+  def scopeAssign(prefix: String, entries: List[String]): String =
+    val single = s"$prefix{${entries.mkString(", ")}}"
+    if single.length <= 100 then single
+    else
+      val pad = prefix.takeWhile(_ == ' ')
+      ((s"$prefix{" :: entries.map(e => s"$pad    $e,")) ::: List(s"$pad}")).mkString("\n")
 
   private def baseType(domainType: String): String =
     domainType.replaceAll("\\s*\\|\\s*None$", "").trim
@@ -191,44 +201,110 @@ object StateBridge:
     val needsDatetime = (planned.relations.map(_.entity) ++ nestedEntities)
       .exists(_.fields.exists(f => baseType(f.domainType) == "datetime"))
 
-    val rowsVar = (e: ProfiledEntity) => s"${Naming.toSnakeCase(e.entityName)}_rows"
-
     val seqRelations = planned.relations.filter(_.isSeq)
-    val hydrateLines = List.newBuilder[String]
-    for e <- nestedEntities do
-      val snake = Naming.toSnakeCase(e.entityName)
-      hydrateLines += s"    ${snake}_rows = (await session.execute(select(${e.modelClassName}))).scalars().all()"
-      hydrateLines += s"    _${snake}_by_id = {int(r.id): r for r in ${snake}_rows}"
-    for e <- planned.relations.filterNot(_.isSeq).map(_.entity).distinctBy(_.entityName) do
-      hydrateLines += s"    ${rowsVar(e)} = (await session.execute(select(${e.modelClassName}))).scalars().all()"
-    for r <- planned.relations do
-      val rows = rowsVar(r.entity)
+    val fullDefault =
+      planned.relations.map(_.stateField).distinct.sorted.map(f => s"\"$f\": (\"full\",)")
+
+    // The fields a relation's hydrate block actually converts: a value
+    // projection reads only its value column, everything else the whole row.
+    def hydratedFields(r: StatePlan.RelationPlan): List[ProfiledField] =
+      r.valueField.map(List(_)).getOrElse(r.entity.fields)
+    def nestedRefs(r: StatePlan.RelationPlan): List[(ProfiledField, ProfiledEntity)] =
+      hydratedFields(r).flatMap(f =>
+        kindFor(profiled, r.entity.entityName, f)
+          .collect { case Kind.EntitySetOf(en) => en }
+          .flatMap(nestedByName.get)
+          .map(f -> _)
+      )
+    def relRows(r: StatePlan.RelationPlan): String = s"${r.stateField}_rows"
+    def guardLines(r: StatePlan.RelationPlan): List[String] =
+      if r.isSeq then List(s"    if scope.get(\"${r.stateField}\") is not None:")
+      else List(s"    sel = scope.get(\"${r.stateField}\")", "    if sel is not None:")
+    def loadLines(r: StatePlan.RelationPlan): List[String] =
+      val model = r.entity.modelClassName
+      val q     = s"${r.stateField}_q"
+      val rows  = relRows(r)
+      if r.isSeq then
+        // Seq-valued state: rows ordered by the serial pk are the seq. A seq
+        // present in scope is always ("full",); keyed loads never apply.
+        List(
+          s"        $q = select($model).order_by($model.id)",
+          s"        $rows = (await session.execute($q)).scalars().all()"
+        )
+      else
+        r.keyField.toList.flatMap { key =>
+          List(
+            s"        $q = select($model)",
+            "        if sel[0] == \"keys\":",
+            s"            $q = $q.where($model.${key.columnName}.in_(list(sel[1])))",
+            s"        $rows = (await session.execute($q)).scalars().all()"
+          )
+        }
+    def constructLines(r: StatePlan.RelationPlan): List[String] =
+      val e    = r.entity
+      val p    = "        "
+      val rows = relRows(r)
       (r.keyField, r.isSeq) match
         case (_, true) =>
-          // Seq-valued state: rows ordered by the serial pk are the seq.
-          hydrateLines += s"    ${rows}_ordered = ("
-          hydrateLines += s"        await session.execute(select(${r.entity.modelClassName}).order_by(${r.entity.modelClassName}.id))"
-          hydrateLines += "    ).scalars().all()"
-          hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_seq(["
-          hydrateLines += s"        module_.${r.entity.entityName}_${r.entity.entityName}("
-          for f <- r.entity.fields do
-            hydrateLines += s"            ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, f), f, "r")},"
-          hydrateLines += "        )"
-          hydrateLines += s"        for r in ${rows}_ordered"
-          hydrateLines += "    ])"
+          List(
+            s"${p}st.${dafnyName(r.stateField)} = to_dafny_seq([",
+            s"$p    module_.${e.entityName}_${e.entityName}("
+          )
+            ::: e.fields.map(f =>
+              s"$p        ${toDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, "r")},"
+            )
+            ::: List(s"$p    )", s"$p    for r in $rows", s"$p])")
         case (Some(key), _) =>
-          hydrateLines += s"    st.${dafnyName(r.stateField)} = to_dafny_map({"
           r.valueField match
             case Some(vf) =>
-              hydrateLines += s"        ${keyToDafny(key, "r")}: ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, vf), vf, "r")}"
+              List(
+                s"${p}st.${dafnyName(r.stateField)} = to_dafny_map({",
+                s"$p    ${keyToDafny(key, "r")}: ${toDafnyFieldExpr(kindFor(profiled, e.entityName, vf), vf, "r")}",
+                s"$p    for r in $rows",
+                s"$p})"
+              )
             case None =>
-              hydrateLines += s"        ${keyToDafny(key, "r")}: module_.${r.entity.entityName}_${r.entity.entityName}("
-              for f <- r.entity.fields do
-                hydrateLines += s"            ${toDafnyFieldExpr(kindFor(profiled, r.entity.entityName, f), f, "r")},"
-              hydrateLines += "        )"
-          hydrateLines += s"        for r in $rows"
-          hydrateLines += "    })"
-        case (None, false) => ()
+              List(
+                s"${p}st.${dafnyName(r.stateField)} = to_dafny_map({",
+                s"$p    ${keyToDafny(key, "r")}: module_.${e.entityName}_${e.entityName}("
+              )
+                ::: e.fields.map(f =>
+                  s"$p        ${toDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, "r")},"
+                )
+                ::: List(s"$p    )", s"$p    for r in $rows", s"$p})")
+        case (None, false) => Nil
+
+    val hydrateLines = List.newBuilder[String]
+    hydrateLines += "    if scope is None:"
+    hydrateLines ++= scopeAssign("        scope = ", fullDefault).linesIterator
+    for ne <- nestedEntities do
+      hydrateLines += s"    _${Naming.toSnakeCase(ne.entityName)}_ids: set[int] = set()"
+    // Relations embedding nested entities load first so the id union across
+    // their hydrated rows can key the nested selects; their Dafny values
+    // construct after _<nested>_by_id exists.
+    val nestedOwners = planned.relations.filter(r => nestedRefs(r).nonEmpty)
+    for r <- nestedOwners do
+      hydrateLines ++= guardLines(r)
+      hydrateLines ++= loadLines(r)
+      for (f, ne) <- nestedRefs(r) do
+        val ids = s"_${Naming.toSnakeCase(ne.entityName)}_ids"
+        hydrateLines += s"        $ids.update(int(_x) for _r in ${relRows(r)} for _x in _r.${f.columnName})"
+    for ne <- nestedEntities do
+      val snake = Naming.toSnakeCase(ne.entityName)
+      val model = ne.modelClassName
+      hydrateLines += s"    ${snake}_rows: list[$model] = []"
+      hydrateLines += s"    if _${snake}_ids:"
+      hydrateLines += s"        _${snake}_q = select($model).where($model.id.in_(list(_${snake}_ids)))"
+      hydrateLines += s"        ${snake}_rows = list((await session.execute(_${snake}_q)).scalars().all())"
+      hydrateLines += s"    _${snake}_by_id = {int(r.id): r for r in ${snake}_rows}"
+    for r <- planned.relations do
+      if nestedRefs(r).nonEmpty then
+        hydrateLines += s"    if scope.get(\"${r.stateField}\") is not None:"
+        hydrateLines ++= constructLines(r)
+      else
+        hydrateLines ++= guardLines(r)
+        hydrateLines ++= loadLines(r)
+        hydrateLines ++= constructLines(r)
     if planned.scalars.nonEmpty then
       hydrateLines += "    scalar_row = ("
       hydrateLines += "        await session.execute(select(_ServiceStateRow))"
@@ -238,48 +314,81 @@ object StateBridge:
         hydrateLines += s"        st.${dafnyName(sc.stateField)} = int(scalar_row.${sc.columnName})"
 
     val persistLines = List.newBuilder[String]
+    persistLines += "    if scope is None:"
+    persistLines ++= scopeAssign("        scope = ", fullDefault).linesIterator
+    for ne <- nestedEntities do
+      persistLines += s"    _${Naming.toSnakeCase(ne.entityName)}_pre_ids: set[int] = set()"
     for (r, key) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e     = r.entity
       val snake = Naming.toSnakeCase(e.entityName)
-      persistLines += s"    ${snake}_post = {"
-      persistLines += s"        ${keyFromDafny(key, "k")}: v"
-      persistLines += s"        for k, v in from_dafny_map(st.${dafnyName(r.stateField)}).items()"
-      persistLines += "    }"
-      persistLines += s"    ${snake}_rows = {"
-      persistLines += s"        r.${key.columnName}: r"
-      persistLines += s"        for r in (await session.execute(select(${e.modelClassName}))).scalars().all()"
-      persistLines += "    }"
-      persistLines += s"    for ${snake}_key, ${snake}_value in ${snake}_post.items():"
-      persistLines += s"        ${snake}_row = ${snake}_rows.get(${snake}_key)"
-      persistLines += s"        if ${snake}_row is None:"
-      persistLines += s"            session.add(${e.modelClassName}("
+      val model = e.modelClassName
+      persistLines += s"    sel = scope.get(\"${r.stateField}\")"
+      persistLines += "    if sel is not None:"
+      persistLines += s"        ${snake}_post = {"
+      persistLines += s"            ${keyFromDafny(key, "k")}: v"
+      persistLines += s"            for k, v in from_dafny_map(st.${dafnyName(r.stateField)}).items()"
+      persistLines += "        }"
+      // A keys scope confines the existing-rows scan to the hydrated keys, so
+      // rows the request never loaded cannot be judged stale; an empty key
+      // list loads no rows, upserts the whole post map, and deletes nothing.
+      persistLines += s"        ${snake}_q = select($model)"
+      persistLines += "        if sel[0] == \"keys\":"
+      persistLines += s"            ${snake}_q = ${snake}_q.where($model.${key.columnName}.in_(list(sel[1])))"
+      persistLines += s"        ${snake}_rows = {"
+      persistLines += s"            r.${key.columnName}: r"
+      persistLines += s"            for r in (await session.execute(${snake}_q)).scalars().all()"
+      persistLines += "        }"
+      // Nested ids collect before the upsert loop mutates these rows: the
+      // nested delete scan may only judge rows the hydrated owners referenced
+      // in their pre state.
+      for (f, ne) <- nestedFieldsOf(e) do
+        val ids = s"_${Naming.toSnakeCase(ne.entityName)}_pre_ids"
+        persistLines += s"        $ids.update(int(_x) for _r in ${snake}_rows.values() for _x in _r.${f.columnName})"
+      persistLines += s"        for ${snake}_key, ${snake}_value in ${snake}_post.items():"
+      persistLines += s"            ${snake}_row = ${snake}_rows.get(${snake}_key)"
+      persistLines += s"            if ${snake}_row is None:"
+      persistLines += s"                session.add($model("
       for f <- e.fields do
-        persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
-      persistLines += "            ))"
-      persistLines += "        else:"
+        persistLines += s"                    ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
+      persistLines += "                ))"
+      persistLines += "            else:"
       for f <- e.fields if f.fieldName != key.fieldName do
-        persistLines += s"            ${snake}_row.${f.columnName} = ${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")}"
-      persistLines += s"    for ${snake}_key, ${snake}_row in ${snake}_rows.items():"
-      persistLines += s"        if ${snake}_key not in ${snake}_post:"
-      persistLines += s"            await session.delete(${snake}_row)"
+        persistLines += s"                ${snake}_row.${f.columnName} = ${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")}"
+      persistLines += s"        for ${snake}_key, ${snake}_row in ${snake}_rows.items():"
+      persistLines += s"            if ${snake}_key not in ${snake}_post:"
+      persistLines += s"                await session.delete(${snake}_row)"
     for r <- seqRelations do
       val e = r.entity
       // Reinsert in seq order: the serial pk reassigns, which nothing
       // observes (the seq projection orders by it and exposes no id).
       val snake = Naming.toSnakeCase(e.entityName)
-      persistLines += s"    for ${snake}_old in (await session.execute(select(${e.modelClassName}))).scalars().all():"
-      persistLines += s"        await session.delete(${snake}_old)"
-      persistLines += "    await session.flush()"
-      persistLines += s"    for ${snake}_value in from_dafny_seq(st.${dafnyName(r.stateField)}):"
-      persistLines += s"        session.add(${e.modelClassName}("
+      val model = e.modelClassName
+      persistLines += s"    if scope.get(\"${r.stateField}\") is not None:"
+      val seqNested = nestedFieldsOf(e)
+      if seqNested.isEmpty then
+        persistLines += s"        for ${snake}_old in (await session.execute(select($model))).scalars().all():"
+        persistLines += s"            await session.delete(${snake}_old)"
+      else
+        persistLines += s"        ${snake}_olds = (await session.execute(select($model))).scalars().all()"
+        for (f, ne) <- seqNested do
+          val ids = s"_${Naming.toSnakeCase(ne.entityName)}_pre_ids"
+          persistLines += s"        $ids.update(int(_x) for _r in ${snake}_olds for _x in _r.${f.columnName})"
+        persistLines += s"        for ${snake}_old in ${snake}_olds:"
+        persistLines += s"            await session.delete(${snake}_old)"
+      persistLines += "        await session.flush()"
+      persistLines += s"        for ${snake}_value in from_dafny_seq(st.${dafnyName(r.stateField)}):"
+      persistLines += s"            session.add($model("
       for f <- e.fields do
-        persistLines += s"            ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
-      persistLines += "        ))"
+        persistLines += s"                ${f.columnName}=${fromDafnyFieldExpr(kindFor(profiled, e.entityName, f), f, s"${snake}_value")},"
+      persistLines += "            ))"
     for ne <- nestedEntities do
       val snake = Naming.toSnakeCase(ne.entityName)
+      val model = ne.modelClassName
       val idSel = specrest.codegen.EmitShared.pyDafnySelector("id")
       // Only whole-entity relations iterate as owner objects; a relation
-      // projecting a single value field holds scalars, not rows.
+      // projecting a single value field holds scalars, not rows. Skipped
+      // owners hydrated nothing, so their post maps are empty and this pass
+      // degenerates to a no-op when no owner is in scope.
       val owners =
         for
           r      <- planned.relations if r.valueField.isEmpty
@@ -293,10 +402,13 @@ object StateBridge:
         persistLines += s"    for _owner in $values:"
         persistLines += s"        for _x in _owner.${specrest.codegen.EmitShared.pyDafnySelector(f.fieldName)}:"
         persistLines += s"            _${snake}_post[int(_x.$idSel)] = _x"
-      persistLines += s"    _${snake}_rows = {"
-      persistLines += "        int(r.id): r"
-      persistLines += s"        for r in (await session.execute(select(${ne.modelClassName}))).scalars().all()"
-      persistLines += "    }"
+      persistLines += s"    _${snake}_rows: dict[int, $model] = {}"
+      persistLines += s"    if _${snake}_pre_ids:"
+      persistLines += s"        _${snake}_q = select($model).where($model.id.in_(list(_${snake}_pre_ids)))"
+      persistLines += s"        _${snake}_rows = {"
+      persistLines += "            int(r.id): r"
+      persistLines += s"            for r in (await session.execute(_${snake}_q)).scalars().all()"
+      persistLines += "        }"
       persistLines += s"    for _${snake}_key, _${snake}_value in _${snake}_post.items():"
       persistLines += s"        _${snake}_row = _${snake}_rows.get(_${snake}_key)"
       persistLines += s"        if _${snake}_row is None:"
@@ -370,10 +482,8 @@ object StateBridge:
       }.mkString
 
     val datetimeImport =
-      (if needsDatetime then "\nfrom datetime import datetime, timezone" else "") match
-        case dt if needsDatetime || needsOptional || nestedEntities.nonEmpty =>
-          s"$dt\nfrom typing import Any\n"
-        case dt => s"$dt\n"
+      (if needsDatetime then "\nfrom datetime import datetime, timezone" else "") +
+        "\nfrom typing import Any\n"
     val bridgedEntities = planned.relations.map(_.entity) ++ nestedEntities
     val usesEnum = bridgedEntities.exists(e =>
       e.fields.exists(f =>
@@ -418,12 +528,16 @@ object StateBridge:
        |)$optionalHelpers$datetimeHelpers$nestedHelpers
        |
        |
-       |async def hydrate_state(session: AsyncSession) -> module_.ServiceState:
+       |async def hydrate_state(
+       |    session: AsyncSession, scope: dict[str, Any] | None = None
+       |) -> module_.ServiceState:
        |    st = make_state()
        |${hydrateLines.result().mkString("\n")}
        |    return st
        |
        |
-       |async def persist_state(session: AsyncSession, st: module_.ServiceState) -> None:
+       |async def persist_state(
+       |    session: AsyncSession, st: module_.ServiceState, scope: dict[str, Any] | None = None
+       |) -> None:
        |${persistLines.result().mkString("\n")}
        |""".stripMargin
