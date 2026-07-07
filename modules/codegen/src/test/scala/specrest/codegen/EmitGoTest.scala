@@ -2,6 +2,7 @@ package specrest.codegen
 
 import munit.CatsEffectSuite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.profile.Annotate
 import specrest.profile.Chi
 import specrest.profile.DatabaseId
 import specrest.profile.LanguageId
@@ -123,6 +124,81 @@ class EmitGoTest extends CatsEffectSuite:
       val snapshot = files(".spec-snapshot.json")
       assert(snapshot.contains("\"schemaVersion\""), snapshot)
       assert(snapshot.contains("url_mappings"), snapshot)
+
+  test("kernel-routed go service hydrates and persists per-op relation scopes"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiled = Annotate.attachDafnyMethods(
+        Annotate.buildProfiledService(ir, "go-chi-sqlite"),
+        Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+      )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.GoDefaultPackagePath,
+        files = Map("kernel.go" -> "package kernel\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files = Emit
+        .emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+        .map(f => f.path -> f.content)
+        .toMap
+      val service = files.getOrElse(
+        "internal/services/url_mapping.go",
+        fail("no url_mapping service emitted")
+      )
+      val bridge = files.getOrElse(
+        "internal/services/state_bridge.go",
+        fail("no state bridge emitted")
+      )
+      assert(
+        service.contains("state, err := hydrateState(ctx, tx, scope)"),
+        s"kernel ops must hydrate state with the op's scope — got:\n$service"
+      )
+      assert(
+        service.contains("if err := persistState(ctx, tx, state, scope); err != nil {"),
+        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+      )
+      // Resolve reads both relations at the path param's key; Shorten's
+      // candidate-freshness check forces both whole.
+      assert(
+        service.contains(
+          "\t\tscope := map[string]hydrationSel{\n" +
+            "\t\t\t\"metadata\": {keys: []any{code}},\n" +
+            "\t\t\t\"store\":    {keys: []any{code}},\n" +
+            "\t\t}"
+        ),
+        s"resolve should hydrate both relations keyed by code — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "\t\tscope := map[string]hydrationSel{\n" +
+            "\t\t\t\"metadata\": {full: true},\n" +
+            "\t\t\t\"store\":    {full: true},\n" +
+            "\t\t}"
+        ),
+        s"shorten should hydrate both relations whole — got:\n$service"
+      )
+      assert(
+        bridge.contains(
+          "func hydrateState(ctx context.Context, db bun.IDB, scope map[string]hydrationSel) (*dafnykernel.ServiceState, error) {"
+        ),
+        s"hydrateState must take the scope map — got:\n$bridge"
+      )
+      assert(
+        bridge.contains(
+          "func persistState(ctx context.Context, db bun.IDB, st *dafnykernel.ServiceState, scope map[string]hydrationSel) error {"
+        ),
+        s"persistState must take the scope map — got:\n$bridge"
+      )
+      // A keyed load confines the select, and the persist delete scan only
+      // sees rows fetched through the same scoped select.
+      assert(
+        bridge.contains("} else if len(sel.keys) > 0 {"),
+        s"bridge must load keyed scopes through an IN filter — got:\n$bridge"
+      )
+      assert(
+        bridge.contains("bun.In(sel.keys)"),
+        s"bridge must bind scope keys into the query — got:\n$bridge"
+      )
 
   private val dialectCases = List(
     DatabaseId.Postgres -> "go-chi-postgres",

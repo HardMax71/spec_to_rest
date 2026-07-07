@@ -9,6 +9,7 @@ import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
 import specrest.codegen.GoTemplates
+import specrest.codegen.HydrationScope
 import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
@@ -1261,8 +1262,8 @@ func sampleCandidate(length int, charset string) (string, error) {
                     )
                   )
                 case _ => None
-        val specInputTypes = svcOperations(kernelCtx.ir)
-          .find(o => operName(o) == op.operationName)
+        val specOp = svcOperations(kernelCtx.ir).find(o => operName(o) == op.operationName)
+        val specInputTypes = specOp
           .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
           .getOrElse(Map.empty)
         val queryNames = endpoint.queryParams.map(_.name).toSet
@@ -1280,17 +1281,44 @@ func sampleCandidate(length int, charset string) (string, error) {
           endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.bodyParams.map(p => p.name -> s"body.${toPascalCase(p.name)}")
+        // Which rows each state relation must hydrate for this operation, as
+        // the scope map both bridge calls receive. Keyed entries name request
+        // values through the same accesses the kernel args use; a relation
+        // the contracts never touch stays out of the map and is skipped in
+        // both directions. No spec op means a nil scope: the bridge falls
+        // back to hydrating everything.
+        val accessByName = inputSources.toMap
+        val scopeLines = specOp match
+          case None => List("\t\tvar scope map[string]hydrationSel")
+          case Some(decl) =>
+            val entries = HydrationScope
+              .analyze(decl, kernelCtx.ir)
+              .byField
+              .toList
+              .sortBy(_._1)
+              .flatMap { (rel, sc) =>
+                sc match
+                  case HydrationScope.Scope.Skip => None
+                  case HydrationScope.Scope.Full => Some(rel -> "{full: true}")
+                  case HydrationScope.Scope.Keys(sources) =>
+                    val accesses = sources.map {
+                      case HydrationScope.KeySource.Input(n)          => accessByName.get(n)
+                      case _: HydrationScope.KeySource.DependentField => None
+                    }
+                    // Dependent-key hops are a later milestone; until wired,
+                    // such a relation loads whole.
+                    if accesses.contains(None) then Some(rel -> "{full: true}")
+                    else Some(rel                            -> s"{keys: []any{${accesses.flatten.mkString(", ")}}}")
+              }
+            StateBridgeGo.scopeAssign("scope := ", "\t\t", entries)
         val convertedArgs = inputSources.map: (specName, access) =>
           specInputTypes
             .get(specName)
             .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
             .filter(k => !queryNames.contains(specName) || queryKindOk(k))
             .flatMap(k => inputToDafny(specName, access, k))
-        val outputs = op.responseFields
-        val specOutputs = svcOperations(kernelCtx.ir)
-          .find(o => operName(o) == op.operationName)
-          .map(operOutputs)
-          .getOrElse(Nil)
+        val outputs     = op.responseFields
+        val specOutputs = specOp.map(operOutputs).getOrElse(Nil)
         // Mirrors the python marshalling: no outputs is a plain effect call,
         // a single entity output projects the read shape nested under the
         // output name, a Seq of entities projects per element into the bare
@@ -1490,11 +1518,12 @@ func sampleCandidate(length int, charset string) (string, error) {
             if kernelCtx.hasState then
               (header :: resultDecl ::
                 "\tif err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {" ::
-                "\t\tstate, err := hydrateState(ctx, tx)" ::
-                "\t\tif err != nil {" :: "\t\t\treturn err" :: "\t\t}" ::
-                (convLines ::: invCheck ::: guardCheck ::: resultAssign :::
+                (scopeLines :::
+                  "\t\tstate, err := hydrateState(ctx, tx, scope)" ::
+                  "\t\tif err != nil {" :: "\t\t\treturn err" :: "\t\t}" ::
+                  convLines ::: invCheck ::: guardCheck ::: resultAssign :::
                   List(
-                    "\t\tif err := persistState(ctx, tx, state); err != nil {",
+                    "\t\tif err := persistState(ctx, tx, state, scope); err != nil {",
                     "\t\t\treturn err",
                     "\t\t}",
                     "\t\treturn nil",
