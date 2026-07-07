@@ -44,12 +44,15 @@ object HydrationScope:
       relationFields.forall(f => byField.get(f).contains(Scope.Full))
 
   def analyze(op: operation_decl, ir: ServiceIRFull): OpScopes =
-    val stateDecls    = irStateFields(ir)
-    val relationNames = stateDecls.filter(f => isRelationLike(stfType(f))).map(stfName).toSet
-    val seqNames      = stateDecls.filter(f => isSeqType(stfType(f))).map(stfName).toSet
-    val inputs        = operInputs(op).map(prmName).toSet
-    val outputs       = operOutputs(op).map(prmName).toSet
-    val clauses       = flattenAndAll(operRequires(op)) ::: flattenAndAll(operEnsures(op))
+    val stateDecls = irStateFields(ir)
+    val seqNames   = stateDecls.filter(f => isSeqType(stfType(f))).map(stfName).toSet
+    // Seq fields track alongside relations so any touch registers; the scope
+    // assembly forces them Full regardless of the demand collected.
+    val relationNames =
+      stateDecls.filter(f => isRelationLike(stfType(f))).map(stfName).toSet ++ seqNames
+    val inputs  = operInputs(op).map(prmName).toSet
+    val outputs = operOutputs(op).map(prmName).toSet
+    val clauses = flattenAndAll(operRequires(op)) ::: flattenAndAll(operEnsures(op))
 
     val demands = collection.mutable.Map.empty[String, Demand]
     def demand(rel: String, d: Demand): Unit =
@@ -84,18 +87,24 @@ object HydrationScope:
           else demand(rel, Demand.Whole)
         }
         walk(key, inputBound)
-      // rel' = rel and rel' = pre(rel): the body leaves it alone; no rows.
-      case BinaryOpF(BEq(), l, r, _)
-          if peelName(l).exists(relationNames) && peelName(r) == peelName(l) =>
-        ()
-      // rel' = pre(rel) + {k -> v} / - {k}: the write itself needs no
-      // pre-row (upsert/delete against hydrated keys), but persistence must
-      // still visit the relation even when nothing else hydrates it, or a
-      // fresh-key insert would be dropped. The key and value sub-expressions
-      // walk normally so their own reads register.
-      case BinaryOpF(BAdd() | BSub(), l, r, _) if peelName(l).exists(relationNames) =>
-        peelName(l).foreach(rel => demand(rel, Demand.Write))
-        walk(r, inputBound)
+      // Whole-relation assignment: the right-hand shape decides. Identity
+      // frames demand nothing (the body leaves the relation alone), inserts
+      // and deletes over the same relation are persist-only writes (the
+      // upsert needs no pre-row, but persistence must still visit the
+      // relation or a fresh-key insert would be dropped), and any other
+      // rewrite falls open to Full.
+      case BinaryOpF(BEq(), l, r, _) if peelName(l).exists(relationNames) =>
+        peelName(l).foreach { rel =>
+          r match
+            case same if peelName(same).contains(rel) => ()
+            case BinaryOpF(BAdd() | BSub(), base, delta, _)
+                if peelName(base).contains(rel) =>
+              demand(rel, Demand.Write)
+              walk(delta, inputBound)
+            case other =>
+              demand(rel, Demand.Whole)
+              walk(other, inputBound)
+        }
       case BinaryOpF(_, l, r, _)                                                       => walk(l, inputBound); walk(r, inputBound)
       case UnaryOpF(UCardinality(), inner, _) if peelName(inner).exists(relationNames) =>
         // Cardinality claims are ensures-side and discharge statically.
@@ -184,6 +193,8 @@ object HydrationScope:
     case _                 => None
 
   private def childExprs(e: expr): List[expr] = e match
+    case PreF(inner, _)          => List(inner)
+    case PrimeF(inner, _)        => List(inner)
     case IfF(c, t, el, _)        => List(c, t, el)
     case FieldAccessF(b, _, _)   => List(b)
     case SomeWrapF(inner, _)     => List(inner)
