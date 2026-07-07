@@ -23,15 +23,20 @@ object HydrationScope:
   enum KeySource derives CanEqual:
     // The value of an operation input (path, query, or body param).
     case Input(name: String)
-    // The values of `elemField` across the `collectionField` elements of the
-    // rows of `ownerRel` hydrated via `ownerKeys` (one dependent hop, e.g.
-    // inventory keyed by the skus of an order's line items).
-    case DependentField(
-        ownerRel: String,
-        ownerKeys: List[String],
-        collectionField: String,
-        elemField: String
-    )
+    // The target's keys are the values of `field` across the rows of
+    // `sourceRel` hydrated in an earlier phase (users keyed by the id field
+    // of the hydrated user_by_email rows).
+    case FieldOfRows(sourceRel: String, field: String)
+    // The target's keys are the values of `elemField` across the nested
+    // entity rows referenced by `collectionField` of the hydrated
+    // `sourceRel` rows (inventory keyed by the skus of the hydrated orders'
+    // line items).
+    case DependentField(sourceRel: String, collectionField: String, elemField: String)
+    // Rows of the target whose `column` equals one of the hydrated keys of
+    // `sourceRel` (payments whose order_id is a hydrated order key). Yields
+    // no target keys ahead of the load, so the persist delete scan must key
+    // off the row keys recorded at hydrate time.
+    case ValueColumn(sourceRel: String, column: String)
 
   enum Scope derives CanEqual:
     case Full
@@ -40,8 +45,6 @@ object HydrationScope:
 
   final case class OpScopes(byField: Map[String, Scope]):
     def apply(field: String): Scope = byField.getOrElse(field, Scope.Skip)
-    def isFullEverywhere(relationFields: List[String]): Boolean =
-      relationFields.forall(f => byField.get(f).contains(Scope.Full))
 
   def analyze(op: operation_decl, ir: ServiceIRFull): OpScopes =
     val stateDecls = irStateFields(ir)
@@ -154,45 +157,151 @@ object HydrationScope:
         rel -> Scope.Keys(names.distinct.map(KeySource.Input(_)))
     }
     val _ = outputs
-    OpScopes(invariantClosure(scoped, ir, relationNames))
+    OpScopes(invariantClosure(scoped, ir, relationNames, seqNames))
 
   // The runtime guard evaluates ServiceStateInv on the hydrated state, and
   // the kernel's proof assumes it, so the scope must be closed under the
-  // invariants' cross-relation reach: a universal over hydrated rows whose
-  // body reads another relation needs that relation whole (a subset of a
-  // conforming relation re-satisfies the universal only when its references
-  // resolve), a dom-equality clause needs the two relations hydrated at the
-  // same keys, and any clause shape the classifier cannot vouch for forces
-  // its relations whole on every operation. Per-row clauses (the domain
-  // relation touched only through the binders) hold on any subset for free.
+  // invariants' cross-relation reach. Per-row clauses (the domain relation
+  // touched only through the binders) hold on any subset for free. A
+  // cross-relation reference hydrates the referenced relation's support:
+  // rows keyed by an owner field resolve through FieldOfRows/DependentField
+  // loads, a column-guarded existential resolves through a ValueColumn
+  // filter, and a guarded universal over another relation shrinks safely
+  // and needs nothing. dom-equality clauses align the two relations' key
+  // sets. Anything the classifier cannot vouch for loads whole, and derived
+  // cycles without a certificate fall back to whole relations: the
+  // ecommerce orders/payments cycle is cut structurally (the ValueColumn
+  // filter confines every loaded row's reference to the hydrated source
+  // keys), and the auth users/user_by_email cycle is cut by the bilateral
+  // index-equality conjuncts that pin each newly loaded row to an already
+  // hydrated one.
   private def invariantClosure(
       base: Map[String, Scope],
       ir: ServiceIRFull,
-      relationNames: Set[String]
+      relationNames: Set[String],
+      seqNames: Set[String]
   ): Map[String, Scope] =
     val shapes = svcInvariants(ir).map(inv => classifyInvariant(invBody(inv), relationNames))
-    def nonemptyPossible(s: Option[Scope]): Boolean = s match
+    def canHydrate(s: Option[Scope]): Boolean = s match
       case Some(Scope.Full)     => true
       case Some(Scope.Keys(ks)) => ks.nonEmpty
       case _                    => false
+    def rowSources(s: Option[Scope]): List[KeySource] = s match
+      case Some(Scope.Keys(ks)) => ks
+      case _                    => Nil
+    def raise(m: Map[String, Scope], rel: String): Map[String, Scope] =
+      m.updated(rel, Scope.Full)
+    def addSource(m: Map[String, Scope], rel: String, src: KeySource): Map[String, Scope] =
+      if seqNames(rel) then raise(m, rel)
+      else
+        m.get(rel) match
+          case Some(Scope.Full) => m
+          case Some(Scope.Keys(existing)) =>
+            if existing.contains(src) then m else m.updated(rel, Scope.Keys(existing :+ src))
+          case _ => m.updated(rel, Scope.Keys(List(src)))
+    // A clause over the target relation that sends `column` of every row
+    // into the source relation: a ValueColumn load from a fully hydrated
+    // source then selects the whole target, so load it whole outright.
+    val coversVia: Set[(String, String, String)] = shapes.collect {
+      case InvShape.Cross(ds, edges, _, _) =>
+        edges.collect { case Edge(target, EdgeKind.FieldKey(col)) =>
+          ds.toList.map(d => (d, target, col))
+        }.flatten
+    }.flatten.toSet
+
+    def applyCross(
+        m: Map[String, Scope],
+        domains: Set[String],
+        edges: List[Edge]
+    ): Map[String, Scope] =
+      val live = domains.filter(d => canHydrate(m.get(d)))
+      if live.isEmpty then m
+      else
+        edges.foldLeft(m) { (acc, edge) =>
+          edge.kind match
+            case EdgeKind.WholeRelation => raise(acc, edge.target)
+            case EdgeKind.FieldKey(f) =>
+              live.foldLeft(acc) { (a, d) =>
+                // Structural cut: a domain hydrated solely through a
+                // ValueColumn filter on this very column already confines
+                // every row's reference to the target's hydrated keys.
+                val srcs = rowSources(a.get(d))
+                val cut = srcs.nonEmpty && srcs.forall {
+                  case KeySource.ValueColumn(s, c) => s == edge.target && c == f
+                  case _                           => false
+                }
+                if cut then a else addSource(a, edge.target, KeySource.FieldOfRows(d, f))
+              }
+            case EdgeKind.NestedFieldKey(coll, ef) =>
+              live.foldLeft(acc)((a, d) =>
+                addSource(a, edge.target, KeySource.DependentField(d, coll, ef))
+              )
+            case EdgeKind.ColumnFilter(col) =>
+              live.foldLeft(acc) { (a, d) =>
+                if a.get(d).contains(Scope.Full) && coversVia((edge.target, d, col)) then
+                  raise(a, edge.target)
+                else addSource(a, edge.target, KeySource.ValueColumn(d, col))
+              }
+        }
+
     def step(m: Map[String, Scope]): Map[String, Scope] =
       shapes.foldLeft(m) { (acc, shape) =>
         shape match
-          case InvShape.Safe => acc
-          case InvShape.Cross(domains, refs) =>
-            if domains.exists(d => nonemptyPossible(acc.get(d))) then
-              refs.foldLeft(acc)((a, r) => a.updated(r, Scope.Full))
-            else acc
-          case InvShape.Aligned(x, y) => align(acc, x, y)
+          case InvShape.Safe                        => acc
+          case InvShape.Cross(domains, edges, _, _) => applyCross(acc, domains, edges)
+          case InvShape.Aligned(x, y)               => align(acc, x, y)
           case InvShape.Opaque(mentioned) =>
-            mentioned.foldLeft(acc)((a, r) => a.updated(r, Scope.Full))
+            mentioned.foldLeft(acc)((a, r) => raise(a, r))
       }
     @annotation.tailrec
     def loop(m: Map[String, Scope]): Map[String, Scope] =
       val next = step(m)
       if next.sizeIs == m.size && next.forall((k, v) => m.get(k).contains(v)) then m
       else loop(next)
-    loop(base)
+    certifyCycles(loop(base), shapes)
+
+  // Derived loads that feed each other form phased chains; a cycle among
+  // them is sound only when it provably terminates. A two-relation cycle is
+  // kept when each side's generating clause pins the referenced row back to
+  // an already hydrated one (an index-equality conjunct) and agrees on its
+  // own key (users[u].id = u), which makes the third phase re-load only
+  // hydrated keys. Every other cycle falls back to whole relations.
+  private def certifyCycles(
+      m: Map[String, Scope],
+      shapes: List[InvShape]
+  ): Map[String, Scope] =
+    def derivedDeps(s: Scope): Set[String] = s match
+      case Scope.Keys(ks) =>
+        ks.collect {
+          case KeySource.FieldOfRows(src, _)       => src
+          case KeySource.DependentField(src, _, _) => src
+          case KeySource.ValueColumn(src, _)       => src
+        }.toSet
+      case _ => Set.empty
+    val deps = m.map((rel, s) => rel -> derivedDeps(s))
+    def reaches(from: String, to: String, seen: Set[String]): Boolean =
+      deps.getOrElse(from, Set.empty).exists { n =>
+        n == to || (!seen(n) && reaches(n, to, seen + n))
+      }
+    def pinnedBoth(a: String, b: String): Boolean =
+      def pinned(domain: String, target: String): Boolean =
+        shapes.exists {
+          case InvShape.Cross(ds, _, pins, keyAgree) =>
+            ds.contains(domain) && pins.contains(target) && keyAgree
+          case _ => false
+        }
+      pinned(a, b) && pinned(b, a)
+    // A dependency edge participates in a cycle when its target can reach
+    // back. Every such edge must be one half of a certified mutual pair; a
+    // self-loop or a longer cycle has no certificate and loads whole.
+    val toFull = m.keySet.filter { r =>
+      deps.getOrElse(r, Set.empty).exists { d =>
+        val backReaches = d == r || reaches(d, r, Set.empty)
+        backReaches &&
+        (d == r || !(deps.getOrElse(d, Set.empty).contains(r) && pinnedBoth(r, d)))
+      }
+    }
+    toFull.foldLeft(m)((acc, r) => acc.updated(r, Scope.Full))
 
   // dom-equality holds on hydrated slices exactly when both relations load
   // the same key set, so alignment raises the lesser side: a skipped or
@@ -213,9 +322,26 @@ object HydrationScope:
         m.updated(x, Scope.Keys(ks))
       case _ => m.updated(x, Scope.Full).updated(y, Scope.Full)
 
+  final private case class Edge(target: String, kind: EdgeKind)
+
+  private enum EdgeKind derives CanEqual:
+    // Reference keyed by a field of the hydrated domain row.
+    case FieldKey(field: String)
+    // Reference keyed by a field of the domain row's nested entity elements.
+    case NestedFieldKey(collection: String, elemField: String)
+    // Column-guarded existential: rows whose column equals the domain key.
+    case ColumnFilter(column: String)
+    // A reference shape with no finite support: load the target whole.
+    case WholeRelation
+
   private enum InvShape derives CanEqual:
     case Safe
-    case Cross(domains: Set[String], refs: Set[String])
+    case Cross(
+        domains: Set[String],
+        edges: List[Edge],
+        pinnedTargets: Set[String],
+        keyAgreement: Boolean
+    )
     case Aligned(x: String, y: String)
     case Opaque(mentioned: Set[String])
 
@@ -263,49 +389,139 @@ object HydrationScope:
     val domains = bindings.flatMap(b => bindingRel(qbdCollection(b), relationNames)).toSet
     if bindings.exists(b => bindingRel(qbdCollection(b), relationNames).isEmpty) then None
     else
-      // None = the clause reaches the domain relation outside its binders,
-      // so subset-safety cannot be vouched for; Some(refs) = the other
-      // relations the body reads, which must load whole.
-      def merge(acc: Option[Set[String]], next: Option[Set[String]]): Option[Set[String]] =
-        for a <- acc; b <- next yield a ++ b
-      def collect(e: expr, vars: Set[String]): Option[Set[String]] = e match
-        case IndexF(rel, IdentifierF(v, _), _) if peelName(rel).exists(domains) =>
-          if vars.contains(v) then Some(Set.empty) else None
+      val keyVars = bindings.map(qbdVar).toSet
+      // The domain row and its field paths, the only sanctioned ways the
+      // clause body may touch the domain relation.
+      def isOwnerRow(e: expr): Boolean = e match
+        case IndexF(rel, IdentifierF(v, _), _) =>
+          peelName(rel).exists(domains) && keyVars.contains(v)
+        case _ => false
+      // env: nested binders over a relation (var -> relation) and nested
+      // binders over an owner field collection (var -> collection field).
+      final case class Env(relVars: Map[String, String], elemVars: Map[String, String])
+      def fieldPath(e: expr, env: Env): Option[EdgeKind] = e match
+        case FieldAccessF(row, f, _) if isOwnerRow(row) => Some(EdgeKind.FieldKey(f))
+        case FieldAccessF(IdentifierF(v, _), f, _) if env.elemVars.contains(v) =>
+          env.elemVars.get(v).map(coll => EdgeKind.NestedFieldKey(coll, f))
+        case _ => None
+      def merge(a: Option[List[Edge]], b: Option[List[Edge]]): Option[List[Edge]] =
+        for x <- a; y <- b yield x ::: y
+      // The column-equality conjunct that ties an existential witness to the
+      // domain key: B[pid].col = k with pid the witness binder, k a key var.
+      def guardColumn(conjuncts: List[expr], rel: String, binder: String): Option[String] =
+        conjuncts.collectFirst {
+          case BinaryOpF(
+                BEq(),
+                FieldAccessF(IndexF(r, IdentifierF(p, _), _), col, _),
+                IdentifierF(k, _),
+                _
+              )
+              if peelName(r).contains(rel) && p == binder && keyVars.contains(k) =>
+            col
+          case BinaryOpF(
+                BEq(),
+                IdentifierF(k, _),
+                FieldAccessF(IndexF(r, IdentifierF(p, _), _), col, _),
+                _
+              )
+              if peelName(r).contains(rel) && p == binder && keyVars.contains(k) =>
+            col
+        }
+      def collect(e: expr, env: Env): Option[List[Edge]] = e match
+        case row if isOwnerRow(row)                             => Some(Nil)
         case IndexF(rel, _, _) if peelName(rel).exists(domains) => None
         case IndexF(rel, key, _) if peelName(rel).exists(relationNames) =>
-          collect(key, vars).map(_ ++ peelName(rel).toSet)
+          val target = peelName(rel).getOrElse("")
+          key match
+            case IdentifierF(v, _) if env.relVars.get(v).contains(target) => Some(Nil)
+            case _ =>
+              fieldPath(key, env) match
+                case Some(kind) => collect(key, env).map(Edge(target, kind) :: _)
+                case None =>
+                  collect(key, env).map(Edge(target, EdgeKind.WholeRelation) :: _)
         case BinaryOpF(BIn() | BNotIn(), l, relRef, _)
             if peelName(relRef).exists(relationNames) =>
           peelName(relRef) match
             case Some(r) if domains(r) => None
-            case r                     => collect(l, vars).map(_ ++ r.toSet)
-        case QuantifierF(_, nbs, nb, _) =>
-          val fromBindings = nbs.foldLeft(Option(Set.empty[String])) { (acc, b) =>
-            acc.flatMap { s =>
+            case Some(r) =>
+              fieldPath(l, env) match
+                case Some(kind) => collect(l, env).map(Edge(r, kind) :: _)
+                case None       => collect(l, env).map(Edge(r, EdgeKind.WholeRelation) :: _)
+            case None => collect(l, env)
+        case QuantifierF(kind, nbs, nb, _) =>
+          val existential = kind match
+            case QSome() | QExists() => true
+            case _                   => false
+          val bound = nbs.foldLeft(Option((env, List.empty[Edge]))) { (acc, b) =>
+            acc.flatMap { (envAcc, edges) =>
               val col = qbdCollection(b)
               bindingRel(col, relationNames) match
-                case Some(r) => if domains(r) then None else Some(s + r)
-                case None    => collect(col, vars).map(s ++ _)
+                case Some(r) if domains(r) => None
+                case Some(r) =>
+                  val nextEnv = envAcc.copy(relVars = envAcc.relVars.updated(qbdVar(b), r))
+                  if existential then
+                    guardColumn(flattenAndAll(List(nb)), r, qbdVar(b)) match
+                      case Some(c) => Some((nextEnv, Edge(r, EdgeKind.ColumnFilter(c)) :: edges))
+                      case None    => Some((nextEnv, Edge(r, EdgeKind.WholeRelation) :: edges))
+                  else Some((nextEnv, edges))
+                case None =>
+                  val elem = col match
+                    case FieldAccessF(row, f, _) if isOwnerRow(row) => Some(f)
+                    case _                                          => None
+                  elem match
+                    case Some(f) =>
+                      Some((envAcc.copy(elemVars = envAcc.elemVars.updated(qbdVar(b), f)), edges))
+                    case None => collect(col, envAcc).map(es => (envAcc, es ::: edges))
             }
           }
-          merge(fromBindings, collect(nb, vars ++ nbs.map(qbdVar)))
+          bound.flatMap((envB, edges) => collect(nb, envB).map(edges ::: _))
         case IdentifierF(n, _) if domains(n)       => None
-        case IdentifierF(n, _) if relationNames(n) => Some(Set(n))
-        case IdentifierF(_, _)                     => Some(Set.empty)
-        case BinaryOpF(_, l, r, _)                 => merge(collect(l, vars), collect(r, vars))
-        case UnaryOpF(_, i, _)                     => collect(i, vars)
+        case IdentifierF(n, _) if relationNames(n) => Some(List(Edge(n, EdgeKind.WholeRelation)))
+        case IdentifierF(_, _)                     => Some(Nil)
+        case BinaryOpF(_, l, r, _)                 => merge(collect(l, env), collect(r, env))
+        case UnaryOpF(_, i, _)                     => collect(i, env)
         case CallF(c, as, _) =>
-          (c :: as).foldLeft(Option(Set.empty[String]))((acc, a) => merge(acc, collect(a, vars)))
+          (c :: as).foldLeft(Option(List.empty[Edge]))((acc, a) => merge(acc, collect(a, env)))
         case LetF(v, value, b, _) =>
-          merge(collect(value, vars), collect(b, vars - v))
-        case other =>
-          childExprs(other).foldLeft(Option(Set.empty[String]))((acc, c) =>
-            merge(acc, collect(c, vars))
+          merge(
+            collect(value, env),
+            collect(b, env.copy(relVars = env.relVars - v, elemVars = env.elemVars - v))
           )
-      collect(inner, bindings.map(qbdVar).toSet) match
-        case None                   => None
-        case Some(rs) if rs.isEmpty => Some(InvShape.Safe)
-        case Some(rs)               => Some(InvShape.Cross(domains, rs))
+        case other =>
+          childExprs(other).foldLeft(Option(List.empty[Edge]))((acc, c) =>
+            merge(acc, collect(c, env))
+          )
+      collect(inner, Env(Map.empty, Map.empty)) match
+        case None => None
+        case Some(edges) =>
+          if edges.isEmpty then Some(InvShape.Safe)
+          else
+            val conjuncts = flattenAndAll(List(inner))
+            // A conjunct that equates the referenced row with the domain row
+            // (users[ube[email].id] = ube[email]) pins the phased load: under
+            // conformance the next phase re-keys only hydrated rows.
+            val pinned = conjuncts.collect {
+              case BinaryOpF(BEq(), IndexF(rel, key, _), rhs, _)
+                  if peelName(rel).exists(relationNames)
+                    && fieldPath(key, Env(Map.empty, Map.empty)).isDefined
+                    && isOwnerRow(rhs) =>
+                peelName(rel).toList
+              case BinaryOpF(BEq(), lhs, IndexF(rel, key, _), _)
+                  if peelName(rel).exists(relationNames)
+                    && fieldPath(key, Env(Map.empty, Map.empty)).isDefined
+                    && isOwnerRow(lhs) =>
+                peelName(rel).toList
+            }.flatten.toSet
+            // A conjunct that ties the domain row's field to its own key
+            // (users[u].id = u), the other half of the cycle certificate.
+            val keyAgreement = conjuncts.exists {
+              case BinaryOpF(BEq(), FieldAccessF(row, _, _), IdentifierF(k, _), _) =>
+                isOwnerRow(row) && keyVars.contains(k)
+              case BinaryOpF(BEq(), IdentifierF(k, _), FieldAccessF(row, _, _), _) =>
+                isOwnerRow(row) && keyVars.contains(k)
+              case _ => false
+            }
+            Some(InvShape.Cross(domains, edges.distinct, pinned, keyAgreement))
 
   private enum Demand derives CanEqual:
     case Whole

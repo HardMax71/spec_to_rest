@@ -790,11 +790,11 @@ object EmitPython:
               case HydrationScope.Scope.Full => Some(s"\"$rel\": (\"full\",)")
               case HydrationScope.Scope.Keys(sources) =>
                 val accesses = sources.map {
-                  case HydrationScope.KeySource.Input(n)          => Some(paramAccess(n))
-                  case _: HydrationScope.KeySource.DependentField => None
+                  case HydrationScope.KeySource.Input(n) => Some(paramAccess(n))
+                  case _                                 => None
                 }
-                // Dependent-key hops are a later milestone; until wired,
-                // such a relation loads whole.
+                // Derived sources (field-of-rows, value-column) are a later
+                // milestone; until wired, such a relation loads whole.
                 if accesses.contains(None) then Some(s"\"$rel\": (\"full\",)")
                 else Some(s"\"$rel\": (\"keys\", [${accesses.flatten.mkString(", ")}])")
           }

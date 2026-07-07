@@ -1302,11 +1302,11 @@ func sampleCandidate(length int, charset string) (string, error) {
                   case HydrationScope.Scope.Full => Some(rel -> "{full: true}")
                   case HydrationScope.Scope.Keys(sources) =>
                     val accesses = sources.map {
-                      case HydrationScope.KeySource.Input(n)          => accessByName.get(n)
-                      case _: HydrationScope.KeySource.DependentField => None
+                      case HydrationScope.KeySource.Input(n) => accessByName.get(n)
+                      case _                                 => None
                     }
-                    // Dependent-key hops are a later milestone; until wired,
-                    // such a relation loads whole.
+                    // Derived sources (field-of-rows, value-column) are a later
+                    // milestone; until wired, such a relation loads whole.
                     if accesses.contains(None) then Some(rel -> "{full: true}")
                     else Some(rel                            -> s"{keys: []any{${accesses.flatten.mkString(", ")}}}")
               }
