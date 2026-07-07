@@ -64,32 +64,55 @@ object HydrationScope:
         case None           => d
       demands.update(rel, next)
 
-    // Let bindings whose value is a keyed read of a relation at input keys
-    // stay key-transparent: `let user = user_by_email[email] in ... user.id`
-    // demands only the email row. Bindings from anything else make later
-    // keyed uses derived, which falls open to Full for that relation.
-    def walk(e: expr, inputBound: Set[String]): Unit = e match
+    // Bindings that stay key-transparent through the walk: an operation
+    // input, a row read at a transparent key (`let user = user_by_email[
+    // email]`), a field of such a row (`let user_id = pre(reset_tokens)[
+    // reset_token].user_id`), and a definite description over such a row's
+    // collection (`let removed = the i in pre(orders)[order_id].items｜..`).
+    // A key built from one of these resolves to an Input, FieldOfRows, or
+    // DependentField source; anything else falls open to Full.
+    def keySources(key: expr, env: Map[String, Binding]): Option[List[KeySource]] = key match
+      case IdentifierF(v, _) =>
+        env.get(v).collect {
+          case Binding.InputVal         => List(KeySource.Input(v))
+          case Binding.FieldVal(rel, f) => List(KeySource.FieldOfRows(rel, f))
+        }
+      case FieldAccessF(IdentifierF(v, _), f, _) =>
+        env.get(v).collect {
+          case Binding.RowOf(rel)        => List(KeySource.FieldOfRows(rel, f))
+          case Binding.ElemOf(rel, coll) => List(KeySource.DependentField(rel, coll, f))
+        }
+      case _ => None
+    def bindingOf(value: expr, env: Map[String, Binding]): Option[Binding] = value match
+      case IndexF(rel, key, _)
+          if peelName(rel).exists(relationNames) && keySources(key, env).isDefined =>
+        peelName(rel).map(Binding.RowOf(_))
+      case FieldAccessF(IndexF(rel, key, _), f, _)
+          if peelName(rel).exists(relationNames) && keySources(key, env).isDefined =>
+        peelName(rel).map(Binding.FieldVal(_, f))
+      case TheF(_, FieldAccessF(IndexF(rel, key, _), coll, _), _, _)
+          if peelName(rel).exists(relationNames) && keySources(key, env).isDefined =>
+        peelName(rel).map(Binding.ElemOf(_, coll))
+      case _ => None
+    def walk(e: expr, env: Map[String, Binding]): Unit = e match
       case LetF(v, value, body, _) =>
-        walk(value, inputBound)
-        val transparent = value match
-          case IndexF(rel, key, _)
-              if peelName(rel).exists(relationNames) && inputKey(key, inputBound) =>
-            true
-          case _ => false
-        walk(body, if transparent then inputBound + v else inputBound)
+        walk(value, env)
+        walk(body, bindingOf(value, env).fold(env - v)(b => env.updated(v, b)))
       case IndexF(relRef, key, _) if peelName(relRef).exists(relationNames) =>
         peelName(relRef).foreach { rel =>
-          if inputKey(key, inputBound) then demand(rel, Demand.Keyed(keyName(key).toList))
-          else demand(rel, Demand.Whole)
+          keySources(key, env) match
+            case Some(srcs) => demand(rel, Demand.Keyed(srcs))
+            case None       => demand(rel, Demand.Whole)
         }
-        walk(key, inputBound)
+        walk(key, env)
       case BinaryOpF(BIn() | BNotIn(), key, relRef, _)
           if peelName(relRef).exists(relationNames) =>
         peelName(relRef).foreach { rel =>
-          if inputKey(key, inputBound) then demand(rel, Demand.Keyed(keyName(key).toList))
-          else demand(rel, Demand.Whole)
+          keySources(key, env) match
+            case Some(srcs) => demand(rel, Demand.Keyed(srcs))
+            case None       => demand(rel, Demand.Whole)
         }
-        walk(key, inputBound)
+        walk(key, env)
       // Whole-relation assignment: the right-hand shape decides. Identity
       // frames demand nothing (the body leaves the relation alone), inserts
       // and deletes over the same relation are persist-only writes (the
@@ -103,49 +126,49 @@ object HydrationScope:
             case BinaryOpF(BAdd() | BSub(), base, delta, _)
                 if peelName(base).contains(rel) =>
               demand(rel, Demand.Write)
-              walk(delta, inputBound)
+              walk(delta, env)
             case other =>
               demand(rel, Demand.Whole)
-              walk(other, inputBound)
+              walk(other, env)
         }
-      case BinaryOpF(_, l, r, _)                                                       => walk(l, inputBound); walk(r, inputBound)
+      case BinaryOpF(_, l, r, _)                                                       => walk(l, env); walk(r, env)
       case UnaryOpF(UCardinality(), inner, _) if peelName(inner).exists(relationNames) =>
         // Cardinality claims are ensures-side and discharge statically.
         ()
-      case UnaryOpF(_, inner, _) => walk(inner, inputBound)
+      case UnaryOpF(_, inner, _) => walk(inner, env)
       case QuantifierF(_, bs, body, _) =>
         bs.foreach { b =>
           val dom = qbdCollection(b)
           peelName(dom) match
             case Some(rel) if relationNames(rel) => demand(rel, Demand.Whole)
-            case _                               => walk(dom, inputBound)
+            case _                               => walk(dom, env)
         }
-        walk(body, inputBound)
+        walk(body, env)
       case SetComprehensionF(_, dom, p, _) =>
         peelName(dom) match
           case Some(rel) if relationNames(rel) => demand(rel, Demand.Whole)
-          case _                               => walk(dom, inputBound)
-        walk(p, inputBound)
+          case _                               => walk(dom, env)
+        walk(p, env)
       case TheF(_, dom, body, _) =>
         peelName(dom) match
           case Some(rel) if relationNames(rel) => demand(rel, Demand.Whole)
-          case _                               => walk(dom, inputBound)
-        walk(body, inputBound)
+          case _                               => walk(dom, env)
+        walk(body, env)
       case CallF(c, args, _) =>
         peelName(c).filter(relationNames).foreach(rel => demand(rel, Demand.Whole))
         args.foreach { a =>
           peelName(a) match
             case Some(rel) if relationNames(rel) => demand(rel, Demand.Whole)
-            case _                               => walk(a, inputBound)
+            case _                               => walk(a, env)
         }
       case IdentifierF(n, _) if relationNames(n) =>
         // A bare relation reference outside every recognized shape.
         demand(n, Demand.Whole)
       case IdentifierF(_, _) => ()
       case other =>
-        childExprs(other).foreach(walk(_, inputBound))
+        childExprs(other).foreach(walk(_, env))
 
-    clauses.foreach(walk(_, inputs))
+    clauses.foreach(walk(_, inputs.map(_ -> Binding.InputVal).toMap))
 
     // Seq state fields persist by delete-all-and-reinsert, so any touch at
     // all means full hydration.
@@ -153,8 +176,8 @@ object HydrationScope:
       case (rel, _) if seqNames(rel) => rel -> Scope.Full
       case (rel, Demand.Whole)       => rel -> Scope.Full
       case (rel, Demand.Write)       => rel -> Scope.Keys(Nil)
-      case (rel, Demand.Keyed(names)) =>
-        rel -> Scope.Keys(names.distinct.map(KeySource.Input(_)))
+      case (rel, Demand.Keyed(sources)) =>
+        rel -> Scope.Keys(sources.distinct)
     }
     val _ = outputs
     OpScopes(invariantClosure(scoped, ir, relationNames, seqNames))
@@ -523,9 +546,15 @@ object HydrationScope:
             }
             Some(InvShape.Cross(domains, edges.distinct, pinned, keyAgreement))
 
+  private enum Binding derives CanEqual:
+    case InputVal
+    case RowOf(rel: String)
+    case FieldVal(rel: String, field: String)
+    case ElemOf(rel: String, collectionField: String)
+
   private enum Demand derives CanEqual:
     case Whole
-    case Keyed(inputNames: List[String])
+    case Keyed(sources: List[KeySource])
     // Persist-only: the body writes the relation (fresh-key insert) but no
     // clause reads existing rows.
     case Write
@@ -549,14 +578,6 @@ object HydrationScope:
     case IdentifierF(n, _) => Some(n)
     case PreF(inner, _)    => peelName(inner)
     case PrimeF(inner, _)  => peelName(inner)
-    case _                 => None
-
-  private def inputKey(key: expr, inputBound: Set[String]): Boolean = key match
-    case IdentifierF(n, _) => inputBound.contains(n)
-    case _                 => false
-
-  private def keyName(key: expr): Option[String] = key match
-    case IdentifierF(n, _) => Some(n)
     case _                 => None
 
   private def childExprs(e: expr): List[expr] = e match

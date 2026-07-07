@@ -50,10 +50,12 @@ class HydrationScopeTest extends CatsEffectSuite:
     ("ecommerce", "PlaceOrder", "orders", keys("order_id")),
     ("ecommerce", "PlaceOrder", "inventory", srcs(orderItemSkus)),
     ("ecommerce", "PlaceOrder", "payments", srcs(orderPayments)),
-    // inventory keyed by a field of a definite-description row: the base
-    // walk fails open until dependent-transparent bindings land.
-    ("ecommerce", "RemoveLineItem", "inventory", Scope.Full),
+    // The definite-description binding (`the i in ...items`) is dependent-
+    // transparent, so inventory keys off the removed item's sku through the
+    // same nested hop the closure uses.
+    ("ecommerce", "RemoveLineItem", "inventory", srcs(orderItemSkus)),
     ("ecommerce", "RemoveLineItem", "orders", keys("order_id")),
+    ("ecommerce", "RemoveLineItem", "payments", srcs(orderPayments)),
     ("todo_list", "CreateTodo", "todos", keys()),
     ("todo_list", "UpdateTodo", "todos", keys("id")),
     ("todo_list", "ListTodos", "todos", Scope.Full),
@@ -79,6 +81,15 @@ class HydrationScopeTest extends CatsEffectSuite:
     ("auth_service", "RequestPasswordReset", "users", srcs(usersFromUbe)),
     ("auth_service", "RequestPasswordReset", "reset_tokens", keys()),
     ("auth_service", "ResetPassword", "reset_tokens", keys("reset_token")),
+    // The let-bound token row field keys the users read, and the bilateral
+    // cycle certificate keeps the derived chain instead of Full.
+    (
+      "auth_service",
+      "ResetPassword",
+      "users",
+      srcs(KeySource.FieldOfRows("reset_tokens", "user_id"), usersFromUbe)
+    ),
+    ("auth_service", "ResetPassword", "user_by_email", srcs(ubeFromUsers)),
     ("url_shortener", "Resolve", "store", keys("code")),
     // dom(store) = dom(metadata) stays aligned: both keyed by the same
     // input, so the closure leaves the keyed scopes alone.
