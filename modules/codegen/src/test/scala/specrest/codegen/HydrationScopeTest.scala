@@ -13,41 +13,58 @@ class HydrationScopeTest extends CatsEffectSuite:
 
   // The census over the four fixture specs, condensed to the load-bearing
   // shapes: keyed reads, persist-only inserts, forced-full searches and
-  // scans, and identity-frame skips.
+  // scans, identity-frame skips, and the invariant closure (cross-relation
+  // invariant references load whole once their domain relation hydrates).
   private val expectations: List[(String, String, String, Scope)] = List(
-    ("ecommerce", "GetOrder", "orders", keys("order_id")),
+    // paidOrdersHavePayments and paymentsReferenceExistingOrders form a
+    // cycle (orders reference payments, payments reference orders), so any
+    // op hydrating a nonempty orders slice fixpoints to whole orders and
+    // payments, and itemSkusStocked drags inventory along. The way out is
+    // reverse-reference keyed loads (payments filtered by the hydrated
+    // order ids), deferred with KeySource.DependentField.
+    ("ecommerce", "GetOrder", "orders", Scope.Full),
+    ("ecommerce", "GetOrder", "inventory", Scope.Full),
+    ("ecommerce", "GetOrder", "payments", Scope.Full),
     ("ecommerce", "ListOrders", "orders", Scope.Full),
     ("ecommerce", "CreateDraftOrder", "orders", keys()),
-    ("ecommerce", "AddLineItem", "orders", keys("order_id")),
+    // A persist-only orders scope is empty at guard time, so the closure
+    // stays quiet and the draft insert touches nothing else.
+    ("ecommerce", "CreateDraftOrder", "inventory", Scope.Skip),
+    ("ecommerce", "AddLineItem", "orders", Scope.Full),
     ("ecommerce", "AddLineItem", "products", keys("sku")),
-    ("ecommerce", "AddLineItem", "inventory", keys("sku")),
-    ("ecommerce", "RecordPayment", "orders", keys("order_id")),
-    ("ecommerce", "RecordPayment", "payments", keys()),
-    ("ecommerce", "PlaceOrder", "orders", keys("order_id")),
-    // inventory' = inventory: the body leaves it alone, nothing hydrates.
-    ("ecommerce", "PlaceOrder", "inventory", Scope.Skip),
-    // inventory keyed by a field of a definite-description row: fail-open.
+    ("ecommerce", "AddLineItem", "inventory", Scope.Full),
+    ("ecommerce", "RecordPayment", "orders", Scope.Full),
+    ("ecommerce", "RecordPayment", "payments", Scope.Full),
+    ("ecommerce", "PlaceOrder", "orders", Scope.Full),
+    ("ecommerce", "PlaceOrder", "inventory", Scope.Full),
     ("ecommerce", "RemoveLineItem", "inventory", Scope.Full),
-    ("ecommerce", "RemoveLineItem", "orders", keys("order_id")),
+    ("ecommerce", "RemoveLineItem", "orders", Scope.Full),
     ("todo_list", "CreateTodo", "todos", keys()),
     ("todo_list", "UpdateTodo", "todos", keys("id")),
     ("todo_list", "ListTodos", "todos", Scope.Full),
     ("todo_list", "DeleteTodo", "todos", keys("id")),
     ("auth_service", "Login", "sessions", Scope.Full),
-    ("auth_service", "Login", "user_by_email", keys("email")),
+    // emailIndexConsistent and userKeyMatchesId tie the user relations
+    // together, so hydrating either pulls both whole.
+    ("auth_service", "Login", "user_by_email", Scope.Full),
+    ("auth_service", "Login", "users", Scope.Full),
     ("auth_service", "Login", "failed_logins", keys("email")),
-    ("auth_service", "Login", "users", keys()),
     ("auth_service", "Login", "login_attempts", Scope.Full),
+    ("auth_service", "Login", "reset_tokens", Scope.Skip),
     ("auth_service", "RefreshToken", "sessions", Scope.Full),
-    ("auth_service", "RequestPasswordReset", "user_by_email", keys("email")),
+    ("auth_service", "RequestPasswordReset", "user_by_email", Scope.Full),
+    ("auth_service", "RequestPasswordReset", "users", Scope.Full),
     ("auth_service", "RequestPasswordReset", "reset_tokens", keys()),
     ("url_shortener", "Resolve", "store", keys("code")),
+    // dom(store) = dom(metadata) stays aligned: both keyed by the same
+    // input, so the closure leaves the keyed scopes alone.
     ("url_shortener", "Resolve", "metadata", keys("code")),
     // Candidate-freshness not-in and output-keyed writes: full.
     ("url_shortener", "Shorten", "store", Scope.Full),
     ("url_shortener", "Shorten", "metadata", Scope.Full),
     ("url_shortener", "ListAll", "metadata", Scope.Full),
-    ("url_shortener", "ListAll", "store", Scope.Skip)
+    // Alignment raises the skipped side to match the full one.
+    ("url_shortener", "ListAll", "store", Scope.Full)
   )
 
   expectations.groupBy(_._1).toList.sortBy(_._1).foreach: (spec, rows) =>
