@@ -1282,35 +1282,54 @@ func sampleCandidate(length int, charset string) (string, error) {
             endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
             endpoint.bodyParams.map(p => p.name -> s"body.${toPascalCase(p.name)}")
         // Which rows each state relation must hydrate for this operation, as
-        // the scope map both bridge calls receive. Keyed entries name request
-        // values through the same accesses the kernel args use; a relation
-        // the contracts never touch stays out of the map and is skipped in
-        // both directions. No spec op means a nil scope: the bridge falls
-        // back to hydrating everything.
+        // the scope map the bridge receives: per relation a slice of source
+        // descriptors matched against the bridge's static load schedule.
+        // Keyed entries name request values through the same accesses the
+        // kernel args use; a relation the contracts never touch stays out of
+        // the map and is skipped in both directions. No spec op means a nil
+        // scope: the bridge falls back to hydrating everything.
         val accessByName = inputSources.toMap
         val scopeLines = specOp match
-          case None => List("\t\tvar scope map[string]hydrationSel")
+          case None => List("\t\tvar scope map[string][]hydrationSrc")
           case Some(decl) =>
-            val entries = HydrationScope
-              .analyze(decl, kernelCtx.ir)
-              .byField
-              .toList
+            val opScopes = HydrationScope.analyze(decl, kernelCtx.ir)
+            val loadPlan = HydrationScope.loadPlan(opScopes)
+            val entries = opScopes.byField.toList
               .sortBy(_._1)
               .flatMap { (rel, sc) =>
                 sc match
-                  case HydrationScope.Scope.Skip => None
-                  case HydrationScope.Scope.Full => Some(rel -> "{full: true}")
-                  case HydrationScope.Scope.Keys(sources) =>
-                    val accesses = sources.map {
-                      case HydrationScope.KeySource.Input(n) => accessByName.get(n)
-                      case _                                 => None
+                  case HydrationScope.Scope.Skip    => None
+                  case HydrationScope.Scope.Full    => Some(rel -> "{{kind: \"full\"}}")
+                  case HydrationScope.Scope.Keys(_) =>
+                    // The op's load plan is the authority: a derived source
+                    // whose relation never gains rows degrades there to a
+                    // full load, and the literal must agree with the schedule
+                    // the bridge runs. A persist-only scope keeps an empty
+                    // keys descriptor so the relation stays visible to
+                    // persistence.
+                    val steps   = loadPlan.filter(_.relation == rel)
+                    val sources = steps.flatMap(_.source)
+                    val inputs = sources.collect { case HydrationScope.KeySource.Input(n) =>
+                      accessByName.get(n)
                     }
-                    // Derived sources (field-of-rows, value-column) are a later
-                    // milestone; until wired, such a relation loads whole.
-                    if accesses.contains(None) then Some(rel -> "{full: true}")
-                    else Some(rel                            -> s"{keys: []any{${accesses.flatten.mkString(", ")}}}")
+                    if steps.exists(_.source.isEmpty) || inputs.contains(None) then
+                      Some(rel -> "{{kind: \"full\"}}")
+                    else
+                      val derived = sources.collect {
+                        case HydrationScope.KeySource.FieldOfRows(src, f) =>
+                          s"{kind: \"fieldOf\", src: \"$src\", a: \"$f\"}"
+                        case HydrationScope.KeySource.DependentField(src, coll, ef) =>
+                          s"{kind: \"dependent\", src: \"$src\", a: \"$coll\", b: \"$ef\"}"
+                        case HydrationScope.KeySource.ValueColumn(src, col) =>
+                          s"{kind: \"valueCol\", src: \"$src\", a: \"$col\"}"
+                      }
+                      val keyed =
+                        if inputs.nonEmpty || derived.isEmpty then
+                          List(s"{kind: \"keys\", keys: []any{${inputs.flatten.mkString(", ")}}}")
+                        else Nil
+                      Some(rel -> s"{${(keyed ::: derived).mkString(", ")}}")
               }
-            StateBridgeGo.scopeAssign("scope := ", "\t\t", entries)
+            StateBridgeGo.scopeAssign("scope := ", "\t\t", "map[string][]hydrationSrc", entries)
         val convertedArgs = inputSources.map: (specName, access) =>
           specInputTypes
             .get(specName)
@@ -1519,11 +1538,11 @@ func sampleCandidate(length int, charset string) (string, error) {
               (header :: resultDecl ::
                 "\tif err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {" ::
                 (scopeLines :::
-                  "\t\tstate, err := hydrateState(ctx, tx, scope)" ::
+                  "\t\tstate, hydrated, err := hydrateState(ctx, tx, scope)" ::
                   "\t\tif err != nil {" :: "\t\t\treturn err" :: "\t\t}" ::
                   convLines ::: invCheck ::: guardCheck ::: resultAssign :::
                   List(
-                    "\t\tif err := persistState(ctx, tx, state, scope); err != nil {",
+                    "\t\tif err := persistState(ctx, tx, state, hydrated); err != nil {",
                     "\t\t\treturn err",
                     "\t\t}",
                     "\t\treturn nil",

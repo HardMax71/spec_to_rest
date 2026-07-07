@@ -324,7 +324,7 @@ class EmitTest extends CatsEffectSuite:
         s"Shorten should marshal body.URL and capture both outputs — got:\n$service"
       )
       assert(
-        service.contains("state, err := hydrateState(ctx, tx, scope)"),
+        service.contains("state, hydrated, err := hydrateState(ctx, tx, scope)"),
         s"kernel ops must hydrate state inside the transaction — got:\n$service"
       )
       assert(
@@ -334,7 +334,7 @@ class EmitTest extends CatsEffectSuite:
         s"kernel ops must check the compiled requires twin — got:\n$service"
       )
       assert(
-        service.contains("persistState(ctx, tx, state, scope)"),
+        service.contains("persistState(ctx, tx, state, hydrated)"),
         s"kernel ops must persist the mutated state — got:\n$service"
       )
       assert(
