@@ -46,6 +46,55 @@ object HydrationScope:
   final case class OpScopes(byField: Map[String, Scope]):
     def apply(field: String): Scope = byField.getOrElse(field, Scope.Skip)
 
+  // One hydration step: a full load (source = None) or one key source. A
+  // derived source executes only after its source relation has rows, so
+  // steps carry the wave they become executable in: full loads and input
+  // keys are wave 1, a derived source is one wave after its source relation
+  // first gains rows. The certified cycles bottom out because each round
+  // trip re-keys rows already hydrated (the plan lists the step once).
+  final case class LoadStep(relation: String, wave: Int, source: Option[KeySource])
+
+  def loadPlan(scopes: OpScopes): List[LoadStep] =
+    val base = scopes.byField.toList.flatMap {
+      case (rel, Scope.Full) => List(LoadStep(rel, 1, None))
+      case (rel, Scope.Keys(sources)) =>
+        sources.collect { case s @ KeySource.Input(_) => LoadStep(rel, 1, Some(s)) }
+      case _ => Nil
+    }
+    val pending = scopes.byField.toList.flatMap {
+      case (rel, Scope.Keys(sources)) =>
+        sources.collect {
+          case s @ KeySource.FieldOfRows(_, _)       => rel -> s
+          case s @ KeySource.DependentField(_, _, _) => rel -> s
+          case s @ KeySource.ValueColumn(_, _)       => rel -> s
+        }
+      case _ => Nil
+    }
+    def sourceRel(s: KeySource): String = s match
+      case KeySource.FieldOfRows(src, _)       => src
+      case KeySource.DependentField(src, _, _) => src
+      case KeySource.ValueColumn(src, _)       => src
+      case KeySource.Input(_)                  => ""
+    @annotation.tailrec
+    def assign(
+        done: List[LoadStep],
+        todo: List[(String, KeySource)],
+        wave: Int
+    ): List[LoadStep] =
+      if todo.isEmpty then done
+      else
+        val ready = todo.filter((_, s) => done.exists(_.relation == sourceRel(s)))
+        // A source whose relation never gains rows cannot arise from the
+        // closure (edges fire only from hydratable domains); degrade to a
+        // full load so the plan stays total regardless.
+        if ready.isEmpty then
+          done ::: todo.map((rel, _) => LoadStep(rel, wave + 1, None)).distinct
+        else
+          val steps = ready.map((rel, s) => LoadStep(rel, wave + 1, Some(s)))
+          assign(done ::: steps, todo.filterNot(ready.contains), wave + 1)
+    assign(base, pending, 1)
+      .sortBy(st => (st.wave, st.relation, st.source.map(_.toString).getOrElse("")))
+
   def analyze(op: operation_decl, ir: ServiceIRFull): OpScopes =
     val stateDecls = irStateFields(ir)
     val seqNames   = stateDecls.filter(f => isSeqType(stfType(f))).map(stfName).toSet

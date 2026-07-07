@@ -106,6 +106,36 @@ class HydrationScopeTest extends CatsEffectSuite:
     case Scope.Keys(sources) => Scope.Keys(sources.sortBy(_.toString))
     case other               => other
 
+  test("auth Login load plan phases the certified chain"):
+    SpecFixtures.loadIR("auth_service").map: ir =>
+      val op = svcOperations(ir)
+        .find(o => operName(o) == "Login")
+        .getOrElse(fail("auth_service has no operation 'Login'"))
+      val plan = HydrationScope.loadPlan(HydrationScope.analyze(op, ir))
+      def waveOf(rel: String, src: Option[KeySource]): Int =
+        plan.find(st => st.relation == rel && st.source == src).map(_.wave).getOrElse(-1)
+      assertEquals(waveOf("user_by_email", Some(KeySource.Input("email"))), 1)
+      assertEquals(waveOf("sessions", None), 1)
+      assertEquals(waveOf("users", Some(usersFromUbe)), 2)
+      assertEquals(waveOf("users", Some(usersFromSess)), 2)
+      assertEquals(waveOf("user_by_email", Some(ubeFromUsers)), 3)
+
+  test("ecommerce GetOrder load plan keeps two waves"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val op = svcOperations(ir)
+        .find(o => operName(o) == "GetOrder")
+        .getOrElse(fail("ecommerce has no operation 'GetOrder'"))
+      val plan  = HydrationScope.loadPlan(HydrationScope.analyze(op, ir))
+      val waves = plan.map(_.wave)
+      assertEquals(waves.max, 2, plan.toString)
+      assertEquals(
+        plan.filter(_.wave == 2).map(st => st.relation -> st.source).toSet,
+        Set[(String, Option[KeySource])](
+          "payments"  -> Some(orderPayments),
+          "inventory" -> Some(orderItemSkus)
+        )
+      )
+
   expectations.groupBy(_._1).toList.sortBy(_._1).foreach: (spec, rows) =>
     test(s"$spec hydration scopes match the contract census"):
       SpecFixtures.loadIR(spec).map: ir =>
