@@ -133,19 +133,19 @@ class EmitTsTest extends CatsEffectSuite:
         .map(_.content)
         .getOrElse(fail("no urlMapping service emitted"))
       assert(
-        service.contains("const state = await hydrateState(tx, scope);"),
-        s"kernel ops must hydrate state with the op's scope — got:\n$service"
+        service.contains("const [state, hydrated] = await hydrateState(tx, scope);"),
+        s"kernel ops must hydrate state with the op's scope and keep the loaded-keys record — got:\n$service"
       )
       assert(
-        service.contains("await persistState(tx, state, scope);"),
-        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+        service.contains("await persistState(tx, state, hydrated);"),
+        s"kernel ops must persist the mutated state under the hydrated record — got:\n$service"
       )
       // Resolve reads both relations at the path param's key; Shorten's
       // candidate-freshness check forces both whole.
       val resolveScope =
         """    const scope: HydrationScope = {
-          |      metadata: { kind: 'keys', keys: [code] },
-          |      store: { kind: 'keys', keys: [code] },
+          |      metadata: [{ kind: 'keys', keys: [code] }],
+          |      store: [{ kind: 'keys', keys: [code] }],
           |    };""".stripMargin
       assert(
         service.contains(resolveScope),
@@ -153,7 +153,7 @@ class EmitTsTest extends CatsEffectSuite:
       )
       assert(
         service.contains(
-          "const scope: HydrationScope = { metadata: { kind: 'full' }, store: { kind: 'full' } };"
+          "const scope: HydrationScope = { metadata: [{ kind: 'full' }], store: [{ kind: 'full' }] };"
         ),
         s"shorten should hydrate both relations whole — got:\n$service"
       )
@@ -162,14 +162,49 @@ class EmitTsTest extends CatsEffectSuite:
         .map(_.content)
         .getOrElse(fail("no state bridge emitted"))
       assert(
-        bridge.contains("scope?: HydrationScope,"),
-        s"bridge entrypoints must accept the optional per-op scope — got:\n$bridge"
+        bridge.contains("): Promise<[unknown, HydratedRecord]> => {"),
+        s"hydrate must return the state alongside the loaded-keys record — got:\n$bridge"
       )
       assert(
-        bridge.contains(
-          "where: metadataSel.kind === 'keys' ? { code: { in: metadataSel.keys as string[] } } : undefined,"
-        ),
+        bridge.contains("hydrated?: HydratedRecord,"),
+        s"persist must consume the hydrated record, not the request scope — got:\n$bridge"
+      )
+      assert(
+        bridge.contains("where: { code: { in: metadataInputKeys as string[] } },"),
         s"keyed scopes must confine the load to the named keys — got:\n$bridge"
+      )
+      assert(
+        bridge.contains("? { code: { in: ([...metadataSel.keys] as string[]).sort() } }"),
+        s"the persist delete scan must confine to the hydrated keys — got:\n$bridge"
+      )
+
+  test("ecommerce GetOrder ts scope literal carries the derived payment and inventory sources"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "ts-express-postgres")
+      val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("GetOrder" -> "GetOrder"))
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.JsDefaultPackagePath,
+        files = Map("kernel.cjs" -> "// kernel\n"),
+        bindings = List(OperationBinding("GetOrder", "GetOrder"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val service = files
+        .find(_.path == "src/services/order.ts")
+        .map(_.content)
+        .getOrElse(fail("no order service emitted"))
+      assert(
+        service.contains("orders: [{ kind: 'keys', keys: [orderId] }]"),
+        s"GetOrder should key orders by the path param — got:\n$service"
+      )
+      assert(
+        service.contains("{ kind: 'valueCol', src: 'orders', column: 'order_id' }"),
+        s"GetOrder should key payments by the hydrated order ids — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "{ kind: 'dependent', src: 'orders', collection: 'items', elem: 'product_sku' }"
+        ),
+        s"GetOrder should key inventory through the hydrated line-item skus — got:\n$service"
       )
 
   private val dialectCases = List(
