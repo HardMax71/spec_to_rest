@@ -65,6 +65,17 @@ object StateBridgeTs:
       seqSupported = true
     )
 
+  // Renders `<prefix>{ e1, e2 };` on one line when it fits 100 columns after
+  // `margin` spaces of ambient indent, one entry per line otherwise.
+  def scopeAssign(prefix: String, entries: List[String], margin: Int): List[String] =
+    if entries.isEmpty then List(s"$prefix{};")
+    else
+      val single = s"$prefix{ ${entries.mkString(", ")} };"
+      if margin + single.length <= 100 then List(single)
+      else
+        val pad = prefix.takeWhile(_ == ' ')
+        (s"$prefix{" :: entries.map(e => s"$pad  $e,")) ::: List(s"$pad};")
+
   private[codegen] def enumValuesLiteral(ir: ServiceIRFull, enumName: String): String =
     svcEnums(ir)
       .find(e => enumNameFull(e) == enumName)
@@ -181,9 +192,7 @@ object StateBridgeTs:
       case Right(p) => p
       case Left(_)  => StatePlan.Plan(Nil, Nil)
 
-    val entities     = planned.relations.map(_.entity).distinctBy(_.entityName)
     val seqRelations = planned.relations.filter(_.isSeq)
-    val seqEntities  = seqRelations.map(_.entity.entityName).toSet
 
     // Element entities of Set[Entity] fields: hydration fetches their rows
     // and builds Dafny values through a local helper, persistence upserts
@@ -206,43 +215,125 @@ object StateBridgeTs:
           .map(f -> _)
       )
 
+    // The fields a relation's hydrate block actually converts: a value
+    // projection reads only its value column, everything else the whole row.
+    def hydratedFields(r: StatePlan.RelationPlan): List[ProfiledField] =
+      r.valueField.map(List(_)).getOrElse(r.entity.fields)
+    def relNestedRefs(
+        r: StatePlan.RelationPlan
+    ): List[(ProfiledField, specrest.profile.ProfiledEntity)] =
+      hydratedFields(r).flatMap(f =>
+        kindFor(profiled.ir, r.entity.entityName, f)
+          .collect { case Kind.EntitySetOf(en) => en }
+          .flatMap(nestedByName.get)
+          .map(f -> _)
+      )
+    val fullDefault =
+      planned.relations.map(_.stateField).distinct.sorted.map(f => s"$f: { kind: 'full' }")
+    def relSel(r: StatePlan.RelationPlan): String     = s"${camel(r.stateField)}Sel"
+    def relRowsVar(r: StatePlan.RelationPlan): String = s"${camel(r.stateField)}Rows"
+    def keysCast(key: ProfiledField): String =
+      if key.domainType == "string" then "string[]" else "number[]"
+    def keyedWhere(sel: String, key: ProfiledField): String =
+      s"$sel.kind === 'keys' ? { ${camel(key.fieldName)}: { in: $sel.keys as ${keysCast(key)} } } : undefined"
+    def loadLines(r: StatePlan.RelationPlan): List[String] =
+      val client = camel(r.entity.entityName)
+      val sel    = relSel(r)
+      // A seq present in scope is always full; keyed loads never apply.
+      if r.isSeq then
+        List(
+          s"  const $sel = sc.${r.stateField};",
+          s"  const ${relRowsVar(r)} = $sel",
+          s"    ? await tx.$client.findMany({ orderBy: { id: 'asc' } })",
+          "    : [];"
+        )
+      else
+        r.keyField.toList.flatMap { key =>
+          List(
+            s"  const $sel = sc.${r.stateField};",
+            s"  const ${relRowsVar(r)} = $sel",
+            s"    ? await tx.$client.findMany({",
+            s"        where: ${keyedWhere(sel, key)},",
+            "      })",
+            "    : [];"
+          )
+        }
+    def idCollectLines(r: StatePlan.RelationPlan, idsSuffix: String): List[String] =
+      relNestedRefs(r).flatMap { (f, ne) =>
+        List(
+          s"  for (const r of ${relRowsVar(r)}) {",
+          s"    for (const x of r.${camel(f.fieldName)} as number[]) {",
+          s"      ${camel(ne.entityName)}$idsSuffix.add(Number(x));",
+          "    }",
+          "  }"
+        )
+      }
+    def constructLines(r: StatePlan.RelationPlan): List[String] =
+      val e = r.entity
+      if r.isSeq then
+        // Rows ordered by the serial pk are the seq, element order preserved.
+        List(
+          s"  if (${relSel(r)}) {",
+          s"    st['${dafnyName(r.stateField)}'] = dafnySeqOf(${relRowsVar(r)}.map((r) =>",
+          s"      dafnyModule['${e.entityName}'].create_${e.entityName}("
+        )
+          ::: e.fields.map(f => s"        ${toDafnyExpr(profiled.ir, e.entityName, f, "r")},")
+          ::: List("      ),", "    ));", "  }")
+      else
+        r.keyField.toList.flatMap { rKey =>
+          val builder = s"${camel(r.stateField)}Map"
+          val update = r.valueField match
+            case Some(vf) =>
+              List(
+                s"      $builder = $builder.update(${keyToDafny(rKey, "r")}, ${toDafnyExpr(profiled.ir, e.entityName, vf, "r")});"
+              )
+            case None =>
+              s"      $builder = $builder.update(${keyToDafny(rKey, "r")}, dafnyModule['${e.entityName}'].create_${e.entityName}(" ::
+                e.fields.map(f => s"        ${toDafnyExpr(profiled.ir, e.entityName, f, "r")},") :::
+                List("      ));")
+          List(
+            s"  if (${relSel(r)}) {",
+            s"    let $builder = emptyDafnyMap() as DafnyMap;",
+            s"    for (const r of ${relRowsVar(r)}) {"
+          ) ::: update ::: List(
+            "    }",
+            s"    st['${dafnyName(r.stateField)}'] = $builder;",
+            "  }"
+          )
+        }
+
     val hydrate = new StringBuilder
+    def add(sb: StringBuilder, lines: List[String]): Unit =
+      lines.foreach(l => sb ++= l + "\n")
+    if planned.relations.nonEmpty then
+      add(hydrate, scopeAssign("  const sc: HydrationScope = scope ?? ", fullDefault, 0))
+    for ne <- nestedEntities do
+      hydrate ++= s"  const ${camel(ne.entityName)}Ids = new Set<number>();\n"
+    // Relations embedding nested entities load first so the id union across
+    // their hydrated rows can key the nested selects; their Dafny values
+    // construct after <nested>ToDafny exists.
+    val nestedOwners = planned.relations.filter(r => relNestedRefs(r).nonEmpty)
+    for r <- nestedOwners do
+      add(hydrate, loadLines(r))
+      add(hydrate, idCollectLines(r, "Ids"))
     for ne <- nestedEntities do
       val client = camel(ne.entityName)
-      val args = ne.fields.map(f =>
-        s"      ${toDafnyExpr(profiled.ir, ne.entityName, f, "r")},"
-      ).mkString("\n")
-      hydrate ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
-      hydrate ++= s"  const ${client}ToDafny = (r: (typeof ${client}Rows)[number]): unknown =>\n"
-      hydrate ++= s"    dafnyModule['${ne.entityName}'].create_${ne.entityName}(\n$args\n    );\n"
-    for e <- entities do
-      val order =
-        if seqEntities.contains(e.entityName) then "{ orderBy: { id: 'asc' } }" else ""
-      hydrate ++= s"  const ${camel(e.entityName)}Rows = await tx.${camel(e.entityName)}.findMany($order);\n"
-    for r <- seqRelations do
-      // Rows ordered by the serial pk are the seq, element order preserved.
-      val rows = s"${camel(r.entity.entityName)}Rows"
-      val args = r.entity.fields.map(f =>
-        s"      ${toDafnyExpr(profiled.ir, r.entity.entityName, f, "r")},"
-      ).mkString("\n")
-      hydrate ++= s"  st['${dafnyName(r.stateField)}'] = dafnySeqOf(${rows}.map((r) =>\n"
-      hydrate ++= s"    dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    ),\n"
-      hydrate ++= "  ));\n"
-    for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
-      val rows    = s"${camel(r.entity.entityName)}Rows"
-      val builder = s"${camel(r.stateField)}Map"
-      hydrate ++= s"  let $builder = emptyDafnyMap() as DafnyMap;\n"
-      hydrate ++= s"  for (const r of $rows) {\n"
-      val value = r.valueField match
-        case Some(vf) => toDafnyExpr(profiled.ir, r.entity.entityName, vf, "r")
-        case None =>
-          val args = r.entity.fields.map(f =>
-            s"      ${toDafnyExpr(profiled.ir, r.entity.entityName, f, "r")},"
-          ).mkString("\n")
-          s"dafnyModule['${r.entity.entityName}'].create_${r.entity.entityName}(\n$args\n    )"
-      hydrate ++= s"    $builder = $builder.update(${keyToDafny(rKey, "r")}, $value);\n"
-      hydrate ++= "  }\n"
-      hydrate ++= s"  st['${dafnyName(r.stateField)}'] = $builder;\n"
+      add(
+        hydrate,
+        List(
+          s"  const ${client}Rows =",
+          s"    ${client}Ids.size > 0",
+          s"      ? await tx.$client.findMany({ where: { id: { in: [...${client}Ids] } } })",
+          "      : [];",
+          s"  const ${client}ToDafny = (r: (typeof ${client}Rows)[number]): unknown =>",
+          s"    dafnyModule['${ne.entityName}'].create_${ne.entityName}("
+        )
+          ::: ne.fields.map(f => s"      ${toDafnyExpr(profiled.ir, ne.entityName, f, "r")},")
+          ::: List("    );")
+      )
+    for r <- planned.relations do
+      if relNestedRefs(r).isEmpty then add(hydrate, loadLines(r))
+      add(hydrate, constructLines(r))
     if planned.scalars.nonEmpty then
       hydrate ++= "  const scalarRow = await tx.serviceState.findUnique({ where: { id: 1 } });\n"
       hydrate ++= "  if (scalarRow) {\n"
@@ -251,58 +342,93 @@ object StateBridgeTs:
       hydrate ++= "  }\n"
 
     val persist = new StringBuilder
+    if planned.relations.nonEmpty then
+      add(persist, scopeAssign("  const sc: HydrationScope = scope ?? ", fullDefault, 0))
+    for ne <- nestedEntities do
+      persist ++= s"  const ${camel(ne.entityName)}PreIds = new Set<number>();\n"
     for r <- seqRelations do
       val e      = r.entity
       val client = camel(e.entityName)
+      persist ++= s"  if (sc.${r.stateField}) {\n"
+      val seqNested = nestedFieldsOf(e)
+      if seqNested.nonEmpty then
+        persist ++= s"    const ${client}Olds = await tx.$client.findMany();\n"
+        for (f, ne) <- seqNested do
+          persist ++= s"    for (const r of ${client}Olds) {\n"
+          persist ++= s"      for (const x of r.${camel(f.fieldName)} as number[]) {\n"
+          persist ++= s"        ${camel(ne.entityName)}PreIds.add(Number(x));\n"
+          persist ++= "      }\n"
+          persist ++= "    }\n"
       // Reinsert in seq order: the serial pk reassigns, which nothing
       // observes (the seq projection orders by it and exposes no id).
-      persist ++= s"  await tx.$client.deleteMany();\n"
-      persist ++= s"  for (const v of st['${dafnyName(r.stateField)}'] as Iterable<unknown>) {\n"
-      persist ++= "    const value = v as Record<string, unknown>;\n"
-      persist ++= s"    await tx.$client.create({\n      data: {\n"
+      persist ++= s"    await tx.$client.deleteMany();\n"
+      persist ++= s"    for (const v of st['${dafnyName(r.stateField)}'] as Iterable<unknown>) {\n"
+      persist ++= "      const value = v as Record<string, unknown>;\n"
+      persist ++= s"      await tx.$client.create({\n        data: {\n"
       for f <- e.fields do
-        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
-      persist ++= "      },\n    });\n"
+        persist ++= s"          ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
+      persist ++= "        },\n      });\n"
+      persist ++= "    }\n"
       persist ++= "  }\n"
     for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e      = r.entity
       val client = camel(e.entityName)
-      persist ++= s"  const ${client}Rows = await tx.$client.findMany();\n"
+      val sel    = relSel(r)
+      persist ++= s"  const $sel = sc.${r.stateField};\n"
+      persist ++= s"  if ($sel) {\n"
+      // A keys scope confines the existing-rows scan to the hydrated keys, so
+      // rows the request never loaded cannot be judged stale; an empty key
+      // list loads no rows, upserts the whole post map, and deletes nothing.
+      persist ++= s"    const ${client}Rows = await tx.$client.findMany({\n"
+      persist ++= s"      where: ${keyedWhere(sel, rKey)},\n"
+      persist ++= "    });\n"
       // String-typed lookup keys are exact for every magnitude: prisma pks
       // arrive as bigint and dafny keys convert through number, so comparing
       // their canonical string forms avoids both bigint mismatch and float
       // precision loss on large ids.
-      persist ++= s"  const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
-      persist ++= s"  const ${client}Seen = new Set<string>();\n"
-      persist ++= s"  for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
+      persist ++= s"    const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
+      // Nested ids collect before the upsert loop mutates these rows: the
+      // nested delete scan may only judge rows the hydrated owners referenced
+      // in their pre state.
+      for (f, ne) <- nestedFieldsOf(e) do
+        persist ++= s"    for (const r of ${client}Rows) {\n"
+        persist ++= s"      for (const x of r.${camel(f.fieldName)} as number[]) {\n"
+        persist ++= s"        ${camel(ne.entityName)}PreIds.add(Number(x));\n"
+        persist ++= "      }\n"
+        persist ++= "    }\n"
+      persist ++= s"    const ${client}Seen = new Set<string>();\n"
+      persist ++= s"    for (const [k, v] of st['${dafnyName(r.stateField)}'] as Iterable<[unknown, unknown]>) {\n"
       val dafnyKeyString =
         if rKey.domainType == "string" then "stringFromDafny(k)" else "intKeyFromDafny(k)"
-      persist ++= s"    const key = $dafnyKeyString;\n"
-      persist ++= "    const value = v as Record<string, unknown>;\n"
-      persist ++= s"    ${client}Seen.add(key);\n"
+      persist ++= s"      const key = $dafnyKeyString;\n"
+      persist ++= "      const value = v as Record<string, unknown>;\n"
+      persist ++= s"      ${client}Seen.add(key);\n"
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
-      persist ++= "    const data = {\n"
+      persist ++= "      const data = {\n"
       for f <- nonKey do
-        persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
-      persist ++= "    };\n"
-      persist ++= s"    const row = ${client}Existing.get(key);\n"
-      persist ++= "    if (row) {\n"
-      persist ++= s"      await tx.$client.update({ where: { id: row.id }, data });\n"
-      persist ++= "    } else {\n"
-      persist ++= s"      await tx.$client.create({\n"
-      persist ++= s"        data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, rKey, "value")}, ...data },\n"
-      persist ++= "      });\n"
+        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
+      persist ++= "      };\n"
+      persist ++= s"      const row = ${client}Existing.get(key);\n"
+      persist ++= "      if (row) {\n"
+      persist ++= s"        await tx.$client.update({ where: { id: row.id }, data });\n"
+      persist ++= "      } else {\n"
+      persist ++= s"        await tx.$client.create({\n"
+      persist ++= s"          data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, rKey, "value")}, ...data },\n"
+      persist ++= "        });\n"
+      persist ++= "      }\n"
       persist ++= "    }\n"
-      persist ++= "  }\n"
-      persist ++= s"  for (const [key, row] of ${client}Existing) {\n"
-      persist ++= s"    if (!${client}Seen.has(key)) {\n"
-      persist ++= s"      await tx.$client.delete({ where: { id: row.id } });\n"
+      persist ++= s"    for (const [key, row] of ${client}Existing) {\n"
+      persist ++= s"      if (!${client}Seen.has(key)) {\n"
+      persist ++= s"        await tx.$client.delete({ where: { id: row.id } });\n"
+      persist ++= "      }\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
     for ne <- nestedEntities do
       val client = camel(ne.entityName)
       // Only whole-entity relations iterate as owner objects; a relation
-      // projecting a single value field holds scalars, not rows.
+      // projecting a single value field holds scalars, not rows. Skipped
+      // owners hydrated nothing, so their post maps are empty and this pass
+      // degenerates to a no-op when no owner is in scope.
       val owners =
         for
           r      <- planned.relations if r.valueField.isEmpty
@@ -320,7 +446,10 @@ object StateBridgeTs:
         persist ++= s"      ${client}Post.set(intFromDafny(li['dtor_id']), li);\n"
         persist ++= "    }\n"
         persist ++= "  }\n"
-      persist ++= s"  const ${client}PostRows = await tx.$client.findMany();\n"
+      persist ++= s"  const ${client}PostRows =\n"
+      persist ++= s"    ${client}PreIds.size > 0\n"
+      persist ++= s"      ? await tx.$client.findMany({ where: { id: { in: [...${client}PreIds] } } })\n"
+      persist ++= "      : [];\n"
       persist ++= s"  const ${client}Existing = new Map(${client}PostRows.map((r) => [Number(r.id), r]));\n"
       persist ++= s"  for (const [key, value] of ${client}Post) {\n"
       persist ++= "    const data = {\n"
@@ -380,7 +509,18 @@ object StateBridgeTs:
        |
        |type DafnyMap = { update(k: unknown, v: unknown): DafnyMap } & Iterable<[unknown, unknown]>;
        |
-       |export const hydrateState = async (tx: Prisma.TransactionClient): Promise<unknown> => {
+       |// Which rows of each state relation an operation touches: a missing entry
+       |// skips the relation in both directions, 'full' loads the whole table, and
+       |// 'keys' confines both the load and the stale-row delete scan to the listed
+       |// key values (an empty list is a persist-only scope).
+       |export type HydrationSel = { kind: 'full' } | { kind: 'keys'; keys: ReadonlyArray<unknown> };
+       |
+       |export type HydrationScope = Readonly<Record<string, HydrationSel | undefined>>;
+       |
+       |export const hydrateState = async (
+       |  tx: Prisma.TransactionClient,
+       |  scope?: HydrationScope,
+       |): Promise<unknown> => {
        |  const st = makeState() as Record<string, unknown>;
        |${hydrate.toString}  return st;
        |};
@@ -388,6 +528,7 @@ object StateBridgeTs:
        |export const persistState = async (
        |  tx: Prisma.TransactionClient,
        |  state: unknown,
+       |  scope?: HydrationScope,
        |): Promise<void> => {
        |  const st = state as Record<string, unknown>;
        |${persist.toString}};

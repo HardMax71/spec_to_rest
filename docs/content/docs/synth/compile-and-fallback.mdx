@@ -48,9 +48,26 @@ Hard failure modes:
 | `dafny` not on PATH (or `--dafny-bin` invalid) | 3 | "`dafny --version` failed ..." |
 | `dafny translate` exits non-zero | 3 | "dafny translate py failed: $stderr" |
 
-Persistence is intentionally out of scope here. The kernel `ServiceState`
-is held per-request by `make_state()`; bridging it to SQLAlchemy / Postgres
-on a `commit` boundary is tracked as a follow-up issue.
+Persistence has since grown past this milestone. Kernel handlers hydrate
+`ServiceState` from the database, evaluate the compiled `Requires` twin and
+the `ServiceStateInv` guard, call the kernel, and persist the mutated state
+in the same transaction. Hydration is scoped per operation: a static pass
+over each operation's contracts (`HydrationScope`) decides, per state
+relation, whether the request loads the whole relation, only the rows keyed
+by request inputs, or nothing at all. The persist pass confines its
+delete scan to the rows it hydrated, so an insert-only operation touches no
+existing rows and a keyed update can never judge an unloaded row stale.
+Soundness rests on the Dafny proofs quantifying over every state that
+satisfies the requires, and a partially hydrated state is such a state,
+provided it still satisfies `ServiceStateInv`. Per-row invariants hold on
+any subset for free; cross-relation clauses do not, so the analyzer closes
+each scope under them: a relation an invariant reads outside its own rows
+loads whole whenever a referencing relation hydrates non-empty, and clause
+shapes the classifier cannot vouch for force their relations whole on every
+request. The one trade left is the guard's reach: a stored invariant
+violation among rows a request never loads (possible only through
+out-of-band writes such as admin seeding) is caught by the next request
+that hydrates them, not by every request.
 
 ## Graduated fallback (M6.6)
 

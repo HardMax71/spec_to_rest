@@ -65,7 +65,8 @@ class {{entity.entityName}}Service:
     async def {{this.handlerName}}(self) -> {{this.serviceReturnAnnotation}}:
 {{/if}}
 {{#if this.kernelHasState}}
-        state = await hydrate_state(self._session)
+{{this.kernelScopeAssign}}
+        state = await hydrate_state(self._session, _scope)
 {{else}}
         state = make_state()
 {{/if}}
@@ -114,7 +115,7 @@ class {{entity.entityName}}Service:
         )
 {{/if}}
 {{#if this.kernelHasState}}
-        await persist_state(self._session, state)
+        await persist_state(self._session, state, _scope)
         # The request session otherwise commits in dependency teardown, which
         # can run after the response is sent; a conformance client reading
         # /admin/state immediately would race the write.

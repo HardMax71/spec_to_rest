@@ -226,12 +226,26 @@ class EmitTest extends CatsEffectSuite:
         s"shorten kernel call should pass the converted body.url — got:\n$service"
       )
       assert(
-        service.contains("state = await hydrate_state(self._session)"),
-        s"kernel ops must hydrate state from the session — got:\n$service"
+        service.contains("state = await hydrate_state(self._session, _scope)"),
+        s"kernel ops must hydrate state from the session with the op's scope — got:\n$service"
       )
       assert(
-        service.contains("await persist_state(self._session, state)"),
-        s"kernel ops must persist the mutated state — got:\n$service"
+        service.contains("await persist_state(self._session, state, _scope)"),
+        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+      )
+      // Resolve reads both relations at the path param's key; Shorten's
+      // candidate-freshness check forces both whole.
+      assert(
+        service.contains(
+          "_scope: dict[str, Any] = {\"metadata\": (\"keys\", [code]), \"store\": (\"keys\", [code])}"
+        ),
+        s"resolve should hydrate both relations keyed by code — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "_scope: dict[str, Any] = {\"metadata\": (\"full\",), \"store\": (\"full\",)}"
+        ),
+        s"shorten should hydrate both relations whole — got:\n$service"
       )
       // Resolve: path param `code: str`, converted at the boundary.
       assert(
@@ -283,7 +297,7 @@ class EmitTest extends CatsEffectSuite:
         s"Shorten should marshal body.URL and capture both outputs — got:\n$service"
       )
       assert(
-        service.contains("state, err := hydrateState(ctx, tx)"),
+        service.contains("state, err := hydrateState(ctx, tx, scope)"),
         s"kernel ops must hydrate state inside the transaction — got:\n$service"
       )
       assert(
@@ -293,7 +307,7 @@ class EmitTest extends CatsEffectSuite:
         s"kernel ops must check the compiled requires twin — got:\n$service"
       )
       assert(
-        service.contains("persistState(ctx, tx, state)"),
+        service.contains("persistState(ctx, tx, state, scope)"),
         s"kernel ops must persist the mutated state — got:\n$service"
       )
       assert(

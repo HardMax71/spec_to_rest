@@ -7,6 +7,7 @@ import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.HydrationScope
 import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
@@ -127,6 +128,7 @@ final private case class EnrichedOperation(
     kernelGuardDetail: String,
     kernelHasState: Boolean,
     kernelHasInv: Boolean,
+    kernelScopeAssign: String,
     kernelResultBind: String,
     kernelResultExpr: String,
     initFields: List[ModelInitFieldView],
@@ -731,13 +733,19 @@ object EmitPython:
         case KernelTypes.Kind.EntitySetOf(_) => None
         case KernelTypes.Kind.OptOf(inner) =>
           inputToDafny("_v", inner).map(conv => s"some_or_none($access, lambda _v: $conv)")
-    val specInputTypes = svcOperations(kernelCtx.ir)
-      .find(o => operName(o) == op.operationName)
+    val specOp = svcOperations(kernelCtx.ir).find(o => operName(o) == op.operationName)
+    val specInputTypes = specOp
       .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
       .getOrElse(Map.empty)
     val nonBodyNames =
       (endpoint.pathParams ++ endpoint.queryParams).map(_.name).toSet
     val queryNames = endpoint.queryParams.map(_.name).toSet
+    def paramAccess(name: String): String =
+      if nonBodyNames.contains(name) then name
+      // Sensitive fields arrive as pydantic SecretStr and must unwrap
+      // before crossing the kernel boundary.
+      else if sensitiveBodyFields.contains(name) then s"body.$name.get_secret_value()"
+      else s"body.$name"
     // Query values arrive as strings, so only string-shaped kinds (plain or
     // enum, optionally wrapped) convert; anything else keeps the op off the
     // kernel rather than passing a mistyped value.
@@ -751,23 +759,46 @@ object EmitPython:
         case _                              => false
     val kernelArgConversions: List[Option[String]] =
       (endpoint.pathParams ++ endpoint.queryParams ++ endpoint.bodyParams).map { p =>
-        val access =
-          if nonBodyNames.contains(p.name) then p.name
-          // Sensitive fields arrive as pydantic SecretStr and must unwrap
-          // before crossing the kernel boundary.
-          else if sensitiveBodyFields.contains(p.name) then s"body.${p.name}.get_secret_value()"
-          else s"body.${p.name}"
+        val access = paramAccess(p.name)
         specInputTypes
           .get(p.name)
           .flatMap(t => KernelTypes.resolve(kernelCtx.ir, t))
           .filter(k => !queryNames.contains(p.name) || queryKindOk(k))
           .flatMap(k => inputToDafny(access, k))
       }
-    val kernelOuts = op.responseFields
-    val specOutputs = svcOperations(kernelCtx.ir)
-      .find(o => operName(o) == op.operationName)
-      .map(operOutputs)
-      .getOrElse(Nil)
+    val kernelOuts  = op.responseFields
+    val specOutputs = specOp.map(operOutputs).getOrElse(Nil)
+    // Which rows each state relation must hydrate for this operation, as the
+    // python dict literal both bridge calls receive. Keyed scopes name the
+    // request values through the same access paths the kernel args use; a
+    // relation the contracts never touch stays out of the dict and is skipped
+    // in both directions.
+    // The annotation is load-bearing: a persist-only scope's empty key list
+    // gives mypy nothing to infer the value type from.
+    val scopePrefix = "        _scope: dict[str, Any] = "
+    val kernelScopeAssign = specOp match
+      case None => "        _scope: dict[str, Any] | None = None"
+      case Some(decl) =>
+        val entries = HydrationScope
+          .analyze(decl, kernelCtx.ir)
+          .byField
+          .toList
+          .sortBy(_._1)
+          .flatMap { (rel, sc) =>
+            sc match
+              case HydrationScope.Scope.Skip => None
+              case HydrationScope.Scope.Full => Some(s"\"$rel\": (\"full\",)")
+              case HydrationScope.Scope.Keys(sources) =>
+                val accesses = sources.map {
+                  case HydrationScope.KeySource.Input(n)          => Some(paramAccess(n))
+                  case _: HydrationScope.KeySource.DependentField => None
+                }
+                // Dependent-key hops are a later milestone; until wired,
+                // such a relation loads whole.
+                if accesses.contains(None) then Some(s"\"$rel\": (\"full\",)")
+                else Some(s"\"$rel\": (\"keys\", [${accesses.flatten.mkString(", ")}])")
+          }
+        StateBridge.scopeAssign(scopePrefix, entries)
     // A single entity-valued output marshals by field projection; a seq of
     // entities projects per element into a bare JSON array (list routes
     // return the array itself); scalar outputs unpack positionally; no
@@ -959,6 +990,7 @@ object EmitPython:
       kernelGuardDetail = kernelGuardDetail,
       kernelHasState = kernelCtx.hasState,
       kernelHasInv = kernelCtx.hasInv,
+      kernelScopeAssign = kernelScopeAssign,
       kernelResultBind = kernelResultBind,
       kernelResultExpr = kernelResultExpr,
       initFields = createInitFields,
@@ -1204,7 +1236,8 @@ object EmitPython:
       needsModelImport = needsModelImport,
       needsDafnyKernel = needsDafnyKernel,
       needsStateBridge = kernelOps.exists(_.kernelHasState),
-      needsAny = kernelOps.exists(_.serviceReturnAnnotation.contains("Any")),
+      needsAny =
+        kernelOps.exists(o => o.serviceReturnAnnotation.contains("Any") || o.kernelHasState),
       adapterImports = adapterImports,
       adapterImportBlock =
         if adapterImports.sizeIs <= 3 then

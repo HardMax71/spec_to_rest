@@ -83,6 +83,20 @@ object StateBridgeGo:
   private def rowsVar(e: ProfiledEntity): String =
     Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Rows"
 
+  // Renders `<lhs>map[string]hydrationSel{...}`, padding each key token the
+  // way gofmt's tabwriter aligns adjacent composite-literal entries.
+  private[go] def scopeAssign(
+      lhs: String,
+      indent: String,
+      entries: List[(String, String)]
+  ): List[String] =
+    if entries.isEmpty then List(s"$indent${lhs}map[string]hydrationSel{}")
+    else
+      val width = entries.map(_._1.length + 3).max
+      (s"$indent${lhs}map[string]hydrationSel{"
+        :: entries.map((k, v) => s"$indent\t${s"\"$k\":".padTo(width + 1, ' ')}$v,"))
+        ::: List(s"$indent}")
+
   private[codegen] def enumHelperName(enumName: String, toDafny: Boolean): String =
     val base = Naming.toCamelCase(enumName, Naming.CamelStrategy.Plain)
     if toDafny then s"${base}ToDafny" else s"${base}FromDafny"
@@ -385,126 +399,225 @@ object StateBridgeGo:
     }.mkString("\n")
 
     val seqRelations = planned.relations.filter(_.isSeq)
-    val seqEntities  = seqRelations.map(_.entity.entityName).toSet
-    val hydrate      = new StringBuilder
+    val fullDefault =
+      planned.relations.map(_.stateField).distinct.sorted.map(f => f -> "{full: true}")
+    // The fields a relation's hydrate block actually converts: a value
+    // projection reads only its value column, everything else the whole row.
+    def hydratedFields(r: StatePlan.RelationPlan): List[ProfiledField] =
+      r.valueField.map(List(_)).getOrElse(r.entity.fields)
+    def nestedRefs(r: StatePlan.RelationPlan): List[(ProfiledField, ProfiledEntity)] =
+      hydratedFields(r).flatMap(f =>
+        kindFor(profiled, r.entity.entityName, f)
+          .collect { case Kind.EntitySetOf(en) => en }
+          .flatMap(nestedByName.get)
+          .map(f -> _)
+      )
+    def relRows(r: StatePlan.RelationPlan): String =
+      Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Rows"
+    def idsVar(ne: ProfiledEntity, pre: Boolean): String =
+      val base = Naming.toCamelCase(ne.entityName, Naming.CamelStrategy.Plain)
+      if pre then s"${base}PreIDs" else s"${base}IDs"
+    def guardOpen(r: StatePlan.RelationPlan): String =
+      if r.isSeq then s"\tif _, ok := scope[\"${r.stateField}\"]; ok {"
+      else s"\tif sel, ok := scope[\"${r.stateField}\"]; ok {"
+    def loadLines(r: StatePlan.RelationPlan, rows: String, errRet: String): List[String] =
+      if r.isSeq then
+        // Rows ordered by the serial pk are the seq. A seq present in scope
+        // always loads whole; keyed loads never apply.
+        List(
+          s"\t\tif err := db.NewSelect().Model(&$rows).Order(\"id ASC\").Scan(ctx); err != nil {",
+          s"\t\t\t$errRet",
+          "\t\t}"
+        )
+      else
+        r.keyField.toList.flatMap { key =>
+          List(
+            "\t\tif sel.full {",
+            s"\t\t\tif err := db.NewSelect().Model(&$rows).Scan(ctx); err != nil {",
+            s"\t\t\t\t$errRet",
+            "\t\t\t}",
+            "\t\t} else if len(sel.keys) > 0 {",
+            s"\t\t\tif err := db.NewSelect().Model(&$rows).Where(\"? IN (?)\", bun.Ident(\"${key.columnName}\"), bun.In(sel.keys)).Scan(ctx); err != nil {",
+            s"\t\t\t\t$errRet",
+            "\t\t\t}",
+            "\t\t}"
+          )
+        }
+    def collectIds(rows: String, refs: List[(ProfiledField, ProfiledEntity)], pre: Boolean) =
+      refs.flatMap { (f, ne) =>
+        List(
+          s"\t\tfor _, r := range $rows {",
+          s"\t\t\t${idsVar(ne, pre)} = append(${idsVar(ne, pre)}, r.${pascal(f.fieldName)}...)",
+          "\t\t}"
+        )
+      }
+
+    val hydrate = new StringBuilder
+    if planned.relations.nonEmpty then
+      hydrate ++= "\tif scope == nil {\n"
+      scopeAssign("scope = ", "\t\t", fullDefault).foreach(l => hydrate ++= s"$l\n")
+      hydrate ++= "\t}\n"
+    for ne <- nestedEntities do
+      hydrate ++= s"\t${idsVar(ne, pre = false)} := make([]int64, 0)\n"
+    // Relations embedding nested entities load first so the id union across
+    // their hydrated rows can key the nested selects; their Dafny values
+    // construct after <nested>ByID exists.
+    val nestedOwners = planned.relations.filter(r => nestedRefs(r).nonEmpty)
+    for r <- nestedOwners do
+      hydrate ++= s"\t${relRows(r)} := make([]models.${r.entity.modelClassName}, 0)\n"
+      hydrate ++= s"${guardOpen(r)}\n"
+      loadLines(r, relRows(r), "return nil, err").foreach(l => hydrate ++= s"$l\n")
+      collectIds(relRows(r), nestedRefs(r), pre = false).foreach(l => hydrate ++= s"$l\n")
+      hydrate ++= "\t}\n"
     for ne <- nestedEntities do
       val byID = Naming.toCamelCase(ne.entityName, Naming.CamelStrategy.Plain) + "ByID"
       val rows = rowsVar(ne)
+      val ids  = idsVar(ne, pre = false)
       hydrate ++= s"\t$rows := make([]models.${ne.modelClassName}, 0)\n"
-      hydrate ++= s"\tif err := db.NewSelect().Model(&$rows).Scan(ctx); err != nil {\n"
-      hydrate ++= "\t\treturn nil, err\n\t}\n"
+      hydrate ++= s"\tif len($ids) > 0 {\n"
+      hydrate ++= s"\t\tif err := db.NewSelect().Model(&$rows).Where(\"? IN (?)\", bun.Ident(\"id\"), bun.In($ids)).Scan(ctx); err != nil {\n"
+      hydrate ++= "\t\t\treturn nil, err\n\t\t}\n"
+      hydrate ++= "\t}\n"
       hydrate ++= s"\t$byID := make(map[int64]models.${ne.modelClassName}, len($rows))\n"
       hydrate ++= s"\tfor _, r := range $rows {\n\t\t$byID[r.ID] = r\n\t}\n"
-    for e <- entities do
-      val order =
-        if seqEntities.contains(e.entityName) then ".Order(\"id ASC\")" else ""
-      hydrate ++= s"\t${rowsVar(e)} := make([]models.${e.modelClassName}, 0)\n"
-      hydrate ++= s"\tif err := db.NewSelect().Model(&${rowsVar(e)})$order.Scan(ctx); err != nil {\n"
-      hydrate ++= "\t\treturn nil, err\n\t}\n"
-    for r <- seqRelations do
-      // Rows ordered by the serial pk are the seq, element order preserved.
-      val elems = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Elems"
-      hydrate ++= s"\t$elems := make([]interface{}, 0, len(${rowsVar(r.entity)}))\n"
-      hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
-      val parts = r.entity.fields
-        .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t"))
-      parts.flatMap(_._1).foreach(l => hydrate ++= s"$l\n")
-      val args = parts.map(p => s"\t\t\t${p._2},").mkString("\n")
-      hydrate ++= s"\t\t$elems = append($elems, dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t))\n"
-      hydrate ++= "\t}\n"
-      hydrate ++= s"\tst.${stateFieldName(r.stateField)} = _dafny.SeqOf($elems...)\n"
-    for (r, rKey) <- planned.relations.flatMap(r => r.keyField.map(r -> _)) do
-      val builder = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Builder"
-      hydrate ++= s"\t$builder := _dafny.NewMapBuilder()\n"
-      hydrate ++= s"\tfor _, r := range ${rowsVar(r.entity)} {\n"
-      val value = r.valueField match
-        case Some(vf) =>
-          val (pre, expr) =
-            toDafnyParts(kindFor(profiled, r.entity.entityName, vf), vf, "r", "\t\t")
-          pre.foreach(l => hydrate ++= s"$l\n")
-          expr
-        case None =>
+    for r <- planned.relations do
+      val owner = nestedRefs(r).nonEmpty
+      if owner then hydrate ++= s"\tif _, ok := scope[\"${r.stateField}\"]; ok {\n"
+      else
+        hydrate ++= s"${guardOpen(r)}\n"
+        hydrate ++= s"\t\t${relRows(r)} := make([]models.${r.entity.modelClassName}, 0)\n"
+        loadLines(r, relRows(r), "return nil, err").foreach(l => hydrate ++= s"$l\n")
+      (r.keyField, r.isSeq) match
+        case (_, true) =>
+          val elems = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Elems"
+          hydrate ++= s"\t\t$elems := make([]interface{}, 0, len(${relRows(r)}))\n"
+          hydrate ++= s"\t\tfor _, r := range ${relRows(r)} {\n"
           val parts = r.entity.fields
-            .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t"))
+            .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t\t"))
           parts.flatMap(_._1).foreach(l => hydrate ++= s"$l\n")
-          val args = parts.map(p => s"\t\t\t${p._2},").mkString("\n")
-          s"dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t)"
-      hydrate ++= s"\t\t$builder.Add(${keyToDafny(rKey, "r")}, $value)\n"
+          val args = parts.map(p => s"\t\t\t\t${p._2},").mkString("\n")
+          hydrate ++= s"\t\t\t$elems = append($elems, dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t\t))\n"
+          hydrate ++= "\t\t}\n"
+          hydrate ++= s"\t\tst.${stateFieldName(r.stateField)} = _dafny.SeqOf($elems...)\n"
+        case (Some(rKey), _) =>
+          val builder = Naming.toCamelCase(r.stateField, Naming.CamelStrategy.Plain) + "Builder"
+          hydrate ++= s"\t\t$builder := _dafny.NewMapBuilder()\n"
+          hydrate ++= s"\t\tfor _, r := range ${relRows(r)} {\n"
+          val value = r.valueField match
+            case Some(vf) =>
+              val (pre, expr) =
+                toDafnyParts(kindFor(profiled, r.entity.entityName, vf), vf, "r", "\t\t\t")
+              pre.foreach(l => hydrate ++= s"$l\n")
+              expr
+            case None =>
+              val parts = r.entity.fields
+                .map(f => toDafnyParts(kindFor(profiled, r.entity.entityName, f), f, "r", "\t\t\t"))
+              parts.flatMap(_._1).foreach(l => hydrate ++= s"$l\n")
+              val args = parts.map(p => s"\t\t\t\t${p._2},").mkString("\n")
+              s"dafnykernel.Companion_${r.entity.entityName}_.Create_${r.entity.entityName}_(\n$args\n\t\t\t)"
+          hydrate ++= s"\t\t\t$builder.Add(${keyToDafny(rKey, "r")}, $value)\n"
+          hydrate ++= "\t\t}\n"
+          hydrate ++= s"\t\tst.${stateFieldName(r.stateField)} = $builder.ToMap()\n"
+        case (None, false) => ()
       hydrate ++= "\t}\n"
-      hydrate ++= s"\tst.${stateFieldName(r.stateField)} = $builder.ToMap()\n"
 
     val persist = new StringBuilder
+    if planned.relations.nonEmpty then
+      persist ++= "\tif scope == nil {\n"
+      scopeAssign("scope = ", "\t\t", fullDefault).foreach(l => persist ++= s"$l\n")
+      persist ++= "\t}\n"
+    for ne <- nestedEntities do
+      persist ++= s"\t${idsVar(ne, pre = true)} := make([]int64, 0)\n"
     for (r, rKey) <- planned.entityRowRelations.flatMap(r => r.keyField.map(r -> _)) do
       val e        = r.entity
       val rows     = rowsVar(e)
       val keyGo    = pascal(rKey.fieldName)
       val existing = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Existing"
       val keyType  = rKey.domainType
-      persist ++= s"\t$rows := make([]models.${e.modelClassName}, 0)\n"
-      persist ++= s"\tif err := db.NewSelect().Model(&$rows).Scan(ctx); err != nil {\n"
-      persist ++= "\t\treturn err\n\t}\n"
-      persist ++= s"\t$existing := make(map[$keyType]models.${e.modelClassName}, len($rows))\n"
-      persist ++= s"\tfor _, r := range $rows {\n\t\t$existing[r.$keyGo] = r\n\t}\n"
+      // A keys scope confines the existing-rows scan to the hydrated keys, so
+      // rows the request never loaded cannot be judged stale; an empty key
+      // list loads no rows, upserts the whole post map, and deletes nothing.
+      persist ++= s"${guardOpen(r)}\n"
+      persist ++= s"\t\t$rows := make([]models.${e.modelClassName}, 0)\n"
+      loadLines(r, rows, "return err").foreach(l => persist ++= s"$l\n")
+      persist ++= s"\t\t$existing := make(map[$keyType]models.${e.modelClassName}, len($rows))\n"
+      persist ++= s"\t\tfor _, r := range $rows {\n\t\t\t$existing[r.$keyGo] = r\n\t\t}\n"
+      // Nested ids collect before the upsert loop rewrites these rows: the
+      // nested delete scan may only judge rows the hydrated owners referenced
+      // in their pre state.
+      collectIds(rows, nestedFieldsOf(e), pre = true).foreach(l => persist ++= s"$l\n")
       val seen = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "Seen"
       val iter = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain) + "It"
-      persist ++= s"\t$seen := make(map[$keyType]bool)\n"
-      persist ++= s"\t$iter := st.${stateFieldName(r.stateField)}.Items().Iterator()\n"
-      persist ++= s"\tfor tu, ok := $iter(); ok; tu, ok = $iter() {\n"
-      persist ++= "\t\tpair := tu.(_dafny.Tuple)\n"
+      persist ++= s"\t\t$seen := make(map[$keyType]bool)\n"
+      persist ++= s"\t\t$iter := st.${stateFieldName(r.stateField)}.Items().Iterator()\n"
+      persist ++= s"\t\tfor tu, ok := $iter(); ok; tu, ok = $iter() {\n"
+      persist ++= "\t\t\tpair := tu.(_dafny.Tuple)\n"
       val keyExpr = keyType match
         case "string" => "dafnykernel.StringFromDafny((*pair.IndexInt(0)).(_dafny.Sequence))"
         case _        => "dafnykernel.IntFromDafny((*pair.IndexInt(0)).(_dafny.Int))"
-      persist ++= s"\t\tkey := $keyExpr\n"
-      persist ++= s"\t\tvalue := (*pair.IndexInt(1)).(dafnykernel.${e.entityName})\n"
-      persist ++= s"\t\t$seen[key] = true\n"
-      persist ++= s"\t\trow, exists := $existing[key]\n"
+      persist ++= s"\t\t\tkey := $keyExpr\n"
+      persist ++= s"\t\t\tvalue := (*pair.IndexInt(1)).(dafnykernel.${e.entityName})\n"
+      persist ++= s"\t\t\t$seen[key] = true\n"
+      persist ++= s"\t\t\trow, exists := $existing[key]\n"
       // The key column stays immutable on updates (the row was fetched by it,
       // and rewriting it from the Dafny value could desync row identity from
       // the map key); inserts set it from the value like every other field.
       for f <- e.fields if f.fieldName != rKey.fieldName do
-        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t")
+        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t\t")
         preF.foreach(l => persist ++= s"$l\n")
-        persist ++= s"\t\trow.${pascal(f.fieldName)} = $exprF\n"
-      persist ++= "\t\tif exists {\n"
-      persist ++= "\t\t\tif _, err := db.NewUpdate().Model(&row).WherePK().Exec(ctx); err != nil {\n"
-      persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
-      persist ++= "\t\t} else {\n"
+        persist ++= s"\t\t\trow.${pascal(f.fieldName)} = $exprF\n"
+      persist ++= "\t\t\tif exists {\n"
+      persist ++= "\t\t\t\tif _, err := db.NewUpdate().Model(&row).WherePK().Exec(ctx); err != nil {\n"
+      persist ++= "\t\t\t\t\treturn err\n\t\t\t\t}\n"
+      persist ++= "\t\t\t} else {\n"
       val (preK, exprK) =
-        fromDafnyParts(kindFor(profiled, e.entityName, rKey), rKey, "value", "\t\t\t")
+        fromDafnyParts(kindFor(profiled, e.entityName, rKey), rKey, "value", "\t\t\t\t")
       preK.foreach(l => persist ++= s"$l\n")
-      persist ++= s"\t\t\trow.${pascal(rKey.fieldName)} = $exprK\n"
+      persist ++= s"\t\t\t\trow.${pascal(rKey.fieldName)} = $exprK\n"
+      persist ++= "\t\t\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
+      persist ++= "\t\t\t\t\treturn err\n\t\t\t\t}\n"
+      persist ++= "\t\t\t}\n"
+      persist ++= "\t\t}\n"
+      persist ++= s"\t\tfor key := range $existing {\n"
+      persist ++= s"\t\t\tif !$seen[key] {\n"
+      persist ++= s"\t\t\t\trow := $existing[key]\n"
+      persist ++= "\t\t\t\tif _, err := db.NewDelete().Model(&row).WherePK().Exec(ctx); err != nil {\n"
+      persist ++= "\t\t\t\t\treturn err\n\t\t\t\t}\n"
+      persist ++= "\t\t\t}\n\t\t}\n"
+      persist ++= "\t}\n"
+    for r <- seqRelations do
+      val e     = r.entity
+      val snake = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain)
+      persist ++= s"\tif _, ok := scope[\"${r.stateField}\"]; ok {\n"
+      val seqNested = nestedFieldsOf(e)
+      if seqNested.nonEmpty then
+        val olds = snake + "Olds"
+        persist ++= s"\t\t$olds := make([]models.${e.modelClassName}, 0)\n"
+        persist ++= s"\t\tif err := db.NewSelect().Model(&$olds).Scan(ctx); err != nil {\n"
+        persist ++= "\t\t\treturn err\n\t\t}\n"
+        collectIds(olds, seqNested, pre = true).foreach(l => persist ++= s"$l\n")
+      // Reinsert in seq order: the serial pk reassigns, which nothing
+      // observes (the seq projection orders by it and exposes no id).
+      persist ++= s"\t\tif _, err := db.NewDelete().Model((*models.${e.modelClassName})(nil)).Where(\"1 = 1\").Exec(ctx); err != nil {\n"
+      persist ++= "\t\t\treturn err\n\t\t}\n"
+      persist ++= s"\t\tit${snake} := _dafny.Iterate(st.${stateFieldName(r.stateField)})\n"
+      persist ++= s"\t\tfor elem, ok := it${snake}(); ok; elem, ok = it${snake}() {\n"
+      persist ++= s"\t\t\tvalue := elem.(dafnykernel.${e.entityName})\n"
+      persist ++= s"\t\t\trow := models.${e.modelClassName}{}\n"
+      for f <- e.fields do
+        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t\t")
+        preF.foreach(l => persist ++= s"$l\n")
+        persist ++= s"\t\t\trow.${pascal(f.fieldName)} = $exprF\n"
       persist ++= "\t\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
       persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
       persist ++= "\t\t}\n"
       persist ++= "\t}\n"
-      persist ++= s"\tfor key := range $existing {\n"
-      persist ++= s"\t\tif !$seen[key] {\n"
-      persist ++= s"\t\t\trow := $existing[key]\n"
-      persist ++= "\t\t\tif _, err := db.NewDelete().Model(&row).WherePK().Exec(ctx); err != nil {\n"
-      persist ++= "\t\t\t\treturn err\n\t\t\t}\n"
-      persist ++= "\t\t}\n\t}\n"
-    for r <- seqRelations do
-      val e     = r.entity
-      val snake = Naming.toCamelCase(e.entityName, Naming.CamelStrategy.Plain)
-      // Reinsert in seq order: the serial pk reassigns, which nothing
-      // observes (the seq projection orders by it and exposes no id).
-      persist ++= s"\tif _, err := db.NewDelete().Model((*models.${e.modelClassName})(nil)).Where(\"1 = 1\").Exec(ctx); err != nil {\n"
-      persist ++= "\t\treturn err\n\t}\n"
-      persist ++= s"\tit${snake} := _dafny.Iterate(st.${stateFieldName(r.stateField)})\n"
-      persist ++= s"\tfor elem, ok := it${snake}(); ok; elem, ok = it${snake}() {\n"
-      persist ++= s"\t\tvalue := elem.(dafnykernel.${e.entityName})\n"
-      persist ++= s"\t\trow := models.${e.modelClassName}{}\n"
-      for f <- e.fields do
-        val (preF, exprF) = fromDafnyParts(kindFor(profiled, e.entityName, f), f, "value", "\t\t")
-        preF.foreach(l => persist ++= s"$l\n")
-        persist ++= s"\t\trow.${pascal(f.fieldName)} = $exprF\n"
-      persist ++= "\t\tif _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {\n"
-      persist ++= "\t\t\treturn err\n\t\t}\n"
-      persist ++= "\t}\n"
     for ne <- nestedEntities do
       val camel = Naming.toCamelCase(ne.entityName, Naming.CamelStrategy.Plain)
       // Only whole-entity relations iterate as owner objects; a relation
-      // projecting a single value field holds scalars, not rows.
+      // projecting a single value field holds scalars, not rows. Skipped
+      // owners hydrated nothing, so their post maps are empty and this pass
+      // degenerates to a no-op when no owner is in scope.
       val owners =
         for
           r      <- planned.relations if r.valueField.isEmpty
@@ -530,9 +643,12 @@ object StateBridgeGo:
         persist ++= "\t}\n"
       val rows     = rowsVar(ne)
       val existing = camel + "Existing"
+      val preIds   = idsVar(ne, pre = true)
       persist ++= s"\t$rows := make([]models.${ne.modelClassName}, 0)\n"
-      persist ++= s"\tif err := db.NewSelect().Model(&$rows).Scan(ctx); err != nil {\n"
-      persist ++= "\t\treturn err\n\t}\n"
+      persist ++= s"\tif len($preIds) > 0 {\n"
+      persist ++= s"\t\tif err := db.NewSelect().Model(&$rows).Where(\"? IN (?)\", bun.Ident(\"id\"), bun.In($preIds)).Scan(ctx); err != nil {\n"
+      persist ++= "\t\t\treturn err\n\t\t}\n"
+      persist ++= "\t}\n"
       persist ++= s"\t$existing := make(map[int64]models.${ne.modelClassName}, len($rows))\n"
       persist ++= s"\tfor _, r := range $rows {\n\t\t$existing[r.ID] = r\n\t}\n"
       persist ++= s"\tfor key, value := range ${camel}Post {\n"
@@ -577,10 +693,13 @@ object StateBridgeGo:
       scalarHydrate ++= "\t}\n"
 
     val fmtImport = if nestedEntities.nonEmpty then "\n\t\"fmt\"" else ""
+    val helperBlock =
+      val h = s"$enumHelpers$nestedHelpers"
+      if h.isEmpty then h else s"$h\n"
     s"""package services
        |
        |import (
-       |\t"context"$fmtImport$scalarImports$sortImport$timeImport
+       |\t"context"$scalarImports$fmtImport$sortImport$timeImport
        |
        |\t"github.com/uptrace/bun"
        |
@@ -589,13 +708,22 @@ object StateBridgeGo:
        |\t"$module/internal/models"
        |)
        |
-       |$enumHelpers$nestedHelpers
-       |func hydrateState(ctx context.Context, db bun.IDB) (*dafnykernel.ServiceState, error) {
+       |// Which rows of each state relation an operation touches: a nil map
+       |// hydrates and persists every relation whole, an absent entry skips the
+       |// relation in both directions, full covers the whole table, and keys
+       |// confines both the load and the persist delete scan to those key values
+       |// (an empty keys list loads nothing and deletes nothing).
+       |type hydrationSel struct {
+       |\tfull bool
+       |\tkeys []any
+       |}
+       |
+       |${helperBlock}func hydrateState(ctx context.Context, db bun.IDB, scope map[string]hydrationSel) (*dafnykernel.ServiceState, error) {
        |\tst := dafnykernel.MakeState()
        |${hydrate.toString}${scalarHydrate.toString}\treturn st, nil
        |}
        |
-       |func persistState(ctx context.Context, db bun.IDB, st *dafnykernel.ServiceState) error {
+       |func persistState(ctx context.Context, db bun.IDB, st *dafnykernel.ServiceState, scope map[string]hydrationSel) error {
        |${persist.toString}\treturn nil
        |}
        |""".stripMargin

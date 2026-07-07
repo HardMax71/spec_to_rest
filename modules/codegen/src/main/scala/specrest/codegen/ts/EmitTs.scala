@@ -8,6 +8,7 @@ import specrest.codegen.EmitShared
 import specrest.codegen.EmittedFile
 import specrest.codegen.EnvExample
 import specrest.codegen.ExtensionStub
+import specrest.codegen.HydrationScope
 import specrest.codegen.KernelTypes
 import specrest.codegen.OperationContext
 import specrest.codegen.Pagination
@@ -713,7 +714,9 @@ object EmitTs:
             .map(n => s"  $n,")
             .mkString("import {\n", "\n", "\n} from '../dafnyKernel/adapter.js';")
         if fns.contains("hydrateState(") then
-          lines += "import { hydrateState, persistState } from './stateBridge.js';"
+          val scopeType =
+            if fns.contains(": HydrationScope") then "type HydrationScope, " else ""
+          lines += s"import { ${scopeType}hydrateState, persistState } from './stateBridge.js';"
         val charsets = operations
           .filter(_.routeThroughKernel)
           .flatMap(_.kernelCandidateConsts)
@@ -857,20 +860,23 @@ object EmitTs:
       val isBigIntPk = bigIntPkParam.contains(p.name)
       val tsType     = if isBigIntPk then "bigint" else tsTypeForParam(p.typeExpr, typeLookup)
       val nm         = toCamelCase(p.name)
+      // toExpressPath renames `{order_id}` to `:orderId`, so req.params keys
+      // by the camel name; reading the spec name yields undefined (and
+      // BigInt('') is 0n, silently mis-keying every multi-word param route).
       val stmt =
         if isBigIntPk then
           s"""      let $nm: bigint;
              |      try {
-             |        $nm = BigInt(req.params['${p.name}'] ?? '');
+             |        $nm = BigInt(req.params['$nm'] ?? '');
              |      } catch {
              |        throw NotFound();
              |      }""".stripMargin
         else if tsType == "number" then
-          s"""      const $nm = Number(req.params['${p.name}']);
+          s"""      const $nm = Number(req.params['$nm']);
              |      if (!Number.isFinite($nm)) {
              |        throw NotFound();
              |      }""".stripMargin
-        else s"      const $nm = req.params['${p.name}'] ?? '';"
+        else s"      const $nm = req.params['$nm'] ?? '';"
       TsPathParam(p.name, nm, tsType, stmt)
 
     val nonIdFields = entity.fields.filterNot(_.fieldName == "id").map(toTsField(_, nativeAttrs))
@@ -1097,8 +1103,8 @@ object EmitTs:
           case KernelTypes.Kind.EntitySetOf(_) => None
           case KernelTypes.Kind.OptOf(inner) =>
             inputToDafny("_v", inner).map(conv => s"someOrNone($access, (_v) => $conv)")
-      val specInputTypes = svcOperations(kernelCtx.ir)
-        .find(o => operName(o) == op.operationName)
+      val specOp = svcOperations(kernelCtx.ir).find(o => operName(o) == op.operationName)
+      val specInputTypes = specOp
         .map(o => operInputs(o).map(pd => prmName(pd) -> prmType(pd)).toMap)
         .getOrElse(Map.empty)
       val queryNames = endpoint.queryParams.map(_.name).toSet
@@ -1126,11 +1132,37 @@ object EmitTs:
                 Some(s"someOrNone($access, (_v) => intToDafny(intFromQueryString(_v)))")
               case _ => inputToDafny(access, k)
           )
-      val outputs = op.responseFields
-      val specOutputs = svcOperations(kernelCtx.ir)
-        .find(o => operName(o) == op.operationName)
-        .map(operOutputs)
-        .getOrElse(Nil)
+      // Which rows each state relation must hydrate for this operation, as the
+      // scope literal both bridge calls receive. Keyed scopes name the request
+      // values through the same access paths the kernel args use; a relation
+      // the contracts never touch stays out of the literal and is skipped in
+      // both directions.
+      val accessByName = inputs.toMap
+      val scopeLines: List[String] = specOp match
+        case None => List("const scope = undefined;")
+        case Some(decl) =>
+          val entries = HydrationScope
+            .analyze(decl, kernelCtx.ir)
+            .byField
+            .toList
+            .sortBy(_._1)
+            .flatMap { (rel, sc) =>
+              sc match
+                case HydrationScope.Scope.Skip => None
+                case HydrationScope.Scope.Full => Some(s"$rel: { kind: 'full' }")
+                case HydrationScope.Scope.Keys(sources) =>
+                  val accesses = sources.map {
+                    case HydrationScope.KeySource.Input(n)          => accessByName.get(n)
+                    case _: HydrationScope.KeySource.DependentField => None
+                  }
+                  // Dependent-key hops are a later milestone; until wired,
+                  // such a relation loads whole.
+                  if accesses.contains(None) then Some(s"$rel: { kind: 'full' }")
+                  else Some(s"$rel: { kind: 'keys', keys: [${accesses.flatten.mkString(", ")}] }")
+            }
+          StateBridgeTs.scopeAssign("const scope: HydrationScope = ", entries, margin = 4)
+      val outputs     = op.responseFields
+      val specOutputs = specOp.map(operOutputs).getOrElse(Nil)
       // Mirrors the python and go marshalling: no outputs is a plain effect
       // call, a single entity output projects the read shape flat, scalars
       // unpack positionally.
@@ -1284,10 +1316,11 @@ object EmitTs:
         val fn =
           if kernelCtx.hasState then
             val steps =
-              "const state = await hydrateState(tx);" ::
+              scopeLines :::
+                "const state = await hydrateState(tx, scope);" ::
                 (invCheck ::: guardCheck).map(_.stripPrefix("  ")) :::
                 bodyLines.dropRight(1).map(_.stripPrefix("  ")) :::
-                "await persistState(tx, state);" ::
+                "await persistState(tx, state, scope);" ::
                 bodyLines.last.stripPrefix("  ") :: Nil
             (header ::
               "  return prisma.$transaction(async (tx) => {" ::

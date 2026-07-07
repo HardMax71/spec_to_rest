@@ -2,6 +2,7 @@ package specrest.codegen
 
 import munit.CatsEffectSuite
 import specrest.codegen.testutil.SpecFixtures
+import specrest.profile.Annotate
 import specrest.profile.DatabaseId
 import specrest.profile.Express
 import specrest.profile.LanguageId
@@ -111,6 +112,65 @@ class EmitTsTest extends CatsEffectSuite:
       assert(types.contains("interface UrlMappingRead"), types)
       assert(types.contains("interface ShortenRequest"), types)
       assert(types.contains("interface ErrorResponse"), types)
+
+  test("kernel-routed ts services hydrate and persist under per-op scopes"):
+    SpecFixtures.loadIR("url_shortener").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "ts-express-postgres")
+      val profiled =
+        Annotate.attachDafnyMethods(
+          profiledBase,
+          Map("Shorten" -> "Shorten", "Resolve" -> "Resolve")
+        )
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.JsDefaultPackagePath,
+        files = Map("kernel.cjs" -> "// kernel\n"),
+        bindings =
+          List(OperationBinding("Shorten", "Shorten"), OperationBinding("Resolve", "Resolve"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val service = files
+        .find(_.path == "src/services/urlMapping.ts")
+        .map(_.content)
+        .getOrElse(fail("no urlMapping service emitted"))
+      assert(
+        service.contains("const state = await hydrateState(tx, scope);"),
+        s"kernel ops must hydrate state with the op's scope — got:\n$service"
+      )
+      assert(
+        service.contains("await persistState(tx, state, scope);"),
+        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+      )
+      // Resolve reads both relations at the path param's key; Shorten's
+      // candidate-freshness check forces both whole.
+      val resolveScope =
+        """    const scope: HydrationScope = {
+          |      metadata: { kind: 'keys', keys: [code] },
+          |      store: { kind: 'keys', keys: [code] },
+          |    };""".stripMargin
+      assert(
+        service.contains(resolveScope),
+        s"resolve should hydrate both relations keyed by code — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "const scope: HydrationScope = { metadata: { kind: 'full' }, store: { kind: 'full' } };"
+        ),
+        s"shorten should hydrate both relations whole — got:\n$service"
+      )
+      val bridge = files
+        .find(_.path == "src/services/stateBridge.ts")
+        .map(_.content)
+        .getOrElse(fail("no state bridge emitted"))
+      assert(
+        bridge.contains("scope?: HydrationScope,"),
+        s"bridge entrypoints must accept the optional per-op scope — got:\n$bridge"
+      )
+      assert(
+        bridge.contains(
+          "where: metadataSel.kind === 'keys' ? { code: { in: metadataSel.keys as string[] } } : undefined,"
+        ),
+        s"keyed scopes must confine the load to the named keys — got:\n$bridge"
+      )
 
   private val dialectCases = List(
     DatabaseId.Postgres -> "ts-express-postgres",
