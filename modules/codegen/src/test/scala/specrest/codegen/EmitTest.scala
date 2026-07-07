@@ -226,24 +226,24 @@ class EmitTest extends CatsEffectSuite:
         s"shorten kernel call should pass the converted body.url — got:\n$service"
       )
       assert(
-        service.contains("state = await hydrate_state(self._session, _scope)"),
-        s"kernel ops must hydrate state from the session with the op's scope — got:\n$service"
+        service.contains("state, _hydrated = await hydrate_state(self._session, _scope)"),
+        s"kernel ops must hydrate state with the op's scope and keep the loaded-keys record — got:\n$service"
       )
       assert(
-        service.contains("await persist_state(self._session, state, _scope)"),
-        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+        service.contains("await persist_state(self._session, state, _hydrated)"),
+        s"kernel ops must persist the mutated state under the hydrated record — got:\n$service"
       )
       // Resolve reads both relations at the path param's key; Shorten's
       // candidate-freshness check forces both whole.
       assert(
         service.contains(
-          "_scope: dict[str, Any] = {\"metadata\": (\"keys\", [code]), \"store\": (\"keys\", [code])}"
+          "_scope: dict[str, Any] = {\"metadata\": [(\"keys\", [code])], \"store\": [(\"keys\", [code])]}"
         ),
         s"resolve should hydrate both relations keyed by code — got:\n$service"
       )
       assert(
         service.contains(
-          "_scope: dict[str, Any] = {\"metadata\": (\"full\",), \"store\": (\"full\",)}"
+          "_scope: dict[str, Any] = {\"metadata\": [(\"full\",)], \"store\": [(\"full\",)]}"
         ),
         s"shorten should hydrate both relations whole — got:\n$service"
       )
@@ -255,6 +255,33 @@ class EmitTest extends CatsEffectSuite:
       assert(
         service.contains("_dafny_kernel.Resolve(") && service.contains("to_dafny_str(code),"),
         s"resolve kernel call should pass the converted code — got:\n$service"
+      )
+
+  test("ecommerce GetOrder scope literal carries the derived payment and inventory sources"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "python-fastapi-postgres")
+      val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("GetOrder" -> "GetOrder"))
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.PythonDefaultPackagePath,
+        files = Map("module_.py" -> "# kernel\n"),
+        bindings = List(OperationBinding("GetOrder", "GetOrder"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val service = files
+        .find(_.path == "app/services/order.py")
+        .map(_.content)
+        .getOrElse(fail("no order service emitted"))
+      assert(
+        service.contains("\"orders\": [(\"keys\", [order_id])]"),
+        s"GetOrder should key orders by the path param — got:\n$service"
+      )
+      assert(
+        service.contains("(\"value_col\", \"orders\", \"order_id\")"),
+        s"GetOrder should key payments by the hydrated order ids — got:\n$service"
+      )
+      assert(
+        service.contains("(\"dependent\", \"orders\", \"items\", \"product_sku\")"),
+        s"GetOrder should key inventory through the hydrated line-item skus — got:\n$service"
       )
 
   test("go validators use package-unique pattern names across entities"):
