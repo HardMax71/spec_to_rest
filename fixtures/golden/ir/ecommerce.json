@@ -11943,6 +11943,260 @@
     },
     {
       "kind" : "Invariant",
+      "name" : "lineItemIdsUnique",
+      "expr" : {
+        "kind" : "Quantifier",
+        "quantifier" : "all",
+        "bindings" : [
+          {
+            "variable" : "oid",
+            "domain" : {
+              "kind" : "Identifier",
+              "name" : "orders",
+              "span" : {
+                "startLine" : 413,
+                "startCol" : 15,
+                "endLine" : 413,
+                "endCol" : 21
+              }
+            },
+            "bindingKind" : "in",
+            "span" : {
+              "startLine" : 413,
+              "startCol" : 8,
+              "endLine" : 413,
+              "endCol" : 21
+            }
+          }
+        ],
+        "body" : {
+          "kind" : "Quantifier",
+          "quantifier" : "all",
+          "bindings" : [
+            {
+              "variable" : "i1",
+              "domain" : {
+                "kind" : "FieldAccess",
+                "base" : {
+                  "kind" : "Index",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "orders",
+                    "span" : {
+                      "startLine" : 414,
+                      "startCol" : 16,
+                      "endLine" : 414,
+                      "endCol" : 22
+                    }
+                  },
+                  "index" : {
+                    "kind" : "Identifier",
+                    "name" : "oid",
+                    "span" : {
+                      "startLine" : 414,
+                      "startCol" : 23,
+                      "endLine" : 414,
+                      "endCol" : 26
+                    }
+                  },
+                  "span" : {
+                    "startLine" : 414,
+                    "startCol" : 16,
+                    "endLine" : 414,
+                    "endCol" : 27
+                  }
+                },
+                "field" : "items",
+                "span" : {
+                  "startLine" : 414,
+                  "startCol" : 16,
+                  "endLine" : 414,
+                  "endCol" : 33
+                }
+              },
+              "bindingKind" : "in",
+              "span" : {
+                "startLine" : 414,
+                "startCol" : 10,
+                "endLine" : 414,
+                "endCol" : 33
+              }
+            }
+          ],
+          "body" : {
+            "kind" : "Quantifier",
+            "quantifier" : "all",
+            "bindings" : [
+              {
+                "variable" : "i2",
+                "domain" : {
+                  "kind" : "FieldAccess",
+                  "base" : {
+                    "kind" : "Index",
+                    "base" : {
+                      "kind" : "Identifier",
+                      "name" : "orders",
+                      "span" : {
+                        "startLine" : 415,
+                        "startCol" : 18,
+                        "endLine" : 415,
+                        "endCol" : 24
+                      }
+                    },
+                    "index" : {
+                      "kind" : "Identifier",
+                      "name" : "oid",
+                      "span" : {
+                        "startLine" : 415,
+                        "startCol" : 25,
+                        "endLine" : 415,
+                        "endCol" : 28
+                      }
+                    },
+                    "span" : {
+                      "startLine" : 415,
+                      "startCol" : 18,
+                      "endLine" : 415,
+                      "endCol" : 29
+                    }
+                  },
+                  "field" : "items",
+                  "span" : {
+                    "startLine" : 415,
+                    "startCol" : 18,
+                    "endLine" : 415,
+                    "endCol" : 35
+                  }
+                },
+                "bindingKind" : "in",
+                "span" : {
+                  "startLine" : 415,
+                  "startCol" : 12,
+                  "endLine" : 415,
+                  "endCol" : 35
+                }
+              }
+            ],
+            "body" : {
+              "kind" : "BinaryOp",
+              "op" : "implies",
+              "left" : {
+                "kind" : "BinaryOp",
+                "op" : "=",
+                "left" : {
+                  "kind" : "FieldAccess",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "i1",
+                    "span" : {
+                      "startLine" : 416,
+                      "startCol" : 10,
+                      "endLine" : 416,
+                      "endCol" : 12
+                    }
+                  },
+                  "field" : "id",
+                  "span" : {
+                    "startLine" : 416,
+                    "startCol" : 10,
+                    "endLine" : 416,
+                    "endCol" : 15
+                  }
+                },
+                "right" : {
+                  "kind" : "FieldAccess",
+                  "base" : {
+                    "kind" : "Identifier",
+                    "name" : "i2",
+                    "span" : {
+                      "startLine" : 416,
+                      "startCol" : 18,
+                      "endLine" : 416,
+                      "endCol" : 20
+                    }
+                  },
+                  "field" : "id",
+                  "span" : {
+                    "startLine" : 416,
+                    "startCol" : 18,
+                    "endLine" : 416,
+                    "endCol" : 23
+                  }
+                },
+                "span" : {
+                  "startLine" : 416,
+                  "startCol" : 10,
+                  "endLine" : 416,
+                  "endCol" : 23
+                }
+              },
+              "right" : {
+                "kind" : "BinaryOp",
+                "op" : "=",
+                "left" : {
+                  "kind" : "Identifier",
+                  "name" : "i1",
+                  "span" : {
+                    "startLine" : 416,
+                    "startCol" : 32,
+                    "endLine" : 416,
+                    "endCol" : 34
+                  }
+                },
+                "right" : {
+                  "kind" : "Identifier",
+                  "name" : "i2",
+                  "span" : {
+                    "startLine" : 416,
+                    "startCol" : 37,
+                    "endLine" : 416,
+                    "endCol" : 39
+                  }
+                },
+                "span" : {
+                  "startLine" : 416,
+                  "startCol" : 32,
+                  "endLine" : 416,
+                  "endCol" : 39
+                }
+              },
+              "span" : {
+                "startLine" : 416,
+                "startCol" : 10,
+                "endLine" : 416,
+                "endCol" : 39
+              }
+            },
+            "span" : {
+              "startLine" : 415,
+              "startCol" : 8,
+              "endLine" : 416,
+              "endCol" : 39
+            }
+          },
+          "span" : {
+            "startLine" : 414,
+            "startCol" : 6,
+            "endLine" : 416,
+            "endCol" : 39
+          }
+        },
+        "span" : {
+          "startLine" : 413,
+          "startCol" : 4,
+          "endLine" : 416,
+          "endCol" : 39
+        }
+      },
+      "span" : {
+        "startLine" : 412,
+        "startCol" : 2,
+        "endLine" : 416,
+        "endCol" : 39
+      }
+    },
+    {
+      "kind" : "Invariant",
       "name" : "nextOrderIdFresh",
       "expr" : {
         "kind" : "Quantifier",
@@ -11954,17 +12208,17 @@
               "kind" : "Identifier",
               "name" : "orders",
               "span" : {
-                "startLine" : 410,
+                "startLine" : 419,
                 "startCol" : 15,
-                "endLine" : 410,
+                "endLine" : 419,
                 "endCol" : 21
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 410,
+              "startLine" : 419,
               "startCol" : 8,
-              "endLine" : 410,
+              "endLine" : 419,
               "endCol" : 21
             }
           }
@@ -11976,9 +12230,9 @@
             "kind" : "Identifier",
             "name" : "oid",
             "span" : {
-              "startLine" : 410,
+              "startLine" : 419,
               "startCol" : 24,
-              "endLine" : 410,
+              "endLine" : 419,
               "endCol" : 27
             }
           },
@@ -11986,30 +12240,30 @@
             "kind" : "Identifier",
             "name" : "next_order_id",
             "span" : {
-              "startLine" : 410,
+              "startLine" : 419,
               "startCol" : 30,
-              "endLine" : 410,
+              "endLine" : 419,
               "endCol" : 43
             }
           },
           "span" : {
-            "startLine" : 410,
+            "startLine" : 419,
             "startCol" : 24,
-            "endLine" : 410,
+            "endLine" : 419,
             "endCol" : 43
           }
         },
         "span" : {
-          "startLine" : 410,
+          "startLine" : 419,
           "startCol" : 4,
-          "endLine" : 410,
+          "endLine" : 419,
           "endCol" : 43
         }
       },
       "span" : {
-        "startLine" : 409,
+        "startLine" : 418,
         "startCol" : 2,
-        "endLine" : 410,
+        "endLine" : 419,
         "endCol" : 43
       }
     },
@@ -12026,17 +12280,17 @@
               "kind" : "Identifier",
               "name" : "payments",
               "span" : {
-                "startLine" : 413,
+                "startLine" : 422,
                 "startCol" : 15,
-                "endLine" : 413,
+                "endLine" : 422,
                 "endCol" : 23
               }
             },
             "bindingKind" : "in",
             "span" : {
-              "startLine" : 413,
+              "startLine" : 422,
               "startCol" : 8,
-              "endLine" : 413,
+              "endLine" : 422,
               "endCol" : 23
             }
           }
@@ -12052,9 +12306,9 @@
                 "kind" : "Identifier",
                 "name" : "payments",
                 "span" : {
-                  "startLine" : 413,
+                  "startLine" : 422,
                   "startCol" : 26,
-                  "endLine" : 413,
+                  "endLine" : 422,
                   "endCol" : 34
                 }
               },
@@ -12062,24 +12316,24 @@
                 "kind" : "Identifier",
                 "name" : "pid",
                 "span" : {
-                  "startLine" : 413,
+                  "startLine" : 422,
                   "startCol" : 35,
-                  "endLine" : 413,
+                  "endLine" : 422,
                   "endCol" : 38
                 }
               },
               "span" : {
-                "startLine" : 413,
+                "startLine" : 422,
                 "startCol" : 26,
-                "endLine" : 413,
+                "endLine" : 422,
                 "endCol" : 39
               }
             },
             "field" : "order_id",
             "span" : {
-              "startLine" : 413,
+              "startLine" : 422,
               "startCol" : 26,
-              "endLine" : 413,
+              "endLine" : 422,
               "endCol" : 48
             }
           },
@@ -12087,30 +12341,30 @@
             "kind" : "Identifier",
             "name" : "orders",
             "span" : {
-              "startLine" : 413,
+              "startLine" : 422,
               "startCol" : 52,
-              "endLine" : 413,
+              "endLine" : 422,
               "endCol" : 58
             }
           },
           "span" : {
-            "startLine" : 413,
+            "startLine" : 422,
             "startCol" : 26,
-            "endLine" : 413,
+            "endLine" : 422,
             "endCol" : 58
           }
         },
         "span" : {
-          "startLine" : 413,
+          "startLine" : 422,
           "startCol" : 4,
-          "endLine" : 413,
+          "endLine" : 422,
           "endCol" : 58
         }
       },
       "span" : {
-        "startLine" : 412,
+        "startLine" : 421,
         "startCol" : 2,
-        "endLine" : 413,
+        "endLine" : 422,
         "endCol" : 58
       }
     }
@@ -12240,9 +12494,9 @@
           "value" : "/orders"
         },
         "span" : {
-          "startLine" : 418,
+          "startLine" : 427,
           "startCol" : 4,
-          "endLine" : 418,
+          "endLine" : 427,
           "endCol" : 42
         }
       },
@@ -12256,9 +12510,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 419,
+          "startLine" : 428,
           "startCol" : 4,
-          "endLine" : 419,
+          "endLine" : 428,
           "endCol" : 46
         }
       },
@@ -12272,9 +12526,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 421,
+          "startLine" : 430,
           "startCol" : 4,
-          "endLine" : 421,
+          "endLine" : 430,
           "endCol" : 36
         }
       },
@@ -12288,9 +12542,9 @@
           "value" : "/orders/{order_id}/items"
         },
         "span" : {
-          "startLine" : 422,
+          "startLine" : 431,
           "startCol" : 4,
-          "endLine" : 422,
+          "endLine" : 431,
           "endCol" : 54
         }
       },
@@ -12304,9 +12558,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 423,
+          "startLine" : 432,
           "startCol" : 4,
-          "endLine" : 423,
+          "endLine" : 432,
           "endCol" : 41
         }
       },
@@ -12320,9 +12574,9 @@
           "value" : "DELETE"
         },
         "span" : {
-          "startLine" : 425,
+          "startLine" : 434,
           "startCol" : 4,
-          "endLine" : 425,
+          "endLine" : 434,
           "endCol" : 41
         }
       },
@@ -12336,10 +12590,26 @@
           "value" : "/orders/{order_id}/items/{item_id}"
         },
         "span" : {
-          "startLine" : 426,
+          "startLine" : 435,
           "startCol" : 4,
-          "endLine" : 426,
+          "endLine" : 435,
           "endCol" : 67
+        }
+      },
+      {
+        "kind" : "ConventionRule",
+        "target" : "RemoveLineItem",
+        "property" : "http_status_success",
+        "qualifier" : null,
+        "value" : {
+          "kind" : "IntLit",
+          "value" : 200
+        },
+        "span" : {
+          "startLine" : 438,
+          "startCol" : 4,
+          "endLine" : 438,
+          "endCol" : 44
         }
       },
       {
@@ -12352,9 +12622,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 428,
+          "startLine" : 440,
           "startCol" : 4,
-          "endLine" : 428,
+          "endLine" : 440,
           "endCol" : 35
         }
       },
@@ -12368,9 +12638,9 @@
           "value" : "/orders/{order_id}/place"
         },
         "span" : {
-          "startLine" : 429,
+          "startLine" : 441,
           "startCol" : 4,
-          "endLine" : 429,
+          "endLine" : 441,
           "endCol" : 53
         }
       },
@@ -12384,9 +12654,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 431,
+          "startLine" : 443,
           "startCol" : 4,
-          "endLine" : 431,
+          "endLine" : 443,
           "endCol" : 38
         }
       },
@@ -12400,9 +12670,9 @@
           "value" : "/orders/{order_id}/payments"
         },
         "span" : {
-          "startLine" : 432,
+          "startLine" : 444,
           "startCol" : 4,
-          "endLine" : 432,
+          "endLine" : 444,
           "endCol" : 59
         }
       },
@@ -12416,9 +12686,9 @@
           "value" : 201
         },
         "span" : {
-          "startLine" : 433,
+          "startLine" : 445,
           "startCol" : 4,
-          "endLine" : 433,
+          "endLine" : 445,
           "endCol" : 43
         }
       },
@@ -12432,9 +12702,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 435,
+          "startLine" : 447,
           "startCol" : 4,
-          "endLine" : 435,
+          "endLine" : 447,
           "endCol" : 34
         }
       },
@@ -12448,9 +12718,9 @@
           "value" : "/orders/{order_id}/ship"
         },
         "span" : {
-          "startLine" : 436,
+          "startLine" : 448,
           "startCol" : 4,
-          "endLine" : 436,
+          "endLine" : 448,
           "endCol" : 51
         }
       },
@@ -12464,9 +12734,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 438,
+          "startLine" : 450,
           "startCol" : 4,
-          "endLine" : 438,
+          "endLine" : 450,
           "endCol" : 40
         }
       },
@@ -12480,9 +12750,9 @@
           "value" : "/orders/{order_id}/deliver"
         },
         "span" : {
-          "startLine" : 439,
+          "startLine" : 451,
           "startCol" : 4,
-          "endLine" : 439,
+          "endLine" : 451,
           "endCol" : 60
         }
       },
@@ -12496,9 +12766,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 441,
+          "startLine" : 453,
           "startCol" : 4,
-          "endLine" : 441,
+          "endLine" : 453,
           "endCol" : 36
         }
       },
@@ -12512,9 +12782,9 @@
           "value" : "/orders/{order_id}/cancel"
         },
         "span" : {
-          "startLine" : 442,
+          "startLine" : 454,
           "startCol" : 4,
-          "endLine" : 442,
+          "endLine" : 454,
           "endCol" : 55
         }
       },
@@ -12528,9 +12798,9 @@
           "value" : "POST"
         },
         "span" : {
-          "startLine" : 444,
+          "startLine" : 456,
           "startCol" : 4,
-          "endLine" : 444,
+          "endLine" : 456,
           "endCol" : 38
         }
       },
@@ -12544,9 +12814,9 @@
           "value" : "/orders/{order_id}/return"
         },
         "span" : {
-          "startLine" : 445,
+          "startLine" : 457,
           "startCol" : 4,
-          "endLine" : 445,
+          "endLine" : 457,
           "endCol" : 57
         }
       },
@@ -12560,9 +12830,9 @@
           "value" : "/orders/{order_id}"
         },
         "span" : {
-          "startLine" : 447,
+          "startLine" : 459,
           "startCol" : 4,
-          "endLine" : 447,
+          "endLine" : 459,
           "endCol" : 45
         }
       },
@@ -12576,9 +12846,9 @@
           "value" : "/orders"
         },
         "span" : {
-          "startLine" : 448,
+          "startLine" : 460,
           "startCol" : 4,
-          "endLine" : 448,
+          "endLine" : 460,
           "endCol" : 36
         }
       },
@@ -12592,24 +12862,24 @@
           "value" : "active = true"
         },
         "span" : {
-          "startLine" : 450,
+          "startLine" : 462,
           "startCol" : 4,
-          "endLine" : 450,
+          "endLine" : 462,
           "endCol" : 52
         }
       }
     ],
     "span" : {
-      "startLine" : 417,
+      "startLine" : 426,
       "startCol" : 2,
-      "endLine" : 451,
+      "endLine" : 463,
       "endCol" : 3
     }
   },
   "span" : {
     "startLine" : 1,
     "startCol" : 0,
-    "endLine" : 452,
+    "endLine" : 464,
     "endCol" : 1
   }
 }

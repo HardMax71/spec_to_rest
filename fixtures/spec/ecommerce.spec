@@ -406,6 +406,15 @@ service OrderService {
         all i2 in orders[oid].items |
           i1.product_sku = i2.product_sku implies i1 = i2
 
+  // RemoveLineItem addresses an item by id, so `the i in items | i.id = item_id`
+  // must be well-defined: without this, two items could share an id and the
+  // definite description (and the DELETE route) would be ambiguous.
+  invariant lineItemIdsUnique:
+    all oid in orders |
+      all i1 in orders[oid].items |
+        all i2 in orders[oid].items |
+          i1.id = i2.id implies i1 = i2
+
   invariant nextOrderIdFresh:
     all oid in orders | oid < next_order_id
 
@@ -424,6 +433,9 @@ service OrderService {
 
     RemoveLineItem.http_method = "DELETE"
     RemoveLineItem.http_path = "/orders/{order_id}/items/{item_id}"
+    // The op declares `output: order`, so the DELETE default of 204 (no
+    // body) would discard it; FastAPI even refuses to register such a route.
+    RemoveLineItem.http_status_success = 200
 
     PlaceOrder.http_method = "POST"
     PlaceOrder.http_path = "/orders/{order_id}/place"
