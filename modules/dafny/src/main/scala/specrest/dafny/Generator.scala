@@ -101,11 +101,19 @@ object Generator:
         case RelationTypeF(_, _, to, _) => namedType(to)
         case _                          => None
       val stateEntityNames = stateFields.values.flatMap(stateValueEntity).toSet
+      // Sum invariants reach the state predicate through the value entity
+      // itself or through any chain of entity-set fields below it, matching
+      // the nested lifting in renderEntities.
+      val ghostReach = closeOverEntitySets(
+        ir,
+        svcEntities(ir)
+          .filter(e => entInvariants(e).exists(containsSumCall))
+          .map(entName)
+          .toSet
+      )
       val anyGhostInv =
         svcInvariants(ir).exists(inv => containsSumCall(invBody(inv))) ||
-          svcEntities(ir).exists(e =>
-            stateEntityNames.contains(entName(e)) && entInvariants(e).exists(containsSumCall)
-          )
+          stateEntityNames.exists(ghostReach)
       val ctx = Ctx(
         ir = ir,
         stateFields = stateFields,
@@ -122,6 +130,7 @@ object Generator:
       sb ++= header(svcName(ir))
       sb ++= optionDatatype()
       sb ++= theByFunction()
+      sb ++= theBySetFunction()
       sb ++= sumFunctions(sumSpecs)
 
       val enumDecls   = renderEnums(svcEnums(ir))
@@ -202,6 +211,18 @@ object Generator:
       "  var k :| k in m && p(k); k\n" +
       "}\n"
 
+  // Set-domain twin of TheBy for `the x in s | P(x)` where s is a set value
+  // (an entity's collection field) rather than a state map: the witness is
+  // the element itself, under the same existence + uniqueness preconditions.
+  private def theBySetFunction(): String =
+    "\nghost function TheBySet<T>(s: set<T>, p: T -> bool): T\n" +
+      "  requires exists x :: x in s && p(x)\n" +
+      "  requires forall x1, x2 :: x1 in s && x2 in s && p(x1) && p(x2) ==> x1 == x2\n" +
+      "  ensures TheBySet(s, p) in s && p(TheBySet(s, p))\n" +
+      "{\n" +
+      "  var x :| x in s && p(x); x\n" +
+      "}\n"
+
   private def renderEnums(decls: List[enum_decl])(using DafnyLabel): String =
     val parts = decls.map { d =>
       val ctors = enmVariants(d).mkString(" | ")
@@ -232,6 +253,24 @@ object Generator:
       case _                                  => false
     }
 
+  // Entities whose predicate is transitively nonempty: seeded by entities
+  // with clauses of their own, closed over entity-set fields, since a nested
+  // element's predicate lifts into its owner's.
+  private def closeOverEntitySets(ir: ServiceIRFull, seed: Set[String]): Set[String] =
+    val elemsOf: Map[String, List[String]] =
+      svcEntities(ir).map { e =>
+        entName(e) -> entFields(e).flatMap(f =>
+          fldType(f) match
+            case SetTypeF(NamedTypeF(n, _), _) => Some(n)
+            case _                             => None
+        )
+      }.toMap
+    @annotation.tailrec
+    def loop(s: Set[String]): Set[String] =
+      val next = s ++ elemsOf.collect { case (owner, elems) if elems.exists(s) => owner }
+      if next.sizeIs == s.size then s else loop(next)
+    loop(seed)
+
   private def renderEntities(
       ctx: Ctx,
       decls: List[entity_decl]
@@ -239,14 +278,10 @@ object Generator:
     val sb           = new StringBuilder
     val withInv      = Set.newBuilder[String]
     val withGhostInv = Set.newBuilder[String]
-    decls.foreach: d =>
+    val baseClauses = decls.map { d =>
       val name       = entName(d)
       val fields     = entFields(d)
       val invariants = entInvariants(d)
-      val ctorFields = fields.map { f =>
-        s"${fldName(f)}: ${renderType(ctx, fldType(f))}"
-      }
-      sb ++= s"datatype $name = $name(${ctorFields.mkString(", ")})\n"
 
       val fieldWhereClauses = fields.flatMap { f =>
         fldDefault(f).map { whereExpr =>
@@ -271,16 +306,49 @@ object Generator:
       val ghostClauses =
         ghostInvariants.map(e => s"(${renderEntityInvariant(invCtx, e, name)})")
 
-      val allClauses = (fieldWhereClauses ++ aliasFieldClauses ++ invClauses).distinct
+      (d, (fieldWhereClauses ++ aliasFieldClauses ++ invClauses).distinct, ghostClauses)
+    }
+    val invEntityNames = closeOverEntitySets(
+      ctx.ir,
+      baseClauses.collect { case (d, all, _) if all.nonEmpty => entName(d) }.toSet
+    )
+    val ghostEntityNames = closeOverEntitySets(
+      ctx.ir,
+      baseClauses.collect { case (d, _, ghost) if ghost.nonEmpty => entName(d) }.toSet
+    )
+
+    baseClauses.foreach: (d, base, ghostClauses) =>
+      val name   = entName(d)
+      val fields = entFields(d)
+      val ctorFields = fields.map { f =>
+        s"${fldName(f)}: ${renderType(ctx, fldType(f))}"
+      }
+      sb ++= s"datatype $name = $name(${ctorFields.mkString(", ")})\n"
+
+      // An entity-set field's elements satisfy their own invariant (the
+      // runtime marshals every stored element through the same checks), so
+      // it lifts into the owner: the state predicate reaches nested items
+      // exactly as the typed Z3 encoding already assumes. The ghost side
+      // lifts the same way so nested sum constraints stay on the contracts.
+      def nestedSetClauses(members: Set[String], suffix: String): List[String] =
+        fields.flatMap { f =>
+          fldType(f) match
+            case SetTypeF(NamedTypeF(en, _), _) if members(en) =>
+              Some(s"(forall i :: i in x.${fldName(f)} ==> $en$suffix(i))")
+            case _ => None
+        }
+
+      val allClauses = base ++ nestedSetClauses(invEntityNames, "Inv")
       if allClauses.nonEmpty then
         withInv += name
         sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
         sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
-      if ghostClauses.nonEmpty then
+      val allGhostClauses = ghostClauses ++ nestedSetClauses(ghostEntityNames, "InvGhost")
+      if allGhostClauses.nonEmpty then
         withGhostInv += name
         sb ++= s"\nghost predicate ${name}InvGhost(x: $name)\n{\n"
-        sb ++= s"  ${ghostClauses.mkString("\n  && ")}\n"
+        sb ++= s"  ${allGhostClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
     (sb.toString, withInv.result(), withGhostInv.result())
 
@@ -684,6 +752,17 @@ object Generator:
           |{
           |  ${fn}Eq(s, x);
           |}
+          |
+          |lemma ${fn}NonNeg(s: set<$elem>)
+          |  requires forall x :: x in s ==> x.$fld >= 0
+          |  ensures $fn(s) >= 0
+          |  decreases |s|
+          |{
+          |  if s != {} {
+          |    var y :| y in s && $fn(s) == y.$fld + $fn(s - {y});
+          |    ${fn}NonNeg(s - {y});
+          |  }
+          |}
           |""".stripMargin
     }
     parts.mkString
@@ -848,20 +927,35 @@ object Generator:
       s"(set $v | $v in $domStr && $predStr :: $projection)"
     case TheF(v, dom, body, _) =>
       // `the v in dom | body` = the unique element satisfying body. Lowered to a
-      // call to the deterministic spec-level helper TheBy so the SAME witness is
-      // referenced across ensures + body within one proof obligation. Inlining
-      // `var x :| ...` instead would give Dafny a fresh witness each occurrence
-      // and CEGIS cannot converge. Uniqueness + existence are the helper's
-      // preconditions, discharged from spec invariants at the call site.
+      // call to the deterministic spec-level helper TheBy (or its set twin) so
+      // the SAME witness is referenced across ensures + body within one proof
+      // obligation. Inlining `var x :| ...` instead would give Dafny a fresh
+      // witness each occurrence and CEGIS cannot converge. Uniqueness +
+      // existence are the helper's preconditions, discharged from spec
+      // invariants at the call site.
       //
-      // The lambda body is guarded with `v in dom &&` because the body usually
-      // dereferences `dom[v]` (a partial operation); without the guard, Dafny
-      // rejects with "element might not be in domain" at every call site.
+      // The lambda body is guarded with `v in dom &&` because a map-domain
+      // body usually dereferences `dom[v]` (a partial operation); without the
+      // guard, Dafny rejects with "element might not be in domain" at every
+      // call site.
       val innerCtx = ctx.copy(boundVars = ctx.boundVars + v)
       val domStr   = renderExpr(ctx, dom)
       val bodyStr  = renderExpr(innerCtx, body)
-      val keyType  = theByKeyType(ctx, dom)
-      s"TheBy($domStr, ($v: $keyType) => $v in $domStr && $bodyStr)"
+      if isMapDomain(ctx, dom) then
+        val keyType = theByKeyType(ctx, dom)
+        s"TheBy($domStr, ($v: $keyType) => $v in $domStr && $bodyStr)"
+      else
+        exprType(ctx, dom) match
+          case Some(SetTypeF(elem, _)) =>
+            // No membership guard here: the set element is the value itself,
+            // and a domain expression like `old(m)[k].items` inside the
+            // lambda would re-read the map where the call site's guard
+            // cannot reach (lambda well-formedness is checked standalone).
+            s"TheBySet($domStr, ($v: ${renderType(ctx, elem)}) => $bodyStr)"
+          case _ =>
+            failDafny(
+              s"TheBy: unsupported domain — expected a map/relation state field or a set-typed expression, got ${dom.getClass.getSimpleName}"
+            )
     case WithF(base, fields, _) =>
       val parts = fields.map { fa =>
         s"${fasName(fa)} := ${renderExpr(ctx, fasValue(fa))}"
@@ -876,6 +970,31 @@ object Generator:
 
   private def isMapDomain(ctx: Ctx, dom: expr): Boolean =
     peelRelationRef(dom).exists(isMapStateField(ctx, _))
+
+  // The type of a domain expression, for the shapes a TheF domain can take:
+  // a named binding, a map/relation read, and an entity field access, through
+  // pre()/prime wrappers. Anything else stays None and the op fails loud.
+  private def exprType(ctx: Ctx, e: expr): Option[type_expr] = e match
+    case PreF(inner, _)   => exprType(ctx, inner)
+    case PrimeF(inner, _) => exprType(ctx, inner)
+    case IdentifierF(n, _) =>
+      ctx.stateFields.get(n).orElse(ctx.inputTypes.get(n)).orElse(ctx.outputTypes.get(n))
+    case IndexF(m, _, _) =>
+      exprType(ctx, m).flatMap {
+        case MapTypeF(_, v, _)          => Some(v)
+        case RelationTypeF(_, _, to, _) => Some(to)
+        case _                          => None
+      }
+    case FieldAccessF(base, f, _) =>
+      exprType(ctx, base).flatMap {
+        case NamedTypeF(en, _) =>
+          svcEntities(ctx.ir)
+            .find(d => entName(d) == en)
+            .flatMap(d => entFields(d).find(fd => fldName(fd) == f))
+            .map(fldType)
+        case _ => None
+      }
+    case _ => None
 
   // Extract the key type of the map/relation `dom` refers to, so the lambda passed
   // to TheBy is fully type-annotated (Dafny cannot infer the parameter type through
@@ -984,7 +1103,11 @@ object Generator:
       case IfF(c, _, _, _)      => walk(c)
       case SomeWrapF(x, _)      => walk(x)
       case LetF(_, value, _, _) => walk(value)
-      case _                    => ()
+      // The binder's own membership is implicit, but the domain expression
+      // may dereference a state map (`the i in pre(orders)[oid].items｜..`),
+      // and that read needs its guard like any other.
+      case TheF(_, dom, _, _) => walk(dom)
+      case _                  => ()
     walk(e)
     acc.toList
 
