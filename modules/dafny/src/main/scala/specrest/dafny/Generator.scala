@@ -101,11 +101,19 @@ object Generator:
         case RelationTypeF(_, _, to, _) => namedType(to)
         case _                          => None
       val stateEntityNames = stateFields.values.flatMap(stateValueEntity).toSet
+      // Sum invariants reach the state predicate through the value entity
+      // itself or through any chain of entity-set fields below it, matching
+      // the nested lifting in renderEntities.
+      val ghostReach = closeOverEntitySets(
+        ir,
+        svcEntities(ir)
+          .filter(e => entInvariants(e).exists(containsSumCall))
+          .map(entName)
+          .toSet
+      )
       val anyGhostInv =
         svcInvariants(ir).exists(inv => containsSumCall(invBody(inv))) ||
-          svcEntities(ir).exists(e =>
-            stateEntityNames.contains(entName(e)) && entInvariants(e).exists(containsSumCall)
-          )
+          stateEntityNames.exists(ghostReach)
       val ctx = Ctx(
         ir = ir,
         stateFields = stateFields,
@@ -245,6 +253,24 @@ object Generator:
       case _                                  => false
     }
 
+  // Entities whose predicate is transitively nonempty: seeded by entities
+  // with clauses of their own, closed over entity-set fields, since a nested
+  // element's predicate lifts into its owner's.
+  private def closeOverEntitySets(ir: ServiceIRFull, seed: Set[String]): Set[String] =
+    val elemsOf: Map[String, List[String]] =
+      svcEntities(ir).map { e =>
+        entName(e) -> entFields(e).flatMap(f =>
+          fldType(f) match
+            case SetTypeF(NamedTypeF(n, _), _) => Some(n)
+            case _                             => None
+        )
+      }.toMap
+    @annotation.tailrec
+    def loop(s: Set[String]): Set[String] =
+      val next = s ++ elemsOf.collect { case (owner, elems) if elems.exists(s) => owner }
+      if next.sizeIs == s.size then s else loop(next)
+    loop(seed)
+
   private def renderEntities(
       ctx: Ctx,
       decls: List[entity_decl]
@@ -282,9 +308,14 @@ object Generator:
 
       (d, (fieldWhereClauses ++ aliasFieldClauses ++ invClauses).distinct, ghostClauses)
     }
-    val invEntityNames = baseClauses.collect {
-      case (d, all, _) if all.nonEmpty => entName(d)
-    }.toSet
+    val invEntityNames = closeOverEntitySets(
+      ctx.ir,
+      baseClauses.collect { case (d, all, _) if all.nonEmpty => entName(d) }.toSet
+    )
+    val ghostEntityNames = closeOverEntitySets(
+      ctx.ir,
+      baseClauses.collect { case (d, _, ghost) if ghost.nonEmpty => entName(d) }.toSet
+    )
 
     baseClauses.foreach: (d, base, ghostClauses) =>
       val name   = entName(d)
@@ -297,24 +328,27 @@ object Generator:
       // An entity-set field's elements satisfy their own invariant (the
       // runtime marshals every stored element through the same checks), so
       // it lifts into the owner: the state predicate reaches nested items
-      // exactly as the typed Z3 encoding already assumes.
-      val nestedSetClauses = fields.flatMap { f =>
-        fldType(f) match
-          case SetTypeF(NamedTypeF(en, _), _) if invEntityNames(en) =>
-            Some(s"(forall i :: i in x.${fldName(f)} ==> ${en}Inv(i))")
-          case _ => None
-      }
+      // exactly as the typed Z3 encoding already assumes. The ghost side
+      // lifts the same way so nested sum constraints stay on the contracts.
+      def nestedSetClauses(members: Set[String], suffix: String): List[String] =
+        fields.flatMap { f =>
+          fldType(f) match
+            case SetTypeF(NamedTypeF(en, _), _) if members(en) =>
+              Some(s"(forall i :: i in x.${fldName(f)} ==> $en$suffix(i))")
+            case _ => None
+        }
 
-      val allClauses = base ++ nestedSetClauses
+      val allClauses = base ++ nestedSetClauses(invEntityNames, "Inv")
       if allClauses.nonEmpty then
         withInv += name
         sb ++= s"\npredicate ${name}Inv(x: $name)\n{\n"
         sb ++= s"  ${allClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
-      if ghostClauses.nonEmpty then
+      val allGhostClauses = ghostClauses ++ nestedSetClauses(ghostEntityNames, "InvGhost")
+      if allGhostClauses.nonEmpty then
         withGhostInv += name
         sb ++= s"\nghost predicate ${name}InvGhost(x: $name)\n{\n"
-        sb ++= s"  ${ghostClauses.mkString("\n  && ")}\n"
+        sb ++= s"  ${allGhostClauses.mkString("\n  && ")}\n"
         sb ++= "}\n"
     (sb.toString, withInv.result(), withGhostInv.result())
 
