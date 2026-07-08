@@ -481,6 +481,28 @@ object StateBridgeTs:
             "  }"
           )
         )
+    def nestedLoadLines(): Unit =
+      for ne <- nestedEntities do
+        val client = camel(ne.entityName)
+        add(
+          hydrate,
+          List(
+            s"  const ${client}Rows =",
+            s"    ${client}Ids.size > 0",
+            s"      ? await tx.$client.findMany({ where: { id: { in: [...${client}Ids] } } })",
+            "      : [];",
+            s"  const ${client}ToDafny = (r: (typeof ${client}Rows)[number]): unknown =>",
+            s"    dafnyModule['${ne.entityName}'].create_${ne.entityName}("
+          )
+            ::: ne.fields.map(f => s"      ${toDafnyExpr(profiled.ir, ne.entityName, f, "r")},")
+            ::: List(
+              "    );",
+              s"  const ${client}ById = new Map(${client}Rows.map((r) => [Number(r.id), r]));"
+            )
+        )
+    // With no keyed owner in the schedule the nested ids all come from the
+    // seq loads above, so the nested selects run here.
+    if lastOwnerIdx.isEmpty then nestedLoadLines()
     for ((rel, shape, _), idx) <- unionSteps.zipWithIndex do
       val r = relByField(rel)
       r.keyField.foreach(key => add(hydrate, stepLines(r, key, shape)))
@@ -498,25 +520,7 @@ object StateBridgeTs:
               "  }"
             )
           )
-      if lastOwnerIdx.contains(idx) then
-        for ne <- nestedEntities do
-          val client = camel(ne.entityName)
-          add(
-            hydrate,
-            List(
-              s"  const ${client}Rows =",
-              s"    ${client}Ids.size > 0",
-              s"      ? await tx.$client.findMany({ where: { id: { in: [...${client}Ids] } } })",
-              "      : [];",
-              s"  const ${client}ToDafny = (r: (typeof ${client}Rows)[number]): unknown =>",
-              s"    dafnyModule['${ne.entityName}'].create_${ne.entityName}("
-            )
-              ::: ne.fields.map(f => s"      ${toDafnyExpr(profiled.ir, ne.entityName, f, "r")},")
-              ::: List(
-                "    );",
-                s"  const ${client}ById = new Map(${client}Rows.map((r) => [Number(r.id), r]));"
-              )
-          )
+      if lastOwnerIdx.contains(idx) then nestedLoadLines()
     // Each relation's Dafny value constructs once, after its last scheduled
     // step, from whatever the steps accumulated; the hydrated record keeps
     // the actually-loaded pks so persist can confine its delete scans.

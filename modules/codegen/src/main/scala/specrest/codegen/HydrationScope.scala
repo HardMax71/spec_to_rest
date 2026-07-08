@@ -333,11 +333,15 @@ object HydrationScope:
     certifyCycles(loop(base), shapes)
 
   // Derived loads that feed each other form phased chains; a cycle among
-  // them is sound only when it provably terminates. A two-relation cycle is
-  // kept when each side's generating clause pins the referenced row back to
-  // an already hydrated one (an index-equality conjunct) and agrees on its
-  // own key (users[u].id = u), which makes the third phase re-load only
-  // hydrated keys. Every other cycle falls back to whole relations.
+  // them is sound only when it provably terminates. A mutual FieldOfRows
+  // pair r <-> p is kept when, for r's edge keyed by field f_r of p's rows
+  // and p's edge keyed by field f_p of r's rows, a clause over r pins p's
+  // row at f_p to the domain row (user_by_email[users[u].email] = users[u])
+  // and agrees the domain row's f_r with its own key (users[u].id = u), and
+  // the mirror clause over p does the same with the fields swapped: each
+  // later phase then re-keys only hydrated rows. The fields must be the
+  // edges' own; agreement on some unrelated field certifies nothing. Every
+  // other cycle falls back to whole relations.
   private def certifyCycles(
       m: Map[String, Scope],
       shapes: List[InvShape]
@@ -355,22 +359,43 @@ object HydrationScope:
       deps.getOrElse(from, Set.empty).exists { n =>
         n == to || (!seen(n) && reaches(n, to, seen + n))
       }
-    def pinnedBoth(a: String, b: String): Boolean =
-      def pinned(domain: String, target: String): Boolean =
-        shapes.exists {
-          case InvShape.Cross(ds, _, pins, keyAgree) =>
-            ds.contains(domain) && pins.contains(target) && keyAgree
-          case _ => false
-        }
-      pinned(a, b) && pinned(b, a)
+    // The fields of rel's derived sources drawn from `from`, defined only
+    // when every such source is a FieldOfRows (the certificate says nothing
+    // about dependent or value-column edges inside a cycle).
+    def fieldOfSources(rel: String, from: String): Option[Set[String]] =
+      m.get(rel) match
+        case Some(Scope.Keys(ks)) =>
+          val drawn = ks.collect {
+            case s @ KeySource.FieldOfRows(src, _) if src == from       => s
+            case s @ KeySource.DependentField(src, _, _) if src == from => s
+            case s @ KeySource.ValueColumn(src, _) if src == from       => s
+          }
+          val fields = drawn.collect { case KeySource.FieldOfRows(_, f) => f }
+          if drawn.nonEmpty && fields.sizeIs == drawn.size then Some(fields.toSet)
+          else None
+        case _ => None
+    def clauseFor(domain: String, pin: (String, String), agreeField: String): Boolean =
+      shapes.exists {
+        case InvShape.Cross(ds, _, pins, agreeFields) =>
+          ds.contains(domain) && pins.contains(pin) && agreeFields.contains(agreeField)
+        case _ => false
+      }
+    def certifiedPair(r: String, p: String): Boolean =
+      (fieldOfSources(r, p), fieldOfSources(p, r)) match
+        case (Some(rFields), Some(pFields)) =>
+          rFields.forall(fr =>
+            pFields.forall(fp =>
+              clauseFor(r, (p, fp), fr) && clauseFor(p, (r, fr), fp)
+            )
+          )
+        case _ => false
     // A dependency edge participates in a cycle when its target can reach
     // back. Every such edge must be one half of a certified mutual pair; a
     // self-loop or a longer cycle has no certificate and loads whole.
     val toFull = m.keySet.filter { r =>
       deps.getOrElse(r, Set.empty).exists { d =>
         val backReaches = d == r || reaches(d, r, Set.empty)
-        backReaches &&
-        (d == r || !(deps.getOrElse(d, Set.empty).contains(r) && pinnedBoth(r, d)))
+        backReaches && (d == r || !certifiedPair(r, d))
       }
     }
     toFull.foldLeft(m)((acc, r) => acc.updated(r, Scope.Full))
@@ -411,8 +436,12 @@ object HydrationScope:
     case Cross(
         domains: Set[String],
         edges: List[Edge],
-        pinnedTargets: Set[String],
-        keyAgreement: Boolean
+        // (target relation, the domain-row field its row is indexed at) for
+        // each index-equality conjunct pinning the target row to the domain
+        // row.
+        pins: Set[(String, String)],
+        // Domain-row fields a conjunct equates with the domain key.
+        keyAgreementFields: Set[String]
     )
     case Aligned(x: String, y: String)
     case Opaque(mentioned: Set[String])
@@ -569,31 +598,37 @@ object HydrationScope:
           if edges.isEmpty then Some(InvShape.Safe)
           else
             val conjuncts = flattenAndAll(List(inner))
-            // A conjunct that equates the referenced row with the domain row
-            // (users[ube[email].id] = ube[email]) pins the phased load: under
-            // conformance the next phase re-keys only hydrated rows.
-            val pinned = conjuncts.collect {
-              case BinaryOpF(BEq(), IndexF(rel, key, _), rhs, _)
-                  if peelName(rel).exists(relationNames)
-                    && fieldPath(key, Env(Map.empty, Map.empty)).isDefined
-                    && isOwnerRow(rhs) =>
-                peelName(rel).toList
-              case BinaryOpF(BEq(), lhs, IndexF(rel, key, _), _)
-                  if peelName(rel).exists(relationNames)
-                    && fieldPath(key, Env(Map.empty, Map.empty)).isDefined
-                    && isOwnerRow(lhs) =>
-                peelName(rel).toList
-            }.flatten.toSet
-            // A conjunct that ties the domain row's field to its own key
+            // A conjunct that equates the referenced row, indexed at a field
+            // of the domain row, with the domain row itself
+            // (users[ube[email].id] = ube[email]) pins the phased load at
+            // that field: under conformance the next phase re-keys only
+            // hydrated rows.
+            def pinOf(rel: expr, key: expr, other: expr): Option[(String, String)] =
+              if isOwnerRow(other) then
+                for
+                  target <- peelName(rel).filter(relationNames)
+                  kind   <- fieldPath(key, Env(Map.empty, Map.empty))
+                  field <- kind match
+                             case EdgeKind.FieldKey(f) => Some(f)
+                             case _                    => None
+                yield (target, field)
+              else None
+            val pinned = conjuncts.flatMap {
+              case BinaryOpF(BEq(), IndexF(rel, key, _), rhs, _) => pinOf(rel, key, rhs)
+              case BinaryOpF(BEq(), lhs, IndexF(rel, key, _), _) => pinOf(rel, key, lhs)
+              case _                                             => None
+            }.toSet
+            // The domain-row fields a conjunct ties to the domain key
             // (users[u].id = u), the other half of the cycle certificate.
-            val keyAgreement = conjuncts.exists {
-              case BinaryOpF(BEq(), FieldAccessF(row, _, _), IdentifierF(k, _), _) =>
-                isOwnerRow(row) && keyVars.contains(k)
-              case BinaryOpF(BEq(), IdentifierF(k, _), FieldAccessF(row, _, _), _) =>
-                isOwnerRow(row) && keyVars.contains(k)
-              case _ => false
-            }
-            Some(InvShape.Cross(domains, edges.distinct, pinned, keyAgreement))
+            val keyAgreementFields = conjuncts.collect {
+              case BinaryOpF(BEq(), FieldAccessF(row, f, _), IdentifierF(k, _), _)
+                  if isOwnerRow(row) && keyVars.contains(k) =>
+                f
+              case BinaryOpF(BEq(), IdentifierF(k, _), FieldAccessF(row, f, _), _)
+                  if isOwnerRow(row) && keyVars.contains(k) =>
+                f
+            }.toSet
+            Some(InvShape.Cross(domains, edges.distinct, pinned, keyAgreementFields))
 
   private enum Binding derives CanEqual:
     case InputVal

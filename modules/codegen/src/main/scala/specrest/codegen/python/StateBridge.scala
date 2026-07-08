@@ -425,6 +425,18 @@ object StateBridge:
       for (f, ne) <- nestedRefs(r) do
         val ids = s"_${Naming.toSnakeCase(ne.entityName)}_ids"
         hydrateLines += s"        $ids.update(int(_x) for _r in $rows for _x in _r.${f.columnName})"
+    def nestedLoadLines(): Unit =
+      for ne <- nestedEntities do
+        val snake = Naming.toSnakeCase(ne.entityName)
+        val model = ne.modelClassName
+        hydrateLines += s"    ${snake}_rows: list[$model] = []"
+        hydrateLines += s"    if _${snake}_ids:"
+        hydrateLines += s"        _${snake}_q = select($model).where($model.id.in_(list(_${snake}_ids)))"
+        hydrateLines += s"        ${snake}_rows = list((await session.execute(_${snake}_q)).scalars().all())"
+        hydrateLines += s"    _${snake}_by_id = {int(r.id): r for r in ${snake}_rows}"
+    // With no keyed owner in the schedule the nested ids all come from the
+    // seq loads above, so the nested selects run here.
+    if lastOwnerIdx.isEmpty then nestedLoadLines()
     for ((rel, shape, _), idx) <- unionSteps.zipWithIndex do
       val r = relByField(rel)
       r.keyField.foreach(key => hydrateLines ++= stepLines(r, key, shape))
@@ -434,15 +446,7 @@ object StateBridge:
         for (f, ne) <- nestedRefs(r) do
           val ids = s"_${Naming.toSnakeCase(ne.entityName)}_ids"
           hydrateLines += s"    $ids.update(int(_x) for _r in ${rel}_acc.values() for _x in _r.${f.columnName})"
-      if lastOwnerIdx.contains(idx) then
-        for ne <- nestedEntities do
-          val snake = Naming.toSnakeCase(ne.entityName)
-          val model = ne.modelClassName
-          hydrateLines += s"    ${snake}_rows: list[$model] = []"
-          hydrateLines += s"    if _${snake}_ids:"
-          hydrateLines += s"        _${snake}_q = select($model).where($model.id.in_(list(_${snake}_ids)))"
-          hydrateLines += s"        ${snake}_rows = list((await session.execute(_${snake}_q)).scalars().all())"
-          hydrateLines += s"    _${snake}_by_id = {int(r.id): r for r in ${snake}_rows}"
+      if lastOwnerIdx.contains(idx) then nestedLoadLines()
     // Each relation's Dafny value constructs once, after its last scheduled
     // step, from whatever the steps accumulated; the hydrated record keeps
     // the actually-loaded pks so persist can confine its delete scans.
