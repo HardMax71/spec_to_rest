@@ -276,8 +276,8 @@ object HydrationScope:
     // source then selects the whole target, so load it whole outright.
     val coversVia: Set[(String, String, String)] = shapes.collect {
       case InvShape.Cross(ds, edges, _, _) =>
-        edges.collect { case Edge(target, EdgeKind.FieldKey(col)) =>
-          ds.toList.map(d => (d, target, col))
+        edges.collect { case Edge(target, EdgeKind.FieldKey(col), owner) =>
+          owner.fold(ds.toList)(List(_)).map(d => (d, target, col))
         }.flatten
     }.flatten.toSet
 
@@ -290,10 +290,14 @@ object HydrationScope:
       if live.isEmpty then m
       else
         edges.foldLeft(m) { (acc, edge) =>
+          // A keyed edge fires only from the domain that owns its rows; the
+          // clause is vacuous over that domain when it hydrates nothing.
+          def fromOwner(f: (Map[String, Scope], String) => Map[String, Scope]) =
+            edge.owner.filter(live).fold(acc)(o => f(acc, o))
           edge.kind match
             case EdgeKind.WholeRelation => raise(acc, edge.target)
             case EdgeKind.FieldKey(f) =>
-              live.foldLeft(acc) { (a, d) =>
+              fromOwner { (a, d) =>
                 // Structural cut: a domain hydrated solely through a
                 // ValueColumn filter on this very column already confines
                 // every row's reference to the target's hydrated keys.
@@ -305,11 +309,9 @@ object HydrationScope:
                 if cut then a else addSource(a, edge.target, KeySource.FieldOfRows(d, f))
               }
             case EdgeKind.NestedFieldKey(coll, ef) =>
-              live.foldLeft(acc)((a, d) =>
-                addSource(a, edge.target, KeySource.DependentField(d, coll, ef))
-              )
+              fromOwner((a, d) => addSource(a, edge.target, KeySource.DependentField(d, coll, ef)))
             case EdgeKind.ColumnFilter(col) =>
-              live.foldLeft(acc) { (a, d) =>
+              fromOwner { (a, d) =>
                 if a.get(d).contains(Scope.Full) && coversVia((edge.target, d, col)) then
                   raise(a, edge.target)
                 else addSource(a, edge.target, KeySource.ValueColumn(d, col))
@@ -374,10 +376,19 @@ object HydrationScope:
           if drawn.nonEmpty && fields.sizeIs == drawn.size then Some(fields.toSet)
           else None
         case _ => None
-    def clauseFor(domain: String, pin: (String, String), agreeField: String): Boolean =
+    // Pins and agreement fields carry the domain relation they were
+    // extracted from, so a multi-domain clause cannot lend one domain's
+    // conjuncts to another.
+    def clauseFor(
+        domain: String,
+        pinTarget: String,
+        pinField: String,
+        agreeField: String
+    ): Boolean =
       shapes.exists {
-        case InvShape.Cross(ds, _, pins, agreeFields) =>
-          ds.contains(domain) && pins.contains(pin) && agreeFields.contains(agreeField)
+        case InvShape.Cross(_, _, pins, agreeFields) =>
+          pins.contains((domain, pinTarget, pinField)) &&
+          agreeFields.contains((domain, agreeField))
         case _ => false
       }
     def certifiedPair(r: String, p: String): Boolean =
@@ -385,7 +396,7 @@ object HydrationScope:
         case (Some(rFields), Some(pFields)) =>
           rFields.forall(fr =>
             pFields.forall(fp =>
-              clauseFor(r, (p, fp), fr) && clauseFor(p, (r, fr), fp)
+              clauseFor(r, p, fp, fr) && clauseFor(p, r, fr, fp)
             )
           )
         case _ => false
@@ -419,7 +430,9 @@ object HydrationScope:
         m.updated(x, Scope.Keys(ks))
       case _ => m.updated(x, Scope.Full).updated(y, Scope.Full)
 
-  final private case class Edge(target: String, kind: EdgeKind)
+  // owner = the domain relation whose rows key the reference; None only for
+  // whole-relation edges, which need no source.
+  final private case class Edge(target: String, kind: EdgeKind, owner: Option[String])
 
   private enum EdgeKind derives CanEqual:
     // Reference keyed by a field of the hydrated domain row.
@@ -436,12 +449,13 @@ object HydrationScope:
     case Cross(
         domains: Set[String],
         edges: List[Edge],
-        // (target relation, the domain-row field its row is indexed at) for
-        // each index-equality conjunct pinning the target row to the domain
-        // row.
-        pins: Set[(String, String)],
-        // Domain-row fields a conjunct equates with the domain key.
-        keyAgreementFields: Set[String]
+        // (domain relation, target relation, the domain-row field the
+        // target row is indexed at) for each index-equality conjunct
+        // pinning the target row to the domain row.
+        pins: Set[(String, String, String)],
+        // (domain relation, field) for each conjunct equating a domain
+        // row's field with that row's own key.
+        keyAgreementFields: Set[(String, String)]
     )
     case Aligned(x: String, y: String)
     case Opaque(mentioned: Set[String])
@@ -487,29 +501,39 @@ object HydrationScope:
       inner: expr,
       relationNames: Set[String]
   ): Option[InvShape] =
-    val domains = bindings.flatMap(b => bindingRel(qbdCollection(b), relationNames)).toSet
+    val binderRelOf = bindings.flatMap { b =>
+      bindingRel(qbdCollection(b), relationNames).map(qbdVar(b) -> _)
+    }.toMap
+    val domains = binderRelOf.values.toSet
     if bindings.exists(b => bindingRel(qbdCollection(b), relationNames).isEmpty) then None
     else
-      val keyVars = bindings.map(qbdVar).toSet
-      // The domain row and its field paths, the only sanctioned ways the
-      // clause body may touch the domain relation.
-      def isOwnerRow(e: expr): Boolean = e match
+      // The domain row: a relation indexed at ITS OWN binder. Indexing one
+      // domain at another domain's binder is a cross-read the classifier
+      // has no support shape for, so it stays opaque.
+      def ownerOf(e: expr): Option[(String, String)] = e match
         case IndexF(rel, IdentifierF(v, _), _) =>
-          peelName(rel).exists(domains) && keyVars.contains(v)
-        case _ => false
+          peelName(rel).filter(r => binderRelOf.get(v).contains(r)).map(_ -> v)
+        case _ => None
+      def isOwnerRow(e: expr): Boolean = ownerOf(e).isDefined
       // env: nested binders over a relation (var -> relation) and nested
-      // binders over an owner field collection (var -> collection field).
-      final case class Env(relVars: Map[String, String], elemVars: Map[String, String])
-      def fieldPath(e: expr, env: Env): Option[EdgeKind] = e match
-        case FieldAccessF(row, f, _) if isOwnerRow(row) => Some(EdgeKind.FieldKey(f))
+      // binders over an owner field collection (var -> owner + collection).
+      final case class Env(relVars: Map[String, String], elemVars: Map[String, (String, String)])
+      def fieldPath(e: expr, env: Env): Option[(String, EdgeKind)] = e match
+        case FieldAccessF(row, f, _) if isOwnerRow(row) =>
+          ownerOf(row).map((rel, _) => rel -> EdgeKind.FieldKey(f))
         case FieldAccessF(IdentifierF(v, _), f, _) if env.elemVars.contains(v) =>
-          env.elemVars.get(v).map(coll => EdgeKind.NestedFieldKey(coll, f))
+          env.elemVars.get(v).map((rel, coll) => rel -> EdgeKind.NestedFieldKey(coll, f))
         case _ => None
       def merge(a: Option[List[Edge]], b: Option[List[Edge]]): Option[List[Edge]] =
         for x <- a; y <- b yield x ::: y
-      // The column-equality conjunct that ties an existential witness to the
-      // domain key: B[pid].col = k with pid the witness binder, k a key var.
-      def guardColumn(conjuncts: List[expr], rel: String, binder: String): Option[String] =
+      // The column-equality conjunct that ties an existential witness to a
+      // domain key: B[pid].col = k with pid the witness binder, k a binder
+      // of the domain the filter draws its keys from.
+      def guardColumn(
+          conjuncts: List[expr],
+          rel: String,
+          binder: String
+      ): Option[(String, String)] =
         conjuncts.collectFirst {
           case BinaryOpF(
                 BEq(),
@@ -517,16 +541,16 @@ object HydrationScope:
                 IdentifierF(k, _),
                 _
               )
-              if peelName(r).contains(rel) && p == binder && keyVars.contains(k) =>
-            col
+              if peelName(r).contains(rel) && p == binder && binderRelOf.contains(k) =>
+            binderRelOf(k) -> col
           case BinaryOpF(
                 BEq(),
                 IdentifierF(k, _),
                 FieldAccessF(IndexF(r, IdentifierF(p, _), _), col, _),
                 _
               )
-              if peelName(r).contains(rel) && p == binder && keyVars.contains(k) =>
-            col
+              if peelName(r).contains(rel) && p == binder && binderRelOf.contains(k) =>
+            binderRelOf(k) -> col
         }
       def collect(e: expr, env: Env): Option[List[Edge]] = e match
         case row if isOwnerRow(row)                             => Some(Nil)
@@ -537,17 +561,20 @@ object HydrationScope:
             case IdentifierF(v, _) if env.relVars.get(v).contains(target) => Some(Nil)
             case _ =>
               fieldPath(key, env) match
-                case Some(kind) => collect(key, env).map(Edge(target, kind) :: _)
+                case Some((owner, kind)) =>
+                  collect(key, env).map(Edge(target, kind, Some(owner)) :: _)
                 case None =>
-                  collect(key, env).map(Edge(target, EdgeKind.WholeRelation) :: _)
+                  collect(key, env).map(Edge(target, EdgeKind.WholeRelation, None) :: _)
         case BinaryOpF(BIn() | BNotIn(), l, relRef, _)
             if peelName(relRef).exists(relationNames) =>
           peelName(relRef) match
             case Some(r) if domains(r) => None
             case Some(r) =>
               fieldPath(l, env) match
-                case Some(kind) => collect(l, env).map(Edge(r, kind) :: _)
-                case None       => collect(l, env).map(Edge(r, EdgeKind.WholeRelation) :: _)
+                case Some((owner, kind)) =>
+                  collect(l, env).map(Edge(r, kind, Some(owner)) :: _)
+                case None =>
+                  collect(l, env).map(Edge(r, EdgeKind.WholeRelation, None) :: _)
             case None => collect(l, env)
         case QuantifierF(kind, nbs, nb, _) =>
           val existential = kind match
@@ -562,25 +589,35 @@ object HydrationScope:
                   val nextEnv = envAcc.copy(relVars = envAcc.relVars.updated(qbdVar(b), r))
                   if existential then
                     guardColumn(flattenAndAll(List(nb)), r, qbdVar(b)) match
-                      case Some(c) => Some((nextEnv, Edge(r, EdgeKind.ColumnFilter(c)) :: edges))
-                      case None    => Some((nextEnv, Edge(r, EdgeKind.WholeRelation) :: edges))
+                      case Some((owner, c)) =>
+                        Some((nextEnv, Edge(r, EdgeKind.ColumnFilter(c), Some(owner)) :: edges))
+                      case None =>
+                        Some((nextEnv, Edge(r, EdgeKind.WholeRelation, None) :: edges))
                   else Some((nextEnv, edges))
                 case None =>
                   val elem = col match
-                    case FieldAccessF(row, f, _) if isOwnerRow(row) => Some(f)
-                    case _                                          => None
+                    case FieldAccessF(row, f, _) if isOwnerRow(row) =>
+                      ownerOf(row).map((rel, _) => rel -> f)
+                    case _ => None
                   elem match
-                    case Some(f) =>
-                      Some((envAcc.copy(elemVars = envAcc.elemVars.updated(qbdVar(b), f)), edges))
+                    case Some((rel, f)) =>
+                      Some(
+                        (
+                          envAcc
+                            .copy(elemVars = envAcc.elemVars.updated(qbdVar(b), (rel, f))),
+                          edges
+                        )
+                      )
                     case None => collect(col, envAcc).map(es => (envAcc, es ::: edges))
             }
           }
           bound.flatMap((envB, edges) => collect(nb, envB).map(edges ::: _))
-        case IdentifierF(n, _) if domains(n)       => None
-        case IdentifierF(n, _) if relationNames(n) => Some(List(Edge(n, EdgeKind.WholeRelation)))
-        case IdentifierF(_, _)                     => Some(Nil)
-        case BinaryOpF(_, l, r, _)                 => merge(collect(l, env), collect(r, env))
-        case UnaryOpF(_, i, _)                     => collect(i, env)
+        case IdentifierF(n, _) if domains(n) => None
+        case IdentifierF(n, _) if relationNames(n) =>
+          Some(List(Edge(n, EdgeKind.WholeRelation, None)))
+        case IdentifierF(_, _)     => Some(Nil)
+        case BinaryOpF(_, l, r, _) => merge(collect(l, env), collect(r, env))
+        case UnaryOpF(_, i, _)     => collect(i, env)
         case CallF(c, as, _) =>
           (c :: as).foldLeft(Option(List.empty[Edge]))((acc, a) => merge(acc, collect(a, env)))
         case LetF(v, value, b, _) =>
@@ -599,34 +636,36 @@ object HydrationScope:
           else
             val conjuncts = flattenAndAll(List(inner))
             // A conjunct that equates the referenced row, indexed at a field
-            // of the domain row, with the domain row itself
+            // of the domain row, with that same domain row
             // (users[ube[email].id] = ube[email]) pins the phased load at
             // that field: under conformance the next phase re-keys only
-            // hydrated rows.
-            def pinOf(rel: expr, key: expr, other: expr): Option[(String, String)] =
-              if isOwnerRow(other) then
-                for
-                  target <- peelName(rel).filter(relationNames)
-                  kind   <- fieldPath(key, Env(Map.empty, Map.empty))
-                  field <- kind match
-                             case EdgeKind.FieldKey(f) => Some(f)
-                             case _                    => None
-                yield (target, field)
-              else None
+            // hydrated rows. Both occurrences must be the same binder, and
+            // the pin is recorded against that binder's relation.
+            def pinOf(rel: expr, key: expr, other: expr): Option[(String, String, String)] =
+              for
+                (owner, v) <- ownerOf(other)
+                target     <- peelName(rel).filter(relationNames)
+                field <- key match
+                           case FieldAccessF(row, f, _) if ownerOf(row).contains((owner, v)) =>
+                             Some(f)
+                           case _ => None
+              yield (owner, target, field)
             val pinned = conjuncts.flatMap {
               case BinaryOpF(BEq(), IndexF(rel, key, _), rhs, _) => pinOf(rel, key, rhs)
               case BinaryOpF(BEq(), lhs, IndexF(rel, key, _), _) => pinOf(rel, key, lhs)
               case _                                             => None
             }.toSet
-            // The domain-row fields a conjunct ties to the domain key
-            // (users[u].id = u), the other half of the cycle certificate.
-            val keyAgreementFields = conjuncts.collect {
-              case BinaryOpF(BEq(), FieldAccessF(row, f, _), IdentifierF(k, _), _)
-                  if isOwnerRow(row) && keyVars.contains(k) =>
-                f
-              case BinaryOpF(BEq(), IdentifierF(k, _), FieldAccessF(row, f, _), _)
-                  if isOwnerRow(row) && keyVars.contains(k) =>
-                f
+            // The domain-row fields a conjunct ties to the row's own key
+            // (users[u].id = u, both sides the same binder), recorded
+            // against that binder's relation.
+            def agreeOf(row: expr, f: String, k: String): Option[(String, String)] =
+              ownerOf(row).collect { case (rel, v) if v == k => rel -> f }
+            val keyAgreementFields = conjuncts.flatMap {
+              case BinaryOpF(BEq(), FieldAccessF(row, f, _), IdentifierF(k, _), _) =>
+                agreeOf(row, f, k)
+              case BinaryOpF(BEq(), IdentifierF(k, _), FieldAccessF(row, f, _), _) =>
+                agreeOf(row, f, k)
+              case _ => None
             }.toSet
             Some(InvShape.Cross(domains, edges.distinct, pinned, keyAgreementFields))
 
