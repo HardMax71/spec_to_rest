@@ -11,6 +11,14 @@ ghost function TheBy<K, V>(m: map<K, V>, p: K -> bool): K
   var k :| k in m && p(k); k
 }
 
+ghost function TheBySet<T>(s: set<T>, p: T -> bool): T
+  requires exists x :: x in s && p(x)
+  requires forall x1, x2 :: x1 in s && x2 in s && p(x1) && p(x2) ==> x1 == x2
+  ensures TheBySet(s, p) in s && p(TheBySet(s, p))
+{
+  var x :| x in s && p(x); x
+}
+
 class ServiceState
 {
   var count: int
