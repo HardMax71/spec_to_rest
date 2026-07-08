@@ -61,13 +61,19 @@ Soundness rests on the Dafny proofs quantifying over every state that
 satisfies the requires, and a partially hydrated state is such a state,
 provided it still satisfies `ServiceStateInv`. Per-row invariants hold on
 any subset for free; cross-relation clauses do not, so the analyzer closes
-each scope under them: a relation an invariant reads outside its own rows
-loads whole whenever a referencing relation hydrates non-empty, and clause
-shapes the classifier cannot vouch for force their relations whole on every
-request. The one trade left is the guard's reach: a stored invariant
-violation among rows a request never loads (possible only through
-out-of-band writes such as admin seeding) is caught by the next request
-that hydrates them, not by every request.
+each scope under them with support loads: a reference keyed by an owner
+field hydrates the referenced rows by those field values, and a
+column-guarded existential hydrates the rows whose column matches the
+hydrated keys. The bridge executes these as wave-ordered phases inside the
+request transaction, records what each phase actually loaded, and confines
+the persist delete scans to exactly those rows. Reference cycles are kept
+only under a termination certificate (the value-column filter that confines
+its own back-reference, or bilateral index-equality conjuncts like the auth
+user index); uncertified cycles and clause shapes the classifier cannot
+vouch for still load their relations whole. The one trade left is the
+guard's reach: a stored invariant violation among rows a request never
+loads (possible only through out-of-band writes such as admin seeding) is
+caught by the next request that hydrates them, not by every request.
 
 ## Graduated fallback (M6.6)
 

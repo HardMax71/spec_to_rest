@@ -1132,33 +1132,52 @@ object EmitTs:
                 Some(s"someOrNone($access, (_v) => intToDafny(intFromQueryString(_v)))")
               case _ => inputToDafny(access, k)
           )
-      // Which rows each state relation must hydrate for this operation, as the
-      // scope literal both bridge calls receive. Keyed scopes name the request
-      // values through the same access paths the kernel args use; a relation
-      // the contracts never touch stays out of the literal and is skipped in
-      // both directions.
+      // Which rows each state relation must hydrate for this operation, as
+      // the scope literal the bridge receives: per relation a list of source
+      // descriptors matched against the bridge's static load schedule. Keyed
+      // scopes name the request values through the same access paths the
+      // kernel args use; a relation the contracts never touch stays out of
+      // the literal and is skipped in both directions.
       val accessByName = inputs.toMap
       val scopeLines: List[String] = specOp match
         case None => List("const scope = undefined;")
         case Some(decl) =>
-          val entries = HydrationScope
-            .analyze(decl, kernelCtx.ir)
-            .byField
-            .toList
+          val opScopes = HydrationScope.analyze(decl, kernelCtx.ir)
+          val opPlan   = HydrationScope.loadPlan(opScopes)
+          val entries = opScopes.byField.toList
             .sortBy(_._1)
             .flatMap { (rel, sc) =>
               sc match
-                case HydrationScope.Scope.Skip => None
-                case HydrationScope.Scope.Full => Some(s"$rel: { kind: 'full' }")
-                case HydrationScope.Scope.Keys(sources) =>
-                  val accesses = sources.map {
-                    case HydrationScope.KeySource.Input(n)          => accessByName.get(n)
-                    case _: HydrationScope.KeySource.DependentField => None
-                  }
-                  // Dependent-key hops are a later milestone; until wired,
-                  // such a relation loads whole.
-                  if accesses.contains(None) then Some(s"$rel: { kind: 'full' }")
-                  else Some(s"$rel: { kind: 'keys', keys: [${accesses.flatten.mkString(", ")}] }")
+                case HydrationScope.Scope.Skip    => None
+                case HydrationScope.Scope.Full    => Some(s"$rel: [{ kind: 'full' }]")
+                case HydrationScope.Scope.Keys(_) =>
+                  // The op's load plan is the authority: a derived source
+                  // whose relation never gains rows degrades there to a full
+                  // load, and the literal must agree with the schedule the
+                  // bridge runs. A persist-only scope keeps an empty keys
+                  // descriptor so the relation stays visible to persistence.
+                  val steps = opPlan.filter(_.relation == rel)
+                  if steps.exists(_.source.isEmpty) then Some(s"$rel: [{ kind: 'full' }]")
+                  else
+                    val sources = steps.flatMap(_.source)
+                    val inputs = sources.collect { case HydrationScope.KeySource.Input(n) =>
+                      accessByName.get(n)
+                    }
+                    if inputs.contains(None) then Some(s"$rel: [{ kind: 'full' }]")
+                    else
+                      val derived = sources.collect {
+                        case HydrationScope.KeySource.FieldOfRows(src, f) =>
+                          s"{ kind: 'fieldOf', src: '$src', field: '$f' }"
+                        case HydrationScope.KeySource.DependentField(src, coll, ef) =>
+                          s"{ kind: 'dependent', src: '$src', collection: '$coll', elem: '$ef' }"
+                        case HydrationScope.KeySource.ValueColumn(src, col) =>
+                          s"{ kind: 'valueCol', src: '$src', column: '$col' }"
+                      }
+                      val keyed =
+                        if inputs.nonEmpty || derived.isEmpty then
+                          List(s"{ kind: 'keys', keys: [${inputs.flatten.mkString(", ")}] }")
+                        else Nil
+                      Some(s"$rel: [${(keyed ::: derived).mkString(", ")}]")
             }
           StateBridgeTs.scopeAssign("const scope: HydrationScope = ", entries, margin = 4)
       val outputs     = op.responseFields
@@ -1317,10 +1336,10 @@ object EmitTs:
           if kernelCtx.hasState then
             val steps =
               scopeLines :::
-                "const state = await hydrateState(tx, scope);" ::
+                "const [state, hydrated] = await hydrateState(tx, scope);" ::
                 (invCheck ::: guardCheck).map(_.stripPrefix("  ")) :::
                 bodyLines.dropRight(1).map(_.stripPrefix("  ")) :::
-                "await persistState(tx, state, scope);" ::
+                "await persistState(tx, state, hydrated);" ::
                 bodyLines.last.stripPrefix("  ") :: Nil
             (header ::
               "  return prisma.$transaction(async (tx) => {" ::

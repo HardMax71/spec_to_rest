@@ -150,54 +150,87 @@ class EmitGoTest extends CatsEffectSuite:
         fail("no state bridge emitted")
       )
       assert(
-        service.contains("state, err := hydrateState(ctx, tx, scope)"),
-        s"kernel ops must hydrate state with the op's scope — got:\n$service"
+        service.contains("state, hydrated, err := hydrateState(ctx, tx, scope)"),
+        s"kernel ops must hydrate state with the op's scope and keep the loaded-keys record — got:\n$service"
       )
       assert(
-        service.contains("if err := persistState(ctx, tx, state, scope); err != nil {"),
-        s"kernel ops must persist the mutated state under the same scope — got:\n$service"
+        service.contains("if err := persistState(ctx, tx, state, hydrated); err != nil {"),
+        s"kernel ops must persist the mutated state under the hydrated record — got:\n$service"
       )
       // Resolve reads both relations at the path param's key; Shorten's
       // candidate-freshness check forces both whole.
       assert(
         service.contains(
-          "\t\tscope := map[string]hydrationSel{\n" +
-            "\t\t\t\"metadata\": {keys: []any{code}},\n" +
-            "\t\t\t\"store\":    {keys: []any{code}},\n" +
+          "\t\tscope := map[string][]hydrationSrc{\n" +
+            "\t\t\t\"metadata\": {{kind: \"keys\", keys: []any{code}}},\n" +
+            "\t\t\t\"store\":    {{kind: \"keys\", keys: []any{code}}},\n" +
             "\t\t}"
         ),
         s"resolve should hydrate both relations keyed by code — got:\n$service"
       )
       assert(
         service.contains(
-          "\t\tscope := map[string]hydrationSel{\n" +
-            "\t\t\t\"metadata\": {full: true},\n" +
-            "\t\t\t\"store\":    {full: true},\n" +
+          "\t\tscope := map[string][]hydrationSrc{\n" +
+            "\t\t\t\"metadata\": {{kind: \"full\"}},\n" +
+            "\t\t\t\"store\":    {{kind: \"full\"}},\n" +
             "\t\t}"
         ),
         s"shorten should hydrate both relations whole — got:\n$service"
       )
       assert(
         bridge.contains(
-          "func hydrateState(ctx context.Context, db bun.IDB, scope map[string]hydrationSel) (*dafnykernel.ServiceState, error) {"
+          "func hydrateState(ctx context.Context, db bun.IDB, scope map[string][]hydrationSrc) (*dafnykernel.ServiceState, map[string]hydrationSel, error) {"
         ),
-        s"hydrateState must take the scope map — got:\n$bridge"
+        s"hydrateState must take the scope map and return the loaded-keys record — got:\n$bridge"
       )
       assert(
         bridge.contains(
-          "func persistState(ctx context.Context, db bun.IDB, st *dafnykernel.ServiceState, scope map[string]hydrationSel) error {"
+          "func persistState(ctx context.Context, db bun.IDB, st *dafnykernel.ServiceState, hydrated map[string]hydrationSel) error {"
         ),
-        s"persistState must take the scope map — got:\n$bridge"
+        s"persistState must consume the hydrated record, not the request scope — got:\n$bridge"
       )
       // A keyed load confines the select, and the persist delete scan only
-      // sees rows fetched through the same scoped select.
+      // sees rows the hydrate record vouches for.
+      assert(
+        bridge.contains("bun.In(metadataInputKeys)"),
+        s"bridge must bind batched input keys into the hydrate query — got:\n$bridge"
+      )
       assert(
         bridge.contains("} else if len(sel.keys) > 0 {"),
-        s"bridge must load keyed scopes through an IN filter — got:\n$bridge"
+        s"persist must confine its delete scan through an IN filter — got:\n$bridge"
       )
       assert(
         bridge.contains("bun.In(sel.keys)"),
-        s"bridge must bind scope keys into the query — got:\n$bridge"
+        s"persist must bind the hydrated keys into the query — got:\n$bridge"
+      )
+
+  test("ecommerce GetOrder scope literal carries the derived payment and inventory sources"):
+    SpecFixtures.loadIR("ecommerce").map: ir =>
+      val profiledBase = Annotate.buildProfiledService(ir, "go-chi-sqlite")
+      val profiled     = Annotate.attachDafnyMethods(profiledBase, Map("GetOrder" -> "GetOrder"))
+      val kernel = DafnyKernel(
+        packagePath = DafnyKernel.GoDefaultPackagePath,
+        files = Map("kernel.go" -> "package kernel\n"),
+        bindings = List(OperationBinding("GetOrder", "GetOrder"))
+      )
+      val files = Emit.emitProject(profiled, EmitOptions(dafnyKernel = Some(kernel)))
+      val service = files
+        .find(_.path == "internal/services/order.go")
+        .map(_.content)
+        .getOrElse(fail("no order service emitted"))
+      assert(
+        service.contains("{kind: \"keys\", keys: []any{orderId}}"),
+        s"GetOrder should key orders by the path param — got:\n$service"
+      )
+      assert(
+        service.contains("{kind: \"valueCol\", src: \"orders\", a: \"order_id\"}"),
+        s"GetOrder should key payments by the hydrated order ids — got:\n$service"
+      )
+      assert(
+        service.contains(
+          "{kind: \"dependent\", src: \"orders\", a: \"items\", b: \"product_sku\"}"
+        ),
+        s"GetOrder should key inventory through the hydrated line-item skus — got:\n$service"
       )
 
   private val dialectCases = List(

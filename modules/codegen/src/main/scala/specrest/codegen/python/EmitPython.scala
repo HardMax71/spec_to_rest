@@ -769,34 +769,51 @@ object EmitPython:
     val kernelOuts  = op.responseFields
     val specOutputs = specOp.map(operOutputs).getOrElse(Nil)
     // Which rows each state relation must hydrate for this operation, as the
-    // python dict literal both bridge calls receive. Keyed scopes name the
-    // request values through the same access paths the kernel args use; a
-    // relation the contracts never touch stays out of the dict and is skipped
-    // in both directions.
+    // python dict literal the bridge receives: per relation a list of source
+    // descriptors matched against the bridge's static load schedule. Keyed
+    // scopes name the request values through the same access paths the
+    // kernel args use; a relation the contracts never touch stays out of the
+    // dict and is skipped in both directions.
     // The annotation is load-bearing: a persist-only scope's empty key list
     // gives mypy nothing to infer the value type from.
     val scopePrefix = "        _scope: dict[str, Any] = "
     val kernelScopeAssign = specOp match
       case None => "        _scope: dict[str, Any] | None = None"
       case Some(decl) =>
-        val entries = HydrationScope
-          .analyze(decl, kernelCtx.ir)
-          .byField
-          .toList
+        val opScopes = HydrationScope.analyze(decl, kernelCtx.ir)
+        val loadPlan = HydrationScope.loadPlan(opScopes)
+        val entries = opScopes.byField.toList
           .sortBy(_._1)
           .flatMap { (rel, sc) =>
             sc match
-              case HydrationScope.Scope.Skip => None
-              case HydrationScope.Scope.Full => Some(s"\"$rel\": (\"full\",)")
-              case HydrationScope.Scope.Keys(sources) =>
-                val accesses = sources.map {
-                  case HydrationScope.KeySource.Input(n)          => Some(paramAccess(n))
-                  case _: HydrationScope.KeySource.DependentField => None
-                }
-                // Dependent-key hops are a later milestone; until wired,
-                // such a relation loads whole.
-                if accesses.contains(None) then Some(s"\"$rel\": (\"full\",)")
-                else Some(s"\"$rel\": (\"keys\", [${accesses.flatten.mkString(", ")}])")
+              case HydrationScope.Scope.Skip    => None
+              case HydrationScope.Scope.Full    => Some(s"\"$rel\": [(\"full\",)]")
+              case HydrationScope.Scope.Keys(_) =>
+                // The op's load plan is the authority: a derived source whose
+                // relation never gains rows degrades there to a full load,
+                // and the literal must agree with the schedule the bridge
+                // runs. A persist-only scope keeps an empty keys descriptor
+                // so the relation stays visible to persistence.
+                val steps = loadPlan.filter(_.relation == rel)
+                if steps.exists(_.source.isEmpty) then Some(s"\"$rel\": [(\"full\",)]")
+                else
+                  val sources = steps.flatMap(_.source)
+                  val inputs = sources.collect { case HydrationScope.KeySource.Input(n) =>
+                    paramAccess(n)
+                  }
+                  val derived = sources.collect {
+                    case HydrationScope.KeySource.FieldOfRows(src, f) =>
+                      s"(\"field_of\", \"$src\", \"$f\")"
+                    case HydrationScope.KeySource.DependentField(src, coll, ef) =>
+                      s"(\"dependent\", \"$src\", \"$coll\", \"$ef\")"
+                    case HydrationScope.KeySource.ValueColumn(src, col) =>
+                      s"(\"value_col\", \"$src\", \"$col\")"
+                  }
+                  val keyed =
+                    if inputs.nonEmpty || derived.isEmpty then
+                      List(s"(\"keys\", [${inputs.mkString(", ")}])")
+                    else Nil
+                  Some(s"\"$rel\": [${(keyed ::: derived).mkString(", ")}]")
           }
         StateBridge.scopeAssign(scopePrefix, entries)
     // A single entity-valued output marshals by field projection; a seq of

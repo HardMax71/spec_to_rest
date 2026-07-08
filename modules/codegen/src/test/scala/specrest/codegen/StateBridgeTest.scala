@@ -14,6 +14,22 @@ class StateBridgeTest extends CatsEffectSuite:
       assert(StateBridge.hasState(plan), "url_shortener state should be bridgeable")
       val bridge = StateBridge.emit(profiled)
       assert(bridge.contains("async def hydrate_state"), bridge)
+      assert(
+        bridge.contains(") -> tuple[module_.ServiceState, dict[str, Any]]:"),
+        s"hydrate must return the state alongside the loaded-keys record:\n$bridge"
+      )
+      assert(
+        bridge.contains(
+          "    session: AsyncSession, st: module_.ServiceState, hydrated: dict[str, Any] | None = None"
+        ),
+        s"persist must consume the hydrated record, not the request scope:\n$bridge"
+      )
+      assert(
+        bridge.contains(
+          "url_mapping_q = url_mapping_q.where(UrlMapping.code.in_(sorted(sel[1])))"
+        ),
+        s"the persist delete scan must confine to the hydrated keys:\n$bridge"
+      )
       assert(bridge.contains("st.store = to_dafny_map({"), bridge)
       assert(
         bridge.contains("module_.UrlMapping_UrlMapping("),
