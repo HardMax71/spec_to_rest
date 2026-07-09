@@ -1,0 +1,84 @@
+name: Duplication
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: duplication-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # The runner's pre-installed Node runs jscpd; dropping setup-node avoids
+      # zizmor's cache-poisoning rule (same choice as deploy-fly.yml).
+      - name: Verify pre-installed Node
+        run: node --version
+
+      - name: Duplication report (Scala main + test)
+        run: |
+          npx --yes jscpd@5.0.12 modules \
+            --pattern "**/src/{main,test}/scala/**/*.scala" \
+            --ignore "**/generated/**" \
+            --min-tokens 50 --min-lines 5 \
+            --reporters console,html --output jscpd-report/scala || true
+
+      - name: Duplication report (Isabelle proofs)
+        run: |
+          npx --yes jscpd@5.0.12 proofs \
+            --pattern "**/*.thy" \
+            --min-tokens 50 --min-lines 5 \
+            --reporters console,html --output jscpd-report/thy || true
+
+      - name: Upload HTML reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: jscpd-report
+          path: jscpd-report/
+          if-no-files-found: warn
+
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify pre-installed Node
+        run: node --version
+
+      - name: Scala main duplication within 1 percent
+        run: |
+          npx --yes jscpd@5.0.12 modules \
+            --pattern "**/src/main/scala/**/*.scala" \
+            --ignore "**/generated/**" \
+            --min-tokens 100 --min-lines 5 \
+            --threshold 1 --reporters console
+
+      # Isabelle theories have no jscpd tokenizer, so .jscpd.json maps .thy onto the
+      # generic clike lexer. That is approximate, so the proof budget is looser than
+      # the Scala one and the verbose report above is where proof repetition is read.
+      - name: Isabelle proof duplication within 2 percent
+        run: |
+          npx --yes jscpd@5.0.12 proofs \
+            --pattern "**/*.thy" \
+            --min-tokens 100 --min-lines 5 \
+            --threshold 2 --reporters console
+
+      - name: Changed-code duplication within 1 percent
+        if: github.event_name == 'pull_request'
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/jscpd-diff-gate.mjs
