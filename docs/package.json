@@ -16,15 +16,15 @@
   },
   "dependencies": {
     "@orama/orama": "^3.1.8",
-    "@shikijs/transformers": "^4.2.0",
+    "@shikijs/transformers": "^4.3.0",
     "beautiful-mermaid": "^1.1.3",
-    "fumadocs-core": "^16.10.0",
-    "fumadocs-mdx": "^15.0.12",
-    "fumadocs-openapi": "^11.0.2",
-    "fumadocs-ui": "^16.9.3",
+    "fumadocs-core": "^16.10.7",
+    "fumadocs-mdx": "^15.0.13",
+    "fumadocs-openapi": "^11.0.6",
+    "fumadocs-ui": "^16.10.7",
     "katex": "^0.17.0",
-    "lucide-react": "^1.16.0",
-    "next": "^16.2.9",
+    "lucide-react": "^1.23.0",
+    "next": "^16.2.10",
     "railroad-diagrams": "^1.0.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -36,12 +36,12 @@
     "unist-util-visit-parents": "^6.0.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.1",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/mdx": "^2.0.14",
-    "@types/node": "25.9.3",
+    "@types/node": "26.1.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.1.2",
-    "postcss": "^8.5.15",
+    "postcss": "^8.5.16",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3"
   }
