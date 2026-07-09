@@ -476,10 +476,11 @@ object EmitPython:
   private def enumAliasDef(ir: ServiceIRFull, typeName: String): Option[String] =
     svcEnums(ir)
       .find(e => enumNameFull(e) == typeName)
-      .map(e =>
-        enumAliasName(typeName) + " = " +
-          enumValuesFull(e).map(v => s"\"$v\"").mkString("Literal[", ", ", "]")
-      )
+      .map: e =>
+        val values = enumValuesFull(e).map(v => s"\"$v\"").mkString(", ")
+        val single = s"${enumAliasName(typeName)} = Literal[$values]"
+        if single.length <= 100 then single
+        else s"${enumAliasName(typeName)} = Literal[\n    $values\n]"
 
   private def schemaInputField(
       f: ProfiledField,

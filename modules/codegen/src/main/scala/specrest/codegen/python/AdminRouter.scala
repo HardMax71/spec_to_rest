@@ -25,8 +25,16 @@ object AdminRouter:
         val seeds = ScalarState
           .fieldsWithSeeds(ir)
           .map((sf, seed) => s"${ScalarState.columnName(stfName(sf))}=$seed")
-          .mkString(", ")
-        s"\n    await session.execute(sa_update(ServiceState).values($seeds))"
+        val single =
+          s"    await session.execute(sa_update(ServiceState).values(${seeds.mkString(", ")}))"
+        val stmt =
+          if single.length <= 100 then single
+          else
+            ("    await session.execute(" ::
+              "        sa_update(ServiceState).values(" ::
+              seeds.map(s => s"            $s,") :::
+              List("        )", "    )")).mkString("\n")
+        s"\n$stmt"
       else ""
     val deleteStatements =
       if entities.isEmpty && !hasScalars then "    pass"
