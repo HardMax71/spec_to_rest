@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const DOCS_CONTENT = path.join(REPO_ROOT, "docs", "content", "docs");
+const DOCS_PUBLIC = path.join(REPO_ROOT, "docs", "public");
 
 function walk(dir, exts) {
   if (!fs.existsSync(dir)) return [];
@@ -22,6 +23,7 @@ const sources = [path.join(REPO_ROOT, "README.md"), ...walk(DOCS_CONTENT, [".md"
 );
 
 const LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
+const HTML_HREF_RE = /\bhref\s*=\s*["']([^"']+)["']/gi;
 const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
 const ASSET_RE = /\.(png|jpe?g|svg|gif|webp|ico|pdf)$/i;
 
@@ -83,40 +85,47 @@ function routeToFile(route) {
 }
 
 const issues = [];
+
+// Validate one link target (markdown or HTML href): resolve the page, then the #fragment.
+function checkTarget(rawTarget, src, fromRel) {
+  const target = rawTarget.trim().split(/\s+/)[0];
+  if (!target || isExternal(target)) return;
+  const hash = target.indexOf("#");
+  const frag = hash >= 0 ? decodeURIComponent(target.slice(hash + 1)) : "";
+  const clean = (hash >= 0 ? target.slice(0, hash) : target).split("?")[0];
+
+  if (clean === "") {
+    if (frag && !anchorsOf(src).has(frag)) {
+      issues.push(`${fromRel} -> #${frag} (no heading on this page)`);
+    }
+    return;
+  }
+  if (ASSET_RE.test(clean)) return;
+
+  let targetFile;
+  if (clean.startsWith("/")) {
+    // A route resolves to a content page (has anchors) or a public/ static asset (none).
+    targetFile = routeToFile(clean) ?? (isFile(path.join(DOCS_PUBLIC, clean.slice(1))) ? "" : null);
+  } else {
+    const resolved = path.resolve(path.dirname(src), clean);
+    targetFile = isFile(resolved) ? resolved : exists(resolved) ? "" : null;
+  }
+  if (targetFile === null) {
+    issues.push(`${fromRel} -> ${clean}`);
+    return;
+  }
+  if (frag && targetFile && !anchorsOf(targetFile).has(frag)) {
+    issues.push(`${fromRel} -> ${clean}#${frag} (no heading on target page)`);
+  }
+}
+
 for (const src of sources) {
   const text = stripCode(fs.readFileSync(src, "utf8"));
   const fromRel = path.relative(REPO_ROOT, src);
-  let m;
-  LINK_RE.lastIndex = 0;
-  while ((m = LINK_RE.exec(text)) !== null) {
-    const target = m[1].trim().split(/\s+/)[0];
-    if (!target || isExternal(target)) continue;
-    const hash = target.indexOf("#");
-    const frag = hash >= 0 ? decodeURIComponent(target.slice(hash + 1)) : "";
-    const clean = (hash >= 0 ? target.slice(0, hash) : target).split("?")[0];
-
-    if (clean === "") {
-      if (frag && !anchorsOf(src).has(frag)) {
-        issues.push(`${fromRel} -> #${frag} (no heading on this page)`);
-      }
-      continue;
-    }
-    if (ASSET_RE.test(clean)) continue;
-
-    let targetFile;
-    if (clean.startsWith("/")) {
-      targetFile = routeToFile(clean);
-    } else {
-      const resolved = path.resolve(path.dirname(src), clean);
-      targetFile = isFile(resolved) ? resolved : exists(resolved) ? "" : null;
-    }
-    if (targetFile === null) {
-      issues.push(`${fromRel} -> ${clean}`);
-      continue;
-    }
-    if (frag && targetFile && !anchorsOf(targetFile).has(frag)) {
-      issues.push(`${fromRel} -> ${clean}#${frag} (no heading on target page)`);
-    }
+  for (const re of [LINK_RE, HTML_HREF_RE]) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) checkTarget(m[1], src, fromRel);
   }
 }
 

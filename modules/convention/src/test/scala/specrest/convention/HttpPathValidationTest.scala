@@ -48,7 +48,7 @@ class HttpPathValidationTest extends CatsEffectSuite:
 
   test("a plain http_path override with no placeholder is accepted"):
     val spec = demoService("Increment", conventions = conv(httpPathRule("Increment", "/increment")))
-    loadIR(spec).map(ir => assertEquals(Validate.validateRoutes(ir), Nil))
+    loadIR(spec).map(Validate.validateRoutes).assertEquals(Nil)
 
   test("a path parameter that matches an input is accepted"):
     val spec = demoService(
@@ -56,7 +56,7 @@ class HttpPathValidationTest extends CatsEffectSuite:
       inputLine = "    input: id: Int\n",
       conventions = conv(httpPathRule("Adjust", "/counts/{id}"))
     )
-    loadIR(spec).map(ir => assertEquals(Validate.validateRoutes(ir), Nil))
+    loadIR(spec).map(Validate.validateRoutes).assertEquals(Nil)
 
   test("a double quote in http_path is rejected as an invalid character"):
     val spec =
