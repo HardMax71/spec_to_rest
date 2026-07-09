@@ -56,7 +56,8 @@ for (const d of report.duplicates ?? []) {
 let changedTotal = 0;
 let changedDup = 0;
 for (const f of changed) {
-  changedTotal += readFileSync(f, "utf8").split("\n").length;
+  const content = readFileSync(f, "utf8");
+  changedTotal += content === "" ? 0 : content.split("\n").length - (content.endsWith("\n") ? 1 : 0);
   changedDup += dupLines.get(f)?.size ?? 0;
 }
 const pct = changedTotal === 0 ? 0 : (changedDup / changedTotal) * 100;
