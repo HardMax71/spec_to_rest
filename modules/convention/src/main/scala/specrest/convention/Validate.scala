@@ -74,16 +74,68 @@ object Validate:
   def validateRoutes(ir: ServiceIRFull): List[ConventionDiagnostic] =
     val endpoints = Path.deriveEndpoints(Classify.classifyOperations(ir), ir)
     val opSpans   = svcOperations(ir).map(op => operName(op) -> operSpan(op)).toMap
+    val opInputs =
+      svcOperations(ir).map(op => operName(op) -> operInputs(op).map(prmName).toSet).toMap
     endpoints.flatMap: ep =>
-      ReservedRoutes.collectFirst:
-        case (root, what) if ep.path == root || ep.path.startsWith(root + "/") =>
-          ConventionDiagnostic(
-            DiagnosticLevel.Error,
-            s"operation '${ep.operationName}' resolves to route '${ep.path}', which is reserved for $what; rename the operation or set an http_path convention override",
-            opSpans.getOrElse(ep.operationName, None),
-            ep.operationName,
-            "http_path"
-          )
+      val span = opSpans.getOrElse(ep.operationName, None)
+      reservedRouteDiags(ep, span) ++
+        pathPatternDiags(ep, opInputs.getOrElse(ep.operationName, Set.empty), span)
+
+  private def reservedRouteDiags(
+      ep: EndpointSpec,
+      span: Option[span_t]
+  ): List[ConventionDiagnostic] =
+    ReservedRoutes.collectFirst {
+      case (root, what) if ep.path == root || ep.path.startsWith(root + "/") =>
+        ConventionDiagnostic(
+          DiagnosticLevel.Error,
+          s"operation '${ep.operationName}' resolves to route '${ep.path}', which is reserved for $what; rename the operation or set an http_path convention override",
+          span,
+          ep.operationName,
+          "http_path"
+        )
+    }.toList
+
+  private val RoutePlaceholder = """\{(\w+)\}""".r
+
+  // RFC 3986 path characters we accept verbatim in a route literal. Anything
+  // else (quotes, whitespace, backslash, stray braces) can break the emitted
+  // target-language string literal, so we reject it at validation time rather
+  // than rely on escaping the value into every template.
+  private val SafePathPunct: Set[Char] = "-._~:/@%".toSet
+
+  private def pathPatternDiags(
+      ep: EndpointSpec,
+      inputNames: Set[String],
+      span: Option[span_t]
+  ): List[ConventionDiagnostic] =
+    val diags = List.newBuilder[ConventionDiagnostic]
+    def report(msg: String): Unit =
+      diags += ConventionDiagnostic(DiagnosticLevel.Error, msg, span, ep.operationName, "http_path")
+
+    val names = RoutePlaceholder.findAllMatchIn(ep.path).map(_.group(1)).toList
+    names
+      .groupBy(identity)
+      .collect { case (name, occurrences) if occurrences.sizeIs > 1 => name }
+      .foreach: name =>
+        report(
+          s"operation '${ep.operationName}' route '${ep.path}' repeats path parameter '{$name}'"
+        )
+    names.distinct
+      .filterNot(inputNames.contains)
+      .foreach: name =>
+        report(
+          s"operation '${ep.operationName}' route '${ep.path}' declares path parameter '{$name}' with no matching input; add an input named '$name' or correct the http_path override"
+        )
+    RoutePlaceholder
+      .replaceAllIn(ep.path, "")
+      .find(c => !(c.isLetterOrDigit || SafePathPunct.contains(c)))
+      .foreach: c =>
+        val shown = if c.isControl then "U+%04X".format(c.toInt) else c.toString
+        report(
+          s"operation '${ep.operationName}' route '${ep.path}' contains an invalid path character '$shown'; use letters, digits, - . _ ~ : / @ %, or a {placeholder}"
+        )
+    diags.result()
 
   def validateSecurity(ir: ServiceIRFull): List[ConventionDiagnostic] =
     val schemes  = svcSecurity(ir)

@@ -45,6 +45,17 @@ private def unquote(raw: String): String =
       i += 1
   sb.toString
 
+// The verifier's extracted String.literal is 7-bit and sys.errors on non-ASCII, so reject it here with a clean diagnostic.
+private def asciiOnly(s: String, ctx: ParserRuleContext): BuildResult[String] =
+  s.find(_.toInt > 127) match
+    case Some(c) =>
+      val code = "U+%04X".format(c.toInt)
+      Left(buildErr(
+        s"string literal contains a non-ASCII character '$c' ($code); spec string literals must be ASCII",
+        ctx
+      ))
+    case None => Right(s)
+
 // The lexer admits `\/` so patterns can contain a literal slash; every
 // downstream regex engine receives the unescaped character.
 private def unslashRegex(raw: String): String =
@@ -396,21 +407,26 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
     kindE.map(k => SecuritySchemeDeclFull(name, k, sp(ctx)))
 
   private def buildConventionRule(ctx: ConventionRuleContext): BuildResult[ConventionRuleFull] =
-    val target          = ctx.UPPER_IDENT.getText
-    val idents          = ctx.lowerIdent.asScala.toList
-    val stringQualifier = Option(ctx.STRING_LIT).map(s => unquote(s.getText))
-    val resolved = idents match
-      case List(p) => Right((stringQualifier, p.getText))
-      case List(q, p) =>
-        if stringQualifier.isDefined then
-          Left(buildErr(
-            s"convention rule '$target.${q.getText}.${p.getText}' cannot combine a dotted qualifier with a string qualifier",
-            ctx
-          ))
-        else Right((Some(q.getText), p.getText))
-      case _ => Left(buildErr("malformed convention rule", ctx))
+    val target = ctx.UPPER_IDENT.getText
+    val idents = ctx.lowerIdent.asScala.toList
+    val qualifier: BuildResult[Option[String]] =
+      Option(ctx.STRING_LIT) match
+        case None    => Right(None)
+        case Some(s) => asciiOnly(unquote(s.getText), ctx).map(Some(_))
+    def targetAndProp(sq: Option[String]): BuildResult[(Option[String], String)] =
+      idents match
+        case List(p) => Right((sq, p.getText))
+        case List(q, p) =>
+          if sq.isDefined then
+            Left(buildErr(
+              s"convention rule '$target.${q.getText}.${p.getText}' cannot combine a dotted qualifier with a string qualifier",
+              ctx
+            ))
+          else Right((Some(q.getText), p.getText))
+        case _ => Left(buildErr("malformed convention rule", ctx))
     for
-      qp       <- resolved
+      sq       <- qualifier
+      qp       <- targetAndProp(sq)
       (qual, p) = qp
       v        <- expr(ctx.expr)
     yield
@@ -562,7 +578,7 @@ final private class IRBuilder extends SpecBaseVisitor[BuildResult[expr]]:
     Right(FloatLitF(ctx.FLOAT_LIT.getText, sp(ctx)))
 
   override def visitStringLitExpr(ctx: StringLitExprContext): BuildResult[expr] =
-    Right(StringLitF(unquote(ctx.STRING_LIT.getText), sp(ctx)))
+    asciiOnly(unquote(ctx.STRING_LIT.getText), ctx).map(StringLitF(_, sp(ctx)))
 
   override def visitTrueLitExpr(ctx: TrueLitExprContext): BuildResult[expr] =
     Right(BoolLitF(true, sp(ctx)))
