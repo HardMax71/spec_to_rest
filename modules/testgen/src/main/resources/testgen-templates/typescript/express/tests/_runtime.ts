@@ -52,20 +52,15 @@ export function _len(x: Anything): number {
   return 0;
 }
 
-// The ts API speaks camelCase while /admin/state serves spec-named (snake)
-// keys; the oracle normalizes the snapshot so both sides compare in one
-// casing. Only NAME keys camelize: state fields at the top level and entity
-// fields below. Relation keys one level under a state field are data (emails,
-// tokens, digit ids) and must pass through untouched.
-const camelKey = (k: string): string =>
-  k.replace(/_([a-z0-9])/g, (_m, c: string) => c.toUpperCase());
-
+// The ts API and /admin/state both serve spec-named (snake) keys, so the
+// snapshot keeps keys as-is and only normalizes structure: arrays and objects
+// recurse, primitives pass through.
 function snapshotDeep(v: Anything): Anything {
   if (Array.isArray(v)) return v.map(snapshotDeep);
   if (v !== null && typeof v === 'object') {
     const out: Record<string, Anything> = {};
     for (const [k, val] of Object.entries(v as Record<string, Anything>)) {
-      out[camelKey(k)] = snapshotDeep(val);
+      out[k] = snapshotDeep(val);
     }
     return out;
   }
@@ -81,9 +76,9 @@ export function stateSnapshot(v: Anything): Anything {
       for (const [key, row] of Object.entries(val as Record<string, Anything>)) {
         rel[key] = snapshotDeep(row);
       }
-      out[camelKey(field)] = rel;
+      out[field] = rel;
     } else {
-      out[camelKey(field)] = snapshotDeep(val);
+      out[field] = snapshotDeep(val);
     }
   }
   return out;

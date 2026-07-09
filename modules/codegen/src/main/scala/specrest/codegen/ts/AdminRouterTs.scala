@@ -26,7 +26,7 @@ object AdminRouterTs:
     def colsOf(e: entity_decl): List[Col] =
       entFields(e).map: f =>
         Col(
-          tsField = Naming.toCamelCase(fldName(f)),
+          tsField = fldName(f),
           columnName = Naming.toColumnName(fldName(f)),
           isDate = isDateTimeType(svcTypeAliases(ir), fldType(f))
         )
@@ -98,10 +98,10 @@ object AdminRouterTs:
                    |          (r: Record<string, unknown>) => rowToDict_${p.entityName}(r),
                    |        ),""".stripMargin
               case shape =>
-                val keyTs = Naming.toCamelCase(p.keyFieldName)
+                val keyTs = p.keyFieldName
                 val value = shape match
                   case AdminModel.ProjectionValue.PrimitiveField(name) =>
-                    s"r.${Naming.toCamelCase(name)}"
+                    s"r.$name"
                   case _ =>
                     s"rowToDict_${p.entityName}(r)"
                 s"""        ${tsKey(stfName(f))}: Object.fromEntries(
@@ -118,7 +118,7 @@ object AdminRouterTs:
       .map: e =>
         val snake = Naming.toSnakeCase(entName(e))
         val pk    = AdminModel.primaryKeyField(e).getOrElse("id")
-        val pkTs  = Naming.toCamelCase(pk)
+        val pkTs  = pk
         val cols  = colsOf(e)
         val dataPairs = cols
           .map: c =>

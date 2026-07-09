@@ -403,9 +403,9 @@ class EmitTest extends CatsEffectSuite:
       )
       assert(
         service.contains(
-          "return { code: stringFromDafny(outCode), shortUrl: stringFromDafny(outShortUrl) };"
+          "return { code: stringFromDafny(outCode), short_url: stringFromDafny(outShortUrl) };"
         ),
-        s"Shorten should marshal both outputs into a camelCase result object - got:\n$service"
+        s"Shorten should marshal both outputs into a snake_case result object - got:\n$service"
       )
       // Resolve: single scalar in/out.
       assert(

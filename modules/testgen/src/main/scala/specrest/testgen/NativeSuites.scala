@@ -278,12 +278,10 @@ private[testgen] object TsRender:
     val bodyExpr =
       if ep.bodyParams.isEmpty then ""
       else
-        // Request schemas key bodies in camelCase; query strings keep the
-        // spec's names (the routes read req.query by spec name).
+        // Request bodies key by the spec's field names (snake), matching the
+        // service's snake_case wire; query strings do the same.
         val pairs = ep.bodyParams
-          .map(p =>
-            s"${TsLit.str(specrest.ir.Naming.toCamelCase(p.name, specrest.ir.Naming.CamelStrategy.Plain))}: ${ref(p.name)}"
-          )
+          .map(p => s"${TsLit.str(p.name)}: ${ref(p.name)}")
           .mkString(", ")
         s", { $pairs }"
     s"client.$method($target$bodyExpr)"

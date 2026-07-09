@@ -734,7 +734,7 @@ object EmitTs:
       reduced: StringRefinements.Reduced = StringRefinements.Reduced(None, None, Nil),
       enumValues: Option[List[String]] = None
   ): TsFieldView =
-    val tsName = toCamelCase(f.fieldName)
+    val tsName = f.fieldName
     val attrs  = prismaAttrs(f, tsName, nativeAttrs)
     // Enum-typed inputs validate as z.enum members at the boundary: the
     // kernel constructs the datatype by member name and must never see an
@@ -909,7 +909,7 @@ object EmitTs:
     val pathArgsCsv    = pathParams.map(_.tsName).mkString(", ")
 
     val lookupField =
-      toCamelCase(EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name)))
+      EmitShared.lookupColumn(entity, endpoint.pathParams.headOption.map(_.name))
 
     val createDataObj = nonIdFields
       .map(f => s"${f.tsField}: body.${f.tsField}")
@@ -965,7 +965,7 @@ object EmitTs:
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (op.operationName, pathArgsCsv, sig, "Promise<boolean>", Option.empty[String], deleteCall)
         case _: RkRedirect =>
-          val tgt = EmitShared.redirectTargetColumn(entity).map(toCamelCase).getOrElse("url")
+          val tgt = EmitShared.redirectTargetColumn(entity).getOrElse("url")
           val sig = pathParams.map(p => s"${p.tsName}: ${p.domainType}").mkString(", ")
           (
             op.operationName,
@@ -1062,9 +1062,6 @@ object EmitTs:
   private def tsElemToDafny(el: String, ref: String): String =
     if el == "str" then s"stringToDafny($ref as string)" else s"intToDafny($ref as number)"
 
-  private def camelName(name: String): String =
-    Naming.toCamelCase(name, Naming.CamelStrategy.Ts)
-
   private def tsKernelServiceFn(
       op: ProfiledOperation,
       handlerName: String,
@@ -1120,7 +1117,7 @@ object EmitTs:
       val inputs =
         endpoint.pathParams.map(p => p.name -> toCamelCase(p.name)) ++
           endpoint.queryParams.map(p => p.name -> toCamelCase(p.name)) ++
-          endpoint.bodyParams.map(p => p.name -> s"body.${toCamelCase(p.name)}")
+          endpoint.bodyParams.map(p => p.name -> s"body.${p.name}")
       val convertedArgs = inputs.map: (specName, access) =>
         specInputTypes
           .get(specName)
@@ -1253,19 +1250,19 @@ object EmitTs:
             // The response nests the entity under the spec's output name.
             val outName = specOutputs.headOption.map(prmName).getOrElse("result")
             val pairs = entityOutputFields.map: f =>
-              s"      ${camelName(f.fieldName)}: ${StateBridgeTs
+              s"      ${f.fieldName}: ${StateBridgeTs
                   .fromDafnyExpr(kernelCtx.ir, outEntity.map(_.entityName).getOrElse(""), f, "out")},"
             (
               "Record<string, unknown>",
               (s"  const out = $call as Record<string, unknown>;" ::
                 "  const result = {" ::
-                s"    ${camelName(outName)}: {" :: pairs) :::
+                s"    ${outName}: {" :: pairs) :::
                 List("    },", "  };", "  return result;")
             )
           else if seqEntityOutput.isDefined then
             val entityName = seqEntityOutput.map(_.entityName).getOrElse("")
             val pairs = entityOutputFields.map: f =>
-              s"      ${camelName(f.fieldName)}: ${StateBridgeTs.fromDafnyExpr(kernelCtx.ir, entityName, f, "elem")},"
+              s"      ${f.fieldName}: ${StateBridgeTs.fromDafnyExpr(kernelCtx.ir, entityName, f, "elem")},"
             (
               "Array<Record<string, unknown>>",
               (s"  const out = $call;" ::
@@ -1285,10 +1282,10 @@ object EmitTs:
               case many =>
                 val vars = many.map(f => "out" + toPascalCase(f.fieldName))
                 val typeBody =
-                  many.map(f => s"${toCamelCase(f.fieldName)}: ${f.domainType}").mkString("; ")
+                  many.map(f => s"${f.fieldName}: ${f.domainType}").mkString("; ")
                 val unknowns = List.fill(vars.size)("unknown").mkString(", ")
                 val retFields =
-                  many.zip(vars).map((f, v) => s"${toCamelCase(f.fieldName)}: ${fromDafny(f, v)}")
+                  many.zip(vars).map((f, v) => s"${f.fieldName}: ${fromDafny(f, v)}")
                 (
                   s"{ $typeBody }",
                   List(

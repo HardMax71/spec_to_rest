@@ -85,7 +85,9 @@ class EmitTsTest extends CatsEffectSuite:
       val schema = files("prisma/schema.prisma")
       assert(schema.contains("model UrlMapping"), schema)
       assert(schema.contains("@@map(\"url_mappings\")"), schema)
-      assert(schema.contains("@map(\"created_at\")"), schema)
+      // Entity fields are snake in Prisma and match their column, so no field-level @map.
+      assert(schema.contains("created_at DateTime"), schema)
+      assert(!schema.contains("@map(\"created_at\")"), schema)
 
       val routes = files("src/routes/urlMappings.ts")
       assert(routes.contains("registerUrlMappingRoutes"), routes)

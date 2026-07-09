@@ -199,7 +199,7 @@ class DialectProfileEmitTest extends CatsEffectSuite:
       val schema = files("prisma/schema.prisma")
       assert(!schema.contains("? ?"), schema)
       assert(schema.contains("description String? @db.Text"), schema)
-      assert(schema.contains("""completedAt DateTime? @map("completed_at")"""), schema)
+      assert(schema.contains("completed_at DateTime?"), schema)
 
   // chi.URLParam returns a string; an integer PK path param must be parsed via strconv
   // before the service call. A string-keyed entity must NOT import strconv (unused import

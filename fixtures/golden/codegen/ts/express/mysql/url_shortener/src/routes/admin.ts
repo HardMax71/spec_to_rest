@@ -19,8 +19,8 @@ function rowToDict_UrlMapping(r: Record<string, unknown>): Record<string, unknow
   return {
     code: r.code,
     url: r.url,
-    created_at: r.createdAt == null ? null : new Date(r.createdAt as string | Date).toISOString(),
-    click_count: r.clickCount,
+    created_at: r.created_at == null ? null : new Date(r.created_at as string | Date).toISOString(),
+    click_count: r.click_count,
   };
 }
 
