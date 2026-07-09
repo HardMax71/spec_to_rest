@@ -3,150 +3,135 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OUT_DIR = path.resolve(__dirname, "..", "out");
-const BASE_PATH = "";
-const ORIGIN = "http://docs.local";
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const DOCS_CONTENT = path.join(REPO_ROOT, "docs", "content", "docs");
+const DOCS_PUBLIC = path.join(REPO_ROOT, "docs", "public");
 
-if (!fs.existsSync(OUT_DIR)) {
-  console.error(`✘ ${OUT_DIR} does not exist; run \`next build\` first`);
-  process.exit(1);
-}
-
-function walk(dir) {
+function walk(dir, exts) {
+  if (!fs.existsSync(dir)) return [];
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walk(full));
-    else if (entry.isFile() && entry.name.endsWith(".html")) out.push(full);
+    if (entry.isDirectory()) out.push(...walk(full, exts));
+    else if (exts.some((x) => entry.name.endsWith(x))) out.push(full);
   }
   return out;
 }
 
-const HREF_RE = /<a\b[^>]*?\shref=("([^"]*)"|'([^']*)')/gi;
-const ID_RE = /\sid=("([^"]+)"|'([^']+)')/gi;
+const sources = [path.join(REPO_ROOT, "README.md"), ...walk(DOCS_CONTENT, [".md", ".mdx"])].filter(
+  (f) => fs.existsSync(f),
+);
 
-function extractHrefs(html) {
-  const hrefs = [];
-  let m;
-  HREF_RE.lastIndex = 0;
-  while ((m = HREF_RE.exec(html)) !== null) hrefs.push(m[2] ?? m[3]);
-  return hrefs;
+const LINK_RE = /\[[^\]]*\]\(([^)]+)\)/g;
+const HTML_HREF_RE = /\bhref\s*=\s*["']([^"']+)["']/gi;
+const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
+const ASSET_RE = /\.(png|jpe?g|svg|gif|webp|ico|pdf)$/i;
+
+const isExternal = (t) => /^[a-z][a-z0-9+.-]*:/i.test(t) || t.startsWith("//");
+const exists = (p) => fs.existsSync(p);
+const isFile = (p) => fs.existsSync(p) && fs.statSync(p).isFile();
+
+const stripFences = (text) => text.replace(/```[\s\S]*?```/g, "");
+// Strip fenced and inline code so links inside examples are not checked.
+const stripCode = (text) => stripFences(text).replace(/`[^`\n]*`/g, "");
+
+// Slug of a heading's rendered text, matching github-slugger (docs are ASCII):
+// drop inline markdown, lowercase, keep [a-z0-9 _-], spaces to hyphens.
+function slugify(heading) {
+  return heading
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/__([^_]+)__/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9 _-]/g, "")
+    .replace(/ /g, "-");
 }
 
-function extractIds(html) {
+const anchorCache = new Map();
+function anchorsOf(file) {
+  const cached = anchorCache.get(file);
+  if (cached) return cached;
   const ids = new Set();
-  let m;
-  ID_RE.lastIndex = 0;
-  while ((m = ID_RE.exec(html)) !== null) ids.add(m[2] ?? m[3]);
+  const counts = new Map();
+  for (const line of stripFences(fs.readFileSync(file, "utf8")).split("\n")) {
+    const m = HEADING_RE.exec(line);
+    if (!m) continue;
+    const base = slugify(m[2]);
+    if (base === "") continue;
+    const seen = counts.get(base) ?? 0;
+    counts.set(base, seen + 1);
+    ids.add(seen === 0 ? base : `${base}-${seen}`);
+  }
+  anchorCache.set(file, ids);
   return ids;
 }
 
-function pageUrlForHtml(htmlAbs) {
-  const rel = path.relative(OUT_DIR, htmlAbs).split(path.sep).join("/");
-  if (rel === "index.html") return `${BASE_PATH}/`;
-  if (rel.endsWith("/index.html")) return `${BASE_PATH}/${rel.slice(0, -"index.html".length)}`;
-  return `${BASE_PATH}/${rel}`;
-}
-
-function isExternal(href) {
-  return /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//");
-}
-
-function shouldCheck(href) {
-  if (!href) return false;
-  if (isExternal(href)) return false;
-  if (href.startsWith("#")) return false;
-  return true;
-}
-
-function resolveAbs(href, fromHtml) {
-  const pageUrl = pageUrlForHtml(fromHtml);
-  return new URL(href, `${ORIGIN}${pageUrl}`);
-}
-
-const ASSET_PREFIXES = ["/_next/", "/api/"];
-function isAssetPath(pathname) {
-  for (const p of ASSET_PREFIXES) if (pathname.startsWith(BASE_PATH + p)) return true;
-  return false;
-}
-
-function resolveTargetFile(pathname) {
-  if (!pathname.startsWith(BASE_PATH)) return { error: "outside-basepath" };
-  let rel = pathname.slice(BASE_PATH.length);
-  if (rel === "" || rel === "/") return { file: path.join(OUT_DIR, "index.html") };
-  if (rel.endsWith("/")) {
-    const f = path.join(OUT_DIR, rel, "index.html");
-    return fs.existsSync(f) ? { file: f } : { error: "missing" };
+// A docs route like `/research/x/theorem` maps to a content file under
+// docs/content/docs, trying page, index, and both markdown extensions.
+function routeToFile(route) {
+  const rel = route.replace(/^\//, "").replace(/^docs\//, "");
+  const candidates =
+    rel === ""
+      ? ["index.mdx", "index.md"]
+      : [`${rel}.mdx`, `${rel}.md`, path.join(rel, "index.mdx"), path.join(rel, "index.md")];
+  for (const candidate of candidates) {
+    const full = path.join(DOCS_CONTENT, candidate);
+    if (isFile(full)) return full;
   }
-  const candidates = [
-    path.join(OUT_DIR, rel),
-    path.join(OUT_DIR, rel + ".html"),
-    path.join(OUT_DIR, rel, "index.html"),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c) && fs.statSync(c).isFile()) return { file: c };
-  }
-  return { error: "missing" };
-}
-
-const idCache = new Map();
-function getIds(file) {
-  if (idCache.has(file)) return idCache.get(file);
-  const html = fs.readFileSync(file, "utf8");
-  const ids = extractIds(html);
-  idCache.set(file, ids);
-  return ids;
+  return null;
 }
 
 const issues = [];
-const htmlFiles = walk(OUT_DIR);
 
-for (const htmlFile of htmlFiles) {
-  const html = fs.readFileSync(htmlFile, "utf8");
-  const hrefs = extractHrefs(html);
-  const fromRel = path.relative(OUT_DIR, htmlFile);
-  for (const href of hrefs) {
-    if (!shouldCheck(href)) continue;
-    let abs;
-    try {
-      abs = resolveAbs(href, htmlFile);
-    } catch (e) {
-      issues.push({ from: fromRel, href, msg: `unparseable URL (${e.message})` });
-      continue;
+// Validate one link target (markdown or HTML href): resolve the page, then the #fragment.
+function checkTarget(rawTarget, src, fromRel) {
+  const target = rawTarget.trim().split(/\s+/)[0];
+  if (!target || isExternal(target)) return;
+  const hash = target.indexOf("#");
+  const frag = hash >= 0 ? decodeURIComponent(target.slice(hash + 1)) : "";
+  const clean = (hash >= 0 ? target.slice(0, hash) : target).split("?")[0];
+
+  if (clean === "") {
+    if (frag && !anchorsOf(src).has(frag)) {
+      issues.push(`${fromRel} -> #${frag} (no heading on this page)`);
     }
-    if (abs.origin !== ORIGIN) continue;
-    if (isAssetPath(abs.pathname)) continue;
-    const resolved = resolveTargetFile(abs.pathname);
-    if (resolved.error) {
-      issues.push({ from: fromRel, href, msg: `404 (${abs.pathname})` });
-      continue;
-    }
-    if (abs.hash) {
-      const anchor = decodeURIComponent(abs.hash.slice(1));
-      const ids = getIds(resolved.file);
-      if (!ids.has(anchor)) {
-        issues.push({
-          from: fromRel,
-          href,
-          msg: `missing anchor #${anchor} in ${path.relative(OUT_DIR, resolved.file)}`,
-        });
-      }
-    }
+    return;
+  }
+  if (ASSET_RE.test(clean)) return;
+
+  let targetFile;
+  if (clean.startsWith("/")) {
+    // A route resolves to a content page (has anchors) or a public/ static asset (none).
+    targetFile = routeToFile(clean) ?? (isFile(path.join(DOCS_PUBLIC, clean.slice(1))) ? "" : null);
+  } else {
+    const resolved = path.resolve(path.dirname(src), clean);
+    targetFile = isFile(resolved) ? resolved : exists(resolved) ? "" : null;
+  }
+  if (targetFile === null) {
+    issues.push(`${fromRel} -> ${clean}`);
+    return;
+  }
+  if (frag && targetFile && !anchorsOf(targetFile).has(frag)) {
+    issues.push(`${fromRel} -> ${clean}#${frag} (no heading on target page)`);
+  }
+}
+
+for (const src of sources) {
+  const text = stripCode(fs.readFileSync(src, "utf8"));
+  const fromRel = path.relative(REPO_ROOT, src);
+  for (const re of [LINK_RE, HTML_HREF_RE]) {
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(text)) !== null) checkTarget(m[1], src, fromRel);
   }
 }
 
 if (issues.length) {
-  console.error(`✘ Found ${issues.length} broken internal link(s):`);
-  const seen = new Set();
-  for (const i of issues) {
-    const key = `${i.from} -> ${i.href}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    console.error(`  ${i.from}`);
-    console.error(`    -> ${i.href}`);
-    console.error(`    ${i.msg}`);
-  }
+  console.error(`Found ${issues.length} broken internal link(s):`);
+  for (const i of issues) console.error(`  ${i}`);
   process.exit(1);
 }
-
-console.log(`✓ Link check passed (${htmlFiles.length} html files scanned)`);
+console.log(`Link check passed (${sources.length} files scanned).`);

@@ -7,7 +7,6 @@ import specrest.convention.Schema
 import specrest.ir.*
 import specrest.ir.generated.SpecRestGenerated.*
 
-@SuppressWarnings(Array("org.wartremover.warts.IsInstanceOf"))
 object Annotate:
 
   def buildProfiledService(ir: ServiceIRFull, profileName: String): ProfiledService =
@@ -108,7 +107,9 @@ object Annotate:
     val mapped   = TypeMap.mapType(typeExpr, profile, ctx)
     val colName  = Naming.toColumnName(fieldName)
     val resolved = TypeMap.resolveTypeExpr(typeExpr, ctx.aliasMap)
-    val nullable = resolved.isInstanceOf[OptionTypeF]
+    val nullable = resolved match
+      case _: OptionTypeF => true
+      case _              => false
     val columnType =
       widenExplicitIdPkSqlType(fieldName, resolveColumnType(typeExpr, profile, ctx))
     ProfiledField(

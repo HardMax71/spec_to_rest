@@ -40,9 +40,9 @@ Full documentation lives under [`docs/content/docs/`](docs/content/docs/) (Fumad
 - [Spec language reference](docs/content/docs/spec-language.mdx)
 - [CLI reference](docs/content/docs/cli.mdx): every subcommand, flags, exit codes
 - [Architecture](docs/content/docs/design/architecture.mdx): compiler internals and module layout
-- [Verification](docs/content/docs/pipelines/verification.mdx) and
-  [translator soundness](docs/content/docs/research/10_translator_soundness.md)
-- [Test generation](docs/content/docs/pipelines/test-generation.mdx): native multi-target
+- [Verification](docs/content/docs/pipelines/verification/index.mdx) and
+  [translator soundness](docs/content/docs/research/translator_soundness/theorem.md)
+- [Test generation](docs/content/docs/pipelines/test-generation/index.mdx): native multi-target
   conformance
 
 ## License
