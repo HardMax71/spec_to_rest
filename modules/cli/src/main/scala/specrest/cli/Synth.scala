@@ -7,10 +7,7 @@ import specrest.cli.ExitStatus.given
 import specrest.convention.Classify
 import specrest.dafny.DafnyMethodHeader
 import specrest.dafny.Generator as DafnyGenerator
-import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
-import specrest.parser.Builder
-import specrest.parser.Parse
 import specrest.synth.Cache
 import specrest.synth.CacheEntry
 import specrest.synth.CegisBudget
@@ -102,22 +99,7 @@ object Synth:
       out: PrintStream = System.out,
       err: PrintStream = System.err
   ): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(buildErr) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitStatus.Violations)
-              case Right(ir) =>
-                runWithIR(specFile, ir, opts, log, out, err)
+    Check.withParsedIR(specFile, log)(ir => runWithIR(specFile, ir, opts, log, out, err))
 
   private def isDirectEmit(s: synthesis_strategy): Boolean = s match
     case _: DirectEmit => true
@@ -127,25 +109,23 @@ object Synth:
     case _: LlmSynthesis => true
     case _               => false
 
-  private def runWithIR(
+  private def withDafnyHeader(
       specFile: String,
       ir: ServiceIRFull,
-      opts: SynthOptions,
+      operation: String,
       log: Logger,
-      out: PrintStream,
-      err: PrintStream
+      directEmitMsg: String
+  )(
+      k: (operation_classification, DafnyMethodHeader, String) => IO[ExitStatus]
   ): IO[ExitStatus] =
     val classifications = Classify.classifyOperations(ir)
-    classifications.find(c => classificationOperationName(c) == opts.operation) match
+    classifications.find(c => classificationOperationName(c) == operation) match
       case None =>
-        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
+        IO.delay(log.error(s"$specFile: operation '$operation' not found"))
           .as(ExitStatus.Violations)
       case Some(c) if isDirectEmit(classificationStrategy(c)) =>
         IO.delay(
-          log.error(
-            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
-              "no LLM synthesis required"
-          )
+          log.error(s"$specFile: operation '$operation' is classified DIRECT_EMIT; $directEmitMsg")
         ).as(ExitStatus.Violations)
       case Some(c) =>
         DafnyGenerator.generate(ir) match
@@ -158,8 +138,20 @@ object Synth:
               case None =>
                 IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
                   .as(ExitStatus.Translator)
-              case Some(header) =>
-                executeSynth(specFile, c, header, dafny.text, opts, log, out, err)
+              case Some(header) => k(c, header, dafny.text)
+
+  private def runWithIR(
+      specFile: String,
+      ir: ServiceIRFull,
+      opts: SynthOptions,
+      log: Logger,
+      out: PrintStream,
+      err: PrintStream
+  ): IO[ExitStatus] =
+    withDafnyHeader(specFile, ir, opts.operation, log, "no LLM synthesis required")(
+      (c, header, text) =>
+        executeSynth(specFile, c, header, text, opts, log, out, err)
+    )
 
   private def executeSynth(
       specFile: String,
@@ -227,21 +219,7 @@ object Synth:
       log: Logger,
       out: PrintStream = System.out
   ): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(buildErr) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitStatus.Violations)
-              case Right(ir) => runAcceptWithIR(specFile, ir, opts, log, out)
+    Check.withParsedIR(specFile, log)(ir => runAcceptWithIR(specFile, ir, opts, log, out))
 
   private def runAcceptWithIR(
       specFile: String,
@@ -250,31 +228,10 @@ object Synth:
       log: Logger,
       out: PrintStream
   ): IO[ExitStatus] =
-    val classifications = Classify.classifyOperations(ir)
-    classifications.find(c => classificationOperationName(c) == opts.operation) match
-      case None =>
-        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
-          .as(ExitStatus.Violations)
-      case Some(c) if isDirectEmit(classificationStrategy(c)) =>
-        IO.delay(
-          log.error(
-            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
-              "no synthesized body is used"
-          )
-        ).as(ExitStatus.Violations)
-      case Some(c) =>
-        DafnyGenerator.generate(ir) match
-          case Left(dErr) =>
-            IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-              .as(ExitStatus.Translator)
-          case Right(dafny) =>
-            val opName = classificationOperationName(c)
-            dafny.methods.find(_.name == opName) match
-              case None =>
-                IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
-                  .as(ExitStatus.Translator)
-              case Some(header) =>
-                acceptBody(specFile, opName, header, dafny.text, opts, log, out)
+    withDafnyHeader(specFile, ir, opts.operation, log, "no synthesized body is used")(
+      (c, header, text) =>
+        acceptBody(specFile, classificationOperationName(c), header, text, opts, log, out)
+    )
 
   // The same gate the CEGIS loop applies to an LLM candidate, applied to a
   // provided body: splice into the skeleton, verify with dafny once, and only
@@ -348,21 +305,7 @@ object Synth:
       out: PrintStream = System.out,
       err: PrintStream = System.err
   ): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(buildErr) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitStatus.Violations)
-              case Right(ir) => runVerifyWithIR(specFile, ir, opts, log, out, err)
+    Check.withParsedIR(specFile, log)(ir => runVerifyWithIR(specFile, ir, opts, log, out, err))
 
   private def runVerifyWithIR(
       specFile: String,
@@ -372,31 +315,10 @@ object Synth:
       out: PrintStream,
       err: PrintStream
   ): IO[ExitStatus] =
-    val classifications = Classify.classifyOperations(ir)
-    classifications.find(c => classificationOperationName(c) == opts.operation) match
-      case None =>
-        IO.delay(log.error(s"$specFile: operation '${opts.operation}' not found"))
-          .as(ExitStatus.Violations)
-      case Some(c) if isDirectEmit(classificationStrategy(c)) =>
-        IO.delay(
-          log.error(
-            s"$specFile: operation '${opts.operation}' is classified DIRECT_EMIT; " +
-              "no LLM synthesis required"
-          )
-        ).as(ExitStatus.Violations)
-      case Some(c) =>
-        DafnyGenerator.generate(ir) match
-          case Left(dErr) =>
-            IO.delay(log.error(s"$specFile: Dafny generation failed: ${dErr.message}"))
-              .as(ExitStatus.Translator)
-          case Right(dafny) =>
-            val opName = classificationOperationName(c)
-            dafny.methods.find(_.name == opName) match
-              case None =>
-                IO.delay(log.error(s"$specFile: no Dafny header for '$opName'"))
-                  .as(ExitStatus.Translator)
-              case Some(header) =>
-                executeCegis(specFile, c, header, dafny.text, opts, log, out, err)
+    withDafnyHeader(specFile, ir, opts.operation, log, "no LLM synthesis required")(
+      (c, header, text) =>
+        executeCegis(specFile, c, header, text, opts, log, out, err)
+    )
 
   private def executeCegis(
       specFile: String,
@@ -550,21 +472,7 @@ object Synth:
       log: Logger,
       err: PrintStream = System.err
   ): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(buildErr) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, buildErr)))
-                  .as(ExitStatus.Violations)
-              case Right(ir) => runVerifyAllWithIR(specFile, ir, opts, log, err)
+    Check.withParsedIR(specFile, log)(ir => runVerifyAllWithIR(specFile, ir, opts, log, err))
 
   private def runVerifyAllWithIR(
       specFile: String,

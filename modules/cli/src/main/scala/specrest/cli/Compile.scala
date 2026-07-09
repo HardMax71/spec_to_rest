@@ -12,7 +12,6 @@ import specrest.codegen.migration.SchemaDiff
 import specrest.convention.Classify
 import specrest.convention.Validate
 import specrest.dafny.Generator as DafnyGenerator
-import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.LlmSynthesis
 import specrest.ir.generated.SpecRestGenerated.ServiceIRFull
 import specrest.ir.generated.SpecRestGenerated.classificationOperationName
@@ -20,8 +19,6 @@ import specrest.ir.generated.SpecRestGenerated.classificationStrategy
 import specrest.ir.generated.SpecRestGenerated.migration_op
 import specrest.ir.generated.SpecRestGenerated.operation_classification
 import specrest.ir.generated.SpecRestGenerated.synthesis_strategy
-import specrest.parser.Builder
-import specrest.parser.Parse
 import specrest.profile.Annotate
 import specrest.profile.LanguageId
 import specrest.profile.ProfiledService
@@ -67,17 +64,9 @@ object Compile:
     case _               => false
 
   def run(specFile: String, opts: CompileOptions, log: Logger): IO[ExitStatus] =
-    val downgrade    = opts.withTests && !SupportedTargets.supports(opts.target)
-    val resolvedOpts = if downgrade then opts.copy(withTests = false) else opts
-    val downgradeNotice =
-      if downgrade then
-        IO.delay(
-          log.warn(
-            s"target ${opts.target} does not support native test generation; skipping " +
-              "(pass --no-tests to silence this warning)"
-          )
-        )
-      else IO.unit
+    val downgrade       = opts.withTests && !SupportedTargets.supports(opts.target)
+    val resolvedOpts    = if downgrade then opts.copy(withTests = false) else opts
+    val downgradeNotice = Check.testDowngradeNotice(opts.target, downgrade, log)
     val warnIfStrictWithoutTests =
       if resolvedOpts.strictStrategies && !resolvedOpts.withTests then
         IO.delay(
@@ -89,56 +78,43 @@ object Compile:
     downgradeNotice *> warnIfStrictWithoutTests *> runImpl(specFile, resolvedOpts, log)
 
   private def runImpl(specFile: String, opts: CompileOptions, log: Logger): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(err) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitStatus.Violations)
-              case Right(ir) =>
-                val routeDiags = Validate.validateRoutes(ir) ++ Validate.validateSecurity(ir)
-                val gate =
-                  if routeDiags.nonEmpty then
-                    IO.delay(routeDiags.foreach(d => log.error(Check.renderConv(specFile, d))))
-                      .as(ExitStatus.Violations)
-                  else if opts.ignoreVerify then
-                    IO.delay(log.warn("proceeding without verification (--ignore-verify)"))
-                      .as(ExitStatus.Ok)
-                  else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
-                gate.flatMap:
-                  case ok if ok == ExitStatus.Ok =>
-                    val strictGate =
-                      if opts.withTests && opts.strictStrategies then
-                        val unhandled = Strategies.forIR(ir).filter(_.skipped.nonEmpty)
-                        if unhandled.isEmpty then IO.pure(ExitStatus.Ok)
-                        else
-                          IO.delay {
-                            log.error(
-                              "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
-                            )
-                            unhandled.foreach: s =>
-                              log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
-                          }.as(ExitStatus.Violations)
-                      else IO.pure(ExitStatus.Ok)
+    Check.withParsedIR(specFile, log): ir =>
+      val routeDiags = Validate.validateRoutes(ir) ++ Validate.validateSecurity(ir)
+      val gate =
+        if routeDiags.nonEmpty then
+          IO.delay(routeDiags.foreach(d => log.error(Check.renderConv(specFile, d))))
+            .as(ExitStatus.Violations)
+        else if opts.ignoreVerify then
+          IO.delay(log.warn("proceeding without verification (--ignore-verify)"))
+            .as(ExitStatus.Ok)
+        else Verify.runGate(specFile, ir, VerificationConfig.Default, log)
+      gate.flatMap:
+        case ok if ok == ExitStatus.Ok =>
+          val strictGate =
+            if opts.withTests && opts.strictStrategies then
+              val unhandled = Strategies.forIR(ir).filter(_.skipped.nonEmpty)
+              if unhandled.isEmpty then IO.pure(ExitStatus.Ok)
+              else
+                IO.delay {
+                  log.error(
+                    "--strict-strategies: type aliases / enums with incomplete strategy synthesis (no convention override registered):"
+                  )
+                  unhandled.foreach: s =>
+                    log.error(s"  ${s.typeName}: ${s.skipped.mkString("; ")}")
+                }.as(ExitStatus.Violations)
+            else IO.pure(ExitStatus.Ok)
 
-                    strictGate.flatMap:
-                      case strictOk if strictOk == ExitStatus.Ok =>
-                        emitProject(specFile, ir, opts, log)
-                      case strictCode => IO.pure(strictCode)
-                  case gateCode =>
-                    IO.delay(
-                      log.error(
-                        s"$specFile: code generation blocked by the verification gate (exit ${gateCode.code}); " +
-                          "re-run with --ignore-verify to generate without verifying"
-                      )
-                    ).as(gateCode)
+          strictGate.flatMap:
+            case strictOk if strictOk == ExitStatus.Ok =>
+              emitProject(specFile, ir, opts, log)
+            case strictCode => IO.pure(strictCode)
+        case gateCode =>
+          IO.delay(
+            log.error(
+              s"$specFile: code generation blocked by the verification gate (exit ${gateCode.code}); " +
+                "re-run with --ignore-verify to generate without verifying"
+            )
+          ).as(gateCode)
 
   private def emitProject(
       specFile: String,
