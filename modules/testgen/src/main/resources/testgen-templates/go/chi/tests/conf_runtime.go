@@ -6,15 +6,20 @@
 // the set/relation/arithmetic semantics Python gets from built-ins (`in`, `==`
 // on sets, `<`, `+`, `|`/`&`/`-`, powerset) are delegated here, operating over
 // `any` values decoded from /admin/state and response bodies
-// (objects -> map[string]any, arrays -> []any, numbers -> float64). `_Set` is
-// a named slice so equality is order-independent for sets and ordered for
-// sequences, matching the TypeScript Set-vs-Array distinction.
+// (objects -> map[string]any, arrays -> []any, numbers -> json.Number, the
+// client decodes with UseNumber). Equality and ordering compare integral
+// values exactly as int64, the widest integer the service side can hold (Go
+// int64, sqlite INTEGER); fractional values compare as float64, and
+// arithmetic stays float64. `_Set` is a named slice so equality is
+// order-independent for sets and ordered for sequences, matching the
+// TypeScript Set-vs-Array distinction.
 
 package tests
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -38,19 +43,65 @@ func _toF(x any) (float64, bool) {
 		return float64(v), true
 	case float64:
 		return v, true
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f, true
+		}
+		return 0, false
 	default:
 		return 0, false
 	}
 }
 
+// _toI reports x as an exact int64. json.Number and digit strings (JSON
+// object keys of Int-keyed relations) parse directly, skipping the float64
+// round-trip that conflates neighbors above 2^53; integral floats convert
+// when in int64 range. Integers past int64 cannot originate from the service
+// side (Go ints and sqlite INTEGER are 64-bit), so callers fall back to
+// float64 for whatever fails here.
+func _toI(x any) (int64, bool) {
+	switch v := x.(type) {
+	case int:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		i, err := strconv.ParseInt(v.String(), 10, 64)
+		return i, err == nil
+	case string:
+		i, err := strconv.ParseInt(v, 10, 64)
+		return i, err == nil
+	case float32:
+		return _floatToI(float64(v))
+	case float64:
+		return _floatToI(v)
+	default:
+		return 0, false
+	}
+}
+
+func _floatToI(f float64) (int64, bool) {
+	// 2^63 is exact in float64 and one past int64 max, hence the >=. NaN
+	// fails the Trunc self-equality; infinities fail the range checks.
+	if f != math.Trunc(f) || f < -(1<<63) || f >= 1<<63 {
+		return 0, false
+	}
+	return int64(f), true
+}
+
+// Integral numbers share one canonical string regardless of representation
+// (json.Number, int64, integral float64), so map-key lookups and hashes
+// agree across decoded and computed values.
 func _str(x any) string {
 	if s, ok := x.(string); ok {
 		return s
 	}
+	if i, ok := _toI(x); ok {
+		return strconv.FormatInt(i, 10)
+	}
 	if f, ok := _toF(x); ok {
-		if f == float64(int64(f)) {
-			return fmt.Sprintf("%d", int64(f))
-		}
 		return fmt.Sprintf("%v", f)
 	}
 	return fmt.Sprintf("%v", x)
@@ -139,25 +190,12 @@ func _eq(a, b any) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
-	if fa, oka := _toF(a); oka {
-		if fb, okb := _toF(b); okb {
-			return fa == fb
-		}
-		// JSON object keys stringify, so an Int-keyed relation iterates as
-		// digit strings while ids stay numbers; compare numerically when the
-		// string side parses as a number exactly.
-		if sb, okb := b.(string); okb {
-			if fb, err := strconv.ParseFloat(sb, 64); err == nil {
-				return fa == fb
-			}
-		}
-		return false
+	if _, oka := _toF(a); oka {
+		return _numEq(a, b)
 	}
-	if sa, oka := a.(string); oka {
-		if fb, okb := _toF(b); okb {
-			if fa, err := strconv.ParseFloat(sa, 64); err == nil {
-				return fa == fb
-			}
+	if _, oka := a.(string); oka {
+		if _, okb := _toF(b); okb {
+			return _numEq(a, b)
 		}
 	}
 	switch av := a.(type) {
@@ -213,6 +251,23 @@ func _eq(a, b any) bool {
 	}
 }
 
+// Number-vs-number and number-vs-digit-string equality (JSON object keys
+// stringify, so an Int-keyed relation iterates as digit strings while ids
+// stay numbers). Integral pairs compare exactly as int64: json.Number keeps
+// full precision past 2^53, where the float64 round-trip conflates adjacent
+// integers. Fractional operands, and integers past int64 (which the service
+// side cannot produce), fall back to float64.
+func _numEq(a, b any) bool {
+	if ia, oka := _toI(a); oka {
+		if ib, okb := _toI(b); okb {
+			return ia == ib
+		}
+	}
+	fa, oka := _num(a)
+	fb, okb := _num(b)
+	return oka && okb && fa == fb
+}
+
 func _in(x, c any) bool {
 	switch cv := c.(type) {
 	case string:
@@ -230,11 +285,9 @@ func _in(x, c any) bool {
 	}
 }
 
-// Digit strings from JSON object keys compare numerically against numbers,
-// matching _eq's coercion (Int-keyed relations stringify their keys). The
-// float64 domain is the ceiling of the whole comparison anyway: encoding/json
-// decodes every number to float64 before these helpers ever see it, so a
-// ParseInt path would imply precision the decoded values no longer carry.
+// Float-context coercion for numbers and numeric strings (JSON object keys).
+// Exact integral comparison goes through _toI first; this is the fallback
+// for fractional values, where float64 is the spec's own numeric domain.
 func _num(x any) (float64, bool) {
 	if f, ok := _toF(x); ok {
 		return f, true
@@ -275,6 +328,18 @@ func _setEq(a, b any) bool {
 }
 
 func _cmp(a, b any) (int, bool) {
+	if ia, oka := _toI(a); oka {
+		if ib, okb := _toI(b); okb {
+			switch {
+			case ia < ib:
+				return -1, true
+			case ia > ib:
+				return 1, true
+			default:
+				return 0, true
+			}
+		}
+	}
 	if fa, oka := _num(a); oka {
 		if fb, okb := _num(b); okb {
 			switch {
@@ -616,15 +681,9 @@ func _call(f any, args ...any) any {
 }
 
 func _abs(x any) any {
-	// JSON-decoded numbers come in as float64; spec ints survive as int64.
-	// Coerce to float64 and delegate to math.Abs, mirroring TS's Math.abs(Number(x)).
-	switch v := x.(type) {
-	case float64:
-		return math.Abs(v)
-	case int64:
-		return math.Abs(float64(v))
-	case int:
-		return math.Abs(float64(v))
+	// _toF folds json.Number in; mirrors TS's Math.abs(Number(x)).
+	if f, ok := _toF(x); ok {
+		return math.Abs(f)
 	}
 	return math.NaN()
 }
@@ -636,8 +695,8 @@ func _now() any {
 }
 
 func _sha256Hex(s any) any {
-	// Coerce any value (numbers come from JSON as float64) to its canonical
-	// string form before hashing, mirroring Python's str(...) coercion.
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%v", s)))
+	// _str canonicalizes numbers (json.Number "2", int64 2, and float64 2
+	// all hash as "2") so decoded and computed values agree.
+	sum := sha256.Sum256([]byte(_str(s)))
 	return hex.EncodeToString(sum[:])
 }

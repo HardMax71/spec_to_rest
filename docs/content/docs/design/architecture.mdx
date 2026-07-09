@@ -66,7 +66,7 @@ flowchart LR
    The parser auto-injects a short preamble (`isValidURI`, `isValidEmail`). See
    [Parser Implementation Notes](/pipelines/parser-implementation).
 2. IR build. CST becomes `ServiceIR`, a Scala 3 enum/case-class ADT, with span tracking.
-3. Verify. `verify` runs structural lints (L01-L06; see
+3. Verify. `verify` runs structural lints (L01-L07; see
    [structural lints](/spec-language#structural-lints)) and then translates each obligation
    to either Z3 SMT-LIB or Alloy (non-overlapping routing) and checks it. The translator's
    correctness is mechanically validated by the universal `translate_soundness_standalone`
@@ -130,7 +130,7 @@ in [#391](https://github.com/HardMax71/spec_to_rest/issues/391).
 modules/
 ├── ir/         # IR ADT (Isabelle-extracted SpecRestGenerated.scala), circe Serialize, PrettyPrint, VerifyError
 ├── parser/     # ANTLR4 grammar, Parse, Builder, Preamble injection
-├── lint/       # Structural lints L01-L06
+├── lint/       # Structural lints L01-L07
 ├── convention/ # M1-M10 classifier, naming, path, schema, validate, Builtins registry (single source of truth for spec-language builtin functions)
 ├── profile/    # Deployment profiles, type mapping, annotation
 ├── verify/     # Z3 + Alloy translators, backends, Consistency, Diagnostic, Narration

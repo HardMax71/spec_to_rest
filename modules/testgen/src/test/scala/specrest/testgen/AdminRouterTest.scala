@@ -60,6 +60,14 @@ class AdminRouterTest extends CatsEffectSuite:
       assert(src.contains("\"count\": state_row.count"), s"src=$src")
       assert(src.contains("from app.models.service_state import ServiceState"), s"src=$src")
 
+  test("ecommerce: multi-counter reset wraps values() one seed per line under the ruff limit"):
+    loadProfiled("fixtures/spec/ecommerce.spec").map: profiled =>
+      val src = AdminRouter.emit(profiled)
+      assert(src.contains("sa_update(ServiceState).values(\n"), s"src=$src")
+      assert(src.contains("            next_order_id=1,"), s"src=$src")
+      val overlong = src.linesIterator.filter(_.length > 100).toList
+      assert(overlong.isEmpty, s"overlong lines: ${overlong.mkString("\n")}")
+
   test("entity model imports use snake_case file names matching codegen"):
     loadProfiled("fixtures/spec/url_shortener.spec").map: profiled =>
       val src = AdminRouter.emit(profiled)

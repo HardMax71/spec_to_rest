@@ -54,8 +54,13 @@ func (r clientResponse) JSON() any {
 	if len(r.body) == 0 {
 		return map[string]any{}
 	}
+	// UseNumber delivers numbers as json.Number: plain Unmarshal rounds
+	// integers through float64, conflating adjacent values above 2^53 before
+	// the runtime's exact int64 comparisons ever see them.
+	dec := json.NewDecoder(bytes.NewReader(r.body))
+	dec.UseNumber()
 	var v any
-	if err := json.Unmarshal(r.body, &v); err != nil {
+	if err := dec.Decode(&v); err != nil {
 		return map[string]any{}
 	}
 	return v

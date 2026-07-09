@@ -634,6 +634,16 @@ class EmitTest extends CatsEffectSuite:
         s"url_mapping schema should not import SecretStr; got:\n$schema"
       )
 
+  test("wide enum Literal alias wraps under the ruff line limit"):
+    SpecFixtures.loadProfiled("ecommerce").map: profiled =>
+      val files  = Emit.emitProject(profiled).map(f => f.path -> f.content).toMap
+      val schema = files("app/schemas/order.py")
+      val wrapped =
+        """OrderStatusValue = Literal[
+          |    "DRAFT", "PLACED", "PAID", "SHIPPED", "DELIVERED", "CANCELLED", "RETURNED"
+          |]""".stripMargin
+      assert(schema.contains(wrapped), s"expected wrapped Literal alias; got:\n$schema")
+
   test(
     "ci.yml renders GitHub Actions ${{ ... }} expressions literally (not Handlebars-substituted)"
   ):

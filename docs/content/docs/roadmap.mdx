@@ -148,7 +148,7 @@ Per-feature ledger for the verifier. For the prose explanation of each entry, se
 | Machine-readable (`--json` / `--json-out`) diagnostics output       | shipped |
 | Richer suggested-fix templates (op/invariant/field-aware; opt-out via `--no-suggestions`) | shipped |
 | Human-readable "why this fails" narration (opt-out via `--no-narration`) | shipped ([#89](https://github.com/HardMax71/spec_to_rest/issues/89)), covers `invariant_violation_by_operation`, `contradictory_invariants`, `unreachable_operation` |
-| Structural spec lints (type mismatch, unused entity, ...)             | shipped, `check` runs L01-L06 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 ships a syntactic over-approximation, SAT-based overlap is candidate verify-side work |
+| Structural spec lints (type mismatch, unused entity, ...)             | shipped, `check` runs L01-L07 ([#81](https://github.com/HardMax71/spec_to_rest/issues/81)); L04 ships a syntactic over-approximation, SAT-based overlap is candidate verify-side work |
 | Per-check VC dump (`--dump-vc <dir>`), Z3 SMT-LIB and Alloy `.als` artifacts | shipped |
 | Unsat-core extraction (`--explain`), surface contributing spec spans on `unsat` diagnostics | shipped (Z3 always; Alloy when `minisat.prover` is bundled) |
 | Native Alloy CLI cross-check job in CI                              | shipped |
