@@ -83,9 +83,9 @@ class SkipRateProbeTest extends CatsEffectSuite:
     ),
     (
       "ecommerce",
-      84,
+      86,
       9,
-      "next_order_id, next_payment_id and next_line_item_id are scalar-backed now, but the nine counter ensures only check when the ops route through the kernel; without one (as in this probe) they skip as before"
+      "86 clauses (was 84): ListOrders gains a completeness ensures and the state gains the orderKeyMatchesId invariant, both in-subset, so the total rises by two with the skip set held. next_order_id, next_payment_id and next_line_item_id are scalar-backed, but the nine counter ensures only check when the ops route through the kernel; without one, as in this probe, they skip as before"
     ),
     (
       "edge_cases",

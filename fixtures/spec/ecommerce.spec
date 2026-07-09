@@ -338,6 +338,12 @@ service OrderService {
         o in ran(orders)
         and (customer_id = none or o.customer_id = customer_id)
         and (status_filter = none or o.status = status_filter)
+      // Completeness: soundness alone is satisfied by an empty list, so
+      // every stored order that matches the filters must also be returned.
+      all oid in orders |
+        ((customer_id = none or orders[oid].customer_id = customer_id)
+         and (status_filter = none or orders[oid].status = status_filter))
+        implies (some o in results | o.id = oid)
       orders' = orders
   }
 
@@ -417,6 +423,12 @@ service OrderService {
 
   invariant nextOrderIdFresh:
     all oid in orders | oid < next_order_id
+
+  // Every order is stored under its own id (CreateDraftOrder inserts at
+  // order.id). ListOrders' completeness clause identifies results by id,
+  // which only pins the right order because of this.
+  invariant orderKeyMatchesId:
+    all oid in orders | orders[oid].id = oid
 
   invariant paymentsReferenceExistingOrders:
     all pid in payments | payments[pid].order_id in orders
