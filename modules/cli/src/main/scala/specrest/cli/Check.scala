@@ -67,6 +67,34 @@ object Check:
           )
         }
 
+  private[cli] def withParsedIR(specFile: String, log: Logger)(
+      k: ServiceIRFull => IO[ExitStatus]
+  ): IO[ExitStatus] =
+    readSource(specFile, log).flatMap:
+      case Left(code) => IO.pure(code)
+      case Right(source) =>
+        Parse.parseSpec(source).flatMap:
+          case Left(VerifyError.Parse(errors)) =>
+            IO.delay {
+              errors.foreach: e =>
+                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
+            }.as(ExitStatus.Violations)
+          case Right(parsed) =>
+            Builder.buildIR(parsed.tree).flatMap:
+              case Left(err) =>
+                IO.delay(log.error(renderBuildError(specFile, err))).as(ExitStatus.Violations)
+              case Right(ir) => k(ir)
+
+  private[cli] def testDowngradeNotice(target: String, downgrade: Boolean, log: Logger): IO[Unit] =
+    if downgrade then
+      IO.delay(
+        log.warn(
+          s"target $target does not support native test generation; skipping " +
+            "(pass --no-tests to silence this warning)"
+        )
+      )
+    else IO.unit
+
   private[cli] def renderConv(specFile: String, d: ConventionDiagnostic): String =
     val loc =
       d.span.collect { case SpanT(line, col, _, _) =>

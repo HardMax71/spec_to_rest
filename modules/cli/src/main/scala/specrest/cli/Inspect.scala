@@ -8,10 +8,7 @@ import specrest.convention.Classify
 import specrest.dafny.DafnyMethodHeader
 import specrest.dafny.Generator as DafnyGenerator
 import specrest.ir.Serialize.given
-import specrest.ir.VerifyError
 import specrest.ir.generated.SpecRestGenerated.*
-import specrest.parser.Builder
-import specrest.parser.Parse
 import specrest.synth.PromptBuilder
 
 import java.io.PrintStream
@@ -40,24 +37,11 @@ object Inspect:
       out: PrintStream = System.out,
       operation: Option[String] = None
   ): IO[ExitStatus] =
-    Check.readSource(specFile, log).flatMap:
-      case Left(code) => IO.pure(code)
-      case Right(source) =>
-        Parse.parseSpec(source).flatMap:
-          case Left(VerifyError.Parse(errors)) =>
-            IO.delay {
-              errors.foreach: e =>
-                log.error(s"$specFile:${e.line}:${e.column}: ${e.message}")
-            }.as(ExitStatus.Violations)
-          case Right(parsed) =>
-            Builder.buildIR(parsed.tree).flatMap:
-              case Left(err) =>
-                IO.delay(log.error(Check.renderBuildError(specFile, err))).as(ExitStatus.Violations)
-              case Right(ir) =>
-                renderIR(ir, format, operation) match
-                  case Right(text) => IO.blocking(out.println(text)).as(ExitStatus.Ok)
-                  case Left(msg) =>
-                    IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Translator)
+    Check.withParsedIR(specFile, log): ir =>
+      renderIR(ir, format, operation) match
+        case Right(text) => IO.blocking(out.println(text)).as(ExitStatus.Ok)
+        case Left(msg) =>
+          IO.delay(log.error(s"$specFile: $msg")).as(ExitStatus.Translator)
 
   private def renderIR(
       ir: ServiceIRFull,
