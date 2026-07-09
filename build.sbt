@@ -78,12 +78,14 @@ val declineVersion          = "2.6.2"
 val apispecVersion          = "0.11.3"
 val snakeYamlVersion        = "2.3"
 val catsEffectVersion       = "3.7.0"
-val jacksonCoreVersion      = "2.18.6"
+val jacksonVersion          = "2.18.8"
 val anthropicJavaVersion    = "2.30.0"
 val openaiJavaVersion       = "4.35.0"
 
-// Scala 3.6.3's scaladoc toolchain still resolves jackson-core 2.15.1.
-ThisBuild / dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core" % jacksonCoreVersion
+// Scala 3.6.3's scaladoc toolchain still resolves jackson-core 2.15.1, and
+// jackson-databind is pulled in transitively below the advisory-patched 2.18.8.
+ThisBuild / dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-core"     % jacksonVersion
+ThisBuild / dependencyOverrides += "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion
 
 lazy val commonMainDeps = Seq(
   "org.typelevel" %% "cats-effect" % catsEffectVersion

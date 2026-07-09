@@ -227,7 +227,7 @@ object Express extends Framework:
         DependencySpec("@types/node", "^22.10.1"),
         DependencySpec("@types/express", "^4.17.21"),
         DependencySpec("prisma", "^6.2.0"),
-        DependencySpec("vitest", "^2.1.8"),
+        DependencySpec("vitest", "^3.2.6"),
         DependencySpec("supertest", "^7.0.0"),
         DependencySpec("@types/supertest", "^6.0.2"),
         DependencySpec("tsx", "^4.19.2")
