@@ -123,7 +123,7 @@ Per issue #193, 10 phases sized for single-contributor PRs:
 | 6     | 4         | 4         | `cert/EmitIsabelle.scala` replacing `cert/Emit.scala`               |
 | 7     | 3         | 3         | A8a/A8b oracles + CI workflow migration                             |
 | 8     | 3         | 3         | Drift audit migration; side-by-side gating                          |
-| 9     | 3         | 3         | Docs: §7 of `10_translator_soundness.md` + `STATUS.md` migration    |
+| 9     | 3         | 3         | Docs: the translator-soundness writeup + `STATUS.md` migration      |
 | 10    | follow-up | follow-up | Retire Lean track (`rm -rf proofs/lean/`)                           |
 
 Total: 53-72 person-days depending on contributor count.

@@ -249,18 +249,18 @@ structured `ConventionDiagnostic`s. The convention override system was hardened 
 
 ## Deployment profiles
 
-Profiles bundle target-language and runtime conventions (Python types, SQLAlchemy column
-mapping, FastAPI imports, etc.). The shipped registry contains exactly one profile:
-`python-fastapi-postgres` (default), FastAPI + SQLAlchemy 2 (async) + Alembic +
-PostgreSQL 16, the only profile `compile` accepts on `main`.
+Profiles bundle target-language and runtime conventions (types, ORM column mapping, framework
+imports, and so on). The registry ships three frameworks, each bound to one language: FastAPI
+(Python, on SQLAlchemy 2 async and Alembic), Chi (Go), and Express (TypeScript, on Prisma). Every
+framework supports all three SQL dialects: PostgreSQL, SQLite, and MySQL.
 
-Multiple-environment overrides (development / staging / production / testing) and additional
-target profiles (Go/chi, TS/Express) are roadmap work:
+A target is the slug `<language>-<framework>-<database>`, for example `python-fastapi-postgres`
+(the default), `go-chi-sqlite`, or `ts-express-mysql`. `compile` accepts any registered
+combination; the `--framework`, `--db`, and `--lang` flags resolve to a slug, and a combination the
+registry does not support is rejected at the command line before generation starts.
 
-- [#33 (M7.1), Go/chi Target](https://github.com/HardMax71/spec_to_rest/issues/33)
-- [#35 (M7.2), TypeScript/Express Target](https://github.com/HardMax71/spec_to_rest/issues/35)
-- [#58 (M7.7), Alternative database dialects (SQLite, MySQL)](https://github.com/HardMax71/spec_to_rest/issues/58)
+Multiple-environment overrides (development / staging / production / testing) remain roadmap work.
 
-The registry is a tiny `Map[String, DeploymentProfile]` in
+The registry is a small `Map[String, Framework]` in
 [`Registry.scala`](https://github.com/HardMax71/spec_to_rest/blob/main/modules/profile/src/main/scala/specrest/profile/Registry.scala);
-adding a new profile is a registry insertion plus a Handlebars template tree.
+adding a target is a framework entry plus its Handlebars template tree.

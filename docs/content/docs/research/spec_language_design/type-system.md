@@ -7,7 +7,7 @@ description: "Primitives, compounds, entity and relation types, refinements, exp
 
 | Type       | Values                       | Default | SQL                    | JSON                |
 | ---------- | ---------------------------- | ------- | ---------------------- | ------------------- |
-| `String`   | Unicode text                 | `""`    | `TEXT` or `VARCHAR(n)` | string              |
+| `String`   | ASCII text                   | `""`    | `TEXT` or `VARCHAR(n)` | string              |
 | `Int`      | arbitrary-precision integers | `0`     | `INTEGER` or `BIGINT`  | integer             |
 | `Float`    | IEEE 754 double              | `0.0`   | `DOUBLE PRECISION`     | number              |
 | `Bool`     | `true`, `false`              | `false` | `BOOLEAN`              | boolean             |
@@ -19,6 +19,10 @@ Underneath, the verifier's type system has four scalar types: `Bool`, `Int`, `Re
 `DateTime` and `Duration` are integers (an epoch and a count of seconds), and `UUID` is a string.
 No primitive has subtypes, and any of them refines into a named, constrained type with a `where`
 clause.
+
+`String` values are ASCII. The verifier reasons over ASCII strings, so the parser rejects any
+non-ASCII character in a string literal with a build-time diagnostic rather than carrying it into
+verification or codegen.
 
 ## Compound types
 
