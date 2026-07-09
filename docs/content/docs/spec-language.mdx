@@ -180,7 +180,7 @@ directly into Python and SMT-LIB: `len`, `dom`, `ran`, `max`, `min`, `now`, `day
 
 ## Structural lints
 
-`spec-to-rest check <file>.spec` runs six solver-free structural lints over the IR after parsing
+`spec-to-rest check <file>.spec` runs seven solver-free structural lints over the IR after parsing
 succeeds. Each diagnostic carries a stable code; warnings allow exit `0`, errors cause exit `1`.
 
 | Code | Level   | What it catches                                                                       |
@@ -191,6 +191,7 @@ succeeds. Each diagnostic carries a stable code; warnings allow exit `0`, errors
 | L04  | warning | Two operations share input/output signature **and** have equivalent `requires`        |
 | L05  | warning | `entity` declared but never referenced in state, operations, invariants, or types     |
 | L06  | error   | Mutually-recursive predicates / functions; verifier inlining would diverge            |
+| L07  | warning | Operation declares outputs but its success status resolves to `204 No Content`, so they never reach the response |
 
 L01 is intentionally narrow: it only fires on literals whose class admits no operator overload
 (e.g., `flag and 5`, `count + true`, `count > true`). The DSL uses `+`/`-` for set/map union and
@@ -204,6 +205,13 @@ ordering and redundant `true` literals). It deliberately does **not** flag subsu
 caller picks the operation by name; ambiguity only matters at the dispatch layer). A SAT-based
 overlap check on `requires_A and requires_B` is candidate work for `verify` and is tracked
 separately.
+
+L07 resolves the success status the same way the convention engine does: a per-operation
+`http_status_success` override wins, otherwise the default follows from the resolved HTTP method
+and operation kind (DELETE and delete-like operations default to `204`). A single `Bool` output is
+exempt because that is the designed delete pattern: the flag selects 204-versus-404 and never
+becomes a response body. For anything else, set `<Op>.http_status_success = 200` in the
+`conventions` block.
 
 ## Test-generation coverage
 

@@ -8,7 +8,7 @@ lints over the IR; `verify` hands the operation contracts to a solver. They catc
 
 ## Structural lints (`check`)
 
-Once a parse succeeds, `check` runs six lints over the IR. Each carries a stable code. An error
+Once a parse succeeds, `check` runs seven lints over the IR. Each carries a stable code. An error
 exits non-zero; a warning exits zero.
 
 | Code | Level   | Catches                                                                                  |
@@ -19,6 +19,7 @@ exits non-zero; a warning exits zero.
 | L04  | warning | two operations with the same input and output signature and equivalent `requires`       |
 | L05  | warning | an entity declared but never referenced                                                  |
 | L06  | error   | mutually recursive predicates or functions, which the verifier's inlining cannot unfold  |
+| L07  | warning | an operation whose outputs a resolved `204 No Content` success status would drop         |
 
 The lints are deliberately narrow. L01 fires only on literals whose type admits no operator at all,
 so it catches obvious mistakes without standing in for a full type checker.

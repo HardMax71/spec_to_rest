@@ -9,7 +9,8 @@ object Lint:
     MissingEnsures,
     OperationOverlap,
     UnusedEntity,
-    CircularPredicate
+    CircularPredicate,
+    DroppedOutputs
   )
 
   def run(ir: service_ir): List[LintDiagnostic] =

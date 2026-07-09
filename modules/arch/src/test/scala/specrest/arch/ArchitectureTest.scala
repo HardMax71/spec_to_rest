@@ -35,7 +35,13 @@ class ArchitectureTest extends CatsEffectSuite:
         .layer("bench").definedBy("specrest.bench..")
         .layer("cli").definedBy("specrest.cli..")
         .whereLayer("parser").mayOnlyBeAccessedByLayers("bench", "cli")
-        .whereLayer("convention").mayOnlyBeAccessedByLayers("profile", "codegen", "testgen", "cli")
+        .whereLayer("convention").mayOnlyBeAccessedByLayers(
+          "profile",
+          "codegen",
+          "testgen",
+          "lint",
+          "cli"
+        )
         .whereLayer("dafny").mayOnlyBeAccessedByLayers("synth", "cli")
         .whereLayer("profile").mayOnlyBeAccessedByLayers("codegen", "testgen", "cli")
         .whereLayer("verify").mayOnlyBeAccessedByLayers("bench", "cli")
