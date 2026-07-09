@@ -3,8 +3,8 @@ import { z } from 'zod';
 export const UrlMappingCreateSchema = z.object({
   code: z.string().min(6).regex(/^(?:^[a-zA-Z0-9]+$)$/),
   url: z.string().min(1).regex(/^(?:^https?:\/\/[^\s\x00-\x1f\x7f]+)$/),
-  createdAt: z.coerce.date(),
-  clickCount: z.number(),
+  created_at: z.coerce.date(),
+  click_count: z.number(),
 });
 
 export type UrlMappingCreate = z.infer<typeof UrlMappingCreateSchema>;

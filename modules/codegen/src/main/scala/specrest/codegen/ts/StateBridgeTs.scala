@@ -127,7 +127,7 @@ object StateBridgeTs:
       f: ProfiledField,
       rowRef: String
   ): String =
-    val access = s"$rowRef.${camel(f.fieldName)}"
+    val access = s"$rowRef.${f.fieldName}"
     kindFor(ir, entityName, f).map(specrest.codegen.KernelTypes.unwrapOpt) match
       case Some(Kind.EnumK(n)) if !f.nullable =>
         s"enumToDafny('$n', $access as string)"
@@ -209,8 +209,8 @@ object StateBridgeTs:
 
   private def keyToDafny(key: ProfiledField, rowRef: String): String =
     key.domainType match
-      case "string" => s"stringToDafny($rowRef.${camel(key.fieldName)})"
-      case _        => s"intToDafny($rowRef.${camel(key.fieldName)})"
+      case "string" => s"stringToDafny($rowRef.${key.fieldName})"
+      case _        => s"intToDafny($rowRef.${key.fieldName})"
 
   def emit(profiled: ProfiledService): String =
     val planned = plan(profiled) match
@@ -294,15 +294,15 @@ object StateBridgeTs:
     def accInsert(r: StatePlan.RelationPlan, key: ProfiledField, pad: String): List[String] =
       List(
         s"${pad}for (const r of ${relRowsVar(r)}) {",
-        s"$pad  ${relAcc(r)}.set(r.${camel(key.fieldName)}, r);",
+        s"$pad  ${relAcc(r)}.set(r.${key.fieldName}, r);",
         s"$pad}"
       )
     def stepLines(r: StatePlan.RelationPlan, key: ProfiledField, shape: StepShape): List[String] =
-      val rel      = r.stateField
-      val client   = camel(r.entity.entityName)
-      val sel      = relSel(r)
-      val rows     = relRowsVar(r)
-      val keyCamel = camel(key.fieldName)
+      val rel     = r.stateField
+      val client  = camel(r.entity.entityName)
+      val sel     = relSel(r)
+      val rows    = relRowsVar(r)
+      val keyName = key.fieldName
       def srcAccOf(src: String): String =
         relByField.get(src).map(relAcc).getOrElse(s"${camel(src)}Acc")
       shape match
@@ -317,19 +317,19 @@ object StateBridgeTs:
             s"  const $keysVar = $sel.flatMap((d) => (d.kind === 'keys' ? [...d.keys] : []));",
             s"  if ($keysVar.length > 0) {",
             s"    const $rows = await tx.$client.findMany({",
-            s"      where: { $keyCamel: { in: $keysVar as ${keysCast(key)} } },",
+            s"      where: { $keyName: { in: $keysVar as ${keysCast(key)} } },",
             "    });"
           ) ::: accInsert(r, key, "    ") ::: List("  }")
         case StepShape.FieldOf(src, field) =>
           val srcField = relByField.get(src).toList
             .flatMap(_.entity.fields)
             .find(_.fieldName == field)
-          val srcCamel = srcField.map(f => camel(f.fieldName)).getOrElse(camel(field))
-          val keysVar  = s"${camel(rel)}From${Naming.toPascalCase(src)}Keys"
-          val proj     = projFor(key, s"r.$srcCamel")
+          val srcName = srcField.map(_.fieldName).getOrElse(field)
+          val keysVar = s"${camel(rel)}From${Naming.toPascalCase(src)}Keys"
+          val proj    = projFor(key, s"r.$srcName")
           val gather =
             if srcField.exists(_.nullable) then
-              s"      ...new Set([...${srcAccOf(src)}.values()].flatMap((r) => (r.$srcCamel === null ? [] : [$proj]))),"
+              s"      ...new Set([...${srcAccOf(src)}.values()].flatMap((r) => (r.$srcName === null ? [] : [$proj]))),"
             else s"      ...new Set([...${srcAccOf(src)}.values()].map((r) => $proj)),"
           List(
             s"  if ($sel.some((d) => d.kind === 'fieldOf' && d.src === '$src' && d.field === '$field')) {",
@@ -338,12 +338,12 @@ object StateBridgeTs:
             s"    ]${sortFor(key)};",
             s"    if ($keysVar.length > 0) {",
             s"      const $rows = await tx.$client.findMany({",
-            s"        where: { $keyCamel: { in: $keysVar } },",
+            s"        where: { $keyName: { in: $keysVar } },",
             "      });"
           ) ::: accInsert(r, key, "      ") ::: List("    }", "  }")
         case StepShape.ValueCol(src, column) =>
           val colField = r.entity.fields.find(_.fieldName == column)
-          val colCamel = colField.map(f => camel(f.fieldName)).getOrElse(camel(column))
+          val colName  = colField.map(_.fieldName).getOrElse(column)
           val srcKeys = colField match
             case Some(cf) if baseTs(cf.domainType) != "string" =>
               s"[...${srcAccOf(src)}.keys()].map((k) => Number(k)).sort($numCmp)"
@@ -354,13 +354,13 @@ object StateBridgeTs:
             s"    ${srcAccOf(src)}.size > 0",
             "  ) {",
             s"    const $rows = await tx.$client.findMany({",
-            s"      where: { $colCamel: { in: $srcKeys } },",
+            s"      where: { $colName: { in: $srcKeys } },",
             "    });"
           ) ::: accInsert(r, key, "    ") ::: List("  }")
         case StepShape.Dependent(src, coll, elem) =>
           val srcEntity = relByField.get(src).map(_.entity)
           val collField = srcEntity.toList.flatMap(_.fields).find(_.fieldName == coll)
-          val collCamel = collField.map(f => camel(f.fieldName)).getOrElse(camel(coll))
+          val collName  = collField.map(_.fieldName).getOrElse(coll)
           val nested = collField
             .flatMap(f => srcEntity.flatMap(e => kindFor(profiled.ir, e.entityName, f)))
             .collect { case Kind.EntitySetOf(en) => en }
@@ -368,7 +368,7 @@ object StateBridgeTs:
           nested.toList.flatMap { ne =>
             val neCamel   = camel(ne.entityName)
             val elemField = ne.fields.find(_.fieldName == elem)
-            val elemCamel = elemField.map(f => camel(f.fieldName)).getOrElse(camel(elem))
+            val elemName  = elemField.map(_.fieldName).getOrElse(elem)
             val keysVar   = s"${camel(rel)}DepKeys"
             List(
               "  if (",
@@ -379,16 +379,16 @@ object StateBridgeTs:
               s"    const $keysVar = [",
               "      ...new Set(",
               s"        [...${srcAccOf(src)}.values()].flatMap((r) =>",
-              s"          (r.$collCamel as number[]).flatMap((x) => {",
+              s"          (r.$collName as number[]).flatMap((x) => {",
               s"            const li = ${neCamel}ById.get(Number(x));",
-              s"            return li ? [${projFor(key, s"li.$elemCamel")}] : [];",
+              s"            return li ? [${projFor(key, s"li.$elemName")}] : [];",
               "          }),",
               "        ),",
               "      ),",
               s"    ]${sortFor(key)};",
               s"    if ($keysVar.length > 0) {",
               s"      const $rows = await tx.$client.findMany({",
-              s"        where: { $keyCamel: { in: $keysVar } },",
+              s"        where: { $keyName: { in: $keysVar } },",
               "      });"
             ) ::: accInsert(r, key, "      ") ::: List("    }", "  }")
           }
@@ -453,7 +453,7 @@ object StateBridgeTs:
     for (r, key) <- keyedRelations do
       val model = r.entity.modelClassName
       hydrate ++= s"  const ${relSel(r)} = sc.${r.stateField} ?? [];\n"
-      hydrate ++= s"  const ${relAcc(r)} = new Map<$model['${camel(key.fieldName)}'], $model>();\n"
+      hydrate ++= s"  const ${relAcc(r)} = new Map<$model['${key.fieldName}'], $model>();\n"
     for ne <- nestedEntities do
       hydrate ++= s"  const ${camel(ne.entityName)}Ids = new Set<number>();\n"
     // Seq-valued state loads whole or not at all (a seq present in scope is
@@ -475,7 +475,7 @@ object StateBridgeTs:
           hydrate,
           List(
             s"  for (const r of ${relRowsVar(r)}) {",
-            s"    for (const x of r.${camel(f.fieldName)} as number[]) {",
+            s"    for (const x of r.${f.fieldName} as number[]) {",
             s"      ${camel(ne.entityName)}Ids.add(Number(x));",
             "    }",
             "  }"
@@ -514,7 +514,7 @@ object StateBridgeTs:
             hydrate,
             List(
               s"  for (const r of ${relAcc(r)}.values()) {",
-              s"    for (const x of r.${camel(f.fieldName)} as number[]) {",
+              s"    for (const x of r.${f.fieldName} as number[]) {",
               s"      ${camel(ne.entityName)}Ids.add(Number(x));",
               "    }",
               "  }"
@@ -547,7 +547,7 @@ object StateBridgeTs:
         persist ++= s"    const ${client}Olds = await tx.$client.findMany();\n"
         for (f, ne) <- seqNested do
           persist ++= s"    for (const r of ${client}Olds) {\n"
-          persist ++= s"      for (const x of r.${camel(f.fieldName)} as number[]) {\n"
+          persist ++= s"      for (const x of r.${f.fieldName} as number[]) {\n"
           persist ++= s"        ${camel(ne.entityName)}PreIds.add(Number(x));\n"
           persist ++= "      }\n"
           persist ++= "    }\n"
@@ -558,7 +558,7 @@ object StateBridgeTs:
       persist ++= "      const value = v as Record<string, unknown>;\n"
       persist ++= s"      await tx.$client.create({\n        data: {\n"
       for f <- e.fields do
-        persist ++= s"          ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
+        persist ++= s"          ${f.fieldName}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
       persist ++= "        },\n      });\n"
       persist ++= "    }\n"
       persist ++= "  }\n"
@@ -580,7 +580,7 @@ object StateBridgeTs:
       persist ++= s"        ? await tx.$client.findMany({\n"
       persist ++= "            where:\n"
       persist ++= s"              $sel.kind === 'keys'\n"
-      persist ++= s"                ? { ${camel(rKey.fieldName)}: { in: ${sortedHydratedKeys(sel, rKey)} } }\n"
+      persist ++= s"                ? { ${rKey.fieldName}: { in: ${sortedHydratedKeys(sel, rKey)} } }\n"
       persist ++= "                : undefined,\n"
       persist ++= "          })\n"
       persist ++= "        : [];\n"
@@ -588,13 +588,13 @@ object StateBridgeTs:
       // arrive as bigint and dafny keys convert through number, so comparing
       // their canonical string forms avoids both bigint mismatch and float
       // precision loss on large ids.
-      persist ++= s"    const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${camel(rKey.fieldName)}), r]));\n"
+      persist ++= s"    const ${client}Existing = new Map(${client}Rows.map((r) => [String(r.${rKey.fieldName}), r]));\n"
       // Nested ids collect before the upsert loop mutates these rows: the
       // nested delete scan may only judge rows the hydrated owners referenced
       // in their pre state.
       for (f, ne) <- nestedFieldsOf(e) do
         persist ++= s"    for (const r of ${client}Rows) {\n"
-        persist ++= s"      for (const x of r.${camel(f.fieldName)} as number[]) {\n"
+        persist ++= s"      for (const x of r.${f.fieldName} as number[]) {\n"
         persist ++= s"        ${camel(ne.entityName)}PreIds.add(Number(x));\n"
         persist ++= "      }\n"
         persist ++= "    }\n"
@@ -608,14 +608,14 @@ object StateBridgeTs:
       val nonKey = e.fields.filter(_.fieldName != rKey.fieldName)
       persist ++= "      const data = {\n"
       for f <- nonKey do
-        persist ++= s"        ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
+        persist ++= s"        ${f.fieldName}: ${fromDafnyExpr(profiled.ir, e.entityName, f, "value")},\n"
       persist ++= "      };\n"
       persist ++= s"      const row = ${client}Existing.get(key);\n"
       persist ++= "      if (row) {\n"
       persist ++= s"        await tx.$client.update({ where: { id: row.id }, data });\n"
       persist ++= "      } else {\n"
       persist ++= s"        await tx.$client.create({\n"
-      persist ++= s"          data: { ${camel(rKey.fieldName)}: ${fromDafnyExpr(profiled.ir, e.entityName, rKey, "value")}, ...data },\n"
+      persist ++= s"          data: { ${rKey.fieldName}: ${fromDafnyExpr(profiled.ir, e.entityName, rKey, "value")}, ...data },\n"
       persist ++= "        });\n"
       persist ++= "      }\n"
       persist ++= "    }\n"
@@ -656,7 +656,7 @@ object StateBridgeTs:
       persist ++= s"  for (const [key, value] of ${client}Post) {\n"
       persist ++= "    const data = {\n"
       for f <- ne.fields if f.fieldName != "id" do
-        persist ++= s"      ${camel(f.fieldName)}: ${fromDafnyExpr(profiled.ir, ne.entityName, f, "value")},\n"
+        persist ++= s"      ${f.fieldName}: ${fromDafnyExpr(profiled.ir, ne.entityName, f, "value")},\n"
       persist ++= "    };\n"
       persist ++= s"    const row = ${client}Existing.get(key);\n"
       persist ++= "    if (row) {\n"

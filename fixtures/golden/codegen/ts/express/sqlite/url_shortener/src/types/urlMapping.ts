@@ -3,23 +3,23 @@ export interface UrlMapping {
   id: number;
   code: string;
   url: string;
-  createdAt: Date;
-  clickCount: number;
+  created_at: Date;
+  click_count: number;
 }
 
 export interface UrlMappingCreate {
   code: string;
   url: string;
-  createdAt: Date;
-  clickCount: number;
+  created_at: Date;
+  click_count: number;
 }
 
 export interface UrlMappingRead {
   id: number;
   code: string;
   url: string;
-  createdAt: Date;
-  clickCount: number;
+  created_at: Date;
+  click_count: number;
 }
 
 export interface ShortenRequest {
