@@ -1,5 +1,67 @@
 # Changelog
 
+## [3.2.0](https://github.com/HardMax71/spec_to_rest/compare/v3.1.0...v3.2.0) (2026-07-09)
+
+
+### Features
+
+* auth kernels route on go and ts (nullable and seq bridges) ([#518](https://github.com/HardMax71/spec_to_rest/issues/518)) ([4b0d3eb](https://github.com/HardMax71/spec_to_rest/commit/4b0d3eb423b582a43a11f3fd7dbc00cc48e7a625))
+* auth_service under synthesis via proven candidate lowering ([#517](https://github.com/HardMax71/spec_to_rest/issues/517)) ([352c6cd](https://github.com/HardMax71/spec_to_rest/commit/352c6cdfbd0e3b23c83e30e715390f0f9c1d11e8))
+* **ci:** conformance runs synthesized kernels for url_shortener ([#514](https://github.com/HardMax71/spec_to_rest/issues/514)) ([629cd40](https://github.com/HardMax71/spec_to_rest/commit/629cd40df873af004cadb11c9e15849abf5b1a0c))
+* **codegen:** ecommerce on verified kernels via nested entity-set bridges and locally verified bodies ([#521](https://github.com/HardMax71/spec_to_rest/issues/521)) ([d16a3ad](https://github.com/HardMax71/spec_to_rest/commit/d16a3ad51613219c7bc54608a952b6489f23c23f))
+* **codegen:** scope kernel hydration to the rows each operation's contracts touch ([#522](https://github.com/HardMax71/spec_to_rest/issues/522)) ([0937923](https://github.com/HardMax71/spec_to_rest/commit/0937923621563c4f19890ca7c11b91522ab0c50b))
+* **codegen:** support loads keep invariant-closed hydration scopes keyed ([#523](https://github.com/HardMax71/spec_to_rest/issues/523)) ([0315074](https://github.com/HardMax71/spec_to_rest/commit/0315074add2d04fa3e6ad4f7d7b893babc0848e7))
+* **dafny:** definite descriptions over set domains put ecommerce fully on verified kernels ([#524](https://github.com/HardMax71/spec_to_rest/issues/524)) ([41a7d45](https://github.com/HardMax71/spec_to_rest/commit/41a7d451dff1b146dc0f8a5a4fe7bd92716b3457))
+* enum, collection, query-param, and list-output kernel marshalling; todo_list on verified kernels fleet-wide ([#519](https://github.com/HardMax71/spec_to_rest/issues/519)) ([a6649d5](https://github.com/HardMax71/spec_to_rest/commit/a6649d5b8eca5e20473ff14317bd1fbe3b0e33b2))
+* **lint:** warn on 204-dropped outputs, with generated-lint and go-oracle exactness riders ([#525](https://github.com/HardMax71/spec_to_rest/issues/525)) ([be12ff4](https://github.com/HardMax71/spec_to_rest/commit/be12ff4928b3df546683855be4bb429cbc5587f1))
+* ListOrders returns every matching order on verified kernels ([#528](https://github.com/HardMax71/spec_to_rest/issues/528)) ([08a9248](https://github.com/HardMax71/spec_to_rest/commit/08a92484b1001340e3531248c07cfb92a5f9b753))
+* **proofs:** prove lower_entails for the candidate lowering ([#520](https://github.com/HardMax71/spec_to_rest/issues/520)) ([b91ed81](https://github.com/HardMax71/spec_to_rest/commit/b91ed81799fb62e021c571a5f9928926d91c3a39))
+* reconcile kernel ServiceState with the database (go) ([#512](https://github.com/HardMax71/spec_to_rest/issues/512)) ([273d8de](https://github.com/HardMax71/spec_to_rest/commit/273d8de884c21c19b65feb43914e5934060a2cd8))
+* reconcile kernel ServiceState with the database (python) ([#511](https://github.com/HardMax71/spec_to_rest/issues/511)) ([e7d3e86](https://github.com/HardMax71/spec_to_rest/commit/e7d3e86b802dc1c31622ac798ac361c3bf1fa5bc))
+* reconcile kernel ServiceState with the database (ts) ([#513](https://github.com/HardMax71/spec_to_rest/issues/513)) ([996d510](https://github.com/HardMax71/spec_to_rest/commit/996d5102fe07f800c39b0c98444eeb6828e848b1))
+* **synth:** machine-verify few-shot examples in CI ([#490](https://github.com/HardMax71/spec_to_rest/issues/490)) ([19b8ad6](https://github.com/HardMax71/spec_to_rest/commit/19b8ad6eca78c0891d3903248bc112e4116ae5fa))
+* **synth:** route fallback escalation across provider families ([#493](https://github.com/HardMax71/spec_to_rest/issues/493)) ([ebe0b30](https://github.com/HardMax71/spec_to_rest/commit/ebe0b30d880a8453eeeb47dfb4cd145fd3a463c7))
+
+
+### Bug Fixes
+
+* **codegen:** ts speaks snake_case on the JSON wire ([#529](https://github.com/HardMax71/spec_to_rest/issues/529)) ([751ee56](https://github.com/HardMax71/spec_to_rest/commit/751ee56f9fa0982f0595bc3ebae2ecb4063b96a6))
+* **synth:** splice cached helper declarations with their method bodies ([#509](https://github.com/HardMax71/spec_to_rest/issues/509)) ([fa2677d](https://github.com/HardMax71/spec_to_rest/commit/fa2677dfbe73d398e61d1655003d7b43cef72ba3))
+* **testgen:** send query parameters in the native Go/TS conformance suites ([#507](https://github.com/HardMax71/spec_to_rest/issues/507)) ([1444b94](https://github.com/HardMax71/spec_to_rest/commit/1444b943b5ae0f56a0b08683938f21303a9956fa))
+
+
+### Code Refactoring
+
+* **cli,codegen:** single-source CI action pins and the kernel target-language mapping ([#506](https://github.com/HardMax71/spec_to_rest/issues/506)) ([491f09d](https://github.com/HardMax71/spec_to_rest/commit/491f09d4e830f326b47211b000c5262422dada53))
+* **cli:** fold shared spec-loading and Dafny-header scaffolding ([#531](https://github.com/HardMax71/spec_to_rest/issues/531)) ([dc1460c](https://github.com/HardMax71/spec_to_rest/commit/dc1460c06ec1dcf6552549e2de0c88d784fe55e3))
+* **codegen:** single-source cloned emitter decisions and data shapes ([#504](https://github.com/HardMax71/spec_to_rest/issues/504)) ([baf3f84](https://github.com/HardMax71/spec_to_rest/commit/baf3f84d8302cd733200736d0c992188e382070d))
+* fold copy-pasted testgen/codegen helpers into shared ones ([#495](https://github.com/HardMax71/spec_to_rest/issues/495)) ([b3a30d9](https://github.com/HardMax71/spec_to_rest/commit/b3a30d90195f34c252cf0585a6f2039125ecde53))
+* **proofs:** drop the dead schema_ subset leftovers from [#391](https://github.com/HardMax71/spec_to_rest/issues/391) ([#497](https://github.com/HardMax71/spec_to_rest/issues/497)) ([189400c](https://github.com/HardMax71/spec_to_rest/commit/189400c9553b16f762f443f3add0d40fac761f12))
+* shared skeletons for testgen backends, Z3Expr walks, and emitter decisions ([#498](https://github.com/HardMax71/spec_to_rest/issues/498)) ([34d585e](https://github.com/HardMax71/spec_to_rest/commit/34d585ea408ecd715cc1ec48e51c970735af6579))
+* **testgen:** one selection pipeline behind the native Go/TS suite drivers ([#503](https://github.com/HardMax71/spec_to_rest/issues/503)) ([7e04761](https://github.com/HardMax71/spec_to_rest/commit/7e04761ad6a894d82935a3ae4a23715c707aafdb))
+* **verify:** consolidate the seven Consistency check runners into two ([#496](https://github.com/HardMax71/spec_to_rest/issues/496)) ([58f6b15](https://github.com/HardMax71/spec_to_rest/commit/58f6b15f0c10e3f9dd42530aabd0cbe18fa21bc5))
+* **verify:** extract cloned encoder helpers, byte-identical scripts ([#505](https://github.com/HardMax71/spec_to_rest/issues/505)) ([f3890a6](https://github.com/HardMax71/spec_to_rest/commit/f3890a66ae24c202856426453a6236bac7c6a092))
+
+
+### Performance
+
+* **proofs:** stop extracting the consumer-dead smtEval interpreter ([#499](https://github.com/HardMax71/spec_to_rest/issues/499)) ([b47fd2a](https://github.com/HardMax71/spec_to_rest/commit/b47fd2a3650af1c9ac4f6e102571b1fc1ca47213))
+
+
+### Documentation
+
+* **design:** split the Isabelle proofs page into a subsection and refresh it ([#486](https://github.com/HardMax71/spec_to_rest/issues/486)) ([bbdfa22](https://github.com/HardMax71/spec_to_rest/commit/bbdfa225f59c56663462e59557f1b0453764decc))
+* mark ServiceState reconciliation shipped in the roadmap ([#515](https://github.com/HardMax71/spec_to_rest/issues/515)) ([517c56b](https://github.com/HardMax71/spec_to_rest/commit/517c56bd5ac6585072554f7f5e9a53362acab310))
+* **pipelines:** split the test generation page into a subsection and refresh it ([#488](https://github.com/HardMax71/spec_to_rest/issues/488)) ([fab3cb1](https://github.com/HardMax71/spec_to_rest/commit/fab3cb12b536825ddeae0148cb119f63c20d9f1d))
+* **pipelines:** split the verification engine page into a subsection and refresh it ([#487](https://github.com/HardMax71/spec_to_rest/issues/487)) ([4abdc79](https://github.com/HardMax71/spec_to_rest/commit/4abdc79eeb85a0935636269043d6cb7d5b367473))
+* re-baseline proof references stale since the one-IR collapse ([#494](https://github.com/HardMax71/spec_to_rest/issues/494)) ([fc0962a](https://github.com/HardMax71/spec_to_rest/commit/fc0962a734fac5851f6c6d3b9de841a0c6c88347))
+* **research:** restructure the research docs into subsections, rewritten against the code ([#482](https://github.com/HardMax71/spec_to_rest/issues/482)) ([627a2e4](https://github.com/HardMax71/spec_to_rest/commit/627a2e46a3e2da8bb7e2075c89e9911d29879a77))
+* **roadmap:** drop duplicate counterexample-formatting follow-up row ([#491](https://github.com/HardMax71/spec_to_rest/issues/491)) ([e8ab4bc](https://github.com/HardMax71/spec_to_rest/commit/e8ab4bc60b66c02f1b7c199d5296747065cf51e1))
+* **roadmap:** ground the closed-issue decisions and tidy the page ([#484](https://github.com/HardMax71/spec_to_rest/issues/484)) ([09733f5](https://github.com/HardMax71/spec_to_rest/commit/09733f5af7c155a302e0556b253c659d4091718c))
+* **roadmap:** prune shipped and not-planned rows from the follow-up tables ([#485](https://github.com/HardMax71/spec_to_rest/issues/485)) ([704d259](https://github.com/HardMax71/spec_to_rest/commit/704d2593245cf0e08827d07d53d6df63b759930c))
+* split the synthesis page into a subsection and rewrite the homepage intro ([#489](https://github.com/HardMax71/spec_to_rest/issues/489)) ([2cf90a2](https://github.com/HardMax71/spec_to_rest/commit/2cf90a27aed66659f6960d5fc066bfbd3844219a))
+* **synth:** fix stale escalation example and dangling follow-up link ([#492](https://github.com/HardMax71/spec_to_rest/issues/492)) ([379c302](https://github.com/HardMax71/spec_to_rest/commit/379c3027a41122834007e4b9e24b8fc10cf6c873))
+
 ## [3.1.0](https://github.com/HardMax71/spec_to_rest/compare/v3.0.1...v3.1.0) (2026-06-27)
 
 
