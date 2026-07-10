@@ -367,24 +367,13 @@ object EmitPython:
     files += EmittedFile("pyproject.toml", engine.renderAny(templates.pyproject, ctx))
     files += EmittedFile("Dockerfile", engine.renderAny(templates.dockerfile, ctx))
     val composeIn = composeInputs(ctx)
-    files += EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml)
-    files += EmittedFile(
-      "docker-compose.override.yml.example",
-      Compose.overrideExample(composeIn).yaml
-    )
-    files += EmittedFile(
-      "docker-compose.staging.yml",
-      Compose.staging(composeIn).yaml,
-      preserve = true
-    )
-    files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
     val authEnv = AuthSchemes.envEntries(profiled.ir).map: (k, v) =>
       EnvExample.Entry(
         k,
         v,
         Some("Credential for the spec's security scheme; unset rejects requests (401)")
       )
-    files += EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
+    files ++= EmitShared.composeAndEnvFiles(composeIn, authEnv)
     files += EmittedFile("Makefile", engine.renderAny(templates.makefile, ctx))
     files += EmittedFile(".gitignore", engine.renderAny(templates.gitignore, ctx))
     files += EmittedFile(".dockerignore", engine.renderAny(templates.dockerignore, ctx))

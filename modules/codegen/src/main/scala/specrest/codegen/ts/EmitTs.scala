@@ -281,19 +281,8 @@ object EmitTs:
       files += EmittedFile(path, engine.renderAny(tpl, projectScope))
 
     val composeIn = composeInputs(projectCtx.db)
-    files += EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml)
-    files += EmittedFile(
-      "docker-compose.override.yml.example",
-      Compose.overrideExample(composeIn).yaml
-    )
-    files += EmittedFile(
-      "docker-compose.staging.yml",
-      Compose.staging(composeIn).yaml,
-      preserve = true
-    )
-    files += EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true)
-    val authEnv = AuthSchemes.envEntries(profiled.ir).map((k, v) => EnvExample.Entry(k, v))
-    files += EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
+    val authEnv   = AuthSchemes.envEntries(profiled.ir).map((k, v) => EnvExample.Entry(k, v))
+    files ++= EmitShared.composeAndEnvFiles(composeIn, authEnv)
 
     files += EmittedFile(
       "src/extensions/index.ts",

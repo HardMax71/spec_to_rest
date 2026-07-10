@@ -172,3 +172,17 @@ private[codegen] object EmitShared:
     firstPathParam match
       case Some(p) if entity.fields.exists(_.columnName == p) => p
       case _                                                  => "id"
+
+  // The docker-compose set and .env.example are identical across targets, so all
+  // three backends emit them from here instead of each re-listing the same files.
+  def composeAndEnvFiles(
+      composeIn: Compose.Inputs,
+      authEnv: List[EnvExample.Entry]
+  ): List[EmittedFile] =
+    List(
+      EmittedFile("docker-compose.yml", Compose.base(composeIn).yaml),
+      EmittedFile("docker-compose.override.yml.example", Compose.overrideExample(composeIn).yaml),
+      EmittedFile("docker-compose.staging.yml", Compose.staging(composeIn).yaml, preserve = true),
+      EmittedFile("docker-compose.prod.yml", Compose.prod(composeIn).yaml, preserve = true),
+      EmittedFile(".env.example", EnvExample.render(composeIn, authEnv))
+    )
