@@ -2,19 +2,26 @@ package specrest.verify.z3
 
 object Z3Trigger:
 
-  private def freeVarNames(e: Z3Expr): Set[String] = e match
-    case Z3Expr.Var(n, _, _) => Set(n)
-    case other               => other.children.foldLeft(Set.empty[String])(_ ++ freeVarNames(_))
-
   // Minimal uninterpreted-function applications covering every bound name: an
   // App is a trigger only if no proper sub-App already covers the bound set,
-  // so we pick `store_dom(k)` over `len(store_map(k))`.
-  private def minimalCovering(names: Set[String], e: Z3Expr): List[Z3Expr] = e match
-    case app @ Z3Expr.App(_, args, _) if names.subsetOf(freeVarNames(app)) =>
-      val sub = args.flatMap(minimalCovering(names, _))
-      if sub.nonEmpty then sub else List(app)
-    case other =>
-      other.children.flatMap(minimalCovering(names, _))
+  // so we pick `store_dom(k)` over `len(store_map(k))`. `innerBound` carries the
+  // names bound by quantifiers crossed on the way down; a legal E-matching
+  // pattern cannot mention one, so an App that touches them is skipped (we keep
+  // descending into its args for a cleaner covering sub-App).
+  private def minimalCovering(
+      names: Set[String],
+      innerBound: Set[String],
+      e: Z3Expr
+  ): List[Z3Expr] =
+    e match
+      case app @ Z3Expr.App(_, args, _)
+          if names.subsetOf(app.freeVars) && app.freeVars.intersect(innerBound).isEmpty =>
+        val sub = args.flatMap(minimalCovering(names, innerBound, _))
+        if sub.nonEmpty then sub else List(app)
+      case Z3Expr.Quantifier(_, bs, body, _) =>
+        minimalCovering(names, innerBound ++ bs.map(_.name), body)
+      case other =>
+        other.children.flatMap(minimalCovering(names, innerBound, _))
 
   // E-matching patterns for a quantifier body. Universals over native theory
   // sorts (String) with no patterns drive Z3 to MBQI, which cannot enumerate
@@ -26,7 +33,7 @@ object Z3Trigger:
     if names.isEmpty then Nil
     else
       val fromGuard = body match
-        case Z3Expr.Implies(g, _, _) => minimalCovering(names, g)
+        case Z3Expr.Implies(g, _, _) => minimalCovering(names, Set.empty, g)
         case _                       => Nil
-      val cands = if fromGuard.nonEmpty then fromGuard else minimalCovering(names, body)
+      val cands = if fromGuard.nonEmpty then fromGuard else minimalCovering(names, Set.empty, body)
       cands.distinct
