@@ -247,8 +247,9 @@ private[codegen] object EmitShared:
 
   // Whether an operation's outputs can be marshaled from the kernel result: no output
   // is a plain effect call, an entity output needs every read-shape field marshalable,
-  // and a scalar output needs every field in the target's kernel-convertible set. That
-  // set is the only per-target input, since each language converts its own scalar types.
+  // and a scalar output needs every field non-nullable and in the target's kernel-convertible
+  // set. That set is the only per-target input, since each language converts its own scalars.
+  // Nullable scalar results defer (their rendered type is not a convertible key anyway).
   def kernelOutputsOk(
       shape: KernelOutputShape,
       specOutputs: List[param_decl],
@@ -261,4 +262,7 @@ private[codegen] object EmitShared:
         shape.outFieldKinds,
         _
       ))
-    else scalarOutputs.nonEmpty && scalarOutputs.forall(f => scalarConvTypes.contains(f.domainType))
+    else
+      scalarOutputs.nonEmpty && scalarOutputs.forall(f =>
+        !f.nullable && scalarConvTypes.contains(f.domainType)
+      )
