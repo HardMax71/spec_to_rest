@@ -2,18 +2,15 @@ package specrest.verify.z3
 
 object Z3Trigger:
 
-  // Minimal uninterpreted-function applications covering every bound name: an
-  // App is a trigger only if no proper sub-App already covers the bound set,
-  // so we pick `store_dom(k)` over `len(store_map(k))`. `innerBound` carries the
-  // names bound by quantifiers crossed on the way down; a legal E-matching
-  // pattern cannot mention one, so an App that touches them is skipped (we keep
-  // descending into its args for a cleaner covering sub-App).
   private def minimalCovering(
       names: Set[String],
       innerBound: Set[String],
       e: Z3Expr
   ): List[Z3Expr] =
     e match
+      // The minimal covering App, and never one that mentions a name bound by an
+      // inner quantifier (`innerBound`): a legal E-matching pattern cannot. The
+      // sub-App preference then picks `store_dom(k)` over `len(store_map(k))`.
       case app @ Z3Expr.App(_, args, _)
           if names.subsetOf(app.freeVars) && app.freeVars.intersect(innerBound).isEmpty =>
         val sub = args.flatMap(minimalCovering(names, innerBound, _))
