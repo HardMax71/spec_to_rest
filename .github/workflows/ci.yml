@@ -36,154 +36,14 @@ jobs:
 
       - uses: sbt/setup-sbt@66fb4376e81982c7d92a4074170846fff88e2e30 # v1.5.0
 
-      - name: Check formatting
-        run: sbt scalafmtCheckAll
+      # SolverCrossCheckTest re-solves the compiler's freshly-dumped VCs with
+      # native z3 and cvc5 (and Alloy) and fails on any disagreement. It skips
+      # when the solvers are absent, so these installs are what make it run.
+      - name: Install native solvers (z3, cvc5)
+        run: sudo apt-get update && sudo apt-get install -y z3 cvc5
 
-      - name: Compile all modules
-        run: sbt "all compile Test/compile"
-
-      - name: Check lint rules
-        run: sbt "scalafixAll --check"
-
-      - name: Run all tests
-        run: sbt test
-
-  z3-cross-check:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Install native Z3
-        run: sudo apt-get update && sudo apt-get install -y z3
-
-      - name: Record native Z3 version
-        run: z3 --version
-
-      - name: Cross-check url_shortener SMT snapshot against native Z3
-        run: |
-          timeout 60s z3 -T:30 fixtures/golden/smt/url_shortener.smt2 \
-            | head -n1 | grep -Fxq sat
-
-      - name: Cross-check set_ops SMT snapshot against native Z3
-        run: |
-          timeout 60s z3 -T:30 fixtures/golden/smt/set_ops.smt2 \
-            | head -n1 | grep -Fxq sat
-
-      - name: Cross-check per-check VC dumps against native Z3
-        run: |
-          set -e
-          for verdicts in fixtures/golden/vc/*/verdicts.json; do
-            dir=$(dirname "$verdicts")
-            for f in "$dir"/*.smt2; do
-              [ -f "$f" ] || continue
-              id=$(basename "$f" .smt2)
-              expected=$(jq -r --arg id "$id" '.entries[] | select(.id == $id) | .rawStatus' "$verdicts")
-              case "$expected" in
-                sat|unsat) ;;
-                *) echo "skip $id (rawStatus=$expected)"; continue ;;
-              esac
-              actual=$(timeout 60s z3 -T:30 "$f" | head -n1)
-              if [ "$actual" != "$expected" ]; then
-                echo "DISAGREEMENT in $f: WASM=$expected, native=$actual" >&2
-                exit 1
-              fi
-              echo "ok $id ($expected)"
-            done
-          done
-
-  cvc5-cross-check:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - name: Install native cvc5
-        run: sudo apt-get update && sudo apt-get install -y cvc5
-
-      - name: Record native cvc5 version
-        run: cvc5 --version | head -1
-
-      - name: Cross-check per-check VC dumps against native cvc5
-        run: |
-          set -euo pipefail
-          any_z3_entries=0
-          any_checked=0
-          any_skipped_unknown=0
-          for verdicts in fixtures/golden/vc/*/verdicts.json; do
-            dir=$(dirname "$verdicts")
-            mapfile -t z3_ids < <(jq -r '.entries[] | select(.tool == "z3") | .id' "$verdicts")
-            [ "${#z3_ids[@]}" -gt 0 ] || { echo "skip $dir (no z3 entries)"; continue; }
-            any_z3_entries=1
-            for id in "${z3_ids[@]}"; do
-              file=$(jq -r --arg id "$id" '.entries[] | select(.tool == "z3" and .id == $id) | .file' "$verdicts")
-              expected=$(jq -r --arg id "$id" '.entries[] | select(.tool == "z3" and .id == $id) | .rawStatus' "$verdicts")
-              case "$expected" in
-                sat|unsat) ;;
-                *) echo "skip $id (rawStatus=$expected)"; continue ;;
-              esac
-              if [ ! -f "$dir/$file" ]; then
-                echo "missing SMT file referenced by $verdicts: $dir/$file" >&2
-                exit 1
-              fi
-              actual=$(timeout 60s cvc5 --finite-model-find --tlimit-per=30000 "$dir/$file" 2>&1 \
-                | grep -E '^(sat|unsat|unknown)$' | head -1 || true)
-              if [ -z "$actual" ]; then
-                echo "no sat/unsat/unknown verdict from cvc5 for $dir/$file (solver error or external timeout)" >&2
-                exit 1
-              fi
-              if [ "$actual" = "unknown" ]; then
-                echo "skip $dir/$id (cvc5=unknown; z3=$expected)"
-                any_skipped_unknown=1
-                continue
-              fi
-              if [ "$actual" != "$expected" ]; then
-                echo "DISAGREEMENT in $dir/$file: z3=$expected, cvc5=$actual" >&2
-                exit 1
-              fi
-              echo "ok $dir/$id ($expected)"
-              any_checked=1
-            done
-          done
-          if [ "$any_z3_entries" -eq 0 ]; then
-            echo "no z3-tool entries found under fixtures/golden/vc/ — refusing to pass vacuously" >&2
-            exit 1
-          fi
-          if [ "$any_checked" -eq 0 ]; then
-            echo "z3-tool entries exist but cvc5 returned unknown / non-sat-or-unsat for all — nothing was cross-checked" >&2
-            exit 1
-          fi
-          if [ "$any_skipped_unknown" -ne 0 ]; then
-            echo "warning: at least one entry was skipped because cvc5 returned unknown; agreement was not vacuous, but not exhaustive" >&2
-          fi
-
-      - name: Upload golden VC dumps on failure
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: cvc5-cross-check-disagreement
-          path: fixtures/golden/vc/
-          if-no-files-found: error
-
-  alloy-cross-check:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520 # v5.4.0
-        with:
-          distribution: temurin
-          java-version: 21
+      - name: Record solver versions
+        run: z3 --version && cvc5 --version
 
       - name: Cache Alloy 6.2.0 CLI jar
         id: alloy-cache
@@ -199,47 +59,14 @@ jobs:
           curl -fsSL -o ~/.cache/alloy/alloy.jar \
             https://github.com/AlloyTools/org.alloytools.alloy/releases/download/v6.2.0/org.alloytools.alloy.dist.jar
 
-      - name: Cross-check per-check VC dumps against native Alloy
-        run: |
-          set -euo pipefail
-          any_alloy_entries=0
-          any_checked=0
-          for verdicts in fixtures/golden/vc/*/verdicts.json; do
-            dir=$(dirname "$verdicts")
-            mapfile -t alloy_ids < <(jq -r '.entries[] | select(.tool == "alloy") | .id' "$verdicts")
-            [ "${#alloy_ids[@]}" -gt 0 ] || { echo "skip $dir (no alloy entries)"; continue; }
-            any_alloy_entries=1
-            for id in "${alloy_ids[@]}"; do
-              file=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .file' "$verdicts")
-              expected=$(jq -r --arg id "$id" '.entries[] | select(.tool == "alloy" and .id == $id) | .rawStatus' "$verdicts")
-              case "$expected" in
-                sat|unsat) ;;
-                *) echo "skip $id (rawStatus=$expected)"; continue ;;
-              esac
-              workdir=$(mktemp -d)
-              cp "$dir/$file" "$workdir/$(basename "$file")"
-              ( cd "$workdir" && timeout 60s java -jar ~/.cache/alloy/alloy.jar exec -q -f -s sat4j "$(basename "$file")" >/dev/null )
-              stem="${file%.als}"
-              receipt="$workdir/$stem/receipt.json"
-              if [ ! -f "$receipt" ]; then
-                echo "no receipt.json for $id at $receipt" >&2
-                exit 1
-              fi
-              actual=$(jq -r '.commands | to_entries[0].value | if has("solution") then "sat" else "unsat" end' "$receipt")
-              if [ "$actual" != "$expected" ]; then
-                echo "DISAGREEMENT in $dir/$file: in-process=$expected, native=$actual" >&2
-                exit 1
-              fi
-              echo "ok $dir/$id ($expected)"
-              rm -rf "$workdir"
-              any_checked=1
-            done
-          done
-          if [ "$any_alloy_entries" -eq 0 ]; then
-            echo "no alloy-tool entries found under fixtures/golden/vc/ — refusing to pass vacuously" >&2
-            exit 1
-          fi
-          if [ "$any_checked" -eq 0 ]; then
-            echo "alloy-tool entries exist but all had non-sat/unsat rawStatus — nothing was cross-checked" >&2
-            exit 1
-          fi
+      - name: Check formatting
+        run: sbt scalafmtCheckAll
+
+      - name: Compile all modules
+        run: sbt "all compile Test/compile"
+
+      - name: Check lint rules
+        run: sbt "scalafixAll --check"
+
+      - name: Run all tests
+        run: sbt test
