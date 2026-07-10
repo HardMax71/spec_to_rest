@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.2.1](https://github.com/HardMax71/spec_to_rest/compare/v3.2.0...v3.2.1) (2026-07-10)
+
+
+### Bug Fixes
+
+* **convention:** reject unsafe http_path patterns and non-ASCII string literals ([#533](https://github.com/HardMax71/spec_to_rest/issues/533)) ([ebaef2e](https://github.com/HardMax71/spec_to_rest/commit/ebaef2e38aa61967c046b163fdf2debd3132d9b4))
+* **verify:** keep inner-bound variables out of quantifier E-matching triggers ([#536](https://github.com/HardMax71/spec_to_rest/issues/536)) ([236d83f](https://github.com/HardMax71/spec_to_rest/commit/236d83fb46948e7452d4cc2956d72112e3cb18f2))
+
+
+### Code Refactoring
+
+* **codegen:** share compose scaffolding and unify kernel-output marshalling ([#535](https://github.com/HardMax71/spec_to_rest/issues/535)) ([4cc165c](https://github.com/HardMax71/spec_to_rest/commit/4cc165c347dfdfc2f9622a2ea8deb8d40f519e7c))
+
 ## [3.2.0](https://github.com/HardMax71/spec_to_rest/compare/v3.1.0...v3.2.0) (2026-07-09)
 
 
