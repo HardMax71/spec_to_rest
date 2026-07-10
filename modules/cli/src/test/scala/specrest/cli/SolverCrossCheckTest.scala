@@ -53,8 +53,8 @@ class SolverCrossCheckTest extends CatsEffectSuite:
   private def smtVerdict(cmd: List[String], file: Path, outer: FiniteDuration): IO[Option[String]] =
     IO.blocking {
       val p = new ProcessBuilder((cmd :+ file.toString).asJava).redirectErrorStream(true).start()
-      p.getOutputStream.close()
       try
+        p.getOutputStream.close()
         if !p.waitFor(outer.toSeconds, TimeUnit.SECONDS) then None
         else
           Using.resource(scala.io.Source.fromInputStream(p.getInputStream, "UTF-8")): source =>
@@ -72,8 +72,8 @@ class SolverCrossCheckTest extends CatsEffectSuite:
           .redirectErrorStream(true)
           .redirectOutput(ProcessBuilder.Redirect.DISCARD)
           .start()
-        p.getOutputStream.close()
         try
+          p.getOutputStream.close()
           if !p.waitFor(90, TimeUnit.SECONDS) then None
           else
             val receipt = work.resolve(bn.stripSuffix(".als")).resolve("receipt.json")
