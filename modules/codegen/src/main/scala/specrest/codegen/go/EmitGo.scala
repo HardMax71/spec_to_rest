@@ -17,7 +17,6 @@ import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
-import specrest.codegen.SensitiveFields
 import specrest.codegen.TemplateEngine
 import specrest.codegen.migration.MigrationPlan
 import specrest.codegen.migration.SchemaCodec
@@ -1331,47 +1330,13 @@ func sampleCandidate(length int, charset string) (string, error) {
         // a single entity output projects the read shape nested under the
         // output name, a Seq of entities projects per element into the bare
         // array, and scalar outputs unpack positionally.
-        val entityOutput = specOutputs match
-          case single :: Nil =>
-            prmType(single) match
-              case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
-              case _                => None
-          case _ => None
-        val seqEntityOutput = specOutputs match
-          case single :: Nil =>
-            prmType(single) match
-              case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
-              case _                             => None
-          case _ => None
-        val entityOutputFields = entityOutput
-          .orElse(seqEntityOutput)
-          .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
-          .getOrElse(Nil)
-        val goEntityTypes = Set("string", "int64", "bool", "time.Time")
-        val outFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
-          .orElse(seqEntityOutput)
-          .map(e =>
-            e.fields.flatMap { f =>
-              KernelTypes
-                .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
-                .map {
-                  case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
-                  case other                         => f.fieldName -> other
-                }
-            }.toMap
-          )
-          .getOrElse(Map.empty)
-        def outFieldOk(f: ProfiledField): Boolean =
-          outFieldKinds.get(f.fieldName) match
-            case Some(KernelTypes.Kind.EnumK(_))                             => true
-            case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
-            case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
-            case _                                                           => goEntityTypes.contains(f.domainType.stripPrefix("*"))
+        val shape              = EmitShared.kernelOutputShape(specOutputs, allEntities, kernelCtx.ir)
+        val entityOutput       = shape.entityOutput
+        val seqEntityOutput    = shape.seqEntityOutput
+        val entityOutputFields = shape.entityOutputFields
+        val outFieldKinds      = shape.outFieldKinds
         val outputsOk =
-          if specOutputs.isEmpty then true
-          else if entityOutput.isDefined || seqEntityOutput.isDefined then
-            entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
-          else outputs.nonEmpty && outputs.forall(f => goKernelScalarConv.contains(f.domainType))
+          EmitShared.kernelOutputsOk(shape, specOutputs, outputs, goKernelScalarConv.keySet)
         Option.when(convertedArgs.forall(_.isDefined) && outputsOk):
           val candidates = op.dafnyCandidates.map: c =>
             (toCamelCase(c.param), c.sampleLength, goCandidateCharsetConst(c.param))

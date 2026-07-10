@@ -16,7 +16,6 @@ import specrest.codegen.RenderContext
 import specrest.codegen.ScalarOpView
 import specrest.codegen.ScalarOps
 import specrest.codegen.ScalarStateFieldView
-import specrest.codegen.SensitiveFields
 import specrest.codegen.TemplateEngine
 import specrest.codegen.TsTemplates
 import specrest.codegen.migration.MigrationPlan
@@ -1171,47 +1170,12 @@ object EmitTs:
       // Mirrors the python and go marshalling: no outputs is a plain effect
       // call, a single entity output projects the read shape flat, scalars
       // unpack positionally.
-      val entityOutput = specOutputs match
-        case single :: Nil =>
-          prmType(single) match
-            case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
-            case _                => None
-        case _ => None
-      val seqEntityOutput = specOutputs match
-        case single :: Nil =>
-          prmType(single) match
-            case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
-            case _                             => None
-        case _ => None
-      val entityOutputFields = entityOutput
-        .orElse(seqEntityOutput)
-        .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
-        .getOrElse(Nil)
-      val tsEntityTypes = Set("string", "number", "boolean", "Date")
-      val outFieldKinds: Map[String, KernelTypes.Kind] = entityOutput
-        .orElse(seqEntityOutput)
-        .map(e =>
-          e.fields.flatMap { f =>
-            KernelTypes
-              .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
-              .map {
-                case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
-                case other                         => f.fieldName -> other
-              }
-          }.toMap
-        )
-        .getOrElse(Map.empty)
-      def outFieldOk(f: ProfiledField): Boolean =
-        outFieldKinds.get(f.fieldName) match
-          case Some(KernelTypes.Kind.EnumK(_))                             => true
-          case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
-          case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
-          case _                                                           => tsEntityTypes.contains(f.domainType.replaceAll("\\s*\\|\\s*null$", ""))
+      val shape              = EmitShared.kernelOutputShape(specOutputs, allEntities, kernelCtx.ir)
+      val entityOutput       = shape.entityOutput
+      val seqEntityOutput    = shape.seqEntityOutput
+      val entityOutputFields = shape.entityOutputFields
       val outputsOk =
-        if specOutputs.isEmpty then true
-        else if entityOutput.isDefined || seqEntityOutput.isDefined then
-          entityOutputFields.nonEmpty && entityOutputFields.forall(outFieldOk)
-        else outputs.nonEmpty && outputs.forall(f => tsKernelScalarConv.contains(f.domainType))
+        EmitShared.kernelOutputsOk(shape, specOutputs, outputs, tsKernelScalarConv.keySet)
       // A redirect op's route issues `res.redirect(status, result)`, so the kernel result must be a
       // single string (the redirect target); otherwise leave it to the redirect route-kind branch.
       val redirectOk =

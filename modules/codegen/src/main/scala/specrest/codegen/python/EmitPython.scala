@@ -810,45 +810,12 @@ object EmitPython:
     // entities projects per element into a bare JSON array (list routes
     // return the array itself); scalar outputs unpack positionally; no
     // outputs at all is a plain effect call.
-    val entityOutput = specOutputs match
-      case single :: Nil =>
-        prmType(single) match
-          case NamedTypeF(n, _) => allEntities.find(_.entityName == n)
-          case _                => None
-      case _ => None
-    val seqEntityOutput = specOutputs match
-      case single :: Nil =>
-        prmType(single) match
-          case SeqTypeF(NamedTypeF(n, _), _) => allEntities.find(_.entityName == n)
-          case _                             => None
-      case _ => None
-    // The API contract for an entity output is the entity's read shape: flat,
-    // with sensitive fields dropped exactly as the schema layer drops them.
-    val entityOutputFields = entityOutput.orElse(seqEntityOutput)
-      .map(_.fields.filterNot(f => SensitiveFields.isSensitive(f.columnName)))
-      .getOrElse(Nil)
-    // Optionality lives on the profiled nullable flag; the kinds map keeps
-    // the payload kind so projection and eligibility read one shape.
-    val entityFieldKinds: Map[String, KernelTypes.Kind] = entityOutput.orElse(seqEntityOutput)
-      .map(e =>
-        e.fields.flatMap { f =>
-          KernelTypes
-            .fieldKind(kernelCtx.ir, e.entityName, f.fieldName)
-            .map {
-              case KernelTypes.Kind.OptOf(inner) => f.fieldName -> inner
-              case other                         => f.fieldName -> other
-            }
-        }.toMap
-      )
-      .getOrElse(Map.empty)
-    def outFieldOk(f: ProfiledField): Boolean =
-      entityFieldKinds.get(f.fieldName) match
-        case Some(KernelTypes.Kind.Scalar(b))                            => (KernelScalarTypes + "datetime").contains(b)
-        case Some(KernelTypes.Kind.EnumK(_))                             => true
-        case Some(KernelTypes.Kind.SetOf(_) | KernelTypes.Kind.SeqOf(_)) => !f.nullable
-        case Some(KernelTypes.Kind.EntitySetOf(_))                       => !f.nullable
-        case Some(KernelTypes.Kind.OptOf(_))                             => false
-        case None                                                        => (KernelScalarTypes + "datetime").contains(baseDomain(f.domainType))
+    val shape                                 = EmitShared.kernelOutputShape(specOutputs, allEntities, kernelCtx.ir)
+    val entityOutput                          = shape.entityOutput
+    val seqEntityOutput                       = shape.seqEntityOutput
+    val entityOutputFields                    = shape.entityOutputFields
+    val entityFieldKinds                      = shape.outFieldKinds
+    def outFieldOk(f: ProfiledField): Boolean = EmitShared.outFieldOk(entityFieldKinds, f)
     val outsMarshalable =
       if specOutputs.isEmpty then true
       else if entityOutput.isDefined || seqEntityOutput.isDefined then
