@@ -14,6 +14,7 @@ import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
+import scala.util.Using
 
 class SolverCrossCheckTest extends CatsEffectSuite:
 
@@ -53,31 +54,37 @@ class SolverCrossCheckTest extends CatsEffectSuite:
     IO.blocking {
       val p = new ProcessBuilder((cmd :+ file.toString).asJava).redirectErrorStream(true).start()
       p.getOutputStream.close()
-      val lines =
-        scala.io.Source.fromInputStream(p.getInputStream, "UTF-8").getLines().map(_.trim).toList
-      p.waitFor()
-      lines.find(l => l == "sat" || l == "unsat" || l == "unknown")
-    }.timeoutTo(outer, IO.pure(None))
+      try
+        if !p.waitFor(outer.toSeconds, TimeUnit.SECONDS) then None
+        else
+          Using.resource(scala.io.Source.fromInputStream(p.getInputStream, "UTF-8")): source =>
+            source.getLines().map(_.trim).find(l => l == "sat" || l == "unsat" || l == "unknown")
+      finally { val _ = p.destroyForcibly() }
+    }
 
   private def alloyVerdict(als: Path): IO[Option[String]] =
-    IO.blocking {
-      val work = Files.createTempDirectory("alloy-xcheck")
-      val bn   = als.getFileName.toString
-      Files.copy(als, work.resolve(bn))
-      val p = new ProcessBuilder("java", "-jar", alloyJar, "exec", "-q", "-f", "-s", "sat4j", bn)
-        .directory(work.toFile)
-        .redirectErrorStream(true)
-        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-        .start()
-      p.getOutputStream.close()
-      p.waitFor(90, TimeUnit.SECONDS)
-      val receipt = work.resolve(bn.stripSuffix(".als")).resolve("receipt.json")
-      Option
-        .when(Files.exists(receipt))(Files.readString(receipt))
-        .flatMap(parser.parse(_).toOption)
-        .flatMap(firstCommand)
-        .map(cmd => if cmd.hcursor.downField("solution").succeeded then "sat" else "unsat")
-    }.timeoutTo(2.minutes, IO.pure(None))
+    IO.blocking(Files.createTempDirectory("alloy-xcheck")).bracket { work =>
+      IO.blocking {
+        val bn = als.getFileName.toString
+        Files.copy(als, work.resolve(bn))
+        val p = new ProcessBuilder("java", "-jar", alloyJar, "exec", "-q", "-f", "-s", "sat4j", bn)
+          .directory(work.toFile)
+          .redirectErrorStream(true)
+          .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+          .start()
+        p.getOutputStream.close()
+        try
+          if !p.waitFor(90, TimeUnit.SECONDS) then None
+          else
+            val receipt = work.resolve(bn.stripSuffix(".als")).resolve("receipt.json")
+            Option
+              .when(Files.exists(receipt))(Files.readString(receipt))
+              .flatMap(parser.parse(_).toOption)
+              .flatMap(firstCommand)
+              .map(cmd => if cmd.hcursor.downField("solution").succeeded then "sat" else "unsat")
+        finally { val _ = p.destroyForcibly() }
+      }
+    }(work => IO.blocking(deleteRecursively(work)).attempt.void)
 
   private def firstCommand(receipt: Json): Option[Json] =
     val commands = receipt.hcursor.downField("commands")
@@ -101,25 +108,36 @@ class SolverCrossCheckTest extends CatsEffectSuite:
       .filter(e => e.rawStatus == "sat" || e.rawStatus == "unsat")
 
   private def crossCheck(spec: Path): IO[List[Result]] =
-    for
-      base <- IO.blocking(Files.createTempDirectory("vc-xcheck"))
-      dir   = base.resolve("d")
-      opts  = VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, dumpVc = Some(dir.toString))
-      _    <- Verify.run(spec.toString, opts, log, devnull)
-      es <- IO.blocking(Option.when(Files.exists(dir.resolve("verdicts.json")))(
-              entries(dir.resolve("verdicts.json"))
-            ).getOrElse(Nil))
-      out <- es.traverse: e =>
-               val f = dir.resolve(e.file)
-               e.tool match
-                 case "z3" =>
-                   (
-                     smtVerdict(List("z3", "-T:30"), f, 40.seconds),
-                     smtVerdict(List("cvc5", "--tlimit=5000"), f, 15.seconds)
-                   ).mapN((z, c) => Result(spec.toString, e, z, c, None))
-                 case "alloy" => alloyVerdict(f).map(a => Result(spec.toString, e, None, None, a))
-                 case _       => IO.pure(Result(spec.toString, e, None, None, None))
-    yield out
+    IO.blocking(Files.createTempDirectory("vc-xcheck")).bracket { base =>
+      val dir = base.resolve("d")
+      val opts =
+        VerifyOptions(30_000L, dumpSmt = false, dumpSmtOut = None, dumpVc = Some(dir.toString))
+      for
+        _ <- Verify.run(spec.toString, opts, log, devnull)
+        es <- IO.blocking(Option.when(Files.exists(dir.resolve("verdicts.json")))(
+                entries(dir.resolve("verdicts.json"))
+              ).getOrElse(Nil))
+        out <- es.traverse: e =>
+                 val f = dir.resolve(e.file)
+                 e.tool match
+                   case "z3" =>
+                     (
+                       smtVerdict(List("z3", "-T:30"), f, 40.seconds),
+                       smtVerdict(List("cvc5", "--tlimit=5000"), f, 15.seconds)
+                     ).mapN((z, c) => Result(spec.toString, e, z, c, None))
+                   case "alloy" => alloyVerdict(f).map(a => Result(spec.toString, e, None, None, a))
+                   case _       => IO.pure(Result(spec.toString, e, None, None, None))
+      yield out
+    }(base => IO.blocking(deleteRecursively(base)).attempt.void)
+
+  private def deleteRecursively(dir: Path): Unit =
+    if Files.exists(dir) then
+      val stream = Files.walk(dir)
+      try
+        val it = stream.sorted(java.util.Comparator.reverseOrder()).iterator()
+        while it.hasNext do
+          val _ = Files.deleteIfExists(it.next())
+      finally stream.close()
 
   test("independent solvers agree with the compiler on every spec's verification conditions"):
     assume(solversPresent, s"z3/cvc5/alloy not available (ALLOY_JAR=$alloyJar); skipping")
